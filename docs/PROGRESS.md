@@ -18,12 +18,12 @@ The repository is managed with Git on `main`, tracks `https://github.com/Wen5555
 
 | Milestone | Source implemented | Current evidence | Remaining |
 |---|---|---|---|
-| M0 | Two Go modules, workspace, Wails template, configs, docs, CI and commands | `go test ./...` passes; CLI/devtool compile | Independent desktop and GOWORK=off checks recorded below |
+| M0 | Two Go modules, workspace, Wails template, configs, docs, CI and commands | Root tests/vet/race, CLI/devtool, and desktop GOWORK=off checks pass | CI runner confirmation |
 | M1 | Pion ICE + quic-go UDP demux, TLS 1.3 pinning, timeout/close paths | Windows loopback host ICE, encrypted bidirectional QUIC, wrong-pin negative tests, benchmark and `demo-local` pass | Real two-host LAN, public IPv6 and controlled dual NAT not run |
 | M2 | Ed25519 identity, invite pairing, SQLite group, WSS auth, presence/session routing, revoke and local trust | signaling package tests and demo control plane pass | Reconnect/backoff and multi-session coordinator |
 | M3 | Manifest/BLAKE3/secure receiver plus shared direct session API and CLI send/receive | App service test completes paired profiles through WSS, ICE, TLS 1.3, QUIC and transfer; demo transfers 1 MiB with matching content hashes and no file-sized signaling forwarding | Real two-machine LAN, public IPv6 and cross-NAT |
 | M4 | Chunk checkpoint/recovery, safe staging, pause/cancel primitives | transfer unit tests pass | Process-kill restart acceptance through app/session coordinator |
-| M5 | Thin Wails binding to shared identity/devices/diagnostics | Desktop Go source compiles in workspace | Independent desktop/GOWORK=off and Windows/macOS runtime |
+| M5 | Thin Wails binding to shared identity/devices/diagnostics | Desktop Go source, frontend checks and Windows Wails production build pass | Windows interactive, macOS runtime and task UI |
 | M6 | Deployment examples, STUN-only config, diagnostics and benchmark entry points | Source and docs present | Docker daemon, HTTPS certificates, NAT lab and package signing |
 
 ## Commands run in this milestone
