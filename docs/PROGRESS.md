@@ -10,6 +10,10 @@ Updated: 2026-09-07. This is an active implementation, not an accepted product r
 - Wails 2.15.0 is available at `.tools/bin/wails.exe`; WebView/macOS runtime validation is not available here.
 - No production service, firewall rule, proxy, route, automatic deployment or push was performed.
 
+## Version control
+
+The repository is managed with Git on `main`, tracks `https://github.com/Wen5555/LinkSend.git`, and has been pushed without force updates. Local identities, databases, build binaries, toolchains and temporary profiles are excluded by `.gitignore`.
+
 ## Milestones
 
 | Milestone | Source implemented | Current evidence | Remaining |
