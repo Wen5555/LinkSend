@@ -19,9 +19,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: apps/desktop/frontend/pnpm-lock.yaml
       - name: Desktop Go checks
+        working-directory: apps/desktop
         shell: pwsh
         run: |
           $env:GOWORK = "off"
+          go env GOMOD GOWORK
           go test ./...
           go build ./...
       - name: Frontend checks

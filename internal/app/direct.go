@@ -17,6 +17,8 @@ import (
 
 const firstGeneration uint64 = 1
 
+const candidateExchangeBudget = 10 * time.Second
+
 type DirectConfig struct {
 	BindAddress   string
 	STUNURLs      []string
@@ -50,17 +52,23 @@ func (p *PeerSession) Close() error {
 }
 
 func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectConfig) (*PeerSession, error) {
-	peer, err := s.trustedDevice(ctx, peerID)
+	phaseBudget := cfg.CheckTimeout
+	if phaseBudget <= 0 {
+		phaseBudget = 20 * time.Second
+	}
+	connectCtx, cancelConnect := context.WithTimeout(ctx, phaseBudget)
+	defer cancelConnect()
+	peer, err := s.trustedDevice(connectCtx, peerID)
 	if err != nil {
-		return nil, err
+		return nil, classifyPhaseError(connectCtx, err, protocol.SignalingTimeout, "peer lookup")
 	}
 	c, err := s.client()
 	if err != nil {
 		return nil, err
 	}
-	signalSession, err := c.Connect(ctx)
+	signalSession, err := c.Connect(connectCtx)
 	if err != nil {
-		return nil, err
+		return nil, classifyPhaseError(connectCtx, err, protocol.SignalingTimeout, "signaling connection")
 	}
 	closeSignal := true
 	stopHeartbeat := startHeartbeat(ctx, signalSession)
@@ -96,10 +104,13 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	if err != nil {
 		return nil, err
 	}
-	if err = signalSession.SendEnvelope(ctx, request); err != nil {
-		return nil, err
+	signalCtx, stopSignal := context.WithTimeout(ctx, phaseBudget)
+	if err = signalSession.SendEnvelope(signalCtx, request); err != nil {
+		stopSignal()
+		return nil, classifyPhaseError(signalCtx, err, protocol.SignalingTimeout, "connect request")
 	}
-	responseWire, err := readSignalMessage(ctx, signalSession)
+	responseWire, err := readSignalMessage(signalCtx, signalSession)
+	stopSignal()
 	if err != nil {
 		return nil, err
 	}
@@ -118,13 +129,21 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	}
 	path, err := endpoint.Connect(ctx, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil, protocol.Fail(protocol.Cancelled, "ICE checks cancelled")
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, protocol.Fail(protocol.CheckTimeout, "ICE checks timed out")
+		}
 		return nil, protocol.Fail(protocol.CheckTimeout, err.Error())
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, false)
 	if err != nil {
 		return nil, err
 	}
-	data, err := transport.Establish(ctx, endpoint, path, tlsConfig, true)
+	quicCtx, stopQUIC := context.WithTimeout(ctx, phaseBudget)
+	data, err := transport.Establish(quicCtx, endpoint, path, tlsConfig, true)
+	stopQUIC()
 	if err != nil {
 		return nil, err
 	}
@@ -136,13 +155,19 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 // AcceptDirect waits for one authenticated request from expectedPeerID. An
 // empty peer ID accepts any currently trusted group member after verification.
 func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg DirectConfig) (*PeerSession, error) {
+	phaseBudget := cfg.CheckTimeout
+	if phaseBudget <= 0 {
+		phaseBudget = 20 * time.Second
+	}
+	connectCtx, cancelConnect := context.WithTimeout(ctx, phaseBudget)
+	defer cancelConnect()
 	c, err := s.client()
 	if err != nil {
 		return nil, err
 	}
-	signalSession, err := c.Connect(ctx)
+	signalSession, err := c.Connect(connectCtx)
 	if err != nil {
-		return nil, err
+		return nil, classifyPhaseError(connectCtx, err, protocol.SignalingTimeout, "signaling connection")
 	}
 	closeSignal := true
 	stopHeartbeat := startHeartbeat(ctx, signalSession)
@@ -156,16 +181,20 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 			_ = signalSession.Close()
 		}
 	}()
-	requestWire, err := readSignalMessage(ctx, signalSession)
+	signalCtx, stopSignal := context.WithTimeout(ctx, phaseBudget)
+	requestWire, err := readSignalMessage(signalCtx, signalSession)
+	stopSignal()
 	if err != nil {
 		return nil, err
 	}
 	if requestWire.Message == nil || requestWire.Message.Type != "connect_request" || requestWire.Message.Recipient != s.identity.ID() {
 		return nil, protocol.Fail(protocol.InvalidMessage, "unexpected connect request")
 	}
-	peer, err := s.trustedDevice(ctx, requestWire.Message.Sender)
+	peerCtx, cancelPeer := context.WithTimeout(ctx, phaseBudget)
+	defer cancelPeer()
+	peer, err := s.trustedDevice(peerCtx, requestWire.Message.Sender)
 	if err != nil {
-		return nil, err
+		return nil, classifyPhaseError(peerCtx, err, protocol.SignalingTimeout, "peer lookup")
 	}
 	if expectedPeerID != "" && expectedPeerID != peer.ID {
 		return nil, protocol.Fail(protocol.AuthenticationFailed, "requesting device does not match expected peer")
@@ -198,21 +227,32 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 	if err != nil {
 		return nil, err
 	}
-	if err = signalSession.SendEnvelope(ctx, response); err != nil {
-		return nil, err
+	signalCtx, stopSignal = context.WithTimeout(ctx, phaseBudget)
+	if err = signalSession.SendEnvelope(signalCtx, response); err != nil {
+		stopSignal()
+		return nil, classifyPhaseError(signalCtx, err, protocol.SignalingTimeout, "connect response")
 	}
+	stopSignal()
 	if err = exchangeCandidates(ctx, signalSession, endpoint, localCandidates, s.identity, peer, requestWire.Message.SessionID); err != nil {
 		return nil, err
 	}
 	path, err := endpoint.Connect(ctx, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, false)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil, protocol.Fail(protocol.Cancelled, "ICE checks cancelled")
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, protocol.Fail(protocol.CheckTimeout, "ICE checks timed out")
+		}
 		return nil, protocol.Fail(protocol.CheckTimeout, err.Error())
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, true)
 	if err != nil {
 		return nil, err
 	}
-	data, err := transport.Establish(ctx, endpoint, path, tlsConfig, false)
+	quicCtx, stopQUIC := context.WithTimeout(ctx, phaseBudget)
+	data, err := transport.Establish(quicCtx, endpoint, path, tlsConfig, false)
+	stopQUIC()
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +276,7 @@ func (s *Service) SendFiles(ctx context.Context, peerID string, paths []string, 
 	if err != nil {
 		return transfer.Result{}, err
 	}
-	return transfer.Send(ctx, stream, prepared, progress)
+	return transfer.Send(ctx, transport.WrapStream(stream), prepared, progress)
 }
 
 func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (transfer.Result, error) {
@@ -249,7 +289,7 @@ func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory str
 	if err != nil {
 		return transfer.Result{}, err
 	}
-	return transfer.Receive(ctx, stream, directory, peer.PeerID, accept, progress)
+	return transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, accept, progress)
 }
 
 func (s *Service) newEndpoint(cfg DirectConfig) (*connectivity.Endpoint, error) {
@@ -295,10 +335,18 @@ func (s *Service) trustedDevice(ctx context.Context, id string) (signaling.Devic
 	return signaling.Device{}, protocol.Fail(protocol.PeerOffline, "peer is not a current group member")
 }
 
-func readSignalMessage(ctx context.Context, session *signaling.Session) (signaling.Wire, error) {
+func readSignalMessage(ctx context.Context, session interface {
+	Read(context.Context) (signaling.Wire, error)
+}) (signaling.Wire, error) {
 	for {
 		wire, err := session.Read(ctx)
 		if err != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				return wire, protocol.Fail(protocol.Cancelled, "signaling read cancelled")
+			}
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return wire, protocol.Fail(protocol.SignalingTimeout, "signaling read timed out")
+			}
 			return wire, err
 		}
 		if wire.Type == "heartbeat" {
@@ -306,6 +354,19 @@ func readSignalMessage(ctx context.Context, session *signaling.Session) (signali
 		}
 		return wire, nil
 	}
+}
+
+func classifyPhaseError(ctx context.Context, err error, timeoutCode protocol.Code, phase string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return fmt.Errorf("%w: %v", protocol.Fail(protocol.Cancelled, phase+" cancelled"), err)
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("%w: %v", protocol.Fail(timeoutCode, phase+" timed out"), err)
+	}
+	return err
 }
 
 func startHeartbeat(ctx context.Context, session *signaling.Session) context.CancelFunc {
@@ -327,7 +388,21 @@ func startHeartbeat(ctx context.Context, session *signaling.Session) context.Can
 	return cancel
 }
 
-func exchangeCandidates(ctx context.Context, session *signaling.Session, endpoint *connectivity.Endpoint, local []connectivity.Candidate, sender *identity.Identity, peer signaling.Device, sessionID string) error {
+type candidateSession interface {
+	SendEnvelope(context.Context, protocol.Envelope) error
+	Read(context.Context) (signaling.Wire, error)
+}
+
+func exchangeCandidates(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, local []connectivity.Candidate, sender *identity.Identity, peer signaling.Device, sessionID string) error {
+	return exchangeCandidatesWithBudget(ctx, session, endpoint, local, sender, peer, sessionID, candidateExchangeBudget)
+}
+
+func exchangeCandidatesWithBudget(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, local []connectivity.Candidate, sender *identity.Identity, peer signaling.Device, sessionID string, budget time.Duration) error {
+	if budget <= 0 {
+		budget = candidateExchangeBudget
+	}
+	phaseCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	errCh := make(chan error, 2)
 	go func() {
 		for _, candidate := range local {
@@ -336,20 +411,20 @@ func exchangeCandidates(ctx context.Context, session *signaling.Session, endpoin
 				errCh <- err
 				return
 			}
-			if err = session.SendEnvelope(ctx, env); err != nil {
+			if err = session.SendEnvelope(phaseCtx, env); err != nil {
 				errCh <- err
 				return
 			}
 		}
 		end, err := protocol.NewEnvelope("end_of_candidates", sender.ID(), peer.ID, sessionID, firstGeneration, map[string]any{})
 		if err == nil {
-			err = session.SendEnvelope(ctx, end)
+			err = session.SendEnvelope(phaseCtx, end)
 		}
 		errCh <- err
 	}()
 	go func() {
 		for {
-			wire, err := readSignalMessage(ctx, session)
+			wire, err := readSignalMessage(phaseCtx, session)
 			if err != nil {
 				errCh <- err
 				return
@@ -383,6 +458,18 @@ func exchangeCandidates(ctx context.Context, session *signaling.Session, endpoin
 		}
 	}()
 	first := <-errCh
+	if first != nil {
+		cancel()
+	}
 	second := <-errCh
+	if second != nil {
+		cancel()
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return protocol.Fail(protocol.Cancelled, "candidate exchange cancelled")
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(phaseCtx.Err(), context.DeadlineExceeded) {
+		return protocol.Fail(protocol.CandidateTimeout, "candidate exchange timed out")
+	}
 	return errors.Join(first, second)
 }

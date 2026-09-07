@@ -5,13 +5,48 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type lifecycleTestStream struct {
+	closed  atomic.Int32
+	aborted atomic.Int32
+}
+
+func (s *lifecycleTestStream) Read([]byte) (int, error)    { return 0, io.EOF }
+func (s *lifecycleTestStream) Write(b []byte) (int, error) { return len(b), nil }
+func (s *lifecycleTestStream) Close() error                { s.closed.Add(1); return nil }
+func (s *lifecycleTestStream) Abort()                      { s.aborted.Add(1) }
+
+func TestStreamLifecycleCancelCompletionRace(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		stream := new(lifecycleTestStream)
+		complete, abort := streamLifecycle(ctx, stream)
+		done := make(chan struct{})
+		go func() {
+			complete()
+			close(done)
+		}()
+		cancel()
+		abort()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("lifecycle completion deadlocked")
+		}
+		if stream.closed.Load() > 1 || stream.aborted.Load() > 1 {
+			t.Fatalf("lifecycle closed or aborted more than once: closed=%d aborted=%d", stream.closed.Load(), stream.aborted.Load())
+		}
+	}
+}
 
 func TestBLAKE3Vectors(t *testing.T) {
 	for input, want := range map[string]string{"": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262", "abc": "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85"} {

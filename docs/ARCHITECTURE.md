@@ -18,4 +18,6 @@ WSS 信令：设备/会话/候选
 
 `internal/app` 的 `ConnectDirect`、`AcceptDirect`、`SendFiles` 和 `ReceiveOnce` 是 CLI/Wails 共用的直连编排入口。它要求本地 `trust.json` 中的公钥固定，候选交换完成后才调用 ICE/QUIC；接收确认通过 `transfer.Receive` 的回调执行。
 
+传输 stream 的正常完成使用 quic-go 的有序 `Close`。取消或协议失败通过 `transport.QUICStream.Abort` 同时调用 `CancelRead` 和 `CancelWrite`，只影响当前 stream，不关闭共享 UDP socket 或 signaling session。候选交换拥有自己的 phase context；首个终态错误取消 sibling，阶段结束不会主动关闭整个 WSS 连接。
+
 真实网络路径的证据和限制记录在 [`docs/adr/0001-ice-quic-integration.md`](adr/0001-ice-quic-integration.md)。当前只冻结了实现边界，双 NAT 通过前不宣称架构验收完成。

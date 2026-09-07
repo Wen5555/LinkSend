@@ -29,12 +29,18 @@ type Code string
 
 const (
 	SignalingUnreachable Code = "SIGNALING_UNREACHABLE"
+	SignalingTimeout     Code = "SIGNALING_TIMEOUT"
+	CandidateTimeout     Code = "CANDIDATE_EXCHANGE_TIMEOUT"
 	PeerOffline          Code = "PEER_OFFLINE"
 	Unpaired             Code = "UNPAIRED"
 	AuthenticationFailed Code = "AUTHENTICATION_FAILED"
 	VersionIncompatible  Code = "VERSION_INCOMPATIBLE"
 	NoCandidates         Code = "NO_CANDIDATES"
+	NoViableCandidate    Code = "NO_VIABLE_CANDIDATE"
 	CheckTimeout         Code = "CHECK_TIMEOUT"
+	ICEFailed            Code = "ICE_FAILED"
+	QUICHandshakeTimeout Code = "QUIC_HANDSHAKE_TIMEOUT"
+	QUICHandshakeFailed  Code = "QUIC_HANDSHAKE_FAILED"
 	DirectFailed         Code = "DIRECT_FAILED"
 	RelayNotImplemented  Code = "RELAY_NOT_IMPLEMENTED"
 	ReceiveRejected      Code = "RECEIVE_REJECTED"

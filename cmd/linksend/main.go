@@ -36,11 +36,11 @@ Commands:
   diagnostics    print a redacted diagnostic report
   send           send files or folders over an authenticated direct session
   receive        wait for one incoming transfer and ask for consent
-  accept         reserved; receiver consent is not exposed yet
-  reject         reserved; receiver consent is not exposed yet
-  status         reserved; transfer status is not exposed yet
-  resume         reserved; transfer resume is not exposed yet
-  cancel         reserved; transfer cancellation is not exposed yet
+  accept         not implemented; receiver consent control is not exposed yet
+  reject         not implemented; receiver consent control is not exposed yet
+  status         not implemented; task status is not exposed yet
+  resume         not implemented; transfer resume is not exposed yet
+  cancel         not implemented; transfer cancellation is not exposed yet
 
 Global flags:
   --server URL              signaling server URL
@@ -210,15 +210,15 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		}
 		return printJSON(result)
 	case "accept":
-		return svc.Accept(ctx, "")
+		return app.ErrNotImplemented
 	case "reject":
-		return svc.Cancel(ctx, "")
+		return app.ErrNotImplemented
 	case "status":
-		return svc.Pause(ctx, "")
+		return app.ErrNotImplemented
 	case "resume":
-		return svc.Resume(ctx, "")
+		return app.ErrNotImplemented
 	case "cancel":
-		return svc.Cancel(ctx, "")
+		return app.ErrNotImplemented
 	default:
 		return fmt.Errorf("unknown command %q; use --help", command)
 	}

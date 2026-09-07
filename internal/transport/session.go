@@ -5,14 +5,32 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"example.com/linksend/internal/connectivity"
+	"example.com/linksend/internal/protocol"
 	quic "github.com/quic-go/quic-go"
 )
+
+const streamAbortErrorCode quic.StreamErrorCode = 0x100
+
+// QUICStream keeps quic-go stream-specific abort operations inside transport.
+// Normal Close still only completes the send direction; Abort is reserved for
+// local cancellation or protocol failure and cancels both directions.
+type QUICStream struct{ *quic.Stream }
+
+func WrapStream(stream *quic.Stream) *QUICStream { return &QUICStream{Stream: stream} }
+
+func (s *QUICStream) Abort() {
+	if s == nil || s.Stream == nil {
+		return
+	}
+	s.CancelRead(streamAbortErrorCode)
+	s.CancelWrite(streamAbortErrorCode)
+}
 
 func QUICConfig() *quic.Config {
 	return &quic.Config{HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, KeepAlivePeriod: 5 * time.Second, MaxIncomingStreams: 8, MaxIncomingUniStreams: -1, Allow0RTT: false, InitialStreamReceiveWindow: 2 << 20, MaxStreamReceiveWindow: 8 << 20, InitialConnectionReceiveWindow: 4 << 20, MaxConnectionReceiveWindow: 32 << 20}
@@ -50,7 +68,16 @@ func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("E_AUTHENTICATION: %w", err)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil, protocol.Fail(protocol.Cancelled, "QUIC handshake cancelled")
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, protocol.Fail(protocol.QUICHandshakeTimeout, "QUIC handshake timed out")
+		}
+		if strings.Contains(err.Error(), "AUTHENTICATION_FAILED") {
+			return nil, protocol.Fail(protocol.AuthenticationFailed, err.Error())
+		}
+		return nil, protocol.Fail(protocol.QUICHandshakeFailed, err.Error())
 	}
 	if conn.RemoteAddr().String() != addr.String() {
 		_ = conn.CloseWithError(1, "nominated path mismatch")

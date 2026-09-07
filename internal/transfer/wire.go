@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,58 @@ type control struct {
 	Index    int       `json:"index,omitempty"`
 	Verified int64     `json:"verified,omitempty"`
 	Error    string    `json:"error,omitempty"`
+}
+
+var ErrCancelled = errors.New("CANCELLED")
+
+type streamAborter interface{ Abort() }
+
+func abortStream(rw io.ReadWriteCloser) {
+	if aborter, ok := rw.(streamAborter); ok {
+		aborter.Abort()
+		return
+	}
+	_ = rw.Close()
+}
+
+// streamLifecycle makes cancellation and normal completion mutually exclusive.
+// The quic adapter aborts both directions; neutral streams retain Close fallback.
+func streamLifecycle(ctx context.Context, rw io.ReadWriteCloser) (complete, abort func()) {
+	var mu sync.Mutex
+	finished := false
+	stop := context.AfterFunc(ctx, func() {
+		mu.Lock()
+		if finished {
+			mu.Unlock()
+			return
+		}
+		finished = true
+		mu.Unlock()
+		abortStream(rw)
+	})
+	complete = func() {
+		mu.Lock()
+		if finished {
+			mu.Unlock()
+			return
+		}
+		finished = true
+		mu.Unlock()
+		stop()
+		_ = rw.Close()
+	}
+	abort = func() {
+		mu.Lock()
+		if finished {
+			mu.Unlock()
+			return
+		}
+		finished = true
+		mu.Unlock()
+		stop()
+		abortStream(rw)
+	}
+	return complete, abort
 }
 
 func writeFrame(w io.Writer, b []byte, limit int) error {
@@ -96,9 +149,14 @@ func readControl(r io.Reader) (control, error) {
 
 // The caller must pass an already mutually authenticated stream. Cancellation
 // closes it so blocked reads/writes terminate; file bytes never enter signaling.
-func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress func(Progress)) (Result, error) {
-	stop := context.AfterFunc(ctx, func() { _ = rw.Close() })
-	defer stop()
+func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress func(Progress)) (result Result, err error) {
+	complete, abort := streamLifecycle(ctx, rw)
+	defer func() {
+		if ctx.Err() != nil && err != nil {
+			err = errors.Join(ErrCancelled, ctx.Err(), err)
+		}
+		abort()
+	}()
 	m := p.Manifest
 	digest := m.Digest()
 	start := time.Now()
@@ -180,6 +238,7 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			progress.State = "Completed"
 			progress.Verified = done.Verified
 			emit()
+			complete()
 			return Result{m.TransferID, digest, done.Verified, "Completed"}, nil
 		default:
 			return Result{}, errors.New("UNKNOWN_CRITICAL_MESSAGE")
@@ -187,9 +246,14 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 	}
 }
 
-func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string, accept func(Manifest) bool, onProgress func(Progress)) (Result, error) {
-	stop := context.AfterFunc(ctx, func() { _ = rw.Close() })
-	defer stop()
+func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string, accept func(Manifest) bool, onProgress func(Progress)) (result Result, err error) {
+	complete, abort := streamLifecycle(ctx, rw)
+	defer func() {
+		if ctx.Err() != nil && err != nil {
+			err = errors.Join(ErrCancelled, ctx.Err(), err)
+		}
+		abort()
+	}()
 	offer, err := readControl(rw)
 	if err != nil {
 		return Result{}, err
@@ -276,5 +340,6 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		return Result{}, ErrIntegrity
 	}
 	emit("Completed")
+	complete()
 	return Result{m.TransferID, m.Digest(), r.VerifiedBytes(), "Completed"}, nil
 }

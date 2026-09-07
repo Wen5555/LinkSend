@@ -28,6 +28,8 @@ The adapter permits only decoded, size-limited STUN Binding datagrams. Applicati
 
 Read/write deadlines and cancellation are adapter-local, never applied to the base socket where they could interrupt QUIC. A queued STUN write owns a copied buffer. A write already passed to the operating system can complete even if its caller times out; this is restricted to bounded STUN control data. Endpoint close cancels adapter operations, closes mux/agent/QUIC/socket, and joins adapter workers. There is no second reader on the UDP socket.
 
+At the stream layer, `internal/transport.QUICStream` is the only quic-go-specific lifecycle adapter exposed to transfer orchestration. Normal completion calls `Stream.Close` (send-direction FIN); cancellation and protocol failure call `CancelRead` and `CancelWrite` with a local application error code. This does not change UDP ownership or close signaling sessions used by other work.
+
 Synchronous initial `ReadNonQUICPacket` with an already-cancelled context initializes the upstream non-QUIC queue before any concurrent operation. This avoids its documented first-read initialization race. The subsequent read pump is the only caller.
 
 ## Path and security policy
