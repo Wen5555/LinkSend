@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"example.com/linksend/internal/app"
@@ -49,6 +50,13 @@ func checkCore() error {
 	if err := runGo("vet", "./..."); err != nil {
 		return fmt.Errorf("core vet failed: %w", err)
 	}
+	env, err := raceEnvironment()
+	if err != nil {
+		return err
+	}
+	if err = runCommand("go", []string{"test", "-race", "./..."}, env); err != nil {
+		return fmt.Errorf("core race tests failed: %w", err)
+	}
 	return nil
 }
 
@@ -72,11 +80,67 @@ func testNAT() error {
 }
 
 func runGo(args ...string) error {
-	cmd := exec.Command("go", args...)
+	return runCommand("go", args, nil)
+}
+
+func runCommand(name string, args []string, env []string) error {
+	cmd := exec.Command(name, args...)
+	if env != nil {
+		cmd.Env = env
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+func raceEnvironment() ([]string, error) {
+	env := os.Environ()
+	if runtime.GOOS != "windows" {
+		return env, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, errors.New("race tests require a usable C toolchain; cannot determine user home")
+	}
+	bin := filepath.Join(home, "scoop", "apps", "mingw", "current", "bin")
+	gcc := filepath.Join(bin, "gcc.exe")
+	gxx := filepath.Join(bin, "g++.exe")
+	if _, err = os.Stat(gcc); err != nil {
+		return nil, fmt.Errorf("race tests require modern MinGW; install it or set CC/CXX explicitly (expected %s)", gcc)
+	}
+	if _, err = os.Stat(gxx); err != nil {
+		return nil, fmt.Errorf("race tests require modern MinGW C++; expected %s", gxx)
+	}
+	env = setEnv(env, "CC", gcc)
+	env = setEnv(env, "CXX", gxx)
+	pathValue := lookupEnv(env, "Path")
+	if pathValue == "" {
+		pathValue = lookupEnv(env, "PATH")
+	}
+	env = setEnv(env, "Path", bin+string(os.PathListSeparator)+pathValue)
+	return env, nil
+}
+
+func lookupEnv(env []string, name string) string {
+	prefix := name + "="
+	for _, item := range env {
+		if len(item) >= len(prefix) && strings.EqualFold(item[:len(prefix)-1], name) && item[len(prefix)-1] == '=' {
+			return item[len(prefix):]
+		}
+	}
+	return ""
+}
+
+func setEnv(env []string, name, value string) []string {
+	prefix := name + "="
+	for i, item := range env {
+		if len(item) >= len(prefix) && strings.EqualFold(item[:len(prefix)-1], name) && item[len(prefix)-1] == '=' {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
 }
 
 func runWails(args ...string) error {
