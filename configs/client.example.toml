@@ -1,0 +1,4 @@
+server = "https://linksend.example.invalid"
+data_dir = ""
+name = "my-device"
+allow_insecure_loopback = false

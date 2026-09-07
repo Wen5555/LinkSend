@@ -1,0 +1,33 @@
+services:
+  rendezvous:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["--config", "/etc/linksend/server.toml"]
+    environment:
+      LINKSEND_BOOTSTRAP_TOKEN: ${LINKSEND_BOOTSTRAP_TOKEN:?set a high-entropy token}
+    volumes:
+      - linksend-data:/var/lib/linksend
+      - ../configs/server.example.toml:/etc/linksend/server.toml:ro
+      - ./tls:/etc/linksend/tls:ro
+    ports:
+      - "8787:8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "--no-verbose", "https://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  stun:
+    image: coturn/coturn:4.6.2
+    command: ["-c", "/etc/coturn/stun-only.conf"]
+    volumes:
+      - ./coturn/stun-only.conf:/etc/coturn/stun-only.conf:ro
+    ports:
+      - "3478:3478/udp"
+
+volumes:
+  linksend-data:

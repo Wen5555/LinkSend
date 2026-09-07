@@ -1,0 +1,6 @@
+listen = "0.0.0.0:8787"
+database = "/var/lib/linksend/control.db"
+allow_insecure_loopback = false
+allow_loopback_candidates = false
+tls_cert = "/etc/linksend/tls/server.crt"
+tls_key = "/etc/linksend/tls/server.key"

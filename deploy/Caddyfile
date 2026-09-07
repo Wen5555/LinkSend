@@ -1,0 +1,3 @@
+linksend.example.invalid {
+  reverse_proxy rendezvous:8787
+}

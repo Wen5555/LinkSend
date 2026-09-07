@@ -1,0 +1,6 @@
+listen = "127.0.0.1:8787"
+database = "data/server.db"
+allow_insecure_loopback = true
+allow_loopback_candidates = true
+tls_cert = ""
+tls_key = ""

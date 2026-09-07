@@ -1,0 +1,34 @@
+name: desktop
+on:
+  push:
+  pull_request:
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: pnpm
+          cache-dependency-path: apps/desktop/frontend/pnpm-lock.yaml
+      - name: Desktop Go checks
+        shell: pwsh
+        run: |
+          $env:GOWORK = "off"
+          go test ./...
+          go build ./...
+      - name: Frontend checks
+        working-directory: apps/desktop/frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run lint
+          pnpm run test
+          pnpm run build
