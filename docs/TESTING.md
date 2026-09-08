@@ -20,3 +20,7 @@ Candidate exchange 测试覆盖发送失败、接收失败、缺少 `end_of_cand
 桌面模块必须从 `apps/desktop` 且 `GOWORK=off` 执行，并确认 `go env GOMOD GOWORK` 指向桌面 `go.mod` 和 `off`。前端检查从 `apps/desktop/frontend` 执行。Wails production build、Docker runtime、HTTPS 证书身份验证、coturn STUN Binding/TURN Allocate 负例均需单独记录，不能由 compose config 或 liveness healthcheck 代替。
 
 目标验收还需要两台真实设备、不同网络、IPv6、睡眠唤醒和公网/家庭热点场景。每次运行应保留候选对、基础 socket、路径、传输哈希、信令/STUN 计数和错误阶段。`tests/natlab` 当前没有执行器；`test-nat` 的非零结果表示 not-run，不是 NAT 通过。
+
+## Stage 2A
+
+真实 Windows↔macOS 局域网验收使用 scripts/stage2a.ps1 与 scripts/stage2a.sh，步骤和证据目录见 docs/STAGE2A.md。

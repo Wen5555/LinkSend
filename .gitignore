@@ -17,3 +17,5 @@ apps/desktop/*.exe
 *.key
 *.crt
 *.pem
+
+.stage2a/

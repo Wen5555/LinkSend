@@ -10,6 +10,14 @@ Updated: 2026-09-08. This is an active implementation, not an accepted product r
 - Wails 2.15.0 is available at `.tools/bin/wails.exe`; WebView/macOS runtime validation is not available here.
 - No production service, firewall rule, proxy, route, automatic deployment or push was performed.
 
+## 2026-09-08 Hong Kong host connectivity preparation
+
+- The reusable `hk-main` SSH alias was resolved and probed successfully (`root@109.66.88.204`, SSH port `60851`); a read-only host audit reported no failed systemd units and 22% root filesystem usage.
+- The remote LinkSend rendezvous process is running from `/opt/linksend-lan-test/rendezvous` with `listen = "0.0.0.0:443"`, the configured origin certificate for `linksend.oooai.de`, and `relay=false`/QUIC capabilities. `GET /healthz` returned `status=ok` through both loopback and the public listener.
+- coturn is running in STUN-only mode on UDP `3478`; no TURN allocation or relay port range is configured. nftables permits TCP `443` and UDP `3478` and retains a default-drop input policy.
+- Windows reachability checks to `109.66.88.204:443` and `109.66.88.204:3478` succeeded. The origin certificate is self-signed but has SANs `linksend.oooai.de` and `*.oooai.de`; normal clients must use the Cloudflare edge hostname and must not disable certificate verification.
+- Public DNS currently returns NXDOMAIN for both `linksend.oooai.de` and `stun.oooai.de`. Formal Windows/macOS WSS pairing and transfer testing is therefore pending the user's Cloudflare records: proxied `A linksend.oooai.de -> 109.66.88.204` and DNS-only `A stun.oooai.de -> 109.66.88.204`.
+
 ## Version control
 
 The repository is managed with Git on `main`, tracks `https://github.com/Wen5555/LinkSend.git`, and has been pushed without force updates. Local identities, databases, build binaries, toolchains and temporary profiles are excluded by `.gitignore`.
@@ -83,7 +91,7 @@ Additional verification completed after the initial update:
 
 ## Next concrete actions
 
-1. Stage 2A: run Windows to macOS real two-machine LAN acceptance with a Linux Rendezvous service and, where available, STUN. Preserve DirectEvidence, transfer hashes and failure-phase output.
+1. After the two Cloudflare records resolve, run Windows to macOS real two-machine LAN acceptance with the Hong Kong rendezvous service and STUN. Preserve DirectEvidence, transfer hashes and failure-phase output.
 2. Stage 2B: run different-network cross-NAT acceptance without relay.
 3. Verify IPv6 and Linux interoperability.
 4. Add persistent task orchestration, then Wails task UI, after real-network evidence is recorded.
