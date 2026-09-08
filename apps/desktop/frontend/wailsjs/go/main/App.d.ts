@@ -17,15 +17,25 @@ export function GetTask(arg1:string):Promise<app.TaskSnapshot>;
 
 export function Identity():Promise<app.IdentityInfo>;
 
+export function JoinGroup(arg1:string,arg2:string):Promise<app.DeviceInfo>;
+
+export function NetworkInterfaces():Promise<Array<main.NetworkInterfaceInfo>>;
+
+export function OpenTaskDirectory(arg1:string):Promise<void>;
+
 export function PickDirectory():Promise<string>;
 
 export function PickFiles():Promise<Array<string>>;
 
 export function PickSourceDirectory():Promise<string>;
 
+export function Preferences():Promise<main.DesktopPreferences>;
+
 export function RejectTask(arg1:string):Promise<void>;
 
 export function RetryTask(arg1:string):Promise<app.TaskSnapshot>;
+
+export function SavePreferences(arg1:main.DesktopPreferences):Promise<void>;
 
 export function StartReceive(arg1:string,arg2:string):Promise<app.TaskSnapshot>;
 
@@ -34,3 +44,5 @@ export function StartSend(arg1:string,arg2:Array<string>):Promise<app.TaskSnapsh
 export function Status():Promise<main.DesktopStatus>;
 
 export function Tasks():Promise<Array<app.TaskSnapshot>>;
+
+export function TrustDevice(arg1:string,arg2:string):Promise<void>;

@@ -19,3 +19,5 @@ apps/desktop/*.exe
 *.pem
 
 .stage2a/
+apps/desktop/frontend/output/
+apps/desktop/frontend/.playwright-cli/

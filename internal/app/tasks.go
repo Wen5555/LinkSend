@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +21,8 @@ type TaskSnapshot struct {
 	Direction          string   `json:"direction"`
 	PeerID             string   `json:"peer_id,omitempty"`
 	SourceSummary      string   `json:"source_summary,omitempty"`
+	ManifestSummary    string   `json:"manifest_summary,omitempty"`
+	FileCount          int      `json:"file_count,omitempty"`
 	TargetDirectory    string   `json:"target_directory,omitempty"`
 	State              string   `json:"state"`
 	Phase              string   `json:"phase"`
@@ -174,7 +177,9 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 			}
 		})
 	}
-	cfg.onSession = func(sessionID, _ string) { t.update(func(v *TaskSnapshot) { v.SessionID = sessionID }) }
+	cfg.onSession = func(sessionID, peerID string) {
+		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
+	}
 	go func() {
 		result, runErr := s.SendFilesDetailed(ctx, peerID, base, cfg, t.progress)
 		if runErr != nil {
@@ -217,7 +222,9 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 			}
 		})
 	}
-	cfg.onSession = func(sessionID, _ string) { t.update(func(v *TaskSnapshot) { v.SessionID = sessionID }) }
+	cfg.onSession = func(sessionID, peerID string) {
+		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
+	}
 	go func() {
 		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
 			n := m.TotalBytes()
@@ -225,6 +232,8 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 				v.State = "awaiting_acceptance"
 				v.Phase = "awaiting_acceptance"
 				v.TotalBytes = &n
+				v.FileCount = len(m.Files)
+				v.ManifestSummary = manifestSummary(m)
 				v.CanCancel = true
 			})
 			select {
@@ -253,6 +262,34 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 		t.finish("completed", nil)
 	}()
 	return t.snapshot(), nil
+}
+
+func manifestSummary(m transfer.Manifest) string {
+	if len(m.Files) == 0 {
+		return "空内容"
+	}
+	const maxNames = 3
+	names := make([]string, 0, maxNames)
+	for _, f := range m.Files {
+		if f.Type != "file" {
+			continue
+		}
+		name := filepath.Base(filepath.Clean(f.Path))
+		if name == "." || name == "" {
+			continue
+		}
+		names = append(names, name)
+		if len(names) == maxNames {
+			break
+		}
+	}
+	if len(names) == 0 {
+		return fmt.Sprintf("%d 个目录", len(m.Files))
+	}
+	if len(m.Files) > len(names) {
+		return strings.Join(names, "、") + fmt.Sprintf(" 等 %d 项", len(m.Files))
+	}
+	return strings.Join(names, "、")
 }
 
 func sourceSummary(paths []string) string {

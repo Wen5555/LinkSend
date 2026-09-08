@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 func TestTaskManagerTerminalAndCancelRace(t *testing.T) {
@@ -33,6 +35,14 @@ func TestTaskManagerTerminalAndCancelRace(t *testing.T) {
 		t.Fatal("late progress changed cancellation request")
 	}
 	cancel()
+}
+
+func TestManifestSummaryIsBoundedAndUseful(t *testing.T) {
+	m := transfer.Manifest{Files: []transfer.FileEntry{{Path: "目录/报告.txt", Type: "file"}, {Path: "目录/空目录", Type: "directory"}, {Path: "第二.txt", Type: "file"}, {Path: "第三.txt", Type: "file"}}}
+	got := manifestSummary(m)
+	if got == "" || len(got) > 128 || got == "4 个目录" {
+		t.Fatalf("unexpected manifest summary: %q", got)
+	}
 }
 
 func TestTaskAcceptanceDecisionAndRepeat(t *testing.T) {

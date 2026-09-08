@@ -121,6 +121,8 @@ export namespace app {
 	    direction: string;
 	    peer_id?: string;
 	    source_summary?: string;
+	    manifest_summary?: string;
+	    file_count?: number;
 	    target_directory?: string;
 	    state: string;
 	    phase: string;
@@ -147,6 +149,8 @@ export namespace app {
 	        this.direction = source["direction"];
 	        this.peer_id = source["peer_id"];
 	        this.source_summary = source["source_summary"];
+	        this.manifest_summary = source["manifest_summary"];
+	        this.file_count = source["file_count"];
 	        this.target_directory = source["target_directory"];
 	        this.state = source["state"];
 	        this.phase = source["phase"];
@@ -169,6 +173,28 @@ export namespace app {
 
 export namespace main {
 
+	export class DesktopPreferences {
+	    format_version: number;
+	    server_url: string;
+	    bind_address: string;
+	    stun_urls: string[];
+	    receive_directory: string;
+	    device_name: string;
+
+	    static createFrom(source: any = {}) {
+	        return new DesktopPreferences(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.format_version = source["format_version"];
+	        this.server_url = source["server_url"];
+	        this.bind_address = source["bind_address"];
+	        this.stun_urls = source["stun_urls"];
+	        this.receive_directory = source["receive_directory"];
+	        this.device_name = source["device_name"];
+	    }
+	}
 	export class DesktopStatus {
 	    version: string;
 	    platform: string;
@@ -191,6 +217,22 @@ export namespace main {
 	        this.ready = source["ready"];
 	        this.error = source["error"];
 	        this.identity = source["identity"];
+	    }
+	}
+	export class NetworkInterfaceInfo {
+	    name: string;
+	    addresses: string[];
+	    is_loopback: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new NetworkInterfaceInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.addresses = source["addresses"];
+	        this.is_loopback = source["is_loopback"];
 	    }
 	}
 

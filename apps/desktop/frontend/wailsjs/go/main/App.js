@@ -30,6 +30,18 @@ export function Identity() {
   return window['go']['main']['App']['Identity']();
 }
 
+export function JoinGroup(arg1, arg2) {
+  return window['go']['main']['App']['JoinGroup'](arg1, arg2);
+}
+
+export function NetworkInterfaces() {
+  return window['go']['main']['App']['NetworkInterfaces']();
+}
+
+export function OpenTaskDirectory(arg1) {
+  return window['go']['main']['App']['OpenTaskDirectory'](arg1);
+}
+
 export function PickDirectory() {
   return window['go']['main']['App']['PickDirectory']();
 }
@@ -42,12 +54,20 @@ export function PickSourceDirectory() {
   return window['go']['main']['App']['PickSourceDirectory']();
 }
 
+export function Preferences() {
+  return window['go']['main']['App']['Preferences']();
+}
+
 export function RejectTask(arg1) {
   return window['go']['main']['App']['RejectTask'](arg1);
 }
 
 export function RetryTask(arg1) {
   return window['go']['main']['App']['RetryTask'](arg1);
+}
+
+export function SavePreferences(arg1) {
+  return window['go']['main']['App']['SavePreferences'](arg1);
 }
 
 export function StartReceive(arg1, arg2) {
@@ -64,4 +84,8 @@ export function Status() {
 
 export function Tasks() {
   return window['go']['main']['App']['Tasks']();
+}
+
+export function TrustDevice(arg1, arg2) {
+  return window['go']['main']['App']['TrustDevice'](arg1, arg2);
 }
