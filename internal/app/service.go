@@ -35,6 +35,7 @@ type Service struct {
 	identity *identity.Identity
 	signal   *signaling.Client
 	mu       sync.RWMutex
+	tasks    *taskManager
 }
 
 type IdentityInfo struct {
@@ -93,7 +94,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager()}
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
 		if err != nil {

@@ -24,6 +24,20 @@ type DirectConfig struct {
 	STUNURLs      []string
 	AllowLoopback bool
 	CheckTimeout  time.Duration
+	WaitTimeout   time.Duration // receiver only: time allowed for an incoming request
+	onPhase       func(string)  // local application observation; never serialized
+	onSession     func(string, string)
+}
+
+func (c DirectConfig) phase(value string) {
+	if c.onPhase != nil {
+		c.onPhase(value)
+	}
+}
+func (c DirectConfig) session(id, peer string) {
+	if c.onSession != nil {
+		c.onSession(id, peer)
+	}
 }
 
 type PeerSession struct {
@@ -137,6 +151,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 		return nil, protocol.Fail(protocol.NoCandidates, "local endpoint gathered no usable candidates")
 	}
 	sessionID := protocol.RandomID()
+	cfg.session(sessionID, peer.ID)
 	request, err := protocol.NewEnvelope("connect_request", s.identity.ID(), peer.ID, sessionID, firstGeneration, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password})
 	if err != nil {
 		return nil, err
@@ -212,7 +227,12 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 			_ = signalSession.Close()
 		}
 	}()
-	signalCtx, stopSignal := context.WithTimeout(ctx, phaseBudget)
+	waitBudget := cfg.WaitTimeout
+	if waitBudget <= 0 {
+		waitBudget = phaseBudget
+	}
+	cfg.phase("waiting")
+	signalCtx, stopSignal := context.WithTimeout(ctx, waitBudget)
 	requestWire, err := readSignalMessage(signalCtx, signalSession)
 	stopSignal()
 	if err != nil {
@@ -233,6 +253,8 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 	if err = requestWire.Message.Verify(peer.PublicKey, time.Now()); err != nil {
 		return nil, err
 	}
+	cfg.session(requestWire.Message.SessionID, peer.ID)
+	cfg.phase("connecting")
 	var remote iceDescription
 	if err = json.Unmarshal(requestWire.Message.Payload, &remote); err != nil || remote.Ufrag == "" || remote.Password == "" {
 		return nil, protocol.Fail(protocol.InvalidMessage, "invalid remote ICE credentials")
@@ -305,11 +327,16 @@ func (s *Service) SendFiles(ctx context.Context, peerID string, paths []string, 
 }
 
 func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []string, cfg DirectConfig, progress func(transfer.Progress)) (DirectTransferResult, error) {
+	cfg.phase("preparing")
 	prepared, err := transfer.Prepare(ctx, paths, 0)
 	if err != nil {
 		return DirectTransferResult{}, err
 	}
 	defer prepared.Close()
+	if progress != nil {
+		progress(transfer.Progress{TransferID: prepared.Manifest.TransferID, State: "Preparing", Total: prepared.Manifest.TotalBytes()})
+	}
+	cfg.phase("connecting")
 	peer, err := s.ConnectDirect(ctx, peerID, cfg)
 	if err != nil {
 		return DirectTransferResult{}, err
@@ -317,7 +344,7 @@ func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []
 	defer peer.Close()
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
 	if err != nil {
-		return DirectTransferResult{}, err
+		return DirectTransferResult{Evidence: peer.Evidence()}, err
 	}
 	result, err := transfer.Send(ctx, transport.WrapStream(stream), prepared, progress)
 	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
@@ -329,6 +356,7 @@ func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory str
 }
 
 func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (DirectTransferResult, error) {
+	cfg.phase("connecting")
 	peer, err := s.AcceptDirect(ctx, expectedPeerID, cfg)
 	if err != nil {
 		return DirectTransferResult{}, err
@@ -336,7 +364,7 @@ func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, direc
 	defer peer.Close()
 	stream, err := peer.Data.Conn.AcceptStream(ctx)
 	if err != nil {
-		return DirectTransferResult{}, err
+		return DirectTransferResult{Evidence: peer.Evidence()}, err
 	}
 	result, err := transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, accept, progress)
 	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err

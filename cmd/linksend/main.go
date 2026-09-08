@@ -173,10 +173,13 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		if *peer == "" || len(fs.Args()) == 0 {
 			return errors.New("send requires --peer and at least one file or directory")
 		}
-		result, err := svc.SendFilesDetailed(ctx, *peer, fs.Args(), directConfig(*bind, *stun, *allowLoopback), func(p transfer.Progress) {
+		result, err := svc.SendFilesDetailed(ctx, *peer, fs.Args(), directConfig(*bind, *stun, *allowLoopback, 0), func(p transfer.Progress) {
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
+			if *evidence {
+				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
+			}
 			return err
 		}
 		if *evidence {
@@ -192,6 +195,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		allowLoopback := fs.Bool("allow-loopback", false, "allow loopback candidates for a local fixture")
 		evidence := fs.Bool("evidence", false, "include the selected direct path evidence in JSON output")
 		autoAccept := fs.Bool("auto-accept", false, "accept only with explicit unattended test opt-in")
+		waitTimeout := fs.Duration("wait-timeout", 0, "receiver request wait timeout (for example 30m)")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
@@ -207,10 +211,13 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 			line, readErr := bufio.NewReader(os.Stdin).ReadString('\n')
 			return readErr == nil && strings.EqualFold(strings.TrimSpace(line), "y")
 		}
-		result, err := svc.ReceiveOnceDetailed(ctx, *peer, *directory, directConfig(*bind, *stun, *allowLoopback), accept, func(p transfer.Progress) {
+		result, err := svc.ReceiveOnceDetailed(ctx, *peer, *directory, directConfig(*bind, *stun, *allowLoopback, *waitTimeout), accept, func(p transfer.Progress) {
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
+			if *evidence {
+				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
+			}
 			return err
 		}
 		if *evidence {
@@ -232,14 +239,14 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 	}
 }
 
-func directConfig(bind, stun string, allowLoopback bool) app.DirectConfig {
+func directConfig(bind, stun string, allowLoopback bool, waitTimeout time.Duration) app.DirectConfig {
 	var urls []string
 	for _, raw := range strings.Split(stun, ",") {
 		if raw = strings.TrimSpace(raw); raw != "" {
 			urls = append(urls, raw)
 		}
 	}
-	return app.DirectConfig{BindAddress: bind, STUNURLs: urls, AllowLoopback: allowLoopback, CheckTimeout: 20 * time.Second}
+	return app.DirectConfig{BindAddress: bind, STUNURLs: urls, AllowLoopback: allowLoopback, CheckTimeout: 20 * time.Second, WaitTimeout: waitTimeout}
 }
 
 func defaultDataDir() string {

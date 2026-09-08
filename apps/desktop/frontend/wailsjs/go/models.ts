@@ -27,7 +27,7 @@ export namespace app {
 	export class DiagnosticIdentity {
 	    id: string;
 	    public_key_hex: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new DiagnosticIdentity(source);
 	    }
@@ -49,11 +49,11 @@ export namespace app {
 	    trusted_peers: number;
 	    generated_at: string;
 	    health_failure?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Diagnostics(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
@@ -67,7 +67,7 @@ export namespace app {
 	        this.generated_at = source["generated_at"];
 	        this.health_failure = source["health_failure"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -90,9 +90,11 @@ export namespace app {
 	    id: string;
 	    public_key_hex: string;
 	    data_dir: string;
+
 	    static createFrom(source: any = {}) {
 	        return new IdentityInfo(source);
 	    }
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -103,22 +105,70 @@ export namespace app {
 	export class InvitationInfo {
 	    token: string;
 	    expires_at: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new InvitationInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.token = source["token"];
 	        this.expires_at = source["expires_at"];
 	    }
 	}
+	export class TaskSnapshot {
+	    id: string;
+	    direction: string;
+	    peer_id?: string;
+	    source_summary?: string;
+	    target_directory?: string;
+	    state: string;
+	    phase: string;
+	    processed_bytes: number;
+	    total_bytes?: number;
+	    rate_bytes_per_second?: number;
+	    started_at: string;
+	    updated_at: string;
+	    ended_at?: string;
+	    error_code?: string;
+	    error_message?: string;
+	    transfer_id?: string;
+	    session_id?: string;
+	    can_cancel: boolean;
+	    can_retry: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new TaskSnapshot(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.direction = source["direction"];
+	        this.peer_id = source["peer_id"];
+	        this.source_summary = source["source_summary"];
+	        this.target_directory = source["target_directory"];
+	        this.state = source["state"];
+	        this.phase = source["phase"];
+	        this.processed_bytes = source["processed_bytes"];
+	        this.total_bytes = source["total_bytes"];
+	        this.rate_bytes_per_second = source["rate_bytes_per_second"];
+	        this.started_at = source["started_at"];
+	        this.updated_at = source["updated_at"];
+	        this.ended_at = source["ended_at"];
+	        this.error_code = source["error_code"];
+	        this.error_message = source["error_message"];
+	        this.transfer_id = source["transfer_id"];
+	        this.session_id = source["session_id"];
+	        this.can_cancel = source["can_cancel"];
+	        this.can_retry = source["can_retry"];
+	    }
+	}
 
 }
 
 export namespace main {
-	
+
 	export class DesktopStatus {
 	    version: string;
 	    platform: string;
@@ -127,11 +177,11 @@ export namespace main {
 	    ready: boolean;
 	    error?: string;
 	    identity?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new DesktopStatus(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
@@ -147,16 +197,16 @@ export namespace main {
 }
 
 export namespace protocol {
-	
+
 	export class Capabilities {
 	    protocol_version: number;
 	    relay: boolean;
 	    transport: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Capabilities(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.protocol_version = source["protocol_version"];

@@ -3,12 +3,34 @@
 import {app} from '../models';
 import {main} from '../models';
 
+export function AcceptTask(arg1:string):Promise<void>;
+
+export function CancelTask(arg1:string):Promise<void>;
+
 export function CreateInvitation():Promise<app.InvitationInfo>;
 
 export function Devices():Promise<Array<app.DeviceInfo>>;
 
 export function Diagnostics():Promise<app.Diagnostics>;
 
+export function GetTask(arg1:string):Promise<app.TaskSnapshot>;
+
 export function Identity():Promise<app.IdentityInfo>;
 
+export function PickDirectory():Promise<string>;
+
+export function PickFiles():Promise<Array<string>>;
+
+export function PickSourceDirectory():Promise<string>;
+
+export function RejectTask(arg1:string):Promise<void>;
+
+export function RetryTask(arg1:string):Promise<app.TaskSnapshot>;
+
+export function StartReceive(arg1:string,arg2:string):Promise<app.TaskSnapshot>;
+
+export function StartSend(arg1:string,arg2:Array<string>):Promise<app.TaskSnapshot>;
+
 export function Status():Promise<main.DesktopStatus>;
+
+export function Tasks():Promise<Array<app.TaskSnapshot>>;

@@ -50,7 +50,7 @@ go run ./cmd/linksend --server http://127.0.0.1:8787 --allow-insecure-loopback -
 
 真实网络请为 `--bind` 提供具体本地接口地址，并按部署情况提供 `--stun stun:host:3478`；不提供 bind 时只允许显式 loopback 开发模式。
 
-桌面端位于 `apps/desktop`，使用 pnpm 和 Wails 2。它目前调用共享身份、诊断和设备服务；完整任务 UI 留待真实两机网络验收之后。
+桌面端位于 `apps/desktop`，使用 pnpm 和 Wails 2。传输页、设备页和设置/诊断页已接入进程内任务服务，可发起真实发送、准备接收、查看快照、确认/拒绝、取消和失败后重新发送。任务仅在当前进程内管理，重启恢复和完整历史尚未实现。
 
 ## 范围边界
 
