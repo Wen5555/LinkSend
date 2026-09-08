@@ -1,6 +1,6 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-07. This is an active implementation, not an accepted product release.
+Updated: 2026-09-08. This is an active implementation, not an accepted product release.
 
 ## Environment and limits
 
@@ -22,7 +22,7 @@ The repository is managed with Git on `main`, tracks `https://github.com/Wen5555
 | M1 | Pion ICE + quic-go UDP demux, TLS 1.3 pinning, timeout/close paths | Windows loopback host ICE, encrypted bidirectional QUIC, wrong-pin negative tests, benchmark and `demo-local` pass | Real two-host LAN, public IPv6 and controlled dual NAT not run |
 | M2 | Ed25519 identity, invite pairing, SQLite group, WSS auth, presence/session routing, revoke and local trust | signaling package tests and demo control plane pass | Reconnect/backoff and multi-session coordinator |
 | M3 | Manifest/BLAKE3/secure receiver plus shared direct session API and CLI send/receive | App service test completes paired profiles through WSS, ICE, TLS 1.3, QUIC and transfer; demo transfers 1 MiB with matching content hashes and no file-sized signaling forwarding | Real two-machine LAN, public IPv6 and cross-NAT |
-| M4 | Chunk checkpoint/recovery, safe staging, pause/cancel primitives | transfer unit tests pass; real QUIC cancellation remains untested | Process-kill restart acceptance through app/session coordinator |
+| M4 | Chunk checkpoint/recovery, safe staging, pause/cancel primitives | transfer unit tests and real quic-go loopback cancellation lifecycle tests pass | Process-kill restart acceptance through app/session coordinator |
 | M5 | Thin Wails binding to shared identity/devices/diagnostics | Desktop Go source, frontend checks and Windows Wails production build pass | Windows interactive, macOS runtime and task UI |
 | M6 | Deployment examples, explicit STUN-only config, diagnostics and benchmark entry points | Compose config parses; STUN-only runtime and HTTPS identity are not run | Docker daemon, HTTPS certificates, STUN Binding/TURN Allocate negative test, NAT lab and package signing |
 
@@ -64,7 +64,7 @@ Additional verification completed after the initial update:
 ## Stage 1A current scope
 
 - Source changes: coturn 4.6.2 now receives the explicit `stun-only` option; the compose healthcheck is documented as liveness only; desktop CI enters `apps/desktop` and prints `GOMOD/GOWORK`; reserved CLI task commands return `NOT_IMPLEMENTED` without dispatching to unrelated state-changing methods.
-- This Stage 1A run must separately record root tests, desktop-module tests, frontend checks and compose parsing. Wails production build, HTTPS certificate validation, coturn runtime, real Windows/macOS LAN, NAT traversal and QUIC cancellation are not implied by those checks.
+- This Stage 1A run must separately record root tests, desktop-module tests, frontend checks and compose parsing. Wails production build, HTTPS certificate validation, coturn runtime and real Windows/macOS LAN/NAT traversal are not implied by those checks. Real quic-go loopback cancellation lifecycle is separately covered by Stage 1B.
 - Stage 1A is complete in source and local automated checks; Stage 1B below records the current lifecycle implementation and evidence. Real network acceptance remains separate.
 
 ## Stage 1B current scope
@@ -83,7 +83,16 @@ Additional verification completed after the initial update:
 
 ## Next concrete actions
 
-1. Connect Wails transfer task UI to the shared direct session API and expose consent/progress events.
-2. Add a privileged Linux NAT fixture without flushing host firewall state.
-3. Add reconnect/backoff and multi-session coordination while preserving verified chunks.
-4. Re-run the full file matrix after app-level pause/resume/cancel wiring.
+1. Stage 2A: run Windows to macOS real two-machine LAN acceptance with a Linux Rendezvous service and, where available, STUN. Preserve DirectEvidence, transfer hashes and failure-phase output.
+2. Stage 2B: run different-network cross-NAT acceptance without relay.
+3. Verify IPv6 and Linux interoperability.
+4. Add persistent task orchestration, then Wails task UI, after real-network evidence is recorded.
+
+## 2026-09-08 engineering optimization evidence
+
+- Diagnostics now use a separate redacted identity DTO; health failures expose only a stable code/summary. Direct transfers can export read-only `DirectEvidence` from the selected ICE pair, endpoint counters and negotiated TLS/ALPN through the CLI `--evidence` flag.
+- Transfer controls use typed operation constants and semantic validation. Accept/ack verified values are bounded, peer error detail is limited to 4 KiB and sanitized, frame limits reject invalid bounds, and progress rates are finite. Resume state parsing is bounded and rejects trailing JSON/unknown file IDs; fresh staging and checkpoint temporary files have best-effort cleanup. Cancellation persists `Cancelled`.
+- ICE failures preserve cancellation, timeout, no-candidate and generic ICE failure categories. Signaling/QUIC wrappers retain underlying causes. Trust files are bounded; SQLite rejects unknown schema versions; server expiry cleanup and network closes avoid holding the mutex during websocket close.
+- The root module path and desktop module path are now `github.com/Wen5555/LinkSend` and `/apps/desktop`; CI verifies modules with `GOWORK=off` and `go mod verify`. `devtool network-info` reports interface state/address data without credentials.
+
+Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`, `go test ./...`, `go vet ./...`, `go run ./cmd/devtool check-core` (including race), root and desktop `GOWORK=off` test/build, frontend typecheck/lint/test/build, Wails 2.15.0 production build, `demo-local`, and `network-info` passed. A 20x transfer repeat was first interrupted after an erroneous test harness blocked; the corrected transfer package passed its focused run. `test-nat` remains an explicit nonzero not-run result because this Windows host lacks the privileged Linux namespace fixture.

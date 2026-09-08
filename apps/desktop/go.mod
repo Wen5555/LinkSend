@@ -1,9 +1,9 @@
-module example.com/linksend/apps/desktop
+module github.com/Wen5555/LinkSend/apps/desktop
 
 go 1.26.0
 
 require (
-	example.com/linksend v0.0.0
+	github.com/Wen5555/LinkSend v0.0.0
 	github.com/wailsapp/wails/v2 v2.15.0
 )
 
@@ -60,4 +60,4 @@ require (
 	modernc.org/sqlite v1.58.0 // indirect
 )
 
-replace example.com/linksend => ../..
+replace github.com/Wen5555/LinkSend => ../..

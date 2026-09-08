@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"example.com/linksend/internal/connectivity"
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/server"
-	"example.com/linksend/internal/signaling"
-	"example.com/linksend/internal/transfer"
-	"example.com/linksend/internal/transport"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/server"
+	"github.com/Wen5555/LinkSend/internal/signaling"
+	"github.com/Wen5555/LinkSend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/transport"
 )
 
 type DemoReport struct {

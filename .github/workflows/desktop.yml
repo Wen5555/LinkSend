@@ -24,6 +24,7 @@ jobs:
         run: |
           $env:GOWORK = "off"
           go env GOMOD GOWORK
+          go mod verify
           go test ./...
           go build ./...
       - name: Frontend checks

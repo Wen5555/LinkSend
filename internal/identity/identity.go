@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/url"
 	"os"
@@ -21,6 +22,13 @@ import (
 )
 
 const ALPN = "linksend/1"
+const maxTrustFileBytes = 1 << 20
+
+var ErrAuthentication = errors.New("identity authentication failed")
+
+func authenticationError(detail string) error {
+	return fmt.Errorf("%w: %s", ErrAuthentication, detail)
+}
 
 type Identity struct{ private ed25519.PrivateKey }
 
@@ -82,6 +90,12 @@ func LoadOrCreate(dir string) (*Identity, error) {
 	if err != nil {
 		return nil, err
 	}
+	created := true
+	defer func() {
+		if created {
+			_ = os.Remove(p)
+		}
+	}()
 	if _, err = f.Write(data); err == nil {
 		err = f.Sync()
 	}
@@ -92,6 +106,7 @@ func LoadOrCreate(dir string) (*Identity, error) {
 	if closeErr != nil {
 		return nil, closeErr
 	}
+	created = false
 	return i, nil
 }
 
@@ -118,7 +133,7 @@ func (i *Identity) certificate(now time.Time) (tls.Certificate, error) {
 // mandatory verifier below replaces it with identity and certificate validation.
 func (i *Identity) TLSConfig(expected ed25519.PublicKey, server bool) (*tls.Config, error) {
 	if len(expected) != ed25519.PublicKeySize {
-		return nil, errors.New("expected trusted Ed25519 public key required")
+		return nil, authenticationError("expected trusted Ed25519 public key required")
 	}
 	cert, err := i.certificate(time.Now())
 	if err != nil {
@@ -133,7 +148,7 @@ func (i *Identity) TLSConfig(expected ed25519.PublicKey, server bool) (*tls.Conf
 	}
 	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
 		if cs.Version != tls.VersionTLS13 || cs.NegotiatedProtocol != ALPN {
-			return errors.New("AUTHENTICATION_FAILED: TLS version or ALPN")
+			return authenticationError("TLS version or ALPN")
 		}
 		return VerifyPeer(cs.PeerCertificates, key, server, time.Now())
 	}
@@ -144,27 +159,27 @@ func (i *Identity) TLSConfig(expected ed25519.PublicKey, server bool) (*tls.Conf
 // insufficient: all certificate policy checks still apply.
 func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsClient bool, now time.Time) error {
 	if len(chain) != 1 || len(expected) != ed25519.PublicKeySize {
-		return errors.New("AUTHENTICATION_FAILED: invalid certificate chain")
+		return authenticationError("invalid certificate chain")
 	}
 	c := chain[0]
 	pub, ok := c.PublicKey.(ed25519.PublicKey)
 	if !ok || !bytes.Equal(pub, expected) {
-		return errors.New("AUTHENTICATION_FAILED: peer public key changed")
+		return authenticationError("peer public key changed")
 	}
 	if c.SignatureAlgorithm != x509.PureEd25519 || !bytes.Equal(c.RawIssuer, c.RawSubject) {
-		return errors.New("AUTHENTICATION_FAILED: certificate must be Ed25519 self-signed")
+		return authenticationError("certificate must be Ed25519 self-signed")
 	}
 	if err := c.CheckSignature(c.SignatureAlgorithm, c.RawTBSCertificate, c.Signature); err != nil {
-		return fmt.Errorf("AUTHENTICATION_FAILED: certificate signature: %w", err)
+		return errors.Join(ErrAuthentication, fmt.Errorf("certificate signature: %w", err))
 	}
 	if c.IsCA || !c.BasicConstraintsValid || c.KeyUsage != x509.KeyUsageDigitalSignature || len(c.UnhandledCriticalExtensions) != 0 {
-		return errors.New("AUTHENTICATION_FAILED: invalid certificate policy")
+		return authenticationError("invalid certificate policy")
 	}
 	if c.NotAfter.Sub(c.NotBefore) > 25*time.Hour || now.Before(c.NotBefore) || !now.Before(c.NotAfter) {
-		return errors.New("AUTHENTICATION_FAILED: certificate validity")
+		return authenticationError("certificate validity")
 	}
 	if len(c.URIs) != 1 || c.URIs[0].String() != "urn:linksend:device:"+DeviceID(expected) || c.Subject.CommonName != DeviceID(expected) || len(c.DNSNames) != 0 || len(c.IPAddresses) != 0 || len(c.EmailAddresses) != 0 {
-		return errors.New("AUTHENTICATION_FAILED: target device identity")
+		return authenticationError("target device identity")
 	}
 	usage := x509.ExtKeyUsageServerAuth
 	if peerIsClient {
@@ -177,12 +192,12 @@ func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsCli
 		}
 	}
 	if !found || len(c.UnknownExtKeyUsage) != 0 {
-		return errors.New("AUTHENTICATION_FAILED: certificate extended usage")
+		return authenticationError("certificate extended usage")
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(c)
 	if _, err := c.Verify(x509.VerifyOptions{Roots: roots, CurrentTime: now, KeyUsages: []x509.ExtKeyUsage{usage}}); err != nil {
-		return fmt.Errorf("AUTHENTICATION_FAILED: certificate validation: %w", err)
+		return errors.Join(ErrAuthentication, fmt.Errorf("certificate validation: %w", err))
 	}
 	return nil
 }
@@ -197,12 +212,20 @@ type TrustFile struct {
 }
 
 func LoadTrust(dir string) ([]TrustedPeer, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "trust.json"))
+	fh, err := os.Open(filepath.Join(dir, "trust.json"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	defer fh.Close()
+	data, err := io.ReadAll(io.LimitReader(fh, maxTrustFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxTrustFileBytes {
+		return nil, errors.New("trust file too large")
 	}
 	var f TrustFile
 	if err = json.Unmarshal(data, &f); err != nil {
@@ -231,7 +254,7 @@ func TrustPeer(dir string, peer TrustedPeer, confirmedFingerprint string) error 
 	for _, p := range peers {
 		if p.ID == peer.ID {
 			if !bytes.Equal(p.PublicKey, peer.PublicKey) {
-				return errors.New("AUTHENTICATION_FAILED: peer key changed")
+				return authenticationError("peer key changed")
 			}
 			return nil
 		}

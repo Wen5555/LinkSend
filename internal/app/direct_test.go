@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/server"
-	"example.com/linksend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/server"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 func TestDirectServiceSendAndReceive(t *testing.T) {
@@ -58,9 +58,9 @@ func TestDirectServiceSendAndReceive(t *testing.T) {
 	}
 	dest := filepath.Join(root, "dest")
 	acceptErr := make(chan error, 1)
-	resultCh := make(chan transfer.Result, 1)
+	resultCh := make(chan DirectTransferResult, 1)
 	go func() {
-		result, receiveErr := b.ReceiveOnce(ctx, aID.ID(), dest, DirectConfig{AllowLoopback: true}, func(transfer.Manifest) bool { return true }, nil)
+		result, receiveErr := b.ReceiveOnceDetailed(ctx, aID.ID(), dest, DirectConfig{AllowLoopback: true}, func(transfer.Manifest) bool { return true }, nil)
 		if receiveErr != nil {
 			acceptErr <- receiveErr
 			return
@@ -68,7 +68,7 @@ func TestDirectServiceSendAndReceive(t *testing.T) {
 		resultCh <- result
 		acceptErr <- nil
 	}()
-	sent, err := a.SendFiles(ctx, bID.ID(), []string{source}, DirectConfig{AllowLoopback: true}, nil)
+	sent, err := a.SendFilesDetailed(ctx, bID.ID(), []string{source}, DirectConfig{AllowLoopback: true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,12 @@ func TestDirectServiceSendAndReceive(t *testing.T) {
 		t.Fatal(err)
 	}
 	received := <-resultCh
-	if sent.Digest != received.Digest || received.Bytes != int64(len(data)) {
+	if sent.Transfer.Digest != received.Transfer.Digest || received.Transfer.Bytes != int64(len(data)) {
 		t.Fatalf("transfer mismatch: sent=%+v received=%+v", sent, received)
+	}
+	for _, evidence := range []DirectEvidence{sent.Evidence, received.Evidence} {
+		if evidence.PeerID == "" || evidence.BaseSocket == "" || evidence.LocalCandidate == "" || evidence.RemoteCandidate == "" || evidence.TransportProtocol != "quic" || evidence.Relay || evidence.TLSVersion != 0x0304 || evidence.ALPN != identity.ALPN {
+			t.Fatalf("incomplete direct evidence: %+v", evidence)
+		}
 	}
 }

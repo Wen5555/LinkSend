@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"example.com/linksend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/app"
 )
 
 func main() {
 	if len(os.Args) < 2 || os.Args[1] == "--help" || os.Args[1] == "-h" {
-		fmt.Println("devtool commands: check-core, demo-local, test-nat, bench-transport, desktop-dev, desktop-build")
+		fmt.Println("devtool commands: check-core, demo-local, test-nat, bench-transport, network-info, desktop-dev, desktop-build")
 		return
 	}
 	var err error
@@ -30,6 +31,8 @@ func main() {
 		err = testNAT()
 	case "bench-transport":
 		err = runGo("test", "-run", "^$", "-bench", "BenchmarkTransport", "-benchtime=1x", "./internal/transport")
+	case "network-info":
+		err = networkInfo()
 	case "desktop-dev":
 		err = runWails("dev")
 	case "desktop-build":
@@ -41,6 +44,35 @@ func main() {
 		fmt.Fprintln(os.Stderr, "devtool:", err)
 		os.Exit(1)
 	}
+}
+
+type interfaceInfo struct {
+	Name      string   `json:"name"`
+	Index     int      `json:"index"`
+	Up        bool     `json:"up"`
+	Loopback  bool     `json:"loopback"`
+	MTU       int      `json:"mtu"`
+	Addresses []string `json:"addresses"`
+}
+
+func networkInfo() error {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return err
+	}
+	result := make([]interfaceInfo, 0, len(interfaces))
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return err
+		}
+		values := make([]string, 0, len(addrs))
+		for _, addr := range addrs {
+			values = append(values, addr.String())
+		}
+		result = append(result, interfaceInfo{Name: iface.Name, Index: iface.Index, Up: iface.Flags&net.FlagUp != 0, Loopback: iface.Flags&net.FlagLoopback != 0, MTU: iface.MTU, Addresses: values})
+	}
+	return json.NewEncoder(os.Stdout).Encode(result)
 }
 
 func checkCore() error {

@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
@@ -82,6 +82,7 @@ type RemoteError struct {
 func (e *RemoteError) Error() string {
 	return fmt.Sprintf("signaling HTTP %d: %s", e.Status, e.Cause.Error())
 }
+func (e *RemoteError) Unwrap() error { return &e.Cause }
 
 // Client owns the long-term device identity used to authenticate every HTTP
 // and WSS control-plane action. It intentionally has no peer-trust policy.
@@ -162,13 +163,17 @@ func (c *Client) signedRequest(ctx context.Context, method, p string, body []byt
 	req.Header.Set("X-LinkSend-Signature", base64.RawStdEncoding.EncodeToString(sig))
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, protocol.Fail(protocol.SignalingUnreachable, "request failed")
+		return nil, protocol.Wrap(protocol.SignalingUnreachable, "request failed", err)
 	}
 	return resp, nil
 }
 
 func decodeError(resp *http.Response) error {
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, protocol.MaxMessageBytes))
+	defer resp.Body.Close()
+	b, err := readLimitedJSON(resp.Body, protocol.MaxMessageBytes)
+	if err != nil {
+		return &RemoteError{Status: resp.StatusCode, Cause: protocol.Error{Code: protocol.InvalidMessage, Detail: "invalid signaling error response"}}
+	}
 	var e protocol.Error
 	if json.Unmarshal(b, &e) == nil && e.Code != "" {
 		return &RemoteError{Status: resp.StatusCode, Cause: e}
@@ -184,7 +189,28 @@ func decodeSuccess(resp *http.Response, out any) error {
 	if out == nil {
 		return nil
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, protocol.MaxPayloadBytes)).Decode(out)
+	b, err := readLimitedJSON(resp.Body, protocol.MaxPayloadBytes)
+	if err != nil {
+		return protocol.Wrap(protocol.InvalidMessage, "invalid signaling response", err)
+	}
+	if err = json.Unmarshal(b, out); err != nil {
+		return protocol.Wrap(protocol.InvalidMessage, "invalid signaling response", err)
+	}
+	return nil
+}
+
+func readLimitedJSON(r io.Reader, limit int) ([]byte, error) {
+	if limit <= 0 {
+		return nil, errors.New("invalid body limit")
+	}
+	b, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) == 0 || len(b) > limit || !json.Valid(b) {
+		return nil, errors.New("invalid JSON response body")
+	}
+	return b, nil
 }
 
 type registration struct {
@@ -215,7 +241,7 @@ func (c *Client) register(ctx context.Context, p, token, name string) (Device, e
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return Device{}, protocol.Fail(protocol.SignalingUnreachable, "registration request failed")
+		return Device{}, protocol.Wrap(protocol.SignalingUnreachable, "registration request failed", err)
 	}
 	var d Device
 	if err = decodeSuccess(resp, &d); err != nil {
@@ -292,7 +318,7 @@ func (c *Client) Health(ctx context.Context) (protocol.Capabilities, error) {
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return protocol.Capabilities{}, protocol.Fail(protocol.SignalingUnreachable, "health request failed")
+		return protocol.Capabilities{}, protocol.Wrap(protocol.SignalingUnreachable, "health request failed", err)
 	}
 	var body struct {
 		Status       string                `json:"status"`
@@ -331,7 +357,7 @@ func (c *Client) Connect(ctx context.Context) (*Session, error) {
 			defer response.Body.Close()
 			return nil, decodeError(response)
 		}
-		return nil, protocol.Fail(protocol.SignalingUnreachable, "WSS connection failed")
+		return nil, protocol.Wrap(protocol.SignalingUnreachable, "WSS connection failed", err)
 	}
 	conn.SetReadLimit(protocol.MaxMessageBytes)
 	closeOnError := func(e error) (*Session, error) {
@@ -342,18 +368,18 @@ func (c *Client) Connect(ctx context.Context) (*Session, error) {
 	defer cancel()
 	var hello Wire
 	if err = wsjson.Read(handshakeCtx, conn, &hello); err != nil {
-		return closeOnError(protocol.Fail(protocol.SignalingUnreachable, "WSS hello missing"))
+		return closeOnError(protocol.Wrap(protocol.SignalingUnreachable, "WSS hello missing", err))
 	}
 	if hello.Type != "hello" || len(hello.Nonce) != 64 || hello.Capabilities == nil || !supported(*hello.Capabilities) {
 		return closeOnError(protocol.Fail(protocol.VersionIncompatible, "WSS server capabilities incompatible"))
 	}
 	auth := Wire{Type: "authenticate", DeviceID: c.identity.ID(), Signature: c.identity.Sign(protocol.ChallengeBytes(c.identity.ID(), hello.Nonce))}
 	if err = wsjson.Write(handshakeCtx, conn, auth); err != nil {
-		return closeOnError(protocol.Fail(protocol.SignalingUnreachable, "WSS authentication write failed"))
+		return closeOnError(protocol.Wrap(protocol.SignalingUnreachable, "WSS authentication write failed", err))
 	}
 	var accepted Wire
 	if err = wsjson.Read(handshakeCtx, conn, &accepted); err != nil {
-		return closeOnError(protocol.Fail(protocol.SignalingUnreachable, "WSS authentication response missing"))
+		return closeOnError(protocol.Wrap(protocol.SignalingUnreachable, "WSS authentication response missing", err))
 	}
 	if accepted.Type != "authenticated" || accepted.DeviceID != c.identity.ID() || accepted.Capabilities == nil || !supported(*accepted.Capabilities) {
 		return closeOnError(protocol.Fail(protocol.AuthenticationFailed, "WSS device authentication rejected"))
@@ -384,7 +410,7 @@ func (s *Session) SendEnvelope(ctx context.Context, env protocol.Envelope) error
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	if err := wsjson.Write(ctx, s.conn, Wire{Type: "signal", Message: &env}); err != nil {
-		return protocol.Fail(protocol.SignalingUnreachable, "WSS signal write failed")
+		return protocol.Wrap(protocol.SignalingUnreachable, "WSS signal write failed", err)
 	}
 	return nil
 }
@@ -393,7 +419,7 @@ func (s *Session) SendHeartbeat(ctx context.Context) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	if err := wsjson.Write(ctx, s.conn, Wire{Type: "heartbeat"}); err != nil {
-		return protocol.Fail(protocol.SignalingUnreachable, "WSS heartbeat write failed")
+		return protocol.Wrap(protocol.SignalingUnreachable, "WSS heartbeat write failed", err)
 	}
 	return nil
 }
@@ -401,7 +427,7 @@ func (s *Session) SendHeartbeat(ctx context.Context) error {
 func (s *Session) Read(ctx context.Context) (Wire, error) {
 	var wire Wire
 	if err := wsjson.Read(ctx, s.conn, &wire); err != nil {
-		return wire, protocol.Fail(protocol.SignalingUnreachable, "WSS signal read failed")
+		return wire, protocol.Wrap(protocol.SignalingUnreachable, "WSS signal read failed", err)
 	}
 	switch wire.Type {
 	case "heartbeat":

@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strconv"
 
-	linksendapp "example.com/linksend/internal/app"
+	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 )
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.

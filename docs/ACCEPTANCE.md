@@ -6,11 +6,11 @@ This matrix separates source implementation, automated evidence, and real-networ
 |---|---|---|---|
 | Identity and trust | Ed25519 identity, invite, fingerprint pinning, revoke | identity/signaling negative tests pass | OOB fingerprint review on two real devices |
 | Signaling | SQLite group, HTTP/WSS auth, presence, sessions, candidates, `relay=false` | WSS envelope and replay/session checks pass | HTTPS/WSS deployment with backup/rotation |
-| ICE and QUIC | Pion ICE over quic-go-owned UDP socket, TLS 1.3 pinning, explicit QUIC stream abort boundary | Windows loopback host path, timeout/close, wrong pin, reverse encrypted bytes and real stream cancellation lifecycle tests pass | Two-host LAN, IPv6, controlled dual NAT srflx |
+| ICE and QUIC | Pion ICE over quic-go-owned UDP socket, TLS 1.3 pinning, explicit QUIC stream abort boundary and read-only direct evidence | Windows loopback host path, timeout/close, wrong pin, reverse encrypted bytes and real quic-go cancellation lifecycle tests pass | Two-host LAN, IPv6, controlled dual NAT srflx |
 | File protocol | Manifest, BLAKE3 chunks, safe root staging, resumable checkpoints | zero/small files, folders, empty dirs, corruption/path/restart unit coverage; app direct transfer passes | Large files and process kill on separate disks |
 | CLI | identity, pairing, devices, trust, revoke, diagnostics, send, receive | CLI help and shared app direct integration pass | Two independent real profiles over LAN/NAT |
 | Desktop | Wails 2 binding for identity/devices/diagnostics; React shell | Source CI checks the desktop module with `GOWORK=off`; frontend checks are separate; Wails production build is not part of this Stage 1A run | Windows runtime, macOS runtime, consent/progress task UI |
 | Operations | Docker/Caddy/STUN-only examples, healthz, redacted diagnostics | compose config parses; healthcheck is liveness-only and does not prove TLS identity; coturn runtime is not run | Docker engine, HTTPS certificate positive/negative tests, STUN Binding, TURN Allocate rejection, backup/restore |
 | Race and static checks | No race-specific code bypass | `go vet ./...`, `go test ./...`, and Windows `go test -race ./...` with MinGW 16.2.0 pass; Stage 1B affected packages repeated 20 times | Repeat on CI and target OSes |
 
-Remaining release blockers are real two-machine LAN/NAT evidence, desktop task UI integration, pause/cancel/restart orchestration at app level, real QUIC cancellation coverage, and production deployment verification.
+Remaining release blockers are real two-machine LAN/NAT evidence, desktop task UI integration, pause/cancel/restart orchestration at app level, and production deployment verification. Real quic-go cancellation lifecycle coverage is automated loopback evidence only.

@@ -14,6 +14,8 @@ import (
 	"strconv"
 )
 
+const maxResumeStateBytes = 2 * MaxMetadata
+
 // ResumeState is atomically checkpointed only after file.Sync. Recovery rehashes
 // every purportedly completed chunk and thus tolerates lost checkpoints and damage.
 type ResumeState struct {
@@ -66,13 +68,27 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 	}
 	if f, e := r.stage.Open("state.json"); e == nil {
 		var saved ResumeState
-		decErr := json.NewDecoder(io.LimitReader(f, MaxMetadata*2)).Decode(&saved)
+		data, readErr := io.ReadAll(io.LimitReader(f, maxResumeStateBytes+1))
 		_ = f.Close()
-		if decErr != nil {
-			return nil, decErr
+		if readErr != nil {
+			return nil, readErr
 		}
-		if saved.Peer != peer || saved.Digest != m.Digest() || saved.Manifest.Digest() != m.Digest() {
+		if len(data) > maxResumeStateBytes {
+			return nil, errors.New("resume state too large")
+		}
+		if err := json.Unmarshal(data, &saved); err != nil {
+			return nil, err
+		}
+		if saved.Peer != peer || saved.Digest != m.Digest() || saved.Manifest.Digest() != m.Digest() || saved.Manifest.TransferID != m.TransferID || saved.Manifest.ChunkSize != m.ChunkSize {
 			return nil, errors.New("RESUME_IDENTITY_MISMATCH")
+		}
+		if saved.State != "Recovering" && saved.State != "Transferring" && saved.State != "Verifying" && saved.State != "Completed" && saved.State != "Paused" && saved.State != "Cancelled" && saved.State != "Failed" {
+			return nil, errors.New("INVALID_RESUME_STATE")
+		}
+		for id := range saved.Verified {
+			if int(id) >= len(m.Files) || m.Files[id].Type != "file" || len(saved.Verified[id]) != len(m.Files[id].Chunks) {
+				return nil, errors.New("INVALID_RESUME_STATE")
+			}
 		}
 	} else if !errors.Is(e, fs.ErrNotExist) {
 		return nil, e
@@ -93,6 +109,12 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 			return nil, err
 		}
 		fresh := hex.EncodeToString(token) + ".new"
+		committed := false
+		defer func(name string, keep *bool) {
+			if !*keep {
+				_ = r.stage.Remove(name)
+			}
+		}(fresh, &committed)
 		f, openErr := r.stage.OpenFile(fresh, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 		if openErr != nil {
 			return nil, openErr
@@ -140,6 +162,7 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 		if err = r.stage.Rename(fresh, name); err != nil {
 			return nil, err
 		}
+		committed = true
 		f, err = r.stage.OpenFile(name, os.O_RDWR, 0600)
 		if err != nil {
 			return nil, err
@@ -168,6 +191,12 @@ func (r *Receiver) checkpoint() error {
 	if err != nil {
 		return err
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = r.stage.Remove("checkpoint.tmp")
+		}
+	}()
 	if _, err = f.Write(b); err != nil {
 		_ = f.Close()
 		return err
@@ -179,7 +208,11 @@ func (r *Receiver) checkpoint() error {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	return r.stage.Rename("checkpoint.tmp", "state.json")
+	if err = r.stage.Rename("checkpoint.tmp", "state.json"); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 func (r *Receiver) WriteChunk(ctx context.Context, id uint32, index int, data []byte) error {

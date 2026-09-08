@@ -12,6 +12,7 @@ LinkSend 是 Go 核心、Wails 2 桌面端和自托管信令服务组成的点�
 - manifest、BLAKE3 分块校验、安全 staging、断点恢复和安全提交。
 - `demo-local` 真实驱动 WSS、ICE、QUIC 和文件协议。
 - CLI `send` / `receive` 已调用共享直连编排；接收端默认要求交互确认，测试才使用 `--auto-accept`。
+- `send --evidence` 和 `receive --evidence` 可输出实际选中的直连路径、STUN 计数和 TLS/ALPN，不含 ICE credential 或令牌。
 
 当前已验证的是 Windows loopback 直连。真实两机 LAN、公网 IPv6、受控双 NAT、Windows 与 macOS 互通以及 Linux NAT 实验仍待目标环境运行，不能由本地演示替代。
 
@@ -49,7 +50,7 @@ go run ./cmd/linksend --server http://127.0.0.1:8787 --allow-insecure-loopback -
 
 真实网络请为 `--bind` 提供具体本地接口地址，并按部署情况提供 `--stun stun:host:3478`；不提供 bind 时只允许显式 loopback 开发模式。
 
-桌面端位于 `apps/desktop`，使用 pnpm 和 Wails 2。它目前调用共享身份、诊断和设备服务；完整发送编排仍在 M3/M4 收尾。
+桌面端位于 `apps/desktop`，使用 pnpm 和 Wails 2。它目前调用共享身份、诊断和设备服务；完整任务 UI 留待真实两机网络验收之后。
 
 ## 范围边界
 

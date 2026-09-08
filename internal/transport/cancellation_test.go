@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/linksend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 func writeTestFrame(t *testing.T, w io.Writer, value any) {

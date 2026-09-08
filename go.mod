@@ -1,4 +1,4 @@
-module example.com/linksend
+module github.com/Wen5555/LinkSend
 
 go 1.26.0
 

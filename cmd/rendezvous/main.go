@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/linksend/internal/server"
+	"github.com/Wen5555/LinkSend/internal/server"
 )
 
 func main() {

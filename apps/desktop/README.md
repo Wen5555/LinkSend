@@ -1,19 +1,40 @@
-# README
+# LinkSend Desktop Shell
 
-## About
+This Wails 2 module is the desktop shell for LinkSend. It exposes the shared
+Go identity, device, and redacted diagnostics services to the React frontend.
+ICE, QUIC, file reads/writes, BLAKE3 verification, and transfer state remain
+in the root Go module; file bytes must never cross Wails JavaScript IPC.
 
-This is the official Wails React-TS template.
+## Development
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+From this directory, install the frontend dependencies and start Wails:
 
-## Live Development
+```powershell
+Set-Location D:\apps\Osend\apps\desktop\frontend
+pnpm install --frozen-lockfile
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+Set-Location ..
+wails dev
+```
 
-## Building
+`D:\apps\Osend\.tools\bin\wails.exe` is the checked project-local Wails
+entry point on Windows and is also used by `go run ./cmd/devtool desktop-dev`
+from the repository root.
 
-To build a redistributable, production mode package, use `wails build`.
+## Build
+
+```powershell
+Set-Location D:\apps\Osend\apps\desktop
+wails build
+```
+
+## Module Boundary
+
+The repository intentionally has two Go modules: the root module contains the
+portable core and this nested module contains Wails and native desktop
+dependencies. `go.work` enables local shared-core development. CI also runs
+this module with `GOWORK=off` so its explicit `replace github.com/Wen5555/LinkSend =>
+../..` dependency is independently verified.
+
+Run the desktop checks from `apps/desktop`; do not add network or filesystem
+transfer logic to React or Wails bindings.

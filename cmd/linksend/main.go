@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/linksend/internal/app"
-	"example.com/linksend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 const usage = `LinkSend CLI
@@ -166,19 +166,23 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		bind := fs.String("bind", "", "concrete local IP:port for ICE")
 		stun := fs.String("stun", "", "comma-separated stun: URLs")
 		allowLoopback := fs.Bool("allow-loopback", false, "allow loopback candidates for a local fixture")
+		evidence := fs.Bool("evidence", false, "include the selected direct path evidence in JSON output")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
 		if *peer == "" || len(fs.Args()) == 0 {
 			return errors.New("send requires --peer and at least one file or directory")
 		}
-		result, err := svc.SendFiles(ctx, *peer, fs.Args(), directConfig(*bind, *stun, *allowLoopback), func(p transfer.Progress) {
+		result, err := svc.SendFilesDetailed(ctx, *peer, fs.Args(), directConfig(*bind, *stun, *allowLoopback), func(p transfer.Progress) {
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
 			return err
 		}
-		return printJSON(result)
+		if *evidence {
+			return printJSON(result)
+		}
+		return printJSON(result.Transfer)
 	case "receive":
 		fs := flag.NewFlagSet(command, flag.ContinueOnError)
 		peer := fs.String("peer", "", "expected trusted peer device ID (optional)")
@@ -186,6 +190,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		bind := fs.String("bind", "", "concrete local IP:port for ICE")
 		stun := fs.String("stun", "", "comma-separated stun: URLs")
 		allowLoopback := fs.Bool("allow-loopback", false, "allow loopback candidates for a local fixture")
+		evidence := fs.Bool("evidence", false, "include the selected direct path evidence in JSON output")
 		autoAccept := fs.Bool("auto-accept", false, "accept only with explicit unattended test opt-in")
 		if err := fs.Parse(args); err != nil {
 			return err
@@ -202,13 +207,16 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 			line, readErr := bufio.NewReader(os.Stdin).ReadString('\n')
 			return readErr == nil && strings.EqualFold(strings.TrimSpace(line), "y")
 		}
-		result, err := svc.ReceiveOnce(ctx, *peer, *directory, directConfig(*bind, *stun, *allowLoopback), accept, func(p transfer.Progress) {
+		result, err := svc.ReceiveOnceDetailed(ctx, *peer, *directory, directConfig(*bind, *stun, *allowLoopback), accept, func(p transfer.Progress) {
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
 			return err
 		}
-		return printJSON(result)
+		if *evidence {
+			return printJSON(result)
+		}
+		return printJSON(result.Transfer)
 	case "accept":
 		return app.ErrNotImplemented
 	case "reject":

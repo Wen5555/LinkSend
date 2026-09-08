@@ -22,8 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/store"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/store"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/pelletier/go-toml/v2"
@@ -149,6 +149,8 @@ func New(cfg Config) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{cfg: cfg, store: db, ctx: ctx, cancel: cancel, clients: map[string]*peer{}, sessions: map[string]*negotiation{}, buckets: map[string]bucket{}, replays: protocol.NewReplayWindow(65536), slots: make(chan struct{}, 128)}
+	s.wg.Add(1)
+	go s.reapExpired()
 	return s, nil
 }
 func (s *Server) Close() error {
@@ -159,13 +161,42 @@ func (s *Server) Close() error {
 	}
 	s.closed = true
 	s.cancel()
+	peers := make([]*peer, 0, len(s.clients))
 	for _, p := range s.clients {
-		p.cancel()
-		p.conn.CloseNow()
+		peers = append(peers, p)
 	}
 	s.mu.Unlock()
+	for _, p := range peers {
+		p.cancel()
+		_ = p.conn.CloseNow()
+	}
 	s.wg.Wait()
 	return s.store.Close()
+}
+
+func (s *Server) reapExpired() {
+	defer s.wg.Done()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case now := <-ticker.C:
+			s.mu.Lock()
+			for sid, n := range s.sessions {
+				if !n.expires.After(now) {
+					delete(s.sessions, sid)
+				}
+			}
+			for host, b := range s.buckets {
+				if now.Sub(b.at) > 5*time.Minute {
+					delete(s.buckets, host)
+				}
+			}
+			s.mu.Unlock()
+		}
+	}
 }
 func (s *Server) Counters() Counters {
 	return Counters{s.receivedMessages.Load(), s.forwardedMessages.Load(), s.receivedBytes.Load(), s.forwardedBytes.Load()}
@@ -347,16 +378,17 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	if p := s.clients[id]; p != nil {
-		p.cancel()
-		p.conn.CloseNow()
-	}
+	p := s.clients[id]
 	for sid, n := range s.sessions {
 		if n.from == id || n.to == id {
 			delete(s.sessions, sid)
 		}
 	}
 	s.mu.Unlock()
+	if p != nil {
+		p.cancel()
+		_ = p.conn.CloseNow()
+	}
 	respond(w, 200, map[string]bool{"revoked": true})
 }
 
@@ -402,13 +434,14 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		return
 	}
-	if old := s.clients[d.ID]; old != nil {
-		old.cancel()
-		old.conn.CloseNow()
-	}
+	old := s.clients[d.ID]
 	s.clients[d.ID] = p
 	s.wg.Add(1)
 	s.mu.Unlock()
+	if old != nil {
+		old.cancel()
+		_ = old.conn.CloseNow()
+	}
 	defer s.wg.Done()
 	defer func() {
 		s.mu.Lock()

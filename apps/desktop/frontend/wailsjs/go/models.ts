@@ -1,5 +1,5 @@
 export namespace app {
-	
+
 	export class DeviceInfo {
 	    id: string;
 	    group_id: string;
@@ -8,11 +8,11 @@ export namespace app {
 	    admin: boolean;
 	    online: boolean;
 	    trusted: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new DeviceInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -24,27 +24,25 @@ export namespace app {
 	        this.trusted = source["trusted"];
 	    }
 	}
-	export class IdentityInfo {
+	export class DiagnosticIdentity {
 	    id: string;
 	    public_key_hex: string;
-	    data_dir: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new IdentityInfo(source);
+	        return new DiagnosticIdentity(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.public_key_hex = source["public_key_hex"];
-	        this.data_dir = source["data_dir"];
 	    }
 	}
 	export class Diagnostics {
 	    version: string;
 	    platform: string;
 	    relay: boolean;
-	    identity: IdentityInfo;
+	    identity: DiagnosticIdentity;
 	    server_url?: string;
 	    server_health: string;
 	    capabilities: protocol.Capabilities;
@@ -61,7 +59,7 @@ export namespace app {
 	        this.version = source["version"];
 	        this.platform = source["platform"];
 	        this.relay = source["relay"];
-	        this.identity = this.convertValues(source["identity"], IdentityInfo);
+	        this.identity = this.convertValues(source["identity"], DiagnosticIdentity);
 	        this.server_url = source["server_url"];
 	        this.server_health = source["server_health"];
 	        this.capabilities = this.convertValues(source["capabilities"], protocol.Capabilities);
@@ -88,7 +86,20 @@ export namespace app {
 		    return a;
 		}
 	}
-	
+	export class IdentityInfo {
+	    id: string;
+	    public_key_hex: string;
+	    data_dir: string;
+	    static createFrom(source: any = {}) {
+	        return new IdentityInfo(source);
+	    }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.public_key_hex = source["public_key_hex"];
+	        this.data_dir = source["data_dir"];
+	    }
+	}
 	export class InvitationInfo {
 	    token: string;
 	    expires_at: string;
@@ -155,4 +166,3 @@ export namespace protocol {
 	}
 
 }
-

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/linksend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/app"
 )
 
 func TestLocalDirectDemo(t *testing.T) {

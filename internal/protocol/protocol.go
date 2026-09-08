@@ -57,10 +57,17 @@ const (
 type Error struct {
 	Code   Code   `json:"code"`
 	Detail string `json:"detail"`
+	Cause  error  `json:"-"`
 }
 
 func (e *Error) Error() string         { return string(e.Code) + ": " + e.Detail }
+func (e *Error) Unwrap() error         { return e.Cause }
 func Fail(c Code, detail string) error { return &Error{Code: c, Detail: detail} }
+
+// Wrap exposes a stable summary while retaining the private diagnostic cause.
+func Wrap(c Code, detail string, cause error) error {
+	return &Error{Code: c, Detail: detail, Cause: cause}
+}
 
 type Capabilities struct {
 	ProtocolVersion int    `json:"protocol_version"`

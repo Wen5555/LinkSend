@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/signaling"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/signaling"
 )
 
 var ErrNotImplemented = errors.New("NOT_IMPLEMENTED: requested application operation is not available")
@@ -43,6 +43,13 @@ type IdentityInfo struct {
 	DataDir   string `json:"data_dir"`
 }
 
+// DiagnosticIdentity intentionally omits local filesystem locations. Identity()
+// is an explicit local profile view; diagnostics are safe to export by default.
+type DiagnosticIdentity struct {
+	ID        string `json:"id"`
+	PublicKey string `json:"public_key_hex"`
+}
+
 type DeviceInfo struct {
 	ID        string `json:"id"`
 	GroupID   string `json:"group_id"`
@@ -62,7 +69,7 @@ type Diagnostics struct {
 	Version       string                `json:"version"`
 	Platform      string                `json:"platform"`
 	Relay         bool                  `json:"relay"`
-	Identity      IdentityInfo          `json:"identity"`
+	Identity      DiagnosticIdentity    `json:"identity"`
 	ServerURL     string                `json:"server_url,omitempty"`
 	ServerHealth  string                `json:"server_health"`
 	Capabilities  protocol.Capabilities `json:"capabilities"`
@@ -203,19 +210,30 @@ func (s *Service) Health(ctx context.Context) (protocol.Capabilities, error) {
 func (s *Service) Diagnostics(ctx context.Context) Diagnostics {
 	info := s.Identity()
 	peers, _ := identity.LoadTrust(s.cfg.DataDir)
-	d := Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: info, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	d := Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: DiagnosticIdentity{ID: info.ID, PublicKey: info.PublicKey}, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
 	if strings.TrimSpace(s.cfg.ServerURL) == "" {
 		return d
 	}
 	capabilities, err := s.Health(ctx)
 	if err != nil {
 		d.ServerHealth = "error"
-		d.HealthFailure = err.Error()
+		d.HealthFailure = safeHealthFailure(err)
 		return d
 	}
 	d.ServerHealth = "ok"
 	d.Capabilities = capabilities
 	return d
+}
+
+func safeHealthFailure(err error) string {
+	if err == nil {
+		return ""
+	}
+	code := protocol.ErrorCode(err)
+	if code == protocol.DirectFailed {
+		return "server health check failed"
+	}
+	return string(code)
 }
 
 func (s *Service) Send(context.Context, []string, string) error { return ErrNotImplemented }

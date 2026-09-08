@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"time"
 
-	"example.com/linksend/internal/connectivity"
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/signaling"
-	"example.com/linksend/internal/transfer"
-	"example.com/linksend/internal/transport"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/signaling"
+	"github.com/Wen5555/LinkSend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/transport"
 )
 
 const firstGeneration uint64 = 1
@@ -28,10 +28,47 @@ type DirectConfig struct {
 
 type PeerSession struct {
 	PeerID        string
+	SessionID     string
 	Path          connectivity.Path
 	Data          *transport.Session
 	signal        *signaling.Session
 	stopHeartbeat context.CancelFunc
+}
+
+// DirectEvidence is a read-only snapshot of the path actually selected by ICE
+// and the TLS parameters actually negotiated by QUIC. It contains no ICE
+// credentials, signaling tokens, or private key material.
+type DirectEvidence struct {
+	SessionID         string `json:"session_id"`
+	Generation        uint64 `json:"generation"`
+	PeerID            string `json:"peer_id"`
+	BaseSocket        string `json:"base_socket"`
+	LocalCandidate    string `json:"local_candidate"`
+	RemoteCandidate   string `json:"remote_candidate"`
+	LocalType         string `json:"local_type"`
+	RemoteType        string `json:"remote_type"`
+	RemoteAddress     string `json:"remote_address"`
+	ConnectionMethod  string `json:"connection_method"`
+	TransportProtocol string `json:"transport_protocol"`
+	Relay             bool   `json:"relay"`
+	STUNBytesSent     uint64 `json:"stun_bytes_sent"`
+	STUNBytesReceived uint64 `json:"stun_bytes_received"`
+	RejectedPackets   uint64 `json:"rejected_packets"`
+	TLSVersion        uint16 `json:"tls_version"`
+	ALPN              string `json:"alpn"`
+}
+
+func (p *PeerSession) Evidence() DirectEvidence {
+	if p == nil || p.Data == nil {
+		return DirectEvidence{}
+	}
+	stats, tlsVersion, alpn := p.Data.Evidence()
+	return DirectEvidence{SessionID: p.SessionID, Generation: p.Path.Generation, PeerID: p.PeerID, BaseSocket: p.Path.BaseSocket, LocalCandidate: p.Path.LocalCandidate, RemoteCandidate: p.Path.RemoteCandidate, LocalType: p.Path.LocalType, RemoteType: p.Path.RemoteType, RemoteAddress: p.Path.RemoteAddress, ConnectionMethod: p.Path.ConnectionMethod, TransportProtocol: p.Path.TransportProtocol, Relay: p.Path.Relay, STUNBytesSent: stats.STUNBytesSent, STUNBytesReceived: stats.STUNBytesReceived, RejectedPackets: stats.RejectedPackets, TLSVersion: tlsVersion, ALPN: alpn}
+}
+
+type DirectTransferResult struct {
+	Transfer transfer.Result `json:"transfer"`
+	Evidence DirectEvidence  `json:"evidence"`
 }
 
 func (p *PeerSession) Close() error {
@@ -129,13 +166,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	}
 	path, err := endpoint.Connect(ctx, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
 	if err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return nil, protocol.Fail(protocol.Cancelled, "ICE checks cancelled")
-		}
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, protocol.Fail(protocol.CheckTimeout, "ICE checks timed out")
-		}
-		return nil, protocol.Fail(protocol.CheckTimeout, err.Error())
+		return nil, classifyICEError(ctx, err)
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, false)
 	if err != nil {
@@ -149,7 +180,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	}
 	closeSignal = false
 	closeEndpoint = false
-	return &PeerSession{PeerID: peer.ID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
+	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
 }
 
 // AcceptDirect waits for one authenticated request from expectedPeerID. An
@@ -238,13 +269,7 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 	}
 	path, err := endpoint.Connect(ctx, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, false)
 	if err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return nil, protocol.Fail(protocol.Cancelled, "ICE checks cancelled")
-		}
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, protocol.Fail(protocol.CheckTimeout, "ICE checks timed out")
-		}
-		return nil, protocol.Fail(protocol.CheckTimeout, err.Error())
+		return nil, classifyICEError(ctx, err)
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, true)
 	if err != nil {
@@ -258,38 +283,63 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 	}
 	closeSignal = false
 	closeEndpoint = false
-	return &PeerSession{PeerID: peer.ID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
+	return &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
+}
+
+func classifyICEError(ctx context.Context, err error) error {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		return protocol.Wrap(protocol.Cancelled, "ICE checks cancelled", err)
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, connectivity.ErrCheckTimeout) {
+		return protocol.Wrap(protocol.CheckTimeout, "ICE checks timed out", err)
+	}
+	if errors.Is(err, connectivity.ErrNoViableCandidate) {
+		return protocol.Wrap(protocol.NoViableCandidate, "ICE nominated no candidate", err)
+	}
+	return protocol.Wrap(protocol.ICEFailed, "ICE checks failed", err)
 }
 
 func (s *Service) SendFiles(ctx context.Context, peerID string, paths []string, cfg DirectConfig, progress func(transfer.Progress)) (transfer.Result, error) {
+	detailed, err := s.SendFilesDetailed(ctx, peerID, paths, cfg, progress)
+	return detailed.Transfer, err
+}
+
+func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []string, cfg DirectConfig, progress func(transfer.Progress)) (DirectTransferResult, error) {
 	prepared, err := transfer.Prepare(ctx, paths, 0)
 	if err != nil {
-		return transfer.Result{}, err
+		return DirectTransferResult{}, err
 	}
 	defer prepared.Close()
 	peer, err := s.ConnectDirect(ctx, peerID, cfg)
 	if err != nil {
-		return transfer.Result{}, err
+		return DirectTransferResult{}, err
 	}
 	defer peer.Close()
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
 	if err != nil {
-		return transfer.Result{}, err
+		return DirectTransferResult{}, err
 	}
-	return transfer.Send(ctx, transport.WrapStream(stream), prepared, progress)
+	result, err := transfer.Send(ctx, transport.WrapStream(stream), prepared, progress)
+	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
 }
 
 func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (transfer.Result, error) {
+	detailed, err := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, accept, progress)
+	return detailed.Transfer, err
+}
+
+func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (DirectTransferResult, error) {
 	peer, err := s.AcceptDirect(ctx, expectedPeerID, cfg)
 	if err != nil {
-		return transfer.Result{}, err
+		return DirectTransferResult{}, err
 	}
 	defer peer.Close()
 	stream, err := peer.Data.Conn.AcceptStream(ctx)
 	if err != nil {
-		return transfer.Result{}, err
+		return DirectTransferResult{}, err
 	}
-	return transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, accept, progress)
+	result, err := transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, accept, progress)
+	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
 }
 
 func (s *Service) newEndpoint(cfg DirectConfig) (*connectivity.Endpoint, error) {
@@ -361,10 +411,10 @@ func classifyPhaseError(ctx context.Context, err error, timeoutCode protocol.Cod
 		return nil
 	}
 	if errors.Is(ctx.Err(), context.Canceled) {
-		return fmt.Errorf("%w: %v", protocol.Fail(protocol.Cancelled, phase+" cancelled"), err)
+		return protocol.Wrap(protocol.Cancelled, phase+" cancelled", err)
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return fmt.Errorf("%w: %v", protocol.Fail(timeoutCode, phase+" timed out"), err)
+		return protocol.Wrap(timeoutCode, phase+" timed out", err)
 	}
 	return err
 }

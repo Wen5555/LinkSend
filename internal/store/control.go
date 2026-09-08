@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"example.com/linksend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/identity"
 	_ "modernc.org/sqlite"
 )
 
@@ -60,6 +60,33 @@ INSERT OR IGNORE INTO schema_version(version) VALUES(1);`)
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+	var versions []int
+	rows, err := db.Query("SELECT version FROM schema_version")
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	for rows.Next() {
+		var version int
+		if err = rows.Scan(&version); err != nil {
+			rows.Close()
+			db.Close()
+			return nil, err
+		}
+		versions = append(versions, version)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		db.Close()
+		return nil, err
+	}
+	if err = rows.Close(); err != nil || len(versions) != 1 || versions[0] != 1 {
+		db.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New("unsupported control database schema version")
 	}
 	return &Control{db: db}, nil
 }

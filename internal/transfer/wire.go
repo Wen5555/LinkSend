@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"math"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type Progress struct {
@@ -36,7 +38,30 @@ type control struct {
 	Error    string    `json:"error,omitempty"`
 }
 
-var ErrCancelled = errors.New("CANCELLED")
+const (
+	opOffer     = "offer"
+	opAccept    = "accept"
+	opReject    = "reject"
+	opChunk     = "chunk"
+	opAck       = "ack"
+	opReady     = "ready"
+	opFinish    = "finish"
+	opCompleted = "completed"
+	opConfirmed = "confirmed"
+	opError     = "error"
+)
+
+const maxPeerError = 4 << 10
+
+var (
+	ErrCancelled = errors.New("CANCELLED")
+	ErrPeerError = errors.New("PEER_ERROR")
+)
+
+type PeerError struct{ Detail string }
+
+func (e *PeerError) Error() string { return "PEER_ERROR: " + e.Detail }
+func (e *PeerError) Unwrap() error { return ErrPeerError }
 
 type streamAborter interface{ Abort() }
 
@@ -89,6 +114,9 @@ func streamLifecycle(ctx context.Context, rw io.ReadWriteCloser) (complete, abor
 }
 
 func writeFrame(w io.Writer, b []byte, limit int) error {
+	if limit <= 0 {
+		return errors.New("INVALID_FRAME_LIMIT")
+	}
 	if len(b) > limit {
 		return errors.New("FRAME_TOO_LARGE")
 	}
@@ -113,6 +141,9 @@ func writeAll(w io.Writer, b []byte) error {
 	return nil
 }
 func readFrame(r io.Reader, limit int) ([]byte, error) {
+	if limit <= 0 {
+		return nil, errors.New("INVALID_FRAME_LIMIT")
+	}
 	var header [4]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return nil, err
@@ -126,6 +157,15 @@ func readFrame(r io.Reader, limit int) ([]byte, error) {
 	return b, err
 }
 func writeControl(w io.Writer, c control) error {
+	if c.Op == opError {
+		c.Error = safePeerError(c.Error)
+		if c.Error == "" {
+			c.Error = "peer reported an error"
+		}
+	}
+	if err := validateControl(c); err != nil {
+		return err
+	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -138,13 +178,79 @@ func readControl(r io.Reader) (control, error) {
 	if err != nil {
 		return c, err
 	}
+	if len(b) == 0 {
+		return c, errors.New("INVALID_CONTROL")
+	}
 	if err = json.Unmarshal(b, &c); err != nil {
 		return c, err
 	}
-	if c.Op == "error" {
-		return c, fmt.Errorf("PEER_ERROR: %s", c.Error)
+	if err = validateControl(c); err != nil {
+		return c, err
+	}
+	if c.Op == opError {
+		return c, &PeerError{Detail: safePeerError(c.Error)}
 	}
 	return c, nil
+}
+
+func safePeerError(s string) string {
+	if !utf8.ValidString(s) {
+		return "peer reported an invalid error"
+	}
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, s)
+	for len(s) > maxPeerError {
+		_, width := utf8.DecodeLastRuneInString(s)
+		s = s[:len(s)-width]
+	}
+	return strings.TrimSpace(s)
+}
+
+func validateControl(c control) error {
+	switch c.Op {
+	case opOffer:
+		if c.Manifest == nil || c.Digest == "" || c.Digest != c.Manifest.Digest() {
+			return errors.New("INVALID_OFFER")
+		}
+		if c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
+			return errors.New("INVALID_OFFER")
+		}
+	case opAccept:
+		if c.Manifest != nil || c.Digest == "" || c.File != 0 || c.Index != 0 || c.Verified < 0 || c.Error != "" {
+			return errors.New("INVALID_ACCEPTANCE")
+		}
+	case opChunk:
+		if c.Manifest != nil || c.Digest != "" || c.Index < 0 || c.Verified != 0 || c.Error != "" {
+			return errors.New("INVALID_CHUNK_REQUEST")
+		}
+	case opAck:
+		if c.Manifest != nil || c.Digest != "" || c.Index < 0 || c.Verified < 0 || c.Error != "" {
+			return errors.New("INVALID_ACK")
+		}
+	case opReady, opReject:
+		if c.Manifest != nil || c.Digest != "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
+			return errors.New("INVALID_CONTROL")
+		}
+	case opFinish, opConfirmed:
+		if c.Manifest != nil || c.Digest == "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
+			return errors.New("INVALID_CONTROL")
+		}
+	case opCompleted:
+		if c.Manifest != nil || c.Digest == "" || c.File != 0 || c.Index != 0 || c.Verified < 0 || c.Error != "" {
+			return errors.New("INVALID_CONTROL")
+		}
+	case opError:
+		if c.Manifest != nil || c.Digest != "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || len(c.Error) == 0 || len(c.Error) > maxPeerError || !utf8.ValidString(c.Error) {
+			return errors.New("INVALID_PEER_ERROR")
+		}
+	default:
+		return errors.New("UNKNOWN_CRITICAL_MESSAGE")
+	}
+	return nil
 }
 
 // The caller must pass an already mutually authenticated stream. Cancellation
@@ -167,17 +273,17 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 		}
 	}
 	emit()
-	if err := writeControl(rw, control{Op: "offer", Manifest: &m, Digest: digest}); err != nil {
+	if err := writeControl(rw, control{Op: opOffer, Manifest: &m, Digest: digest}); err != nil {
 		return Result{}, err
 	}
 	c, err := readControl(rw)
 	if err != nil {
 		return Result{}, err
 	}
-	if c.Op == "reject" {
+	if c.Op == opReject {
 		return Result{}, ErrRejected
 	}
-	if c.Op != "accept" || c.Digest != digest {
+	if c.Op != opAccept || c.Digest != digest || c.Verified < 0 || c.Verified > progress.Total {
 		return Result{}, errors.New("INVALID_ACCEPTANCE")
 	}
 	progress.State = "Transferring"
@@ -194,10 +300,10 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			return Result{}, err
 		}
 		switch c.Op {
-		case "chunk":
+		case opChunk:
 			data, e := p.ReadChunk(ctx, c.File, c.Index, buf)
 			if e != nil {
-				_ = writeControl(rw, control{Op: "error", Error: e.Error()})
+				_ = writeControl(rw, control{Op: opError, Error: e.Error()})
 				return Result{}, e
 			}
 			progress.Read += int64(len(data))
@@ -209,30 +315,31 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			if e != nil {
 				return Result{}, e
 			}
-			if ack.Op != "ack" || ack.File != c.File || ack.Index != c.Index || ack.Verified < progress.Verified || ack.Verified > progress.Total {
+			maxVerified := initial + progress.Sent
+			if ack.Op != opAck || ack.File != c.File || ack.Index != c.Index || ack.Verified < progress.Verified || ack.Verified > progress.Total || ack.Verified > maxVerified {
 				return Result{}, errors.New("INVALID_ACK")
 			}
 			progress.Verified = ack.Verified
-			progress.BytesPerSecond = float64(progress.Verified-initial) / time.Since(start).Seconds()
+			progress.BytesPerSecond = safeRate(progress.Verified-initial, time.Since(start))
 			emit()
-		case "ready":
+		case opReady:
 			progress.State = "Verifying"
 			emit()
 			if err = p.Revalidate(ctx); err != nil {
-				_ = writeControl(rw, control{Op: "error", Error: err.Error()})
+				_ = writeControl(rw, control{Op: opError, Error: err.Error()})
 				return Result{}, err
 			}
-			if err = writeControl(rw, control{Op: "finish", Digest: digest}); err != nil {
+			if err = writeControl(rw, control{Op: opFinish, Digest: digest}); err != nil {
 				return Result{}, err
 			}
 			done, e := readControl(rw)
 			if e != nil {
 				return Result{}, e
 			}
-			if done.Op != "completed" || done.Digest != digest || done.Verified != m.TotalBytes() {
+			if done.Op != opCompleted || done.Digest != digest || done.Verified != m.TotalBytes() {
 				return Result{}, ErrIntegrity
 			}
-			if err = writeControl(rw, control{Op: "confirmed", Digest: digest}); err != nil {
+			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest}); err != nil {
 				return Result{}, err
 			}
 			progress.State = "Completed"
@@ -244,6 +351,17 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			return Result{}, errors.New("UNKNOWN_CRITICAL_MESSAGE")
 		}
 	}
+}
+
+func safeRate(bytes int64, elapsed time.Duration) float64 {
+	if bytes <= 0 || elapsed <= 0 {
+		return 0
+	}
+	r := float64(bytes) / elapsed.Seconds()
+	if math.IsNaN(r) || math.IsInf(r, 0) || r < 0 {
+		return 0
+	}
+	return r
 }
 
 func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string, accept func(Manifest) bool, onProgress func(Progress)) (result Result, err error) {
@@ -258,7 +376,7 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	if err != nil {
 		return Result{}, err
 	}
-	if offer.Op != "offer" || offer.Manifest == nil {
+	if offer.Op != opOffer || offer.Manifest == nil {
 		return Result{}, errors.New("INVALID_OFFER")
 	}
 	m := *offer.Manifest
@@ -269,24 +387,31 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		return Result{}, ErrIntegrity
 	}
 	if accept == nil || !accept(m) {
-		_ = writeControl(rw, control{Op: "reject"})
+		_ = writeControl(rw, control{Op: opReject})
 		return Result{}, ErrRejected
 	}
 	r, err := OpenReceiver(ctx, directory, peer, m)
 	if err != nil {
-		_ = writeControl(rw, control{Op: "error", Error: err.Error()})
+		_ = writeControl(rw, control{Op: opError, Error: err.Error()})
 		return Result{}, err
 	}
 	defer r.Close()
-	fail := func(e error) (Result, error) { _ = r.Mark("Failed"); return Result{}, e }
-	if err = writeControl(rw, control{Op: "accept", Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
+	fail := func(e error) (Result, error) {
+		state := "Failed"
+		if errors.Is(e, context.Canceled) {
+			state = "Cancelled"
+		}
+		_ = r.Mark(state)
+		return Result{}, e
+	}
+	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
 		return fail(err)
 	}
 	start := time.Now()
 	initial := r.VerifiedBytes()
 	emit := func(state string) {
 		if onProgress != nil {
-			onProgress(Progress{TransferID: m.TransferID, State: state, Total: m.TotalBytes(), Verified: r.VerifiedBytes(), BytesPerSecond: float64(r.VerifiedBytes()-initial) / time.Since(start).Seconds()})
+			onProgress(Progress{TransferID: m.TransferID, State: state, Total: m.TotalBytes(), Verified: r.VerifiedBytes(), BytesPerSecond: safeRate(r.VerifiedBytes()-initial, time.Since(start))})
 		}
 	}
 	for _, e := range m.Files {
@@ -297,7 +422,7 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 			if err = ctx.Err(); err != nil {
 				return fail(err)
 			}
-			if err = writeControl(rw, control{Op: "chunk", File: e.ID, Index: i}); err != nil {
+			if err = writeControl(rw, control{Op: opChunk, File: e.ID, Index: i}); err != nil {
 				return fail(err)
 			}
 			data, eRead := readFrame(rw, m.ChunkSize)
@@ -305,38 +430,38 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 				return fail(eRead)
 			}
 			if err = r.WriteChunk(ctx, e.ID, i, data); err != nil {
-				_ = writeControl(rw, control{Op: "error", Error: err.Error()})
+				_ = writeControl(rw, control{Op: opError, Error: err.Error()})
 				return fail(err)
 			}
-			if err = writeControl(rw, control{Op: "ack", File: e.ID, Index: i, Verified: r.VerifiedBytes()}); err != nil {
+			if err = writeControl(rw, control{Op: opAck, File: e.ID, Index: i, Verified: r.VerifiedBytes()}); err != nil {
 				return fail(err)
 			}
 			emit("Transferring")
 		}
 	}
-	if err = writeControl(rw, control{Op: "ready"}); err != nil {
+	if err = writeControl(rw, control{Op: opReady}); err != nil {
 		return fail(err)
 	}
 	finish, err := readControl(rw)
 	if err != nil {
 		return fail(err)
 	}
-	if finish.Op != "finish" || finish.Digest != m.Digest() {
+	if finish.Op != opFinish || finish.Digest != m.Digest() {
 		return fail(ErrIntegrity)
 	}
 	emit("Verifying")
 	if err = r.Finish(ctx); err != nil {
-		_ = writeControl(rw, control{Op: "error", Error: err.Error()})
+		_ = writeControl(rw, control{Op: opError, Error: err.Error()})
 		return fail(err)
 	}
-	if err = writeControl(rw, control{Op: "completed", Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
+	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
 		return fail(err)
 	}
 	confirmed, err := readControl(rw)
 	if err != nil {
 		return Result{}, err
 	}
-	if confirmed.Op != "confirmed" || confirmed.Digest != m.Digest() {
+	if confirmed.Op != opConfirmed || confirmed.Digest != m.Digest() {
 		return Result{}, ErrIntegrity
 	}
 	emit("Completed")

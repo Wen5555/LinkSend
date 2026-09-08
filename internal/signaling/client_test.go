@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/server"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/server"
 )
 
 func testServer(t *testing.T) (*server.Server, *httptest.Server) {

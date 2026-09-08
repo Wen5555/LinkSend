@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"example.com/linksend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/app"
 )
 
 func TestUnimplementedTaskCommandsHaveNoSideEffects(t *testing.T) {

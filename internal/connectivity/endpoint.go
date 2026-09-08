@@ -18,6 +18,12 @@ import (
 
 const MaxCandidates = 32
 
+var (
+	ErrCheckTimeout      = errors.New("ICE_CHECK_TIMEOUT")
+	ErrNoViableCandidate = errors.New("NO_VIABLE_CANDIDATE")
+	ErrICEFailed         = errors.New("ICE_FAILED")
+)
+
 type Config struct {
 	// A concrete local address is required; unspecified binds are rejected.
 	BindAddress   string
@@ -243,14 +249,23 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 		_, err = e.agent.Accept(ctx, remote.Ufrag, remote.Password)
 	}
 	if err != nil {
-		return Path{}, fmt.Errorf("E_ICE_CHECK_TIMEOUT: %w", err)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return Path{}, fmt.Errorf("%w: %v", context.Canceled, err)
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return Path{}, fmt.Errorf("%w: %v", ErrCheckTimeout, err)
+		}
+		if errors.Is(err, ice.ErrNoCandidatePairs) {
+			return Path{}, fmt.Errorf("%w: %v", ErrNoViableCandidate, err)
+		}
+		return Path{}, fmt.Errorf("%w: %v", ErrICEFailed, err)
 	}
 	p, err := e.agent.GetSelectedCandidatePair()
 	if err != nil {
 		return Path{}, err
 	}
 	if p == nil {
-		return Path{}, errors.New("E_DIRECT_FAILED: ICE returned no nominated pair")
+		return Path{}, ErrNoViableCandidate
 	}
 	method := "direct_unknown"
 	if p.Local.Type() == ice.CandidateTypeServerReflexive || p.Remote.Type() == ice.CandidateTypeServerReflexive {

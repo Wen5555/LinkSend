@@ -1,6 +1,6 @@
 # Architecture
 
-根 module `example.com/linksend` 包含协议、身份、信令客户端、Pion/quic-go 集成、传输协议、存储、服务端、应用服务和 CLI。`apps/desktop` 是唯一嵌套 Go module，Wails 绑定只调用 `internal/app`。
+根 module `github.com/Wen5555/LinkSend` 包含协议、身份、信令客户端、Pion/quic-go 集成、传输协议、存储、服务端、应用服务和 CLI。`apps/desktop` 是唯一嵌套 Go module，Wails 绑定只调用 `internal/app`。
 
 数据面流程是：
 

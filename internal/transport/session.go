@@ -6,12 +6,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
-	"example.com/linksend/internal/connectivity"
-	"example.com/linksend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	quic "github.com/quic-go/quic-go"
 )
 
@@ -41,6 +41,14 @@ type Session struct {
 	Path     connectivity.Path
 	endpoint *connectivity.Endpoint
 	once     sync.Once
+}
+
+func (s *Session) Evidence() (connectivity.Stats, uint16, string) {
+	if s == nil || s.Conn == nil || s.endpoint == nil {
+		return connectivity.Stats{}, 0, ""
+	}
+	tlsState := s.Conn.ConnectionState().TLS
+	return s.endpoint.Stats(), tlsState.Version, tlsState.NegotiatedProtocol
 }
 
 // Establish uses the ICE controlling role as QUIC client. Both TLS configs must
@@ -74,10 +82,10 @@ func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, protocol.Fail(protocol.QUICHandshakeTimeout, "QUIC handshake timed out")
 		}
-		if strings.Contains(err.Error(), "AUTHENTICATION_FAILED") {
-			return nil, protocol.Fail(protocol.AuthenticationFailed, err.Error())
+		if errors.Is(err, identity.ErrAuthentication) {
+			return nil, protocol.Wrap(protocol.AuthenticationFailed, "TLS peer identity verification failed", err)
 		}
-		return nil, protocol.Fail(protocol.QUICHandshakeFailed, err.Error())
+		return nil, protocol.Wrap(protocol.QUICHandshakeFailed, "QUIC handshake failed", err)
 	}
 	if conn.RemoteAddr().String() != addr.String() {
 		_ = conn.CloseWithError(1, "nominated path mismatch")

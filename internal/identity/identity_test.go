@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"math/big"
 	"net"
 	"os"
@@ -136,5 +137,7 @@ func TestCertificatePolicy(t *testing.T) {
 	}
 	if _, err := i.TLSConfig(nil, false); err == nil {
 		t.Fatal("missing pin accepted")
+	} else if !errors.Is(err, ErrAuthentication) {
+		t.Fatalf("missing identity sentinel: %v", err)
 	}
 }

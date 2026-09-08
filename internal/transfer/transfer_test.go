@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -287,6 +288,124 @@ func TestFrameLimitsAndCaseCollision(t *testing.T) {
 	m.Files = append(m.Files, FileEntry{ID: uint32(len(m.Files)), Path: strings.ToUpper(m.Files[0].Path), Type: "directory"})
 	if err := m.Validate(); err == nil {
 		t.Fatal("case collision accepted")
+	}
+}
+
+func TestControlBoundsAndPeerError(t *testing.T) {
+	if err := validateControl(control{Op: opAccept, Digest: "x", Verified: -1}); err == nil {
+		t.Fatal("negative accept verified accepted")
+	}
+	if err := validateControl(control{Op: opAck, Index: 0, Verified: -1}); err == nil {
+		t.Fatal("negative ack accepted")
+	}
+	if err := validateControl(control{Op: "bogus"}); err == nil {
+		t.Fatal("unknown operation accepted")
+	}
+	if got := safePeerError("line\x00\x1b[31m"); strings.ContainsAny(got, "\x00\x1b") {
+		t.Fatalf("unsafe peer detail: %q", got)
+	}
+	if safeRate(1, 0) != 0 || safeRate(-1, time.Second) != 0 {
+		t.Fatal("invalid rate")
+	}
+}
+
+func TestSenderRejectsImpossibleVerifiedProgress(t *testing.T) {
+	p := fixture(t)
+	for _, verified := range []int64{-1, p.Manifest.TotalBytes() + 1} {
+		t.Run("accept", func(t *testing.T) {
+			a, b := net.Pipe()
+			defer a.Close()
+			defer b.Close()
+			done := make(chan error, 1)
+			go func() {
+				_, err := readControl(b)
+				if err != nil {
+					done <- err
+					return
+				}
+				payload, _ := json.Marshal(control{Op: opAccept, Digest: p.Manifest.Digest(), Verified: verified})
+				done <- writeFrame(b, payload, MaxMetadata)
+			}()
+			_, err := Send(context.Background(), a, p, nil)
+			if err == nil || !strings.Contains(err.Error(), "INVALID_ACCEPTANCE") {
+				t.Fatalf("accepted impossible verified=%d: %v", verified, err)
+			}
+			if peerErr := <-done; peerErr != nil {
+				t.Fatal(peerErr)
+			}
+		})
+	}
+	// A receiver cannot acknowledge more data than this sender has written.
+	var chunkFile FileEntry
+	for _, entry := range p.Manifest.Files {
+		if entry.Type == "file" && len(entry.Chunks) > 0 {
+			chunkFile = entry
+			break
+		}
+	}
+	if len(chunkFile.Chunks) == 0 {
+		t.Fatal("fixture has no nonempty file")
+	}
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	done := make(chan error, 1)
+	go func() {
+		offer, err := readControl(b)
+		if err != nil {
+			done <- err
+			return
+		}
+		if err = writeControl(b, control{Op: opAccept, Digest: offer.Digest}); err != nil {
+			done <- err
+			return
+		}
+		if err = writeControl(b, control{Op: opChunk, File: chunkFile.ID, Index: 0}); err != nil {
+			done <- err
+			return
+		}
+		if _, err = readFrame(b, p.Manifest.ChunkSize); err != nil {
+			done <- err
+			return
+		}
+		payload, _ := json.Marshal(control{Op: opAck, File: chunkFile.ID, Index: 0, Verified: p.Manifest.TotalBytes()})
+		done <- writeFrame(b, payload, MaxMetadata)
+	}()
+	_, err := Send(context.Background(), a, p, nil)
+	if err == nil || !strings.Contains(err.Error(), "INVALID_ACK") {
+		t.Fatalf("accepted impossible ACK: %v", err)
+	}
+	if peerErr := <-done; peerErr != nil {
+		t.Fatal(peerErr)
+	}
+}
+
+func TestResumeStateRejectsTrailingDataAndUnknownFiles(t *testing.T) {
+	p := fixture(t)
+	for _, mutate := range []func(*ResumeState){
+		func(*ResumeState) {},
+		func(state *ResumeState) { state.Verified[999] = []bool{true} },
+	} {
+		dest := t.TempDir()
+		stage := filepath.Join(dest, ".linksend-"+p.Manifest.TransferID)
+		if err := os.Mkdir(stage, 0700); err != nil {
+			t.Fatal(err)
+		}
+		state := ResumeState{Peer: "peer", Manifest: p.Manifest, Digest: p.Manifest.Digest(), State: "Transferring", Verified: map[uint32][]bool{}}
+		mutate(&state)
+		data, err := json.Marshal(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(state.Verified) == 0 {
+			data = append(data, []byte(" {}")...)
+		}
+		if err = os.WriteFile(filepath.Join(stage, "state.json"), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = OpenReceiver(context.Background(), dest, "peer", p.Manifest); err == nil {
+			t.Fatal("invalid resume state accepted")
+		}
 	}
 }
 

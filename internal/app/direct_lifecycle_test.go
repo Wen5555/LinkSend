@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"example.com/linksend/internal/connectivity"
-	"example.com/linksend/internal/identity"
-	"example.com/linksend/internal/protocol"
-	"example.com/linksend/internal/signaling"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/signaling"
 )
 
 type candidateSessionStub struct {
