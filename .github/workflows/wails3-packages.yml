@@ -51,7 +51,7 @@ jobs:
         run: |
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.18
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          wails3 version
+          "$(go env GOPATH)/bin/wails3" version
       - name: Verify core module
         shell: bash
         run: GOWORK=off go test ./...

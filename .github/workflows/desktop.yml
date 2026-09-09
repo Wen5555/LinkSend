@@ -24,7 +24,8 @@ jobs:
           $env:GOBIN = "$env:GITHUB_WORKSPACE\.wails-bin"
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.18
           "$env:GITHUB_WORKSPACE\.wails-bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          wails3 version
+          & "$env:GITHUB_WORKSPACE\.wails-bin\wails3.exe" version
+          $env:PATH = "$env:GITHUB_WORKSPACE\.wails-bin;$env:PATH"
       - name: Desktop Go checks
         working-directory: apps/desktop
         shell: pwsh
