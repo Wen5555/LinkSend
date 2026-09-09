@@ -16,7 +16,7 @@ Updated: 2026-09-09. This is an active implementation, not an accepted product r
 - The default PATH exposed MinGW-w64 GCC 8.1, which made Windows race binaries exit with `0xc0000139`. Scoop MinGW 16.2.0 is now installed and selected explicitly for race verification.
 - Docker 29.2.1 client is installed, but the Linux engine is unavailable.
 - Wails 3.0.0-beta.18 is available at `.tools/bin/wails3.exe`; WebView2 is installed, but macOS runtime validation is not available here.
-- This round changed only the LinkSend service binary/config on `hk-main`; no unrelated firewall, DNS, proxy or certificate records were modified. No Git commit, push, reset, clean or stash was performed.
+- This round changed only the LinkSend service binary/config on `hk-main`; no unrelated firewall, DNS, proxy or certificate records were modified. At the time of this deployment snapshot no Git commit/push/reset/clean/stash had been performed; the later candidate commits and push are recorded in the 2026-09-10 section below.
 
 ## 2026-09-08 Hong Kong host connectivity preparation
 
@@ -219,3 +219,23 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 浏览器行为/视觉检查：实际打开传输、设备、设置三页，并在 700px 窄屏检查导航折叠、单列布局、表单宽度、禁用态和复制入口；这是 WebView 内容渲染证据，不等于 Wails 原生窗口点击验收。
 - `NOT_RUN` / `BLOCKED_BY_EXTERNAL_ENV`：本轮未运行新的 Windows↔macOS 双机传输、跨 NAT、IPv6、网络切换、睡眠唤醒、macOS Wails、Windows 原生窗口人工点击、Docker 引擎运行或安装签名。`devtool test-nat` 在 Windows 上按设计非零退出并说明需要 Linux 特权 namespace fixture。
 - 下一步：在两端现场执行 Stage 2B 跨 NAT 与新版原生 UI 工作流；之后实现持久任务历史、真正的应用重启恢复和暂停/恢复编排。
+
+## 2026-09-10 Wails 3 候选打包与交付核验
+
+- 任务分支为 `codex/wails3-hk-dmg-20260909`，当前候选 commit 为
+  `8087f876ac4a94a43a1c46536a78493064092d32`；本轮提交了 DMG 资源、Windows/Mac 测试说明，
+  未修改 `main`、未合并、未发布正式 Release。源码快照仍保留在 `.artifacts/pre-wails3-20260909-*`。
+- GitHub Actions run [34384170503](https://github.com/Wen5555/LinkSend/actions/runs/34384170503) 的
+  `windows-amd64`、`macos-arm64`、`macos-amd64` 均 `success`。Windows ZIP 和两个 DMG 已下载到
+  `.artifacts/ci-34384170503/` 并通过 ZIP 完整性、包内 `SHA256SUMS.txt`、DMG HFS+ 目录、
+  `Info.plist`、`CFBundleIdentifier`、Go `GOARCH/GOOS` 与 Wails 依赖核验。
+- 最终包 SHA256：Windows ZIP
+  `b4338a99a2cbe77bb700c7bd756edea79ad9086e9ee2e9e0e42456e1c28772ce`；macOS arm64 DMG
+  `42364315567243996e8296a13af3e65811987db68f0a58b40ad780d15bda7303`；macOS amd64 DMG
+  `432f276dde5c1297597cb8eef32dea90830d88f388ccec38d35d60dc05f59651`。DMG 为内部测试包，
+  仅 ad-hoc 签名，不含 Developer ID 或公证。
+- Windows ZIP 现在包含真实 `LinkSend.exe` 与 `README-WINDOWS-TEST.txt`；DMG 包含完整
+  `LinkSend.app`、`README-MACOS-TEST.txt` 和 Applications 拖拽入口。离线 `go version -m` 确认
+  Go 1.26.5、`GOOS=darwin`、`GOARCH=arm64/amd64` 及 Wails `v3.0.0-beta.18`。
+- 当前主机实际完成了 Windows 与香港服务的既有真实双向 QUIC 证据；没有新增 Mac 原生窗口、DMG
+  挂载、红点/Cmd+Q、跨 NAT、IPv6 或网络切换验收，均标记 `NOT_RUN`/`BLOCKED_BY_EXTERNAL_ENV`。

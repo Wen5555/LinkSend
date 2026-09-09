@@ -40,3 +40,27 @@ plutil -p apps/desktop/bin/macos-arm64/LinkSend.app/Contents/Info.plist
 ```
 
 首次打开：将 DMG 中的 `LinkSend.app` 拖入 `/Applications`，若系统提示未验证，进入“系统设置 → 隐私与安全 → 仍要打开”针对该应用确认。不要关闭 Gatekeeper 或批量清除隔离属性。
+
+## 本轮 CI 产物（2026-09-10）
+
+GitHub Actions run [34384170503](https://github.com/Wen5555/LinkSend/actions/runs/34384170503)
+在 commit `8087f876ac4a94a43a1c46536a78493064092d32` 的 Windows、macOS arm64、macOS amd64
+矩阵均通过（`fail-fast: false`）。artifact 名称分别为：
+
+- `LinkSend-wails3-preview-windows-amd64-8087f876ac4a94a43a1c46536a78493064092d32`
+- `LinkSend-wails3-preview-macos-arm64-8087f876ac4a94a43a1c46536a78493064092d32`
+- `LinkSend-wails3-preview-macos-amd64-8087f876ac4a94a43a1c46536a78493064092d32`
+
+包内 SHA256（以 `SHA256SUMS.txt` 为准）：
+
+```text
+42364315567243996e8296a13af3e65811987db68f0a58b40ad780d15bda7303  LinkSend-wails3-preview-macos-arm64-8087f876ac4a94a43a1c46536a78493064092d32.dmg
+432f276dde5c1297597cb8eef32dea90830d88f388ccec38d35d60dc05f59651  LinkSend-wails3-preview-macos-amd64-8087f876ac4a94a43a1c46536a78493064092d32.dmg
+b4338a99a2cbe77bb700c7bd756edea79ad9086e9ee2e9e0e42456e1c28772ce  apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-8087f876ac4a94a43a1c46536a78493064092d32.zip
+```
+
+Windows 端 ZIP 含 `LinkSend.exe` 和 `README-WINDOWS-TEST.txt`；两个 DMG 均含完整
+`LinkSend.app`、`README-MACOS-TEST.txt`、Applications 拖拽入口和对应架构的 Mach-O。
+离线结构检查还确认 `CFBundleIdentifier=com.linksend.desktop`、Go 1.26.5、Wails 3
+`v3.0.0-beta.18`。当前 Windows 主机无法执行 `hdiutil` 挂载、`codesign --verify` 或原生
+WebKit 窗口操作，这些项目保持 `NOT_RUN`/`BLOCKED_BY_EXTERNAL_ENV`。
