@@ -1,6 +1,6 @@
 {
   "source_head": "6b35db699b3b4334bfccbcc61aea800ec0f4ce33",
-  "built_at": "2026-09-09 04:37 Asia/Shanghai",
+  "built_at": "2026-09-09 12:16 Asia/Shanghai",
   "platform": "windows/amd64",
   "go": "1.26.5",
   "wails": "2.15.0",
@@ -8,7 +8,7 @@
   "pnpm": "11.19.0",
   "dirty": true,
   "binary": "LinkSend.exe",
-  "sha256": "0c3eac7cf0033468a589a079dfb8ddc2f046d6d7560c54419565a84f2a17459e",
+  "sha256": "081975c0b0d02ea392b9f9b8a12bb38e3df868d4999ea16fbdd670ebfa9b72d5",
   "changes": [
     "apps/desktop/app.go",
     "apps/desktop/app_test.go",
@@ -18,6 +18,8 @@
     "apps/desktop/frontend/wailsjs/go/main/App.d.ts",
     "apps/desktop/frontend/wailsjs/go/main/App.js",
     "apps/desktop/frontend/wailsjs/go/models.ts",
-    "internal/app/tasks.go"
+    "internal/app/tasks.go",
+    "apps/desktop/frontend/src/connection.ts",
+    "apps/desktop/frontend/src/connection.test.ts"
   ]
 }

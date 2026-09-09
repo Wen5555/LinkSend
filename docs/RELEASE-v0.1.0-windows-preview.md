@@ -26,6 +26,7 @@
 - 桌面接收等待时限固定为 10 分钟，ICE 检查时限为 30 秒。
 - 前端刷新拆分为任务高频刷新和远端状态低频刷新，并防止请求重叠。
 - 浅色视觉系统采用语义 tokens、侧栏导航、状态条、分层表面、键盘焦点和减少动效规则。
+- 将 401 成员校验拒绝转换为可执行的中文引导，并覆盖未入组、无管理员权限和失效邀请三类提示。
 
 ## 验证证据
 
@@ -36,6 +37,7 @@
 - 隔离 rendezvous + 两个随机 profile：bootstrap、邀请、加入、双向 trust、16 MiB 随机文件 QUIC 传输和双端 SHA256：通过。
 - 香港主站 `https://linksend.oooai.de/healthz`：HTTP 200，`protocol_version=1`、`transport=quic`、`relay=false`。
 - 香港主站 443 rendezvous listener、3478 coturn STUN-only listener：通过只读检查。
+- 当前桌面 profile 与服务器成员表只读比对确认未入组；未通过自动 bootstrap 绕过安全模型。
 - Playwright 实际渲染检查传输、设备、设置三页，截图已随产物提供。
 
 ## 明确边界
