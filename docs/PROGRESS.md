@@ -1,14 +1,22 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-08. This is an active implementation, not an accepted product release.
+Updated: 2026-09-09. This is an active implementation, not an accepted product release.
+
+## 2026-09-09 Wails 3 migration and Hong Kong production verification
+
+- Wails 3 CLI and Go module fixed at `v3.0.0-beta.18`; desktop entry/service/window/dialog lifecycle and generated TypeScript bindings now use Wails 3. The old v2 module, `wails.json` and `frontend/wailsjs` outputs were removed. Source snapshot and working-tree patch are retained under `.artifacts/pre-wails3-20260909-*`.
+- Wails 3 Windows production build completed from the dirty working tree: `apps/desktop/bin/LinkSend.exe`, SHA256 `0DD18B54495B1320518B0E61903B2E9A155DDC7B902ACE320B564CA81BF5B27E`; `go version -m` reports `github.com/wailsapp/wails/v3 v3.0.0-beta.18`. The process remained alive for 4 seconds in a native WebView2 smoke check; no manual native click acceptance was performed.
+- Hong Kong `hk-main` was inspected, backed up and updated using the local SSH credential. Candidate rendezvous SHA256 `53445BE88943FBABDAA7AABFAF98E299AD9780B1084DAA764CF8804E48E5A338` is running at `/opt/linksend-lan-test/rendezvous`; backup `/opt/linksend-lan-test/backups/20260909T133335Z-wails3` was verified with SQLite `PRAGMA integrity_check=ok`. `test_pairing_code="orion123"` and an explicit existing group are enabled; generic configs remain off.
+- Real Hong Kong HTTPS/WSS control-plane evidence: fixed-code joins for `hk-win-wails3` and `hk-peer-wails3` returned `admin=true` in group `73cde936…`; a dynamic invitation joined `hk-dynamic-wails3` with `admin=false`; reusing that invitation was rejected. After a controlled server restart, health remained `status=ok`, `relay=false`, `transport=quic`, and the group persisted with 8 members/5 admins/0 revoked.
+- Real two-way transfers through Hong Kong signaling and direct QUIC on the physical Windows interface `10.234.232.205`: 1 MiB Windows→peer transfer ID `4773432abda776c76882261f55c0b491`, SHA256 `30E14955…`; 2 MiB peer→Windows transfer ID `cf38b13233b0214c7d309e28bf823d0f`, SHA256 `5647F05E…`. Both reported TLS 1.3 (`772`), ALPN `linksend/1`, `relay=false`, host↔host candidates, and matching received hashes.
 
 ## Environment and limits
 
 - Windows amd64, PowerShell 7, Go 1.26.5, Node 22.15.0, pnpm 11.19.0.
 - The default PATH exposed MinGW-w64 GCC 8.1, which made Windows race binaries exit with `0xc0000139`. Scoop MinGW 16.2.0 is now installed and selected explicitly for race verification.
 - Docker 29.2.1 client is installed, but the Linux engine is unavailable.
-- Wails 2.15.0 is available at `.tools/bin/wails.exe`; WebView/macOS runtime validation is not available here.
-- No production service, firewall rule, proxy, route, automatic deployment or push was performed.
+- Wails 3.0.0-beta.18 is available at `.tools/bin/wails3.exe`; WebView2 is installed, but macOS runtime validation is not available here.
+- This round changed only the LinkSend service binary/config on `hk-main`; no unrelated firewall, DNS, proxy or certificate records were modified. No Git commit, push, reset, clean or stash was performed.
 
 ## 2026-09-08 Hong Kong host connectivity preparation
 
@@ -61,7 +69,7 @@ Additional verification completed after the initial update:
 - With Scoop MinGW 16.2.0 selected via `CC`, `CXX` and `PATH`, `go test -race ./...` passed across all root packages and integration tests.
 - `apps/desktop` with `GOWORK=off`: `go test ./...` and `go build ./...` passed.
 - `apps/desktop/frontend`: `pnpm run typecheck`, `pnpm run lint`, `pnpm run test` (3 tests) and `pnpm run build` passed.
-- Wails 2.15.0 production build passed and produced `apps/desktop/build/bin/LinkSend.exe` on Windows amd64.
+- Historical Wails 2.15.0 production build passed before migration; the current Wails 3 build is recorded in the 2026-09-09 section above.
 - After shared direct-session changes, Wails production build was rerun and passed again.
 - `go run ./cmd/devtool test-nat` correctly returned nonzero with an explicit Windows/Linux-privilege explanation.
 - `go run ./cmd/devtool bench-transport` passed on this Windows host: native 102.18 MB/s, ICE integration 98.87 MB/s for one exploratory iteration; this is loopback evidence only.
@@ -87,7 +95,7 @@ Additional verification completed after the initial update:
 - Go 1.26.5, module minimum 1.26.0.
 - Pion ICE v4.4.2, quic-go v0.62.0.
 - modernc.org/sqlite v1.58.0, coder/websocket v1.8.15, go-toml/v2 v2.4.3, zeebo/blake3 v0.2.4.
-- Wails 2.15.0, React 19.2.8, TypeScript 5.9.3, Vite 7.3.6, pnpm 11.19.0.
+- Wails 3.0.0-beta.18, React 19.2.8, TypeScript 5.9.3, Vite 7.3.6, pnpm 11.19.0.
 
 ## Next concrete actions
 
@@ -103,7 +111,7 @@ Additional verification completed after the initial update:
 - ICE failures preserve cancellation, timeout, no-candidate and generic ICE failure categories. Signaling/QUIC wrappers retain underlying causes. Trust files are bounded; SQLite rejects unknown schema versions; server expiry cleanup and network closes avoid holding the mutex during websocket close.
 - The root module path and desktop module path are now `github.com/Wen5555/LinkSend` and `/apps/desktop`; CI verifies modules with `GOWORK=off` and `go mod verify`. `devtool network-info` reports interface state/address data without credentials.
 
-Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`, `go test ./...`, `go vet ./...`, `go run ./cmd/devtool check-core` (including race), root and desktop `GOWORK=off` test/build, frontend typecheck/lint/test/build, Wails 2.15.0 production build, `demo-local`, and `network-info` passed. A 20x transfer repeat was first interrupted after an erroneous test harness blocked; the corrected transfer package passed its focused run. `test-nat` remains an explicit nonzero not-run result because this Windows host lacks the privileged Linux namespace fixture.
+Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`, `go test ./...`, `go vet ./...`, `go run ./cmd/devtool check-core` (including race), root and desktop `GOWORK=off` test/build, frontend typecheck/lint/test/build, Wails 3 production build, `demo-local`, and `network-info` passed. A 20x transfer repeat was first interrupted after an erroneous test harness blocked; the corrected transfer package passed its focused run. `test-nat` remains an explicit nonzero not-run result because this Windows host lacks the privileged Linux namespace fixture.
 
 ## 2026-09-08 domain recheck
 
@@ -152,7 +160,7 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - `apps/desktop/app.go` 增加本地偏好原子保存（服务地址、绑定地址、STUN、设备名、接收目录）、真实网卡枚举、加入设备组、完整指纹信任和安全打开接收目录的 Wails 桥接；环境变量仍优先覆盖本地设置，既有身份目录不变。
 - `frontend/src/App.tsx` 重做为传输、设备、设置与诊断三页应用壳：发送端只显示等待确认，接收端才显示接受/拒绝；任务轮询与远端状态刷新分离；浏览器桥未注入时显示明确不可用提示。
 - `frontend/src/App.css` 使用浅色语义 tokens、侧栏导航、状态条、分组表面、可见焦点和减少动效规则，完成 Playwright 传输/设备/设置三页截图检查。
-- 自动化通过：桌面 `GOWORK=off go test ./...`、`go build ./...`、`go vet ./...`；前端 `typecheck`、`lint`、`test`、`build`；Wails 2.15.0 production build；`git diff --check`。
+- 自动化通过：桌面 `GOWORK=off go test ./...`、`go build ./...`、`go vet ./...`；前端 `typecheck`、`lint`、`test`、`build`；Wails 3 production build；`git diff --check`。
 - 产物位于 `.artifacts/windows-preview/20260909-0405/`，含 `LinkSend.exe`、`BUILD-INFO.json`、`SHA256SUMS.txt`、中文启动说明、验证记录和浏览器渲染截图；ZIP 位于 `.artifacts/windows-preview/LinkSend-windows-preview-20260909-0405.zip`。
 - Wails 原生窗口点击与截图、跨 NAT/IPv6、网络迁移和重启恢复仍未运行，均保持 `NOT_RUN` / `BLOCKED_BY_EXTERNAL_ENV` 边界。
 - Windows 启动冒烟：运行 `apps/desktop/build/bin/LinkSend.exe` 后进程保持运行超过 3 秒并由本次检查结束；未进行人工点击和双机传输。
@@ -162,7 +170,7 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 接收任务快照现在保留已认证 `peer_id`、manifest 内容摘要和条目数量；接收确认信息可在任务区核对发送者、内容和总量。
 - `OpenTaskDirectory` 改为按已完成接收任务 ID 校验目录，避免前端传入任意本地路径；桌面接收等待时限固定为 10 分钟，ICE 检查时限为 30 秒。
 - 前端任务/远端轮询加入 in-flight 防重叠；操作调用增加 pending 门闩；完成接收任务提供打开目录操作。
-- 复核构建：根模块测试/桌面测试与 vet、前端 typecheck/lint/test/build、Wails 2.15.0 production build 均通过；交付目录已更新为最后一次构建的二进制和 SHA256。
+- 复核构建：根模块测试/桌面测试与 vet、前端 typecheck/lint/test/build、Wails 3 production build 均通过；交付目录已更新为最后一次构建的二进制和 SHA256。
 
 ## 2026-09-09 401 配对错误修复
 
@@ -176,3 +184,38 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 香港主站 `hk-main` 只读探测通过；`https://linksend.oooai.de/healthz` 返回 `status=ok`、`protocol_version=1`、`relay=false`、`transport=quic`；远端 443 由 rendezvous 监听，3478 由 coturn STUN-only 监听。
 - 该隔离测试证明 CLI/核心真实链路，不等价于物理 LAN、跨 NAT 或 Wails 原生窗口验收。
 - 生产 EXE 使用隔离 `LINKSEND_DATA_DIR` 启动冒烟保持运行超过 3 秒；WebView2 Runtime 152.0.4191.66 已安装。当前会话未进行人工窗口点击，桌面交互仍待现场验收。
+
+## 2026-09-09 Windows Preview 首次配对与退出保护补齐
+
+- `apps/desktop/app.go` 现在区分偏好不存在、有效、损坏、不支持版本和不可读状态；损坏/不支持文件原地保留，远端操作在用户保存修复前被阻止。新增 `PreferencesStatus`、`EffectiveConfig`，明确环境变量 > 已保存偏好 > 默认值及需重启生效边界。
+- `internal/app/service.go` 新增基于已认证设备列表的成员/角色状态：`member/admin`、`not_member`、`auth_failed`、`unavailable` 分开表达；合并 401 不再被猜测为确定未入组。前端管理员邀请按钮按服务端角色禁用并解释原因，普通新设备主入口为粘贴邀请。
+- `apps/desktop/main.go` 注册 Wails 3 `ShouldQuit`。存在准备、等待确认、连接、传输、校验或取消中的任务时，原生窗口提供继续任务/取消任务并退出；取消清理有界等待，超时保持窗口打开，重复关闭幂等。
+- 新增桌面偏好恢复回归测试；根模块、桌面模块（`GOWORK=off`）、前端和 Wails Windows/amd64 production build 均通过，`git diff --check` 通过。
+- 最终本地产物：`.artifacts/windows-preview/20260909-1312/` 及对应 ZIP。原生窗口人工点击、原生截图、真实主站管理员邀请和物理双机本轮仍为 `NOT_RUN`/`BLOCKED`，未以浏览器或隔离组结果替代。
+
+## 2026-09-09 配对权限模型调整
+
+- 根据产品决策，邀请生成不再要求管理员角色；任一已配对且未撤销设备都可以生成 32 字节高熵、10 分钟有效、一次性配对码。保留服务端签名认证、设备组隔离和逐对端完整指纹信任。
+- 首次建立空设备组仍需使用服务端 bootstrap 入口；本轮没有把服务改成匿名开放注册。
+- 更新服务端邀请授权、客户端错误文案、桌面按钮和 signaling 回归测试。管理员字段继续作为服务端事实展示，但不再作为生成配对码的前置条件。
+
+## 2026-09-09 可用性与本地配对改进
+
+- 新增 `docs/IMPROVEMENT-PROMPT.md`，记录全项目检查、配对边界、UI 视觉和验证要求，可作为后续迭代的固定改进提示词。
+- `internal/server.Config.TestPairingCode` 默认关闭；本轮香港授权配置可在显式目标组上启用固定码 `orion123`，开发服务仍提供同一固定码。服务端仍要求 Ed25519 注册签名，生产高熵一次性邀请路径不变。
+- `internal/store.JoinTestCode` 使用独立兼容路径加入明确设备组并授予管理员，并添加回归测试；公共配置缺少 `test_pairing_group` 时拒绝固定码配置。
+- 桌面设备页展示“仅测试使用、未来可能关闭”的固定配对码并支持复制；输入框提示可直接输入 `orion123`。
+- `apps/desktop/frontend/src/App.css` 增加 Apple 风格视觉层：系统字体、克制蓝色强调、半透明分组表面、统一圆角与焦点状态、窄屏导航折叠和减少动效规则。
+- 本轮验证：根模块 `go test ./...` 通过；桌面模块 `GOWORK=off go test ./...`、`go build ./...`、`go vet ./...` 通过；前端 `pnpm run typecheck`、`pnpm run lint`、`pnpm run test -- --run`（4 tests）、`pnpm run build` 通过；`git diff --check` 通过。
+- 未运行：Wails 原生窗口人工点击、Windows↔macOS 新版 UI 验收、跨 NAT/IPv6/网络切换。上述项目仍保持 `NOT_RUN` 边界。
+
+## 2026-09-09 全面产品改进复核
+
+- 增量实现：任务层把接收拒绝、源文件变化、完整性失败、危险路径、磁盘空间/权限和取消映射为稳定协议错误码；Wails 任务 DTO 与 CLI 失败出口只展示中文操作建议，底层 HTTP、文件系统和栈信息保留为内部 cause，不直接进入用户界面。
+- 成员资格把信令不可达、版本不兼容和身份拒绝分开；任一已加入且未撤销设备可生成一次性邀请的前端文案与服务端权限保持一致。
+- 固定配对码对同一 profile 重试为幂等并授予管理员；生产 `Join` 的高熵、10 分钟、一次性语义未改变，静态入口通过显式目标组控制。
+- 直连完成后任务阶段显式进入 `connected`，界面把成员资格、对端 presence、指纹信任和已建立直连分别呈现。新增 favicon 清除浏览器预览的无意义 404。
+- 当前 Windows/PowerShell 环境实际通过：`gofmt -l .`、`git diff --check`、根 `go test ./...`、`go vet ./...`、根 `GOWORK=off go test ./...`、根普通及 `GOWORK=off go test -race ./...`、桌面 `GOWORK=off go test/go vet/go build ./...`、前端 typecheck/lint/4 tests/build、Wails 3 production build、`demo-local` 和 Compose 配置解析。Wails 3 EXE 隔离启动后保持运行超过 4 秒，再由本轮检查结束。
+- 浏览器行为/视觉检查：实际打开传输、设备、设置三页，并在 700px 窄屏检查导航折叠、单列布局、表单宽度、禁用态和复制入口；这是 WebView 内容渲染证据，不等于 Wails 原生窗口点击验收。
+- `NOT_RUN` / `BLOCKED_BY_EXTERNAL_ENV`：本轮未运行新的 Windows↔macOS 双机传输、跨 NAT、IPv6、网络切换、睡眠唤醒、macOS Wails、Windows 原生窗口人工点击、Docker 引擎运行或安装签名。`devtool test-nat` 在 Windows 上按设计非零退出并说明需要 Linux 特权 namespace fixture。
+- 下一步：在两端现场执行 Stage 2B 跨 NAT 与新版原生 UI 工作流；之后实现持久任务历史、真正的应用重启恢复和暂停/恢复编排。

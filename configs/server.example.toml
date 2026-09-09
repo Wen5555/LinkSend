@@ -4,3 +4,7 @@ allow_insecure_loopback = false
 allow_loopback_candidates = false
 tls_cert = "/etc/linksend/tls/server.crt"
 tls_key = "/etc/linksend/tls/server.key"
+# Optional compatibility test entry. Leave unset in generic/public deployments.
+# If explicitly enabled for the authorized Hong Kong test group, use:
+# test_pairing_code = "orion123"
+# test_pairing_group = "<existing-group-id>"

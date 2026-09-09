@@ -1,0 +1,89 @@
+name: wails3-packages
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wails3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-amd64
+            runner: windows-2022
+            os: windows
+            arch: amd64
+          - name: macos-arm64
+            runner: macos-15
+            os: macos
+            arch: arm64
+          - name: macos-amd64
+            runner: macos-15-intel
+            os: macos
+            arch: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: pnpm
+          cache-dependency-path: apps/desktop/frontend/pnpm-lock.yaml
+      - name: Install Wails 3 CLI
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.18
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          wails3 version
+      - name: Verify core module
+        shell: bash
+        run: GOWORK=off go test ./...
+      - name: Build Windows amd64
+        if: matrix.os == 'windows'
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $env:GOWORK = "off"
+          wails3 task build ARCH=${{ matrix.arch }}
+          Compress-Archive -Path "bin/LinkSend.exe" -DestinationPath "bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip"
+      - name: Build macOS DMG
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          bash scripts/build-macos.sh --arch ${{ matrix.arch }} --format dmg
+          cp "apps/desktop/bin/macos-${{ matrix.arch }}/LinkSend.dmg" "LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg"
+      - name: Hash package
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = windows ]; then
+            sha256sum "apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip" > SHA256SUMS.txt
+          else
+            shasum -a 256 "LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg" > SHA256SUMS.txt
+          fi
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkSend-wails3-preview-${{ matrix.os }}-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip
+            LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

@@ -66,6 +66,12 @@ type InvitationInfo struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+type MembershipStatus struct {
+	State   string `json:"state"` // pending, member, not_member, auth_failed, unavailable
+	Role    string `json:"role"`  // unknown, member, admin
+	Message string `json:"message,omitempty"`
+}
+
 type Diagnostics struct {
 	Version       string                `json:"version"`
 	Platform      string                `json:"platform"`
@@ -170,6 +176,42 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+// Membership reports only evidence returned by the authenticated server. A
+// merged 401 remains auth_failed; it is never guessed to mean not_member.
+func (s *Service) Membership(ctx context.Context) MembershipStatus {
+	c, err := s.client()
+	if err != nil {
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "服务地址尚未配置或当前不可达"}
+	}
+	devices, err := c.Devices(ctx)
+	if err != nil {
+		return membershipFailure(err)
+	}
+	for _, d := range devices {
+		if d.ID == s.identity.ID() {
+			role := "member"
+			if d.Admin {
+				role = "admin"
+			}
+			return MembershipStatus{State: "member", Role: role}
+		}
+	}
+	return MembershipStatus{State: "not_member", Role: "unknown", Message: "当前身份不在该设备组中，请使用管理员邀请加入"}
+}
+
+func membershipFailure(err error) MembershipStatus {
+	switch protocol.ErrorCode(err) {
+	case protocol.SignalingUnreachable, protocol.SignalingTimeout:
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "暂时无法连接信令服务，请检查服务地址和网络。"}
+	case protocol.VersionIncompatible:
+		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "服务版本或能力不兼容，请升级后重试。"}
+	case protocol.AuthenticationFailed:
+		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "当前身份未通过该服务的成员或签名验证，请先使用一次性邀请加入。"}
+	default:
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "设备组状态暂时无法读取，请检查服务和网络。"}
+	}
 }
 
 func (s *Service) Trust(ctx context.Context, deviceID, fingerprint string) error {

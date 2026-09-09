@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -151,11 +153,101 @@ func userError(err error) string {
 	if err == nil {
 		return ""
 	}
-	if e, ok := err.(*protocol.Error); ok && e.Detail != "" {
-		return e.Detail
+	var e *protocol.Error
+	if errors.As(err, &e) {
+		if detail := userErrorForCode(e.Code); detail != "" {
+			return detail
+		}
+		if e.Detail != "" {
+			return e.Detail
+		}
 	}
-	return strings.TrimSpace(err.Error())
+	return "传输未完成，请检查设备状态、网络和接收目录后重试。"
 }
+
+// classifyTaskError converts internal transfer/system errors into stable,
+// user-actionable protocol codes while retaining the original cause for
+// errors.Is/errors.As callers. Raw HTTP, filesystem and stack details must not
+// cross the Wails task DTO boundary.
+func classifyTaskError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var existing *protocol.Error
+	if errors.As(err, &existing) {
+		return err
+	}
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, transfer.ErrCancelled):
+		return protocol.Wrap(protocol.Cancelled, "传输已取消", err)
+	case errors.Is(err, transfer.ErrRejected):
+		return protocol.Wrap(protocol.ReceiveRejected, "接收方拒绝了本次传输，请确认对方已准备接收。", err)
+	case errors.Is(err, transfer.ErrChanged):
+		return protocol.Wrap(protocol.SourceChanged, "源文件在传输过程中发生变化，请重新选择文件后重试。", err)
+	case errors.Is(err, transfer.ErrIntegrity):
+		return protocol.Wrap(protocol.IntegrityFailed, "文件完整性校验失败，请重试并检查磁盘或网络。", err)
+	case errors.Is(err, transfer.ErrPath):
+		return protocol.Wrap(protocol.UnsafePath, "目标路径不安全或包含不支持的名称，请选择其他目录。", err)
+	case errors.Is(err, transfer.ErrConflict):
+		return protocol.Wrap(protocol.DirectFailed, "目标文件已存在且不会覆盖，请选择空目录后重试。", err)
+	case errors.Is(err, syscall.ENOSPC):
+		return protocol.Wrap(protocol.DiskFull, "接收磁盘空间不足，请清理空间后重试。", err)
+	case errors.Is(err, fs.ErrPermission):
+		return protocol.Wrap(protocol.DiskFull, "接收目录没有写入权限，请选择可写目录。", err)
+	default:
+		return protocol.Wrap(protocol.DirectFailed, "传输未完成，请根据当前阶段检查设备在线、网络和接收目录。", err)
+	}
+}
+
+func userErrorForCode(code protocol.Code) string {
+	switch code {
+	case protocol.SignalingUnreachable:
+		return "无法连接信令服务，请检查服务地址和网络后重试。"
+	case protocol.SignalingTimeout, protocol.CandidateTimeout:
+		return "信令或候选交换超时，请检查网络后重试。"
+	case protocol.PeerOffline:
+		return "对端当前离线，请让对端保持 LinkSend 运行。"
+	case protocol.Unpaired:
+		return "设备尚未完成指纹信任，请在设备页核对完整指纹。"
+	case protocol.AuthenticationFailed:
+		return "身份验证失败，请确认设备组成员资格和已保存指纹。"
+	case protocol.VersionIncompatible:
+		return "双方版本或传输能力不兼容，请升级到兼容版本。"
+	case protocol.NoCandidates, protocol.NoViableCandidate, protocol.CheckTimeout, protocol.ICEFailed:
+		return "未能建立直连，请检查绑定地址、UDP 防火墙和网络切换。"
+	case protocol.QUICHandshakeTimeout, protocol.QUICHandshakeFailed:
+		return "安全直连握手失败，请确认双方指纹一致并重试。"
+	case protocol.DirectFailed:
+		return "直连或传输未完成，请检查设备在线、网络和接收目录后重试。"
+	case protocol.ReceiveRejected:
+		return "接收方拒绝了本次传输。"
+	case protocol.SourceChanged:
+		return "源文件在传输过程中发生变化，请重新选择文件后重试。"
+	case protocol.IntegrityFailed:
+		return "文件完整性校验失败，请重试并检查磁盘或网络。"
+	case protocol.DiskFull:
+		return "接收磁盘空间不足或目录不可写，请选择其他目录。"
+	case protocol.UnsafePath:
+		return "目标路径不安全或包含不支持的名称，请选择其他目录。"
+	case protocol.Cancelled:
+		return "传输已取消。"
+	case protocol.RelayNotImplemented:
+		return "当前网络需要中继，但 LinkSend 暂未实现中继。"
+	case protocol.InvalidMessage, protocol.Replay, protocol.RateLimited:
+		return "对端或服务返回了无效请求，请刷新状态后重试。"
+	default:
+		return ""
+	}
+}
+
+// UserError returns a stable, actionable message suitable for CLI/Wails
+// surfaces. It intentionally omits private causes and filesystem details.
+func UserError(err error) string { return userError(err) }
+
+// ClassifyError exposes the same boundary used by in-process task snapshots
+// for callers such as the standalone CLI. The returned error retains its
+// original cause for internal errors.Is/errors.As checks.
+func ClassifyError(err error) error { return classifyTaskError(err) }
 
 func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (TaskSnapshot, error) {
 	if strings.TrimSpace(peerID) == "" || len(paths) == 0 {
@@ -183,6 +275,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	go func() {
 		result, runErr := s.SendFilesDetailed(ctx, peerID, base, cfg, t.progress)
 		if runErr != nil {
+			runErr = classifyTaskError(runErr)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				t.finish("cancelled", protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", runErr))
 			} else {
@@ -244,6 +337,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 			}
 		}, t.progress)
 		if runErr != nil {
+			runErr = classifyTaskError(runErr)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				t.finish("cancelled", protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", runErr))
 			} else {

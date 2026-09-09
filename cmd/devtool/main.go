@@ -34,9 +34,9 @@ func main() {
 	case "network-info":
 		err = networkInfo()
 	case "desktop-dev":
-		err = runWails("dev")
+		err = runWails("dev", "-config", "./build/config.yml")
 	case "desktop-build":
-		err = runWails("build")
+		err = runWails("task", "build", "ARCH=amd64")
 	default:
 		err = fmt.Errorf("unknown devtool command %q", os.Args[1])
 	}
@@ -184,9 +184,9 @@ func runWails(args ...string) error {
 	if _, err = os.Stat(desktop); err != nil {
 		return fmt.Errorf("desktop module unavailable: %w", err)
 	}
-	wails := "wails"
+	wails := "wails3"
 	if runtime.GOOS == "windows" {
-		local := filepath.Join(root, ".tools", "bin", "wails.exe")
+		local := filepath.Join(root, ".tools", "bin", "wails3.exe")
 		if _, statErr := os.Stat(local); statErr == nil {
 			wails = local
 		}

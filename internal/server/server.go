@@ -37,6 +37,14 @@ type Config struct {
 	TLSCert                 string `toml:"tls_cert"`
 	TLSKey                  string `toml:"tls_key"`
 	BootstrapToken          string `toml:"-"`
+	// TestPairingCode is an explicitly provisioned, repeatable pairing entry.
+	// The generic example config leaves it empty; the authorized Hong Kong
+	// deployment may set the fixed value "orion123" for compatibility testing.
+	TestPairingCode string `toml:"test_pairing_code"`
+	// TestPairingGroup selects the existing target group for TestPairingCode.
+	// It is required for non-loopback deployments so a static code cannot
+	// accidentally create or select an arbitrary group.
+	TestPairingGroup string `toml:"test_pairing_group"`
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -69,6 +77,14 @@ func (c Config) Validate() error {
 	}
 	if c.AllowLoopbackCandidates && !c.AllowInsecureLoopback {
 		return errors.New("loopback candidates only allowed in explicit loopback development mode")
+	}
+	if strings.TrimSpace(c.TestPairingCode) != "" {
+		if c.TestPairingCode != "orion123" {
+			return errors.New("test pairing code must be exactly orion123")
+		}
+		if !c.AllowInsecureLoopback && strings.TrimSpace(c.TestPairingGroup) == "" {
+			return errors.New("public static pairing requires test_pairing_group")
+		}
 	}
 	return nil
 }
@@ -305,7 +321,13 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, err := s.store.Join(r.Context(), req.Token, req.Name, req.PublicKey)
+	var d store.Device
+	var err error
+	if s.cfg.TestPairingCode != "" && subtle.ConstantTimeCompare([]byte(req.Token), []byte(s.cfg.TestPairingCode)) == 1 {
+		d, err = s.store.JoinTestCode(r.Context(), req.Name, req.PublicKey, s.cfg.TestPairingGroup)
+	} else {
+		d, err = s.store.Join(r.Context(), req.Token, req.Name, req.PublicKey)
+	}
 	if err != nil {
 		reject(w, 403, protocol.AuthenticationFailed, "invitation invalid, expired or used")
 		return
@@ -345,7 +367,7 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	}
 	token, expires, err := s.store.Invitation(r.Context(), d)
 	if err != nil {
-		reject(w, 403, protocol.AuthenticationFailed, "administrator required")
+		reject(w, 403, protocol.AuthenticationFailed, "paired member required")
 		return
 	}
 	respond(w, 201, Invitation{token, expires})

@@ -193,6 +193,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	if err != nil {
 		return nil, err
 	}
+	cfg.phase("connected")
 	closeSignal = false
 	closeEndpoint = false
 	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
@@ -303,6 +304,7 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 	if err != nil {
 		return nil, err
 	}
+	cfg.phase("connected")
 	closeSignal = false
 	closeEndpoint = false
 	return &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
@@ -373,7 +375,7 @@ func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, direc
 func (s *Service) newEndpoint(cfg DirectConfig) (*connectivity.Endpoint, error) {
 	if cfg.BindAddress == "" {
 		if !cfg.AllowLoopback && !s.cfg.AllowInsecureLoopback {
-			return nil, errors.New("E_NO_CANDIDATE: provide a concrete --bind address for this platform")
+			return nil, protocol.Fail(protocol.NoCandidates, "请提供具体的本机绑定地址以发现直连候选")
 		}
 		cfg.BindAddress = "127.0.0.1:0"
 	}

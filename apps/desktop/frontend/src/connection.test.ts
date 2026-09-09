@@ -16,6 +16,7 @@ describe('connection evidence labels', () => {
   });
   it('explains membership errors in user-facing language', () => {
     expect(humanizeBackendError('signaling HTTP 401: AUTHENTICATION_FAILED: request signature or membership invalid')).toContain('尚未加入');
-    expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('没有管理员权限');
+    expect(humanizeBackendError('AUTHENTICATION_FAILED: paired member required')).toContain('尚未完成配对');
+    expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('权限模型不兼容');
   });
 });

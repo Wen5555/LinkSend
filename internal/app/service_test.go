@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Wen5555/LinkSend/internal/protocol"
 )
 
 func TestProfileIdentityAndDiagnosticsAreLocal(t *testing.T) {
@@ -33,6 +35,15 @@ func TestProfileIdentityAndDiagnosticsAreLocal(t *testing.T) {
 	}
 	if !errors.Is(svc.Send(context.Background(), nil, ""), ErrNotImplemented) {
 		t.Fatal("send must report explicit not implemented error")
+	}
+}
+
+func TestMembershipFailureSeparatesUnavailableFromAuth(t *testing.T) {
+	if got := membershipFailure(protocol.Wrap(protocol.SignalingUnreachable, "network", errors.New("dial failed"))); got.State != "unavailable" {
+		t.Fatalf("unreachable classified as %q: %+v", got.State, got)
+	}
+	if got := membershipFailure(protocol.Fail(protocol.AuthenticationFailed, "denied")); got.State != "auth_failed" {
+		t.Fatalf("auth failure classified as %q: %+v", got.State, got)
 	}
 }
 
