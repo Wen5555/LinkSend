@@ -36,8 +36,8 @@ pnpm run build
 ## 候选构建确认（2026-09-10）
 
 任务分支 `codex/wails3-hk-dmg-20260909` 的候选 commit
-`8087f876ac4a94a43a1c46536a78493064092d32` 已通过 GitHub Actions run
-[34384170503](https://github.com/Wen5555/LinkSend/actions/runs/34384170503)：Windows amd64、
+`555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d` 已通过 GitHub Actions run
+[34387753173](https://github.com/Wen5555/LinkSend/actions/runs/34387753173)：Windows amd64、
 macOS arm64 DMG、macOS amd64 DMG 三个 job 均成功。离线核验显示两个 DMG 都包含完整
 `LinkSend.app`、`com.linksend.desktop`、测试说明和对应 `GOARCH`，`go version -m` 均报告
 Wails `v3.0.0-beta.18`。这证明构建链和包结构，不等价于真实 Mac 原生窗口验收。

@@ -43,20 +43,20 @@ plutil -p apps/desktop/bin/macos-arm64/LinkSend.app/Contents/Info.plist
 
 ## 本轮 CI 产物（2026-09-10）
 
-GitHub Actions run [34384170503](https://github.com/Wen5555/LinkSend/actions/runs/34384170503)
-在 commit `8087f876ac4a94a43a1c46536a78493064092d32` 的 Windows、macOS arm64、macOS amd64
+GitHub Actions run [34387753173](https://github.com/Wen5555/LinkSend/actions/runs/34387753173)
+在 commit `555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d` 的 Windows、macOS arm64、macOS amd64
 矩阵均通过（`fail-fast: false`）。artifact 名称分别为：
 
-- `LinkSend-wails3-preview-windows-amd64-8087f876ac4a94a43a1c46536a78493064092d32`
-- `LinkSend-wails3-preview-macos-arm64-8087f876ac4a94a43a1c46536a78493064092d32`
-- `LinkSend-wails3-preview-macos-amd64-8087f876ac4a94a43a1c46536a78493064092d32`
+- `LinkSend-wails3-preview-windows-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
+- `LinkSend-wails3-preview-macos-arm64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
+- `LinkSend-wails3-preview-macos-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
 
 包内 SHA256（以 `SHA256SUMS.txt` 为准）：
 
 ```text
-42364315567243996e8296a13af3e65811987db68f0a58b40ad780d15bda7303  LinkSend-wails3-preview-macos-arm64-8087f876ac4a94a43a1c46536a78493064092d32.dmg
-432f276dde5c1297597cb8eef32dea90830d88f388ccec38d35d60dc05f59651  LinkSend-wails3-preview-macos-amd64-8087f876ac4a94a43a1c46536a78493064092d32.dmg
-b4338a99a2cbe77bb700c7bd756edea79ad9086e9ee2e9e0e42456e1c28772ce  apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-8087f876ac4a94a43a1c46536a78493064092d32.zip
+5ff0217fab3b257999eae710f29bc76f08979b37100b2f1b4347546a6d3645a2  LinkSend-wails3-preview-macos-arm64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.dmg
+653c2ceb098c5d81bc4c6f0a351cb20b446772c206888463aec7b34efff73819  LinkSend-wails3-preview-macos-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.dmg
+1c43b7576118c5480d139bd691a1c84b8c3d09f67d96f8815c1877c4055f8f80  apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.zip
 ```
 
 Windows 端 ZIP 含 `LinkSend.exe` 和 `README-WINDOWS-TEST.txt`；两个 DMG 均含完整

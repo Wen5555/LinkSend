@@ -223,16 +223,16 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 ## 2026-09-10 Wails 3 候选打包与交付核验
 
 - 任务分支为 `codex/wails3-hk-dmg-20260909`，当前候选 commit 为
-  `8087f876ac4a94a43a1c46536a78493064092d32`；本轮提交了 DMG 资源、Windows/Mac 测试说明，
+  `555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`；本轮提交了 DMG 资源、Windows/Mac 测试说明，
   未修改 `main`、未合并、未发布正式 Release。源码快照仍保留在 `.artifacts/pre-wails3-20260909-*`。
-- GitHub Actions run [34384170503](https://github.com/Wen5555/LinkSend/actions/runs/34384170503) 的
+- GitHub Actions run [34387753173](https://github.com/Wen5555/LinkSend/actions/runs/34387753173) 的
   `windows-amd64`、`macos-arm64`、`macos-amd64` 均 `success`。Windows ZIP 和两个 DMG 已下载到
-  `.artifacts/ci-34384170503/` 并通过 ZIP 完整性、包内 `SHA256SUMS.txt`、DMG HFS+ 目录、
+  `.artifacts/ci-34387753173/` 并通过 ZIP 完整性、包内 `SHA256SUMS.txt`、DMG HFS+ 目录、
   `Info.plist`、`CFBundleIdentifier`、Go `GOARCH/GOOS` 与 Wails 依赖核验。
 - 最终包 SHA256：Windows ZIP
-  `b4338a99a2cbe77bb700c7bd756edea79ad9086e9ee2e9e0e42456e1c28772ce`；macOS arm64 DMG
-  `42364315567243996e8296a13af3e65811987db68f0a58b40ad780d15bda7303`；macOS amd64 DMG
-  `432f276dde5c1297597cb8eef32dea90830d88f388ccec38d35d60dc05f59651`。DMG 为内部测试包，
+  `1c43b7576118c5480d139bd691a1c84b8c3d09f67d96f8815c1877c4055f8f80`；macOS arm64 DMG
+  `5ff0217fab3b257999eae710f29bc76f08979b37100b2f1b4347546a6d3645a2`；macOS amd64 DMG
+  `653c2ceb098c5d81bc4c6f0a351cb20b446772c206888463aec7b34efff73819`。DMG 为内部测试包，
   仅 ad-hoc 签名，不含 Developer ID 或公证。
 - Windows ZIP 现在包含真实 `LinkSend.exe` 与 `README-WINDOWS-TEST.txt`；DMG 包含完整
   `LinkSend.app`、`README-MACOS-TEST.txt` 和 Applications 拖拽入口。离线 `go version -m` 确认
