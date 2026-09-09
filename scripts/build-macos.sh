@@ -46,7 +46,9 @@ fi
 
 cd "$REPO_ROOT/apps/desktop"
 export GOWORK=off
+cd frontend
 pnpm install --frozen-lockfile
+cd ..
 "$WAILS3_BIN" generate bindings -ts -i -clean=true
 "$WAILS3_BIN" task common:generate:icons
 
