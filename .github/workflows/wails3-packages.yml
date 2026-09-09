@@ -62,7 +62,7 @@ jobs:
         run: |
           $env:GOWORK = "off"
           wails3 task build ARCH=${{ matrix.arch }}
-          Compress-Archive -Path "bin/LinkSend.exe" -DestinationPath "bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip"
+          Compress-Archive -Path "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -DestinationPath "bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip"
       - name: Build macOS DMG
         if: matrix.os == 'macos'
         shell: bash

@@ -152,7 +152,7 @@ tasks:
       DMG_FILE_ICON: '{{.DMG_FILE_ICON | default "build/darwin/dmg-file-icon.icns"}}'
       DMG_WINDOW_WIDTH: '{{.DMG_WINDOW_WIDTH | default "540"}}'
       DMG_WINDOW_HEIGHT: '{{.DMG_WINDOW_HEIGHT | default "380"}}'
-      DMG_FILES: '{{.DMG_FILES | default ""}}'
+      DMG_FILES: '{{.DMG_FILES | default "README-MACOS-TEST.txt=build/darwin/README-MACOS-TEST.txt"}}'
 
 
   create:app:bundle:
