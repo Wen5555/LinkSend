@@ -38,8 +38,9 @@ done
 
 WAILS3_BIN=${WAILS3_BIN:-wails3}
 command -v "$WAILS3_BIN" >/dev/null 2>&1 || { echo "missing wails3 CLI (v3.0.0-beta.18)" >&2; exit 3; }
-case "$($WAILS3_BIN version)" in
-  v3.0.0-beta.18) ;;
+WAILS_VERSION=$($WAILS3_BIN version | tr -d '\r' | tail -n 1)
+case "$WAILS_VERSION" in
+  v3.0.0-beta.18*) ;;
   *) echo "wails3 v3.0.0-beta.18 is required" >&2; exit 3 ;;
 esac
 
