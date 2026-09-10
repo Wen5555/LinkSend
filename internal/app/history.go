@@ -32,6 +32,12 @@ func historyDB(path string) (*sql.DB, error) {
 	if _, err = db.Exec("CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, snapshot BLOB NOT NULL)"); err != nil {
 		return fail(err)
 	}
+	if _, err = db.Exec("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
+		return fail(err)
+	}
+	if _, err = db.Exec("INSERT INTO metadata(key,value) VALUES('schema_version','1') ON CONFLICT(key) DO NOTHING"); err != nil {
+		return fail(err)
+	}
 	if _, err = db.Exec("PRAGMA user_version=1"); err != nil {
 		return fail(err)
 	}
