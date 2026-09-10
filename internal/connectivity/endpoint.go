@@ -282,6 +282,8 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 }
 
 func (e *Endpoint) Close() error {
+	endpointCtorMu.Lock()
+	defer endpointCtorMu.Unlock()
 	var result error
 	e.once.Do(func() {
 		close(e.done)
@@ -303,6 +305,10 @@ func (e *Endpoint) Close() error {
 		if e.packets != nil {
 			e.packets.wg.Wait()
 		}
+		// Pion's UDPMuxDefault does not expose a wait handle for its reader
+		// goroutine. Give the closed channel a bounded quiescence window before
+		// another endpoint can be constructed (required for -race correctness).
+		time.Sleep(50 * time.Millisecond)
 	})
 	return result
 }
