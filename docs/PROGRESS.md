@@ -262,4 +262,12 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 提交 `9b72334d0fbe5e18649424924e96cf88756c6845` 已推送分支 `codex/wails3-hk-dmg-20260909`。Actions run [34515881198](https://github.com/Wen5555/LinkSend/actions/runs/34513870167) 的 Windows amd64、macOS arm64、macOS amd64 三平台均 success，产物与该提交对应。
 - 本机可交付 Windows 便携 ZIP：`apps/desktop/bin/LinkSend-windows-amd64-0.1.0-preview.zip`，包含 EXE、测试说明、BUILD-INFO 和包内 SHA256。NSIS/Wails CLI 未安装，安装器未生成；macOS DMG 仅通过 CI 产出，未在本机挂载或进行原生窗口点击验收。
 
+## 2026-09-11 全面网络提示词执行记录
+
+- 香港主站 `hk-main` 经 codex-ssh-manager 完成只读 `resolve/probe/audit-host`：root、Debian 6.1.0-50-cloud-amd64、x86_64，根分区余量约 78%，`rebootRequired=false`；未修改生产配置。
+- 荷兰 VPS `nl-highdefense` 的 SSH 管理器探测在本轮超时，未取得 STUN/TURN 或 NAT 实验运行证据，标记 `BLOCKED_BY_EXTERNAL_ENV`，未执行 sudo 或网络配置变更。
+- `go run ./cmd/devtool demo-local` 退出码 0：真实 ICE host candidate、QUIC TLS 1.3、摘要一致（1 MiB），仅作为 loopback 证据，不能替代双机 LAN。
+- `go run ./cmd/devtool test-nat` 退出码 1，输出明确为 Windows 缺少受控 Linux namespace/NAT fixture；标记 `BLOCKED_BY_EXTERNAL_ENV`，没有伪造 NAT 成功。
+- GitHub Actions run [34523034011](https://github.com/Wen5555/LinkSend/actions/runs/34523034011) 对主分支提交 `a9646f21c3d088036ade6d7f0a44cd0cb4a75c9a` 的 Windows amd64、macOS arm64、macOS amd64 jobs 均 `success`；对应构建附件可从该 run 下载。尚未替换旧候选 release `v0.1.0-preview-e27`（其目标提交不是当前主分支），避免上传不匹配资产。
+
 
