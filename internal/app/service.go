@@ -101,6 +101,7 @@ func New(cfg Config) (*Service, error) {
 		}
 	}
 	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager()}
+	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "tasks-history.json"))
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
 		if err != nil {

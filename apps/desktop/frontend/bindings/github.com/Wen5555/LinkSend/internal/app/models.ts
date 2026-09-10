@@ -85,6 +85,15 @@ export interface TaskSnapshot {
     "error_message"?: string;
     "transfer_id"?: string;
     "session_id"?: string;
+    "connection_method"?: string;
+    "transport_protocol"?: string;
+    "relay": boolean;
     "can_cancel": boolean;
     "can_retry": boolean;
+    "can_pause": boolean;
+    "can_resume": boolean;
+    "revision": number;
+    "history_persisted": boolean;
+    "restart_recovery_supported": boolean;
+    "byte_resume_supported": boolean;
 }

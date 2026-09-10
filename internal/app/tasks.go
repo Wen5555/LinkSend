@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,27 +21,36 @@ import (
 // TaskSnapshot is the process-lifetime application view used by Wails and CLI.
 // It intentionally contains metadata only; file bytes never cross this boundary.
 type TaskSnapshot struct {
-	ID                 string   `json:"id"`
-	Direction          string   `json:"direction"`
-	PeerID             string   `json:"peer_id,omitempty"`
-	SourceSummary      string   `json:"source_summary,omitempty"`
-	ManifestSummary    string   `json:"manifest_summary,omitempty"`
-	FileCount          int      `json:"file_count,omitempty"`
-	TargetDirectory    string   `json:"target_directory,omitempty"`
-	State              string   `json:"state"`
-	Phase              string   `json:"phase"`
-	ProcessedBytes     int64    `json:"processed_bytes"`
-	TotalBytes         *int64   `json:"total_bytes,omitempty"`
-	RateBytesPerSecond *float64 `json:"rate_bytes_per_second,omitempty"`
-	StartedAt          string   `json:"started_at"`
-	UpdatedAt          string   `json:"updated_at"`
-	EndedAt            string   `json:"ended_at,omitempty"`
-	ErrorCode          string   `json:"error_code,omitempty"`
-	ErrorMessage       string   `json:"error_message,omitempty"`
-	TransferID         string   `json:"transfer_id,omitempty"`
-	SessionID          string   `json:"session_id,omitempty"`
-	CanCancel          bool     `json:"can_cancel"`
-	CanRetry           bool     `json:"can_retry"`
+	ID                       string   `json:"id"`
+	Direction                string   `json:"direction"`
+	PeerID                   string   `json:"peer_id,omitempty"`
+	SourceSummary            string   `json:"source_summary,omitempty"`
+	ManifestSummary          string   `json:"manifest_summary,omitempty"`
+	FileCount                int      `json:"file_count,omitempty"`
+	TargetDirectory          string   `json:"target_directory,omitempty"`
+	State                    string   `json:"state"`
+	Phase                    string   `json:"phase"`
+	ProcessedBytes           int64    `json:"processed_bytes"`
+	TotalBytes               *int64   `json:"total_bytes,omitempty"`
+	RateBytesPerSecond       *float64 `json:"rate_bytes_per_second,omitempty"`
+	StartedAt                string   `json:"started_at"`
+	UpdatedAt                string   `json:"updated_at"`
+	EndedAt                  string   `json:"ended_at,omitempty"`
+	ErrorCode                string   `json:"error_code,omitempty"`
+	ErrorMessage             string   `json:"error_message,omitempty"`
+	TransferID               string   `json:"transfer_id,omitempty"`
+	SessionID                string   `json:"session_id,omitempty"`
+	ConnectionMethod         string   `json:"connection_method,omitempty"`
+	TransportProtocol        string   `json:"transport_protocol,omitempty"`
+	Relay                    bool     `json:"relay"`
+	CanCancel                bool     `json:"can_cancel"`
+	CanRetry                 bool     `json:"can_retry"`
+	CanPause                 bool     `json:"can_pause"`
+	CanResume                bool     `json:"can_resume"`
+	Revision                 uint64   `json:"revision"`
+	HistoryPersisted         bool     `json:"history_persisted"`
+	RestartRecoverySupported bool     `json:"restart_recovery_supported"`
+	ByteResumeSupported      bool     `json:"byte_resume_supported"`
 }
 
 type taskRecord struct {
@@ -50,24 +61,78 @@ type taskRecord struct {
 	peerID   string
 	paths    []string
 	cfg      DirectConfig
+	persist  func(TaskSnapshot)
 }
 
 type taskManager struct {
-	mu    sync.RWMutex
-	seq   uint64
-	tasks map[string]*taskRecord
+	mu          sync.RWMutex
+	seq         uint64
+	tasks       map[string]*taskRecord
+	historyPath string
+}
+
+type taskHistory struct {
+	SchemaVersion int            `json:"schema_version"`
+	Tasks         []TaskSnapshot `json:"tasks"`
+}
+
+func (m *taskManager) configureHistory(path string) {
+	m.historyPath = path
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var h taskHistory
+	if json.Unmarshal(b, &h) != nil || h.SchemaVersion != 1 {
+		return
+	}
+	for _, snap := range h.Tasks {
+		if snap.ID == "" {
+			continue
+		}
+		if !isTerminal(snap.State) {
+			snap.State = "recovering"
+			snap.Phase = "recovering"
+			snap.CanCancel = false
+			snap.CanResume = snap.Direction == "receive"
+		}
+		snap.HistoryPersisted = true
+		snap.RestartRecoverySupported = true
+		snap.ByteResumeSupported = true
+		m.tasks[snap.ID] = &taskRecord{snap: snap}
+	}
+}
+
+func (m *taskManager) persistSnapshot(_ TaskSnapshot) {
+	if m.historyPath == "" {
+		return
+	}
+	m.mu.RLock()
+	h := taskHistory{SchemaVersion: 1, Tasks: make([]TaskSnapshot, 0, len(m.tasks))}
+	for _, t := range m.tasks {
+		h.Tasks = append(h.Tasks, t.snapshot())
+	}
+	m.mu.RUnlock()
+	b, err := json.MarshalIndent(h, "", "  ")
+	if err != nil {
+		return
+	}
+	tmp := m.historyPath + ".tmp"
+	if err = os.WriteFile(tmp, b, 0600); err == nil {
+		_ = os.Rename(tmp, m.historyPath)
+	}
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
 
 func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRecord, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	for _, t := range m.tasks {
 		t.mu.RLock()
 		active := !isTerminal(t.snap.State)
 		t.mu.RUnlock()
 		if active {
+			m.mu.Unlock()
 			return nil, errors.New("BUSY: another transfer task is active")
 		}
 	}
@@ -75,8 +140,15 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.ID = time.Now().UTC().Format("20060102T150405.000000000Z") + "-" + formatSeq(m.seq)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.StartedAt, s.UpdatedAt, s.State, s.CanCancel = now, now, "preparing", true
+	s.Revision = 1
+	s.HistoryPersisted = true
+	s.RestartRecoverySupported = true
+	s.ByteResumeSupported = true
 	t := &taskRecord{snap: s, cancel: cancel}
+	t.persist = m.persistSnapshot
 	m.tasks[s.ID] = t
+	m.mu.Unlock()
+	m.persistSnapshot(s)
 	return t, nil
 }
 
@@ -94,12 +166,14 @@ func isTerminal(s string) bool { return s == "completed" || s == "failed" || s =
 func (t *taskRecord) snapshot() TaskSnapshot { t.mu.RLock(); defer t.mu.RUnlock(); return t.snap }
 func (t *taskRecord) update(fn func(*TaskSnapshot)) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if isTerminal(t.snap.State) {
+		t.mu.Unlock()
 		return
 	}
 	fn(&t.snap)
+	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	t.mu.Unlock()
 }
 func (t *taskRecord) progress(p transfer.Progress) {
 	t.update(func(v *TaskSnapshot) {
@@ -115,6 +189,8 @@ func (t *taskRecord) progress(p transfer.Progress) {
 			v.State = "awaiting_acceptance"
 		case "transferring":
 			v.State = "transferring"
+			v.CanPause = true
+			v.CanResume = false
 		case "verifying":
 			v.State = "verifying"
 		}
@@ -131,8 +207,8 @@ func (t *taskRecord) progress(p transfer.Progress) {
 }
 func (t *taskRecord) finish(state string, err error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if isTerminal(t.snap.State) {
+		t.mu.Unlock()
 		return
 	}
 	if t.snap.State == "cancel_requested" && state == "completed" {
@@ -140,7 +216,10 @@ func (t *taskRecord) finish(state string, err error) {
 		err = protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", err)
 	}
 	t.snap.State = state
+	t.snap.Revision++
 	t.snap.CanCancel = false
+	t.snap.CanPause = false
+	t.snap.CanResume = false
 	t.snap.CanRetry = state == "failed" && t.snap.Direction == "send"
 	t.snap.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.snap.UpdatedAt = t.snap.EndedAt
@@ -148,6 +227,7 @@ func (t *taskRecord) finish(state string, err error) {
 		t.snap.ErrorCode = string(protocol.ErrorCode(err))
 		t.snap.ErrorMessage = userError(err)
 	}
+	t.mu.Unlock()
 }
 func userError(err error) string {
 	if err == nil {
@@ -272,6 +352,13 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	cfg.onSession = func(sessionID, peerID string) {
 		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
 	}
+	cfg.onEvidence = func(e DirectEvidence) {
+		t.update(func(v *TaskSnapshot) {
+			v.ConnectionMethod = e.ConnectionMethod
+			v.TransportProtocol = e.TransportProtocol
+			v.Relay = e.Relay
+		})
+	}
 	go func() {
 		result, runErr := s.SendFilesDetailed(ctx, peerID, base, cfg, t.progress)
 		if runErr != nil {
@@ -317,6 +404,13 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	}
 	cfg.onSession = func(sessionID, peerID string) {
 		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
+	}
+	cfg.onEvidence = func(e DirectEvidence) {
+		t.update(func(v *TaskSnapshot) {
+			v.ConnectionMethod = e.ConnectionMethod
+			v.TransportProtocol = e.TransportProtocol
+			v.Relay = e.Relay
+		})
 	}
 	go func() {
 		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
