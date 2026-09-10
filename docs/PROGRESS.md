@@ -239,3 +239,12 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
   Go 1.26.5、`GOOS=darwin`、`GOARCH=arm64/amd64` 及 Wails `v3.0.0-beta.18`。
 - 当前主机实际完成了 Windows 与香港服务的既有真实双向 QUIC 证据；没有新增 Mac 原生窗口、DMG
   挂载、红点/Cmd+Q、跨 NAT、IPv6 或网络切换验收，均标记 `NOT_RUN`/`BLOCKED_BY_EXTERNAL_ENV`。
+
+## 2026-09-11 任务诊断文案与阶段可读性补丁
+
+- 前端任务列表将内部阶段枚举映射为中文可操作文案（发现网络地址、交换连接信息、检查直连路径、建立安全直连、等待接收确认、恢复传输等）；未知未来阶段仍原样保留，便于诊断。
+- `humanizeBackendError` 补齐稳定连接、传输、任务操作和桌面边界错误码（包括 `NO_CANDIDATES`、`CHECK_TIMEOUT`、`DISK_FULL`、`UNSAFE_PATH`、`RELAY_NOT_IMPLEMENTED`、`TASK_NOT_RETRYABLE` 等），避免将原始内部错误直接展示给用户。
+- 修复测试配对面板 CSS 伪元素重复显示“仅测试使用”文案，并补充阶段与错误码前端回归测试。
+- 实际验证：前端 `pnpm run typecheck`、`pnpm run lint`、`pnpm run test -- --run`（6 tests）、`pnpm run build`；根模块 `gofmt -l .`、`git diff --check`、`go vet ./...`、`GOWORK=off go test ./...`；桌面模块 `GOWORK=off go test ./...`、`go vet ./...`、`go build ./...`；Wails `v3.0.0-beta.18` production Windows build 均通过。
+- `go run ./cmd/devtool demo-local` 实际完成 loopback TLS 1.3/QUIC 文件传输与摘要一致性；该结果仅证明本机链路。Windows↔macOS、跨 NAT、IPv6、网络切换、睡眠唤醒和原生窗口人工点击仍为 `NOT_RUN` / `BLOCKED_BY_EXTERNAL_ENV`。
+- Wails 最新构建产物 `apps/desktop/bin/LinkSend.exe` 隔离数据目录启动冒烟保持运行超过 4 秒后结束；未进行原生窗口人工点击。

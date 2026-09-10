@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionMethodLabel, humanizeBackendError } from './connection';
+import { connectionMethodLabel, humanizeBackendError, taskPhaseLabel } from './connection';
 
 describe('connection evidence labels', () => {
   it('does not infer LAN from an ICE host candidate or online presence', () => {
@@ -18,5 +18,15 @@ describe('connection evidence labels', () => {
     expect(humanizeBackendError('signaling HTTP 401: AUTHENTICATION_FAILED: request signature or membership invalid')).toContain('尚未加入');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: paired member required')).toContain('尚未完成配对');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('权限模型不兼容');
+  });
+  it('localizes stable task phases and preserves unknown diagnostics', () => {
+    expect(taskPhaseLabel('awaiting_acceptance')).toBe('等待接收确认');
+    expect(taskPhaseLabel('CHECKING')).toBe('检查直连路径');
+    expect(taskPhaseLabel('future_phase')).toBe('future_phase');
+  });
+  it('maps transport and task errors without exposing raw internals', () => {
+    expect(humanizeBackendError('DISK_FULL: no space left on device')).toContain('空间不足');
+    expect(humanizeBackendError('TASK_NOT_RETRYABLE')).toContain('无法重试');
+    expect(humanizeBackendError('RELAY_NOT_IMPLEMENTED')).toContain('暂未实现中继');
   });
 });
