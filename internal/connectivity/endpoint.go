@@ -69,7 +69,7 @@ type Endpoint struct {
 	udp                            *net.UDPConn
 	tr                             *quic.Transport
 	packets                        *stunPacketConn
-	mux                            *ice.UniversalUDPMuxDefault
+	mux                            ice.UDPMux
 	agent                          *ice.Agent
 	creds                          Credentials
 	candidates                     chan Candidate
@@ -126,12 +126,19 @@ func New(cfg Config) (*Endpoint, error) {
 		_ = u.Close()
 		return nil, err
 	}
-	e.mux = ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{UDPConn: e.packets})
+	if len(urls) > 0 {
+		e.mux = ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{UDPConn: e.packets})
+	} else {
+		e.mux = ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: e.packets})
+	}
 	types := []ice.CandidateType{ice.CandidateTypeHost}
 	if len(urls) > 0 {
 		types = append(types, ice.CandidateTypeServerReflexive)
 	}
-	opts := []ice.AgentOption{ice.WithUrls(urls), ice.WithNetworkTypes([]ice.NetworkType{nt}), ice.WithCandidateTypes(types), ice.WithMulticastDNSMode(ice.MulticastDNSModeDisabled), ice.WithUDPMux(e.mux), ice.WithUDPMuxSrflx(e.mux), ice.WithRemoteIPFilter(func(ip net.IP) bool { return safeIP(ip, cfg.AllowLoopback) }), ice.WithHostAcceptanceMinWait(0), ice.WithSrflxAcceptanceMinWait(500 * time.Millisecond), ice.WithMaxBindingRequests(7), ice.WithCheckInterval(100 * time.Millisecond), ice.WithSTUNGatherTimeout(3 * time.Second)}
+	opts := []ice.AgentOption{ice.WithUrls(urls), ice.WithNetworkTypes([]ice.NetworkType{nt}), ice.WithCandidateTypes(types), ice.WithMulticastDNSMode(ice.MulticastDNSModeDisabled), ice.WithUDPMux(e.mux), ice.WithRemoteIPFilter(func(ip net.IP) bool { return safeIP(ip, cfg.AllowLoopback) }), ice.WithHostAcceptanceMinWait(0), ice.WithSrflxAcceptanceMinWait(500 * time.Millisecond), ice.WithMaxBindingRequests(7), ice.WithCheckInterval(100 * time.Millisecond), ice.WithSTUNGatherTimeout(3 * time.Second)}
+	if len(urls) > 0 {
+		opts = append(opts, ice.WithUDPMuxSrflx(e.mux.(ice.UniversalUDPMux)))
+	}
 	if cfg.AllowLoopback {
 		opts = append(opts, ice.WithIncludeLoopback())
 	}
