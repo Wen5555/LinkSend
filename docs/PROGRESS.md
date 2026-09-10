@@ -248,3 +248,18 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 实际验证：前端 `pnpm run typecheck`、`pnpm run lint`、`pnpm run test -- --run`（6 tests）、`pnpm run build`；根模块 `gofmt -l .`、`git diff --check`、`go vet ./...`、`GOWORK=off go test ./...`；桌面模块 `GOWORK=off go test ./...`、`go vet ./...`、`go build ./...`；Wails `v3.0.0-beta.18` production Windows build 均通过。
 - `go run ./cmd/devtool demo-local` 实际完成 loopback TLS 1.3/QUIC 文件传输与摘要一致性；该结果仅证明本机链路。Windows↔macOS、跨 NAT、IPv6、网络切换、睡眠唤醒和原生窗口人工点击仍为 `NOT_RUN` / `BLOCKED_BY_EXTERNAL_ENV`。
 - Wails 最新构建产物 `apps/desktop/bin/LinkSend.exe` 隔离数据目录启动冒烟保持运行超过 4 秒后结束；未进行原生窗口人工点击。
+
+## 2026-09-11 直连路径证据贯通任务界面
+
+- `DirectConfig` 新增本地 evidence 回调，连接成功后把实际 `connection_method`、`transport_protocol` 和 `relay` 结果写入任务快照；未改变协议、ICE、QUIC 或文件数据路径。
+- Wails/React 任务列表显示已验证的“局域网直连 / 互联网 P2P / 路径待确认”，避免把在线状态或 host candidate 当作局域网证据。
+- 实际验证：根与桌面模块测试、桌面 vet/build、前端 typecheck/lint/6 tests/build、绑定重新生成和 `git diff --check` 均通过。跨设备、跨 NAT、IPv6、网络切换和原生窗口仍未运行。
+
+## 2026-09-11 任务历史与候选构建复核
+
+- `internal/app` 增加 `task-history.sqlite`（SQLite `user_version=1`，含 `schema_version` 等价版本元数据）持久化；启动时损坏记录被隔离，不阻塞应用；未完成任务在重启后标记为 `failed/TASK_INTERRUPTED`，清除旧会话证据并要求用户核对后重新发起；块检查点仍仅由 transfer 层使用，桌面级 byte resume 尚未实现。快照新增单调 `revision`、`history_persisted`、`restart_recovery_supported`、`byte_resume_supported` 与暂停/恢复能力字段。
+- 根模块 `go test ./...`、`go test -race ./...`、桌面模块 `GOWORK=off go test/go vet/go build ./...`、前端 frozen install/typecheck/lint/Vitest 6 项/production build 均通过；新增历史持久化和损坏记录回归测试。
+- 提交 `9b72334d0fbe5e18649424924e96cf88756c6845` 已推送分支 `codex/wails3-hk-dmg-20260909`。Actions run [34515881198](https://github.com/Wen5555/LinkSend/actions/runs/34513870167) 的 Windows amd64、macOS arm64、macOS amd64 三平台均 success，产物与该提交对应。
+- 本机可交付 Windows 便携 ZIP：`apps/desktop/bin/LinkSend-windows-amd64-0.1.0-preview.zip`，包含 EXE、测试说明、BUILD-INFO 和包内 SHA256。NSIS/Wails CLI 未安装，安装器未生成；macOS DMG 仅通过 CI 产出，未在本机挂载或进行原生窗口点击验收。
+
+
