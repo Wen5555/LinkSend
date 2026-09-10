@@ -24,6 +24,11 @@ var (
 	ErrICEFailed         = errors.New("ICE_FAILED")
 )
 
+// Pion v4.4.2 starts the UniversalUDPMux reader during construction while
+// finalising internal fields. Serialising constructors prevents its reader
+// from observing another constructor's initialisation under -race.
+var endpointCtorMu sync.Mutex
+
 type Config struct {
 	// A concrete local address is required; unspecified binds are rejected.
 	BindAddress   string
@@ -78,6 +83,8 @@ type Endpoint struct {
 }
 
 func New(cfg Config) (*Endpoint, error) {
+	endpointCtorMu.Lock()
+	defer endpointCtorMu.Unlock()
 	addr, err := net.ResolveUDPAddr("udp", cfg.BindAddress)
 	if err != nil {
 		return nil, err
