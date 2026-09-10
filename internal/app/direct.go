@@ -27,6 +27,7 @@ type DirectConfig struct {
 	WaitTimeout   time.Duration // receiver only: time allowed for an incoming request
 	onPhase       func(string)  // local application observation; never serialized
 	onSession     func(string, string)
+	onEvidence    func(DirectEvidence)
 }
 
 func (c DirectConfig) phase(value string) {
@@ -37,6 +38,11 @@ func (c DirectConfig) phase(value string) {
 func (c DirectConfig) session(id, peer string) {
 	if c.onSession != nil {
 		c.onSession(id, peer)
+	}
+}
+func (c DirectConfig) evidence(value DirectEvidence) {
+	if c.onEvidence != nil {
+		c.onEvidence(value)
 	}
 }
 
@@ -194,6 +200,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 		return nil, err
 	}
 	cfg.phase("connected")
+	cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data}).Evidence())
 	closeSignal = false
 	closeEndpoint = false
 	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
@@ -305,6 +312,7 @@ func (s *Service) AcceptDirect(ctx context.Context, expectedPeerID string, cfg D
 		return nil, err
 	}
 	cfg.phase("connected")
+	cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data}).Evidence())
 	closeSignal = false
 	closeEndpoint = false
 	return &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, signal: signalSession, stopHeartbeat: stopHeartbeat}, nil
