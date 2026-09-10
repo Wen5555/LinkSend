@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -17,27 +19,36 @@ import (
 // TaskSnapshot is the process-lifetime application view used by Wails and CLI.
 // It intentionally contains metadata only; file bytes never cross this boundary.
 type TaskSnapshot struct {
-	ID                 string   `json:"id"`
-	Direction          string   `json:"direction"`
-	PeerID             string   `json:"peer_id,omitempty"`
-	SourceSummary      string   `json:"source_summary,omitempty"`
-	ManifestSummary    string   `json:"manifest_summary,omitempty"`
-	FileCount          int      `json:"file_count,omitempty"`
-	TargetDirectory    string   `json:"target_directory,omitempty"`
-	State              string   `json:"state"`
-	Phase              string   `json:"phase"`
-	ProcessedBytes     int64    `json:"processed_bytes"`
-	TotalBytes         *int64   `json:"total_bytes,omitempty"`
-	RateBytesPerSecond *float64 `json:"rate_bytes_per_second,omitempty"`
-	StartedAt          string   `json:"started_at"`
-	UpdatedAt          string   `json:"updated_at"`
-	EndedAt            string   `json:"ended_at,omitempty"`
-	ErrorCode          string   `json:"error_code,omitempty"`
-	ErrorMessage       string   `json:"error_message,omitempty"`
-	TransferID         string   `json:"transfer_id,omitempty"`
-	SessionID          string   `json:"session_id,omitempty"`
-	CanCancel          bool     `json:"can_cancel"`
-	CanRetry           bool     `json:"can_retry"`
+	ID                       string   `json:"id"`
+	Direction                string   `json:"direction"`
+	PeerID                   string   `json:"peer_id,omitempty"`
+	SourceSummary            string   `json:"source_summary,omitempty"`
+	ManifestSummary          string   `json:"manifest_summary,omitempty"`
+	FileCount                int      `json:"file_count,omitempty"`
+	TargetDirectory          string   `json:"target_directory,omitempty"`
+	State                    string   `json:"state"`
+	Phase                    string   `json:"phase"`
+	ProcessedBytes           int64    `json:"processed_bytes"`
+	TotalBytes               *int64   `json:"total_bytes,omitempty"`
+	RateBytesPerSecond       *float64 `json:"rate_bytes_per_second,omitempty"`
+	StartedAt                string   `json:"started_at"`
+	UpdatedAt                string   `json:"updated_at"`
+	EndedAt                  string   `json:"ended_at,omitempty"`
+	ErrorCode                string   `json:"error_code,omitempty"`
+	ErrorMessage             string   `json:"error_message,omitempty"`
+	TransferID               string   `json:"transfer_id,omitempty"`
+	SessionID                string   `json:"session_id,omitempty"`
+	ConnectionMethod         string   `json:"connection_method,omitempty"`
+	TransportProtocol        string   `json:"transport_protocol,omitempty"`
+	Relay                    bool     `json:"relay"`
+	CanCancel                bool     `json:"can_cancel"`
+	CanRetry                 bool     `json:"can_retry"`
+	CanPause                 bool     `json:"can_pause"`
+	CanResume                bool     `json:"can_resume"`
+	Revision                 uint64   `json:"revision"`
+	HistoryPersisted         bool     `json:"history_persisted"`
+	RestartRecoverySupported bool     `json:"restart_recovery_supported"`
+	ByteResumeSupported      bool     `json:"byte_resume_supported"`
 }
 
 type taskRecord struct {
@@ -48,24 +59,28 @@ type taskRecord struct {
 	peerID   string
 	paths    []string
 	cfg      DirectConfig
+	persist  func(TaskSnapshot) error
 }
 
 type taskManager struct {
-	mu    sync.RWMutex
-	seq   uint64
-	tasks map[string]*taskRecord
+	mu          sync.RWMutex
+	seq         uint64
+	tasks       map[string]*taskRecord
+	historyPath string
+	historyErr  error
+	workers     sync.WaitGroup
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
 
 func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRecord, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	for _, t := range m.tasks {
 		t.mu.RLock()
 		active := !isTerminal(t.snap.State)
 		t.mu.RUnlock()
 		if active {
+			m.mu.Unlock()
 			return nil, errors.New("BUSY: another transfer task is active")
 		}
 	}
@@ -73,8 +88,17 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.ID = time.Now().UTC().Format("20060102T150405.000000000Z") + "-" + formatSeq(m.seq)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.StartedAt, s.UpdatedAt, s.State, s.CanCancel = now, now, "preparing", true
+	s.Revision = 1
+	s.HistoryPersisted = m.historyPath != "" && m.historyErr == nil
 	t := &taskRecord{snap: s, cancel: cancel}
+	t.persist = m.persistSnapshot
 	m.tasks[s.ID] = t
+	m.mu.Unlock()
+	if err := m.persistSnapshot(s); err != nil {
+		t.mu.Lock()
+		t.snap.HistoryPersisted = false
+		t.mu.Unlock()
+	}
 	return t, nil
 }
 
@@ -92,12 +116,16 @@ func isTerminal(s string) bool { return s == "completed" || s == "failed" || s =
 func (t *taskRecord) snapshot() TaskSnapshot { t.mu.RLock(); defer t.mu.RUnlock(); return t.snap }
 func (t *taskRecord) update(fn func(*TaskSnapshot)) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if isTerminal(t.snap.State) {
+		t.mu.Unlock()
 		return
 	}
 	fn(&t.snap)
+	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	snap := t.snap
+	t.mu.Unlock()
+	t.save(snap)
 }
 func (t *taskRecord) progress(p transfer.Progress) {
 	t.update(func(v *TaskSnapshot) {
@@ -113,6 +141,8 @@ func (t *taskRecord) progress(p transfer.Progress) {
 			v.State = "awaiting_acceptance"
 		case "transferring":
 			v.State = "transferring"
+			v.CanPause = false
+			v.CanResume = false
 		case "verifying":
 			v.State = "verifying"
 		}
@@ -129,8 +159,8 @@ func (t *taskRecord) progress(p transfer.Progress) {
 }
 func (t *taskRecord) finish(state string, err error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if isTerminal(t.snap.State) {
+		t.mu.Unlock()
 		return
 	}
 	if t.snap.State == "cancel_requested" && state == "completed" {
@@ -138,7 +168,10 @@ func (t *taskRecord) finish(state string, err error) {
 		err = protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", err)
 	}
 	t.snap.State = state
+	t.snap.Revision++
 	t.snap.CanCancel = false
+	t.snap.CanPause = false
+	t.snap.CanResume = false
 	t.snap.CanRetry = state == "failed" && t.snap.Direction == "send"
 	t.snap.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.snap.UpdatedAt = t.snap.EndedAt
@@ -146,16 +179,119 @@ func (t *taskRecord) finish(state string, err error) {
 		t.snap.ErrorCode = string(protocol.ErrorCode(err))
 		t.snap.ErrorMessage = userError(err)
 	}
+	snap := t.snap
+	t.mu.Unlock()
+	t.save(snap)
+}
+
+func (t *taskRecord) save(snap TaskSnapshot) {
+	if t.persist != nil {
+		if err := t.persist(snap); err != nil {
+			t.mu.Lock()
+			t.snap.HistoryPersisted = false
+			t.mu.Unlock()
+		}
+	}
 }
 func userError(err error) string {
 	if err == nil {
 		return ""
 	}
-	if e, ok := err.(*protocol.Error); ok && e.Detail != "" {
-		return e.Detail
+	var e *protocol.Error
+	if errors.As(err, &e) {
+		if detail := userErrorForCode(e.Code); detail != "" {
+			return detail
+		}
+		if e.Detail != "" {
+			return e.Detail
+		}
 	}
-	return strings.TrimSpace(err.Error())
+	return "传输未完成，请检查设备状态、网络和接收目录后重试。"
 }
+
+// classifyTaskError converts internal transfer/system errors into stable,
+// user-actionable protocol codes while retaining the original cause for
+// errors.Is/errors.As callers. Raw HTTP, filesystem and stack details must not
+// cross the Wails task DTO boundary.
+func classifyTaskError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var existing *protocol.Error
+	if errors.As(err, &existing) {
+		return err
+	}
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, transfer.ErrCancelled):
+		return protocol.Wrap(protocol.Cancelled, "传输已取消", err)
+	case errors.Is(err, transfer.ErrRejected):
+		return protocol.Wrap(protocol.ReceiveRejected, "接收方拒绝了本次传输，请确认对方已准备接收。", err)
+	case errors.Is(err, transfer.ErrChanged):
+		return protocol.Wrap(protocol.SourceChanged, "源文件在传输过程中发生变化，请重新选择文件后重试。", err)
+	case errors.Is(err, transfer.ErrIntegrity):
+		return protocol.Wrap(protocol.IntegrityFailed, "文件完整性校验失败，请重试并检查磁盘或网络。", err)
+	case errors.Is(err, transfer.ErrPath):
+		return protocol.Wrap(protocol.UnsafePath, "目标路径不安全或包含不支持的名称，请选择其他目录。", err)
+	case errors.Is(err, transfer.ErrConflict):
+		return protocol.Wrap(protocol.DirectFailed, "目标文件已存在且不会覆盖，请选择空目录后重试。", err)
+	case errors.Is(err, syscall.ENOSPC):
+		return protocol.Wrap(protocol.DiskFull, "接收磁盘空间不足，请清理空间后重试。", err)
+	case errors.Is(err, fs.ErrPermission):
+		return protocol.Wrap(protocol.DiskFull, "接收目录没有写入权限，请选择可写目录。", err)
+	default:
+		return protocol.Wrap(protocol.DirectFailed, "传输未完成，请根据当前阶段检查设备在线、网络和接收目录。", err)
+	}
+}
+
+func userErrorForCode(code protocol.Code) string {
+	switch code {
+	case protocol.SignalingUnreachable:
+		return "无法连接信令服务，请检查服务地址和网络后重试。"
+	case protocol.SignalingTimeout, protocol.CandidateTimeout:
+		return "信令或候选交换超时，请检查网络后重试。"
+	case protocol.PeerOffline:
+		return "对端当前离线，请让对端保持 LinkSend 运行。"
+	case protocol.Unpaired:
+		return "设备尚未完成指纹信任，请在设备页核对完整指纹。"
+	case protocol.AuthenticationFailed:
+		return "身份验证失败，请确认设备组成员资格和已保存指纹。"
+	case protocol.VersionIncompatible:
+		return "双方版本或传输能力不兼容，请升级到兼容版本。"
+	case protocol.NoCandidates, protocol.NoViableCandidate, protocol.CheckTimeout, protocol.ICEFailed:
+		return "未能建立直连，请检查绑定地址、UDP 防火墙和网络切换。"
+	case protocol.QUICHandshakeTimeout, protocol.QUICHandshakeFailed:
+		return "安全直连握手失败，请确认双方指纹一致并重试。"
+	case protocol.DirectFailed:
+		return "直连或传输未完成，请检查设备在线、网络和接收目录后重试。"
+	case protocol.ReceiveRejected:
+		return "接收方拒绝了本次传输。"
+	case protocol.SourceChanged:
+		return "源文件在传输过程中发生变化，请重新选择文件后重试。"
+	case protocol.IntegrityFailed:
+		return "文件完整性校验失败，请重试并检查磁盘或网络。"
+	case protocol.DiskFull:
+		return "接收磁盘空间不足或目录不可写，请选择其他目录。"
+	case protocol.UnsafePath:
+		return "目标路径不安全或包含不支持的名称，请选择其他目录。"
+	case protocol.Cancelled:
+		return "传输已取消。"
+	case protocol.RelayNotImplemented:
+		return "当前网络需要中继，但 LinkSend 暂未实现中继。"
+	case protocol.InvalidMessage, protocol.Replay, protocol.RateLimited:
+		return "对端或服务返回了无效请求，请刷新状态后重试。"
+	default:
+		return ""
+	}
+}
+
+// UserError returns a stable, actionable message suitable for CLI/Wails
+// surfaces. It intentionally omits private causes and filesystem details.
+func UserError(err error) string { return userError(err) }
+
+// ClassifyError exposes the same boundary used by in-process task snapshots
+// for callers such as the standalone CLI. The returned error retains its
+// original cause for internal errors.Is/errors.As checks.
+func ClassifyError(err error) error { return classifyTaskError(err) }
 
 func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (TaskSnapshot, error) {
 	if strings.TrimSpace(peerID) == "" || len(paths) == 0 {
@@ -180,9 +316,19 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	cfg.onSession = func(sessionID, peerID string) {
 		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
 	}
+	cfg.onEvidence = func(e DirectEvidence) {
+		t.update(func(v *TaskSnapshot) {
+			v.ConnectionMethod = e.ConnectionMethod
+			v.TransportProtocol = e.TransportProtocol
+			v.Relay = e.Relay
+		})
+	}
+	s.tasks.workers.Add(1)
 	go func() {
+		defer s.tasks.workers.Done()
 		result, runErr := s.SendFilesDetailed(ctx, peerID, base, cfg, t.progress)
 		if runErr != nil {
+			runErr = classifyTaskError(runErr)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				t.finish("cancelled", protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", runErr))
 			} else {
@@ -225,7 +371,16 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	cfg.onSession = func(sessionID, peerID string) {
 		t.update(func(v *TaskSnapshot) { v.SessionID = sessionID; v.PeerID = peerID })
 	}
+	cfg.onEvidence = func(e DirectEvidence) {
+		t.update(func(v *TaskSnapshot) {
+			v.ConnectionMethod = e.ConnectionMethod
+			v.TransportProtocol = e.TransportProtocol
+			v.Relay = e.Relay
+		})
+	}
+	s.tasks.workers.Add(1)
 	go func() {
+		defer s.tasks.workers.Done()
 		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
 			n := m.TotalBytes()
 			t.update(func(v *TaskSnapshot) {
@@ -244,6 +399,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 			}
 		}, t.progress)
 		if runErr != nil {
+			runErr = classifyTaskError(runErr)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				t.finish("cancelled", protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", runErr))
 			} else {
@@ -375,9 +531,10 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 func (s *Service) Shutdown() {
 	s.tasks.mu.RLock()
 	for _, t := range s.tasks.tasks {
-		if !isTerminal(t.snapshot().State) {
+		if !isTerminal(t.snapshot().State) && t.cancel != nil {
 			t.cancel()
 		}
 	}
 	s.tasks.mu.RUnlock()
+	s.tasks.workers.Wait()
 }

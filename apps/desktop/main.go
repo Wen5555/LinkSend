@@ -5,33 +5,54 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	app := NewApp()
-
-	err := wails.Run(&options.App{
-		Title:  "LinkSend",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
+	desktop := NewApp()
+	host := application.New(application.Options{
+		Name:        "LinkSend",
+		Description: "端到端直连文件传输",
+		Services: []application.Service{
+			application.NewService(desktop),
 		},
-		BackgroundColour: &options.RGBA{R: 247, G: 249, B: 251, A: 255},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
-		Bind: []interface{}{
-			app,
+		Assets: application.AssetOptions{
+			Handler: application.BundledAssetFileServer(assets),
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+		ShouldQuit: desktop.shouldQuit,
+		ErrorHandler: func(err error) {
+			slog.Error("wails application error", "error", err)
 		},
 	})
 
-	if err != nil {
+	window := host.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:               "main",
+		Title:              "LinkSend",
+		Width:              1120,
+		Height:             760,
+		MinWidth:           720,
+		MinHeight:          560,
+		URL:                "/",
+		BackgroundColour:   application.NewRGB(247, 249, 251),
+		UseApplicationMenu: true,
+		Mac: application.MacWindow{
+			Backdrop:                application.MacBackdropTranslucent,
+			TitleBar:                application.MacTitleBarHiddenInset,
+			InvisibleTitleBarHeight: 42,
+		},
+		Windows: application.WindowsWindow{
+			Theme: application.SystemDefault,
+		},
+	})
+	desktop.attachRuntime(host, window)
+
+	if err := host.Run(); err != nil {
 		slog.Error("desktop failed", "error", err)
 		os.Exit(1)
 	}

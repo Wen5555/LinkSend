@@ -16,6 +16,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@wailsio/runtime": "3.0.0-beta.18",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
@@ -79,6 +81,7 @@ func TestTaskBusyAndRetryCreatesNewID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	_, cancel := context.WithCancel(context.Background())
 	failed, err := svc.tasks.create(TaskSnapshot{Direction: "send"}, cancel)
 	if err != nil {
@@ -98,4 +101,41 @@ func TestTaskBusyAndRetryCreatesNewID(t *testing.T) {
 		t.Fatalf("original failure was not retained: %+v", svc.Tasks())
 	}
 	cancel()
+}
+
+func TestClassifyTaskErrorKeepsStableCodesAndHidesRawDetails(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code protocol.Code
+		want string
+	}{
+		{"rejected", transfer.ErrRejected, protocol.ReceiveRejected, "接收方拒绝"},
+		{"changed", transfer.ErrChanged, protocol.SourceChanged, "源文件"},
+		{"integrity", transfer.ErrIntegrity, protocol.IntegrityFailed, "完整性"},
+		{"path", transfer.ErrPath, protocol.UnsafePath, "目标路径"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyTaskError(tc.err)
+			if protocol.ErrorCode(got) != tc.code {
+				t.Fatalf("code=%s, want %s", protocol.ErrorCode(got), tc.code)
+			}
+			if msg := userError(got); msg == "" || !strings.Contains(msg, tc.want) || strings.Contains(msg, tc.err.Error()) {
+				t.Fatalf("unsafe/unhelpful user message: %q", msg)
+			}
+			if !errors.Is(got, tc.err) {
+				t.Fatalf("wrapped cause was not retained: %v", got)
+			}
+		})
+	}
+	raw := errors.New("signaling HTTP 500: stack at secret/path")
+	msg := userError(classifyTaskError(raw))
+	if strings.Contains(msg, "secret/path") || strings.Contains(msg, "HTTP 500") {
+		t.Fatalf("raw detail leaked: %q", msg)
+	}
+	msg = userError(protocol.Fail(protocol.DirectFailed, "private stack / token"))
+	if strings.Contains(msg, "private stack") || strings.Contains(msg, "token") {
+		t.Fatalf("protocol detail leaked: %q", msg)
+	}
 }

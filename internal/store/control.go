@@ -139,9 +139,9 @@ func (s *Control) Devices(ctx context.Context, group string) ([]Device, error) {
 	}
 	return out, rows.Err()
 }
-func (s *Control) Invitation(ctx context.Context, admin Device) (string, time.Time, error) {
-	current, err := s.Device(ctx, admin.ID)
-	if err != nil || !current.Admin {
+func (s *Control) Invitation(ctx context.Context, member Device) (string, time.Time, error) {
+	current, err := s.Device(ctx, member.ID)
+	if err != nil || current.Revoked {
 		return "", time.Time{}, ErrUnauthorized
 	}
 	var raw [32]byte
@@ -182,6 +182,65 @@ func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Dev
 	}
 	d := Device{ID: identity.DeviceID(key), GroupID: group, Name: name, PublicKey: key}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key) VALUES(?,?,?,?)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
+		return Device{}, fmt.Errorf("register device: %w", err)
+	}
+	return d, tx.Commit()
+}
+
+// JoinTestCode adds a device to an explicitly selected compatibility group. It
+// is intentionally separate from Join so the production invitation path keeps
+// its high-entropy, single-use semantics. A fixed-code join is an authorized
+// administrator bootstrap path: new members and existing members are marked
+// admin, while revoked identities remain rejected.
+func (s *Control) JoinTestCode(ctx context.Context, name string, key []byte, groupID string) (Device, error) {
+	if len(key) != 32 || len(name) == 0 || len(name) > 128 {
+		return Device{}, ErrInvitation
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Device{}, err
+	}
+	defer tx.Rollback()
+	group := groupID
+	if group == "" {
+		err = tx.QueryRowContext(ctx, "SELECT group_id FROM devices WHERE revoked=0 ORDER BY admin DESC, id LIMIT 1").Scan(&group)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Device{}, ErrInvitation
+		}
+		if err != nil {
+			return Device{}, err
+		}
+	} else {
+		var exists int
+		if err = tx.QueryRowContext(ctx, "SELECT 1 FROM devices WHERE group_id=? AND revoked=0 ORDER BY admin DESC, id LIMIT 1", group).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+			return Device{}, ErrInvitation
+		} else if err != nil {
+			return Device{}, err
+		}
+	}
+	d := Device{ID: identity.DeviceID(key), GroupID: group, Name: name, PublicKey: key, Admin: true}
+	// Repeating the fixed development code with the same profile is expected
+	// during UI/e2e runs. Return the existing non-revoked member instead of
+	// surfacing a SQLite UNIQUE error; production Join remains single-use.
+	var existing Device
+	err = tx.QueryRowContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE id=?", d.ID).Scan(&existing.ID, &existing.GroupID, &existing.Name, &existing.PublicKey, &existing.Admin, &existing.Revoked)
+	if err == nil {
+		if existing.Revoked || existing.GroupID != group || string(existing.PublicKey) != string(key) {
+			return Device{}, ErrInvitation
+		}
+		if !existing.Admin {
+			if _, err = tx.ExecContext(ctx, "UPDATE devices SET admin=1,name=? WHERE id=?", name, existing.ID); err != nil {
+				return Device{}, err
+			}
+			existing.Admin = true
+			existing.Name = name
+		}
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return Device{}, err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,admin) VALUES(?,?,?,?,1)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
 		return Device{}, fmt.Errorf("register device: %w", err)
 	}
 	return d, tx.Commit()

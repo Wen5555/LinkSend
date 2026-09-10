@@ -1,6 +1,6 @@
 # LinkSend Desktop Shell
 
-This Wails 2 module is the desktop shell for LinkSend. It exposes the shared
+This Wails 3 module (`v3.0.0-beta.18`) is the desktop shell for LinkSend. It exposes the shared
 Go identity, device, and redacted diagnostics services to the React frontend.
 ICE, QUIC, file reads/writes, BLAKE3 verification, and transfer state remain
 in the root Go module; file bytes must never cross Wails JavaScript IPC.
@@ -14,18 +14,17 @@ Set-Location D:\apps\Osend\apps\desktop\frontend
 pnpm install --frozen-lockfile
 
 Set-Location ..
-wails dev
+wails3 dev -config ./build/config.yml
 ```
 
-`D:\apps\Osend\.tools\bin\wails.exe` is the checked project-local Wails
-entry point on Windows and is also used by `go run ./cmd/devtool desktop-dev`
-from the repository root.
+`D:\apps\Osend\.tools\bin\wails3.exe` is the checked project-local Wails 3
+entry point on Windows and is used by the Taskfile commands.
 
 ## Build
 
 ```powershell
 Set-Location D:\apps\Osend\apps\desktop
-wails build
+wails3 task build ARCH=amd64
 ```
 
 ## Module Boundary

@@ -65,6 +65,13 @@ func TestClientRegistrationAndSignedHTTP(t *testing.T) {
 	if joined.ID != b.ID() || joined.GroupID != admin.GroupID {
 		t.Fatalf("unexpected joined device: %+v", joined)
 	}
+	// Any paired device may mint a short-lived one-time pairing code; the
+	// desktop product does not impose an administrator-only gate.
+	peerClient := testClient(t, h.URL, b)
+	secondInvite, err := peerClient.CreateInvitation(ctx)
+	if err != nil || len(secondInvite.Token) != 43 {
+		t.Fatalf("member invitation: %v %+v", err, secondInvite)
+	}
 	devices, err := c.Devices(ctx)
 	if err != nil || len(devices) != 2 {
 		t.Fatalf("devices: %v %#v", err, devices)

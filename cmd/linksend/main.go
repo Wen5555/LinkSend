@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
@@ -177,6 +178,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
+			err = app.ClassifyError(err)
 			if *evidence {
 				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
 			}
@@ -215,6 +217,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 			fmt.Fprintf(os.Stderr, "progress state=%s verified=%d total=%d bps=%.1f\n", p.State, p.Verified, p.Total, p.BytesPerSecond)
 		})
 		if err != nil {
+			err = app.ClassifyError(err)
 			if *evidence {
 				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
 			}
@@ -270,6 +273,15 @@ func printJSON(value any) error {
 }
 
 func fatal(err error) {
+	var protocolErr *protocol.Error
+	if errors.As(err, &protocolErr) {
+		fmt.Fprintf(os.Stderr, "linksend: %s: %s\n", protocolErr.Code, app.UserError(err))
+		os.Exit(1)
+	}
+	if strings.Contains(err.Error(), "signaling HTTP") {
+		fmt.Fprintln(os.Stderr, "linksend: 无法完成信令请求，请检查服务地址和网络后重试。")
+		os.Exit(1)
+	}
 	fmt.Fprintln(os.Stderr, "linksend:", strings.TrimSpace(err.Error()))
 	os.Exit(1)
 }

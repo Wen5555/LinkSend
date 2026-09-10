@@ -66,17 +66,27 @@ type InvitationInfo struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+type MembershipStatus struct {
+	State   string `json:"state"` // pending, member, not_member, auth_failed, unavailable
+	Role    string `json:"role"`  // unknown, member, admin
+	Message string `json:"message,omitempty"`
+}
+
 type Diagnostics struct {
-	Version       string                `json:"version"`
-	Platform      string                `json:"platform"`
-	Relay         bool                  `json:"relay"`
-	Identity      DiagnosticIdentity    `json:"identity"`
-	ServerURL     string                `json:"server_url,omitempty"`
-	ServerHealth  string                `json:"server_health"`
-	Capabilities  protocol.Capabilities `json:"capabilities"`
-	TrustedPeers  int                   `json:"trusted_peers"`
-	GeneratedAt   string                `json:"generated_at"`
-	HealthFailure string                `json:"health_failure,omitempty"`
+	HistoryPersisted         bool                  `json:"history_persisted"`
+	RestartRecoverySupported bool                  `json:"restart_recovery_supported"`
+	ByteResumeSupported      bool                  `json:"byte_resume_supported"`
+	HistoryError             string                `json:"history_error,omitempty"`
+	Version                  string                `json:"version"`
+	Platform                 string                `json:"platform"`
+	Relay                    bool                  `json:"relay"`
+	Identity                 DiagnosticIdentity    `json:"identity"`
+	ServerURL                string                `json:"server_url,omitempty"`
+	ServerHealth             string                `json:"server_health"`
+	Capabilities             protocol.Capabilities `json:"capabilities"`
+	TrustedPeers             int                   `json:"trusted_peers"`
+	GeneratedAt              string                `json:"generated_at"`
+	HealthFailure            string                `json:"health_failure,omitempty"`
 }
 
 func New(cfg Config) (*Service, error) {
@@ -95,6 +105,7 @@ func New(cfg Config) (*Service, error) {
 		}
 	}
 	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager()}
+	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
 		if err != nil {
@@ -172,6 +183,42 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	return out, nil
 }
 
+// Membership reports only evidence returned by the authenticated server. A
+// merged 401 remains auth_failed; it is never guessed to mean not_member.
+func (s *Service) Membership(ctx context.Context) MembershipStatus {
+	c, err := s.client()
+	if err != nil {
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "服务地址尚未配置或当前不可达"}
+	}
+	devices, err := c.Devices(ctx)
+	if err != nil {
+		return membershipFailure(err)
+	}
+	for _, d := range devices {
+		if d.ID == s.identity.ID() {
+			role := "member"
+			if d.Admin {
+				role = "admin"
+			}
+			return MembershipStatus{State: "member", Role: role}
+		}
+	}
+	return MembershipStatus{State: "not_member", Role: "unknown", Message: "当前身份不在该设备组中，请使用管理员邀请加入"}
+}
+
+func membershipFailure(err error) MembershipStatus {
+	switch protocol.ErrorCode(err) {
+	case protocol.SignalingUnreachable, protocol.SignalingTimeout:
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "暂时无法连接信令服务，请检查服务地址和网络。"}
+	case protocol.VersionIncompatible:
+		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "服务版本或能力不兼容，请升级后重试。"}
+	case protocol.AuthenticationFailed:
+		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "当前身份未通过该服务的成员或签名验证，请先使用一次性邀请加入。"}
+	default:
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "设备组状态暂时无法读取，请检查服务和网络。"}
+	}
+}
+
 func (s *Service) Trust(ctx context.Context, deviceID, fingerprint string) error {
 	if len(deviceID) != 64 || deviceID != fingerprint {
 		return errors.New("UNPAIRED: full device fingerprint confirmation is required")
@@ -212,6 +259,10 @@ func (s *Service) Diagnostics(ctx context.Context) Diagnostics {
 	info := s.Identity()
 	peers, _ := identity.LoadTrust(s.cfg.DataDir)
 	d := Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: DiagnosticIdentity{ID: info.ID, PublicKey: info.PublicKey}, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	d.HistoryPersisted = s.tasks.historyPath != "" && s.tasks.historyErr == nil
+	if s.tasks.historyErr != nil {
+		d.HistoryError = "TASK_STORE_UNAVAILABLE"
+	}
 	if strings.TrimSpace(s.cfg.ServerURL) == "" {
 		return d
 	}

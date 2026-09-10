@@ -1,6 +1,6 @@
 # LinkSend
 
-LinkSend 是 Go 核心、Wails 2 桌面端和自托管信令服务组成的点对点文件传输工具。服务器只负责设备组、在线状态、会话和候选交换；文件字节通过经过身份认证的 QUIC 直连传输，当前没有 Relay、TURN 文件中继或 HTTP 上传接口。
+LinkSend 是 Go 核心、Wails 3 桌面端和自托管信令服务组成的点对点文件传输工具。服务器只负责设备组、在线状态、会话和候选交换；文件字节通过经过身份认证的 QUIC 直连传输，当前没有 Relay、TURN 文件中继或 HTTP 上传接口。
 
 源码仓库：[github.com/Wen5555/LinkSend](https://github.com/Wen5555/LinkSend)。当前版本是开发验收阶段，真实双 NAT 和跨平台实机结果以验收矩阵为准。
 
@@ -13,8 +13,9 @@ LinkSend 是 Go 核心、Wails 2 桌面端和自托管信令服务组成的点�
 - `demo-local` 真实驱动 WSS、ICE、QUIC 和文件协议。
 - CLI `send` / `receive` 已调用共享直连编排；接收端默认要求交互确认，测试才使用 `--auto-accept`。
 - `send --evidence` 和 `receive --evidence` 可输出实际选中的直连路径、STUN 计数和 TLS/ALPN，不含 ICE credential 或令牌。
+- Wails 3 传输、设备、设置/诊断三页已连接共享任务服务；任务和 CLI 失败出口按稳定错误码给出可操作建议。固定配对码 `orion123` 默认只在 `configs/server.dev.toml` 启用；经本轮授权的香港入口可在明确配置的目标组上启用，通用生产配置保持关闭。
 
-当前已验证的是 Windows loopback 直连。真实两机 LAN、公网 IPv6、受控双 NAT、Windows 与 macOS 互通以及 Linux NAT 实验仍待目标环境运行，不能由本地演示替代。
+当前已验证 Windows loopback 直连，以及 `docs/STAGE2A-20260909.md` 记录的一次 Windows↔macOS 同网段 16 MiB 实机传输。跨 NAT、公网 IPv6、网络切换、重复双向实机矩阵和 Wails 原生交互验收仍待目标环境运行，不能由本地演示或浏览器截图替代。
 
 ## 快速开始
 
@@ -39,6 +40,8 @@ go run ./cmd/rendezvous --config configs/server.dev.toml
 go run ./cmd/linksend --server http://127.0.0.1:8787 --allow-insecure-loopback bootstrap --token $env:LINKSEND_BOOTSTRAP_TOKEN --name admin
 ```
 
+开发服务完成首次 bootstrap 后，其他隔离 profile 可使用固定测试配对码 `orion123`；正式配对仍使用高熵、10 分钟有效、一次性邀请。香港本轮测试入口如启用固定码，必须同时设置明确的 `test_pairing_group`，并记录其风险和关闭方法。
+
 其余 CLI 命令见 `go run ./cmd/linksend --help`。每个测试客户端必须使用独立的 `--data-dir` 和接收目录。
 
 发送端需要先用 `devices` 取得并通过 `trust` 固定对端指纹：
@@ -50,7 +53,7 @@ go run ./cmd/linksend --server http://127.0.0.1:8787 --allow-insecure-loopback -
 
 真实网络请为 `--bind` 提供具体本地接口地址，并按部署情况提供 `--stun stun:host:3478`；不提供 bind 时只允许显式 loopback 开发模式。
 
-桌面端位于 `apps/desktop`，使用 pnpm 和 Wails 2。传输页、设备页和设置/诊断页已接入进程内任务服务，可发起真实发送、准备接收、查看快照、确认/拒绝、取消和失败后重新发送。任务仅在当前进程内管理，重启恢复和完整历史尚未实现。
+桌面端位于 `apps/desktop`，使用 pnpm 和锁定的 Wails 3 `v3.0.0-beta.18`。传输页、设备页和设置/诊断页已接入进程内任务服务，可发起真实发送、准备接收、查看快照、确认/拒绝、取消和失败后重新发送。任务错误按稳定代码和操作建议展示；任务仍仅在当前进程内管理，应用重启恢复和完整历史尚未实现。
 
 ## 范围边界
 

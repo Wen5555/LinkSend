@@ -4,3 +4,5 @@ allow_insecure_loopback = true
 allow_loopback_candidates = true
 tls_cert = ""
 tls_key = ""
+# Repeatable local UI/e2e pairing only. Never copy this setting to a public server.
+test_pairing_code = "orion123"

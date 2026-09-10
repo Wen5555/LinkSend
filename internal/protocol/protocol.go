@@ -70,12 +70,17 @@ func Wrap(c Code, detail string, cause error) error {
 }
 
 type Capabilities struct {
-	ProtocolVersion int    `json:"protocol_version"`
-	Relay           bool   `json:"relay"`
-	Transport       string `json:"transport"`
+	ProtocolVersion          int    `json:"protocol_version"`
+	Relay                    bool   `json:"relay"`
+	Transport                string `json:"transport"`
+	HistoryPersisted         bool   `json:"history_persisted"`
+	RestartRecoverySupported bool   `json:"restart_recovery_supported"`
+	ByteResumeSupported      bool   `json:"byte_resume_supported"`
 }
 
-func Supported() Capabilities { return Capabilities{Version, false, "quic"} }
+func Supported() Capabilities {
+	return Capabilities{ProtocolVersion: Version, Relay: false, Transport: "quic"}
+}
 
 type Envelope struct {
 	ProtocolVersion int             `json:"protocol_version"`

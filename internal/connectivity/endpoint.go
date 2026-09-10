@@ -24,6 +24,11 @@ var (
 	ErrICEFailed         = errors.New("ICE_FAILED")
 )
 
+// Pion v4.4.2 starts the UniversalUDPMux reader during construction while
+// finalising internal fields. Serialising constructors prevents its reader
+// from observing another constructor's initialisation under -race.
+var endpointCtorMu sync.Mutex
+
 type Config struct {
 	// A concrete local address is required; unspecified binds are rejected.
 	BindAddress   string
@@ -64,7 +69,7 @@ type Endpoint struct {
 	udp                            *net.UDPConn
 	tr                             *quic.Transport
 	packets                        *stunPacketConn
-	mux                            *ice.UniversalUDPMuxDefault
+	mux                            ice.UDPMux
 	agent                          *ice.Agent
 	creds                          Credentials
 	candidates                     chan Candidate
@@ -78,6 +83,8 @@ type Endpoint struct {
 }
 
 func New(cfg Config) (*Endpoint, error) {
+	endpointCtorMu.Lock()
+	defer endpointCtorMu.Unlock()
 	addr, err := net.ResolveUDPAddr("udp", cfg.BindAddress)
 	if err != nil {
 		return nil, err
@@ -119,12 +126,19 @@ func New(cfg Config) (*Endpoint, error) {
 		_ = u.Close()
 		return nil, err
 	}
-	e.mux = ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{UDPConn: e.packets})
+	if len(urls) > 0 {
+		e.mux = ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{UDPConn: e.packets})
+	} else {
+		e.mux = ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: e.packets})
+	}
 	types := []ice.CandidateType{ice.CandidateTypeHost}
 	if len(urls) > 0 {
 		types = append(types, ice.CandidateTypeServerReflexive)
 	}
-	opts := []ice.AgentOption{ice.WithUrls(urls), ice.WithNetworkTypes([]ice.NetworkType{nt}), ice.WithCandidateTypes(types), ice.WithMulticastDNSMode(ice.MulticastDNSModeDisabled), ice.WithUDPMux(e.mux), ice.WithUDPMuxSrflx(e.mux), ice.WithRemoteIPFilter(func(ip net.IP) bool { return safeIP(ip, cfg.AllowLoopback) }), ice.WithHostAcceptanceMinWait(0), ice.WithSrflxAcceptanceMinWait(500 * time.Millisecond), ice.WithMaxBindingRequests(7), ice.WithCheckInterval(100 * time.Millisecond), ice.WithSTUNGatherTimeout(3 * time.Second)}
+	opts := []ice.AgentOption{ice.WithUrls(urls), ice.WithNetworkTypes([]ice.NetworkType{nt}), ice.WithCandidateTypes(types), ice.WithMulticastDNSMode(ice.MulticastDNSModeDisabled), ice.WithUDPMux(e.mux), ice.WithRemoteIPFilter(func(ip net.IP) bool { return safeIP(ip, cfg.AllowLoopback) }), ice.WithHostAcceptanceMinWait(0), ice.WithSrflxAcceptanceMinWait(500 * time.Millisecond), ice.WithMaxBindingRequests(7), ice.WithCheckInterval(100 * time.Millisecond), ice.WithSTUNGatherTimeout(3 * time.Second)}
+	if len(urls) > 0 {
+		opts = append(opts, ice.WithUDPMuxSrflx(e.mux.(ice.UniversalUDPMux)))
+	}
 	if cfg.AllowLoopback {
 		opts = append(opts, ice.WithIncludeLoopback())
 	}
@@ -275,6 +289,8 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 }
 
 func (e *Endpoint) Close() error {
+	endpointCtorMu.Lock()
+	defer endpointCtorMu.Unlock()
 	var result error
 	e.once.Do(func() {
 		close(e.done)
@@ -296,6 +312,10 @@ func (e *Endpoint) Close() error {
 		if e.packets != nil {
 			e.packets.wg.Wait()
 		}
+		// Pion's UDPMuxDefault does not expose a wait handle for its reader
+		// goroutine. Give the closed channel a bounded quiescence window before
+		// another endpoint can be constructed (required for -race correctness).
+		time.Sleep(50 * time.Millisecond)
 	})
 	return result
 }

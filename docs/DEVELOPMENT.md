@@ -29,4 +29,8 @@ go test -race ./...
 
 不要通过关闭 CGO 或跳过测试掩盖工具链问题。桌面构建需要 WebView2 和 Wails 工具链。
 
+## 固定开发配对码
+
+`configs/server.dev.toml` 显式设置 `test_pairing_code = "orion123"`，用于重复的本地 UI/e2e 测试。该字段默认值为空；经本轮授权的香港正式入口也可在明确的 `test_pairing_group` 上开启，其他公网配置缺少目标组时会在启动校验时拒绝。注册请求仍必须通过新设备 Ed25519 私钥签名，生产的高熵、10 分钟有效、一次性邀请路径不变。移除配置项和 `JoinTestCode` 分支即可完整删除该测试入口。
+
 版本固定在根 `go.mod`、桌面 `go.mod`、`pnpm-lock.yaml` 和 ADR 中。改变协议时同步 `docs/PROTOCOL.md` 并增加兼容性/安全测试。
