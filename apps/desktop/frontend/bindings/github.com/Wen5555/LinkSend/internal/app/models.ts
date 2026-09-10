@@ -25,6 +25,10 @@ export interface DiagnosticIdentity {
 }
 
 export interface Diagnostics {
+    "history_persisted": boolean;
+    "restart_recovery_supported": boolean;
+    "byte_resume_supported": boolean;
+    "history_error"?: string;
     "version": string;
     "platform": string;
     "relay": boolean;

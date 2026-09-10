@@ -81,6 +81,7 @@ func TestTaskBusyAndRetryCreatesNewID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	_, cancel := context.WithCancel(context.Background())
 	failed, err := svc.tasks.create(TaskSnapshot{Direction: "send"}, cancel)
 	if err != nil {

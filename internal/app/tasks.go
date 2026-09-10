@@ -2,11 +2,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -61,7 +59,7 @@ type taskRecord struct {
 	peerID   string
 	paths    []string
 	cfg      DirectConfig
-	persist  func(TaskSnapshot)
+	persist  func(TaskSnapshot) error
 }
 
 type taskManager struct {
@@ -69,58 +67,8 @@ type taskManager struct {
 	seq         uint64
 	tasks       map[string]*taskRecord
 	historyPath string
-}
-
-type taskHistory struct {
-	SchemaVersion int            `json:"schema_version"`
-	Tasks         []TaskSnapshot `json:"tasks"`
-}
-
-func (m *taskManager) configureHistory(path string) {
-	m.historyPath = path
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var h taskHistory
-	if json.Unmarshal(b, &h) != nil || h.SchemaVersion != 1 {
-		return
-	}
-	for _, snap := range h.Tasks {
-		if snap.ID == "" {
-			continue
-		}
-		if !isTerminal(snap.State) {
-			snap.State = "recovering"
-			snap.Phase = "recovering"
-			snap.CanCancel = false
-			snap.CanResume = snap.Direction == "receive"
-		}
-		snap.HistoryPersisted = true
-		snap.RestartRecoverySupported = true
-		snap.ByteResumeSupported = true
-		m.tasks[snap.ID] = &taskRecord{snap: snap}
-	}
-}
-
-func (m *taskManager) persistSnapshot(_ TaskSnapshot) {
-	if m.historyPath == "" {
-		return
-	}
-	m.mu.RLock()
-	h := taskHistory{SchemaVersion: 1, Tasks: make([]TaskSnapshot, 0, len(m.tasks))}
-	for _, t := range m.tasks {
-		h.Tasks = append(h.Tasks, t.snapshot())
-	}
-	m.mu.RUnlock()
-	b, err := json.MarshalIndent(h, "", "  ")
-	if err != nil {
-		return
-	}
-	tmp := m.historyPath + ".tmp"
-	if err = os.WriteFile(tmp, b, 0600); err == nil {
-		_ = os.Rename(tmp, m.historyPath)
-	}
+	historyErr  error
+	workers     sync.WaitGroup
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
@@ -141,14 +89,16 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.StartedAt, s.UpdatedAt, s.State, s.CanCancel = now, now, "preparing", true
 	s.Revision = 1
-	s.HistoryPersisted = true
-	s.RestartRecoverySupported = true
-	s.ByteResumeSupported = true
+	s.HistoryPersisted = m.historyPath != "" && m.historyErr == nil
 	t := &taskRecord{snap: s, cancel: cancel}
 	t.persist = m.persistSnapshot
 	m.tasks[s.ID] = t
 	m.mu.Unlock()
-	m.persistSnapshot(s)
+	if err := m.persistSnapshot(s); err != nil {
+		t.mu.Lock()
+		t.snap.HistoryPersisted = false
+		t.mu.Unlock()
+	}
 	return t, nil
 }
 
@@ -173,7 +123,9 @@ func (t *taskRecord) update(fn func(*TaskSnapshot)) {
 	fn(&t.snap)
 	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	snap := t.snap
 	t.mu.Unlock()
+	t.save(snap)
 }
 func (t *taskRecord) progress(p transfer.Progress) {
 	t.update(func(v *TaskSnapshot) {
@@ -189,7 +141,7 @@ func (t *taskRecord) progress(p transfer.Progress) {
 			v.State = "awaiting_acceptance"
 		case "transferring":
 			v.State = "transferring"
-			v.CanPause = true
+			v.CanPause = false
 			v.CanResume = false
 		case "verifying":
 			v.State = "verifying"
@@ -227,7 +179,19 @@ func (t *taskRecord) finish(state string, err error) {
 		t.snap.ErrorCode = string(protocol.ErrorCode(err))
 		t.snap.ErrorMessage = userError(err)
 	}
+	snap := t.snap
 	t.mu.Unlock()
+	t.save(snap)
+}
+
+func (t *taskRecord) save(snap TaskSnapshot) {
+	if t.persist != nil {
+		if err := t.persist(snap); err != nil {
+			t.mu.Lock()
+			t.snap.HistoryPersisted = false
+			t.mu.Unlock()
+		}
+	}
 }
 func userError(err error) string {
 	if err == nil {
@@ -359,7 +323,9 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 			v.Relay = e.Relay
 		})
 	}
+	s.tasks.workers.Add(1)
 	go func() {
+		defer s.tasks.workers.Done()
 		result, runErr := s.SendFilesDetailed(ctx, peerID, base, cfg, t.progress)
 		if runErr != nil {
 			runErr = classifyTaskError(runErr)
@@ -412,7 +378,9 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 			v.Relay = e.Relay
 		})
 	}
+	s.tasks.workers.Add(1)
 	go func() {
+		defer s.tasks.workers.Done()
 		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
 			n := m.TotalBytes()
 			t.update(func(v *TaskSnapshot) {
@@ -563,9 +531,10 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 func (s *Service) Shutdown() {
 	s.tasks.mu.RLock()
 	for _, t := range s.tasks.tasks {
-		if !isTerminal(t.snapshot().State) {
+		if !isTerminal(t.snapshot().State) && t.cancel != nil {
 			t.cancel()
 		}
 	}
 	s.tasks.mu.RUnlock()
+	s.tasks.workers.Wait()
 }

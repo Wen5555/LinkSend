@@ -73,16 +73,20 @@ type MembershipStatus struct {
 }
 
 type Diagnostics struct {
-	Version       string                `json:"version"`
-	Platform      string                `json:"platform"`
-	Relay         bool                  `json:"relay"`
-	Identity      DiagnosticIdentity    `json:"identity"`
-	ServerURL     string                `json:"server_url,omitempty"`
-	ServerHealth  string                `json:"server_health"`
-	Capabilities  protocol.Capabilities `json:"capabilities"`
-	TrustedPeers  int                   `json:"trusted_peers"`
-	GeneratedAt   string                `json:"generated_at"`
-	HealthFailure string                `json:"health_failure,omitempty"`
+	HistoryPersisted         bool                  `json:"history_persisted"`
+	RestartRecoverySupported bool                  `json:"restart_recovery_supported"`
+	ByteResumeSupported      bool                  `json:"byte_resume_supported"`
+	HistoryError             string                `json:"history_error,omitempty"`
+	Version                  string                `json:"version"`
+	Platform                 string                `json:"platform"`
+	Relay                    bool                  `json:"relay"`
+	Identity                 DiagnosticIdentity    `json:"identity"`
+	ServerURL                string                `json:"server_url,omitempty"`
+	ServerHealth             string                `json:"server_health"`
+	Capabilities             protocol.Capabilities `json:"capabilities"`
+	TrustedPeers             int                   `json:"trusted_peers"`
+	GeneratedAt              string                `json:"generated_at"`
+	HealthFailure            string                `json:"health_failure,omitempty"`
 }
 
 func New(cfg Config) (*Service, error) {
@@ -101,7 +105,7 @@ func New(cfg Config) (*Service, error) {
 		}
 	}
 	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager()}
-	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "tasks-history.json"))
+	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
 		if err != nil {
@@ -255,6 +259,10 @@ func (s *Service) Diagnostics(ctx context.Context) Diagnostics {
 	info := s.Identity()
 	peers, _ := identity.LoadTrust(s.cfg.DataDir)
 	d := Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: DiagnosticIdentity{ID: info.ID, PublicKey: info.PublicKey}, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	d.HistoryPersisted = s.tasks.historyPath != "" && s.tasks.historyErr == nil
+	if s.tasks.historyErr != nil {
+		d.HistoryError = "TASK_STORE_UNAVAILABLE"
+	}
 	if strings.TrimSpace(s.cfg.ServerURL) == "" {
 		return d
 	}
