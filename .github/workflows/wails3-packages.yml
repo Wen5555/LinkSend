@@ -49,6 +49,11 @@ jobs:
           node-version: 22.15.0
           cache: pnpm
           cache-dependency-path: apps/desktop/frontend/pnpm-lock.yaml
+      - name: Verify committed source
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test -z "$(git status --porcelain)"
       - name: Install Wails 3 CLI
         shell: bash
         run: |
@@ -67,6 +72,12 @@ jobs:
           wails3 task package ARCH=${{ matrix.arch }} INSTALL_SCOPE=user
           New-Item -ItemType Directory -Force -Path "bin/release" | Out-Null
           Copy-Item "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -Destination "bin/release"
+          $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $goVersion = (go version).Trim()
+          $nodeVersion = (node --version).Trim()
+          $pnpmVersion = (pnpm --version).Trim()
+          $wailsVersion = (wails3 version 2>&1 | Select-String -Pattern '^v3\.0\.0-beta\.18$' | Select-Object -First 1).Line.Trim()
+          $nsisVersion = (& makensis /VERSION 2>&1 | Select-Object -First 1).ToString().Trim()
           @(
             "product_version=$env:PRODUCT_VERSION"
             "protocol_version=1"
@@ -74,7 +85,19 @@ jobs:
             "workflow_run=${{ github.run_id }}"
             "workflow_head_sha=${{ github.sha }}"
             "source_state=COMMITTED"
+            "source_checkout_clean=true"
+            "build_time_utc=$buildTime"
+            "target_os=windows"
+            "target_arch=amd64"
+            "tool_go=$goVersion"
+            "tool_node=$nodeVersion"
+            "tool_pnpm=$pnpmVersion"
+            "tool_wails=$wailsVersion"
+            "tool_nsis=$nsisVersion"
+            "package_validation=version_info_and_nsis_build_pass"
+            "native_validation=not_run_in_workflow"
             "signing=unsigned"
+            "notarization=not_applicable"
           ) | Set-Content -Encoding utf8 "bin/release/BUILD-INFO.txt"
           Compress-Archive -Path "bin/release/*" -DestinationPath "bin/LinkSend-v$env:PRODUCT_VERSION-windows-amd64-${{ github.sha }}.zip"
           Copy-Item "bin/LinkSend-amd64-installer.exe" "bin/LinkSend-v$env:PRODUCT_VERSION-windows-amd64-installer-${{ github.sha }}.exe"
@@ -87,6 +110,12 @@ jobs:
         run: |
           bash scripts/build-macos.sh --arch ${{ matrix.arch }} --format dmg
           cp "apps/desktop/bin/macos-${{ matrix.arch }}/LinkSend.dmg" "LinkSend-v${PRODUCT_VERSION}-macos-${{ matrix.arch }}-${{ github.sha }}.dmg"
+          BUILD_TIME_UTC=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          GO_VERSION=$(go version)
+          NODE_VERSION=$(node --version)
+          PNPM_VERSION=$(pnpm --version)
+          WAILS_VERSION=$(wails3 version 2>&1 | grep -E '^v3\.0\.0-beta\.18$' | head -n 1)
+          CLANG_VERSION=$(clang --version | head -n 1)
           {
             echo "product_version=${PRODUCT_VERSION}"
             echo "protocol_version=1"
@@ -94,6 +123,17 @@ jobs:
             echo "workflow_run=${{ github.run_id }}"
             echo "workflow_head_sha=${{ github.sha }}"
             echo "source_state=COMMITTED"
+            echo "source_checkout_clean=true"
+            echo "build_time_utc=${BUILD_TIME_UTC}"
+            echo "target_os=macos"
+            echo "target_arch=${{ matrix.arch }}"
+            echo "tool_go=${GO_VERSION}"
+            echo "tool_node=${NODE_VERSION}"
+            echo "tool_pnpm=${PNPM_VERSION}"
+            echo "tool_wails=${WAILS_VERSION}"
+            echo "tool_clang=${CLANG_VERSION}"
+            echo "package_validation=mount_bundle_id_arch_codesign_pass"
+            echo "native_validation=not_run_in_workflow"
             echo "signing=ad-hoc"
             echo "notarization=not_run"
           } > BUILD-INFO.txt
