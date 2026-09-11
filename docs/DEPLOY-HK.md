@@ -34,4 +34,16 @@ inspect → backup → change → verify → rollback-ready
 
 schema 变化必须在部署记录中给出迁移前备份、前后 `user_version`、兼容范围和准确恢复步骤。通常回滚二进制不应回退已经产生新业务写入的数据库；只有 schema 不兼容且已确认数据边界时，才从部署前在线备份恢复。
 
-本轮 `0.2.0` 的实际备份目录、部署二进制 revision/SHA256、健康与立即重试结果将在事务完成后追加到本文件和 PROGRESS；完成前继续标记旧服务 FAIL。
+## `0.2.0` 实际事务（2026-09-11）
+
+- manager 前置 `resolve`、`probe`、`audit-host` 全部 PASS；发现一个既有 `linksend-origin-renew.service` 失败，但当前 rendezvous、443/TCP 与 3478/UDP 均正常。首次只读脚本错误假定 systemd unit 且远端缺少 `file`，退出 127，无任何变更；随后确认 rendezvous 实际由 `/opt/linksend-lan-test/rendezvous-public.pid` 与 `nohup` 管理。
+- 部署源码 commit：`4b7ccf66f89c9720d9b5970e5d610b453048d69c`。Linux amd64 资产由独立干净 clone、`GOWORK=off` 构建；本地 `go version -m` 为该 revision、`vcs.modified=false`。大小 11,309,218 bytes，SHA256 `c549cdbf1bd461d6f583302f96700471000aacba1fed912c66d6e74912f30247`。
+- 变更前 PID `352572`，旧 SHA256 `53445be88943fbabdaa7aabfaf98e299ad9780b1084daa764cf8804e48e5a338`；配置 SHA256 `20a940907782d0baec8745e9e3fe45bed68053568f0b3f6d325eeffdd77299c0`，数据库 `integrity_check=ok`、`user_version=0`。
+- 部署备份：`/opt/linksend-lan-test/backups/20260911T101714Z-v0.2.0-4b7ccf6`。其中保留旧二进制的验证副本和从运行路径移出的 `rendezvous.uninstalled`、0600 配置、SQLite 在线备份与 SHA256 清单；备份数据库 integrity=ok。
+- 事务成功后新 PID `381064`，运行路径只保留 `0.2.0` 新二进制；配置 SHA 未变化，数据库 integrity=ok。内外网 health 均返回 `version=0.2.0`、`product_version=0.2.0`、`protocol_version=1`、`transport=quic`、`relay=false`。
+- 公网行为验证在同一物理 `eth0` 上使用两个隔离 profile：连续两次完成后立即重连，以及拒绝后立即重连并完成均 PASS；每轮 2,097,152 bytes，内容 `cmp`/SHA256 一致，服务 PID/SHA 未变化。运行时 profile、邀请、临时 CLI 和正文已删除；B 由 API 撤销，A 因禁止自撤销在 SQLite 在线备份后精确撤销。清理备份为 `/opt/linksend-lan-test/backups/20260911T102329Z-v0.2.0-lifecycle-cleanup`，数据库 integrity=ok。
+- 关键 manager jobs：部署 `/tmp/codex-ssh/linksend-v020-deploy-20260911T101701Z`；公网生命周期 `/tmp/codex-ssh/linksend-v020-public-lifecycle-20260911T102053Z`；测试管理员清理 `/tmp/codex-ssh/linksend-v020-revoke-test-admin-20260911T102316Z`。日志不包含邀请、固定码、私钥或文件正文。
+
+旧服务“立即重试”FAIL 已由部署后的测试主站行为复核消除。未修改 DNS、路由、防火墙、代理、Caddy/TLS、coturn、固定码配置或非 LinkSend 服务。
+
+准确回滚：先核对当前 PID 的 `/proc/<pid>/exe` 指向运行路径，TERM 并等待退出；将 `.../20260911T101714Z-v0.2.0-4b7ccf6/rendezvous.pre-v0.2.0` 以 mode 755 安装回 `/opt/linksend-lan-test/rendezvous`，按原 `--config /opt/linksend-lan-test/server-public.toml` 用 `nohup` 启动，原子更新 PID 文件，再核对旧 SHA、443 listener 和 health。配置与 schema 未改变，通常不应恢复旧数据库；只有明确要撤销部署后成员写入时才停服并使用已验证在线备份。

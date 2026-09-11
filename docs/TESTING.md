@@ -53,6 +53,8 @@ schema 迁移测试必须确认：v1 数据可读、迁移前 `task-history.sqli
 
 `0.2.0` 预提交重跑已再次通过根模块 full test/race/vet/GOWORK=off、P0 重复 20 次、真实 QUIC 定向恢复重复 3 次、桌面独立模块、前端 8 tests、bindings 生成、Wails production 和 NSIS package。Windows 主 EXE 与 installer 的 FileVersion/ProductVersion 均读取为 `0.2.0`；仅在 JSON 中出现版本字符串不能替代此检查。首次生成的 Windows metadata 缺 FileVersion 显示字符串，该 FAIL 和修复记录保留在 PROGRESS。
 
+香港测试主站 `0.2.0` 部署后公网复测使用两个隔离 Linux profile 和同一实际 `eth0`：完成→立即完成、拒绝→立即完成均 PASS，每轮 2,097,152 bytes，内容一致；服务 PID/SHA 保持稳定。该结果证明已部署信令生命周期修复，不是双 NAT 或跨平台恢复证明。测试 profile/正文/邀请/CLI 已删除，两条测试成员均撤销；完整 job/备份见 DEPLOY-HK。
+
 Windows 最终顺序实际执行并退出 0：
 
 ```powershell
