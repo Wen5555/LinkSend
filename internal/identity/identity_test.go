@@ -38,9 +38,15 @@ func TestPersistentIdentityAndTrust(t *testing.T) {
 	if err := TrustPeer(dir, p, a.ID()); err != nil {
 		t.Fatal(err)
 	}
+	if err := SetAutoAccept(dir, a.ID(), true); err != nil {
+		t.Fatal(err)
+	}
 	peers, err := LoadTrust(dir)
 	if err != nil || len(peers) != 1 {
 		t.Fatalf("trust %v", err)
+	}
+	if !peers[0].AutoAccept {
+		t.Fatal("auto-accept preference was not persisted")
 	}
 	if err = os.WriteFile(filepath.Join(dir, "identity.key"), []byte("corrupt"), 0600); err != nil {
 		t.Fatal(err)

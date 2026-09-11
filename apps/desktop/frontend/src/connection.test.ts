@@ -15,7 +15,7 @@ describe('connection evidence labels', () => {
     expect(connectionMethodLabel('internet_p2p')).toBe('互联网 P2P');
   });
   it('explains membership errors in user-facing language', () => {
-    expect(humanizeBackendError('signaling HTTP 401: AUTHENTICATION_FAILED: request signature or membership invalid')).toContain('尚未加入');
+    expect(humanizeBackendError('signaling HTTP 401: AUTHENTICATION_FAILED: request signature or membership invalid')).toContain('尚未完成配对');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: paired member required')).toContain('尚未完成配对');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('权限模型不兼容');
   });

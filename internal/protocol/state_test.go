@@ -10,7 +10,7 @@ import (
 
 func TestSupportedCapabilitiesExposeProductVersionSeparately(t *testing.T) {
 	caps := Supported()
-	if ProductVersion != "0.2.0" || caps.ProductVersion != ProductVersion {
+	if ProductVersion != "0.3.0" || caps.ProductVersion != ProductVersion {
 		t.Fatalf("product version drift: constant=%q capabilities=%q", ProductVersion, caps.ProductVersion)
 	}
 	if caps.ProtocolVersion != Version || Version != 1 {

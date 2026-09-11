@@ -274,10 +274,28 @@ func (c *Client) CreateInvitation(ctx context.Context) (Invitation, error) {
 	if err = decodeSuccess(resp, &invitation); err != nil {
 		return Invitation{}, err
 	}
-	if len(invitation.Token) != 43 || invitation.ExpiresAt.Before(time.Now()) {
+	if !validPairingCode(invitation.Token) || invitation.ExpiresAt.Before(time.Now()) {
 		return Invitation{}, protocol.Fail(protocol.InvalidMessage, "invalid invitation response")
 	}
 	return invitation, nil
+}
+
+func validPairingCode(value string) bool {
+	if len(value) == 43 { // protocol-v1 legacy invitation
+		return true
+	}
+	if len(value) != 9 || value[4] != '-' {
+		return false
+	}
+	for index, r := range value {
+		if index == 4 {
+			continue
+		}
+		if (r < 'A' || r > 'Z') && (r < '2' || r > '7') {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) Devices(ctx context.Context) ([]Device, error) {

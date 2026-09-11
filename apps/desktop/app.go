@@ -98,6 +98,7 @@ func (a *App) attachRuntime(host *application.App, window application.Window) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	dataDir := os.Getenv("LINKSEND_DATA_DIR")
+	explicitDataDir := dataDir != ""
 	if dataDir == "" {
 		if root, err := os.UserConfigDir(); err == nil {
 			dataDir = filepath.Join(root, "LinkSend")
@@ -112,6 +113,26 @@ func (a *App) startup(ctx context.Context) {
 	name := firstNonEmpty(a.prefs.DeviceName, "LinkSend desktop")
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
+	if a.initErr == nil && a.core != nil && !a.configBlocked {
+		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
+			if explicitDataDir {
+				a.prefs.ReceiveDirectory = filepath.Join(dataDir, "received")
+			} else {
+				a.prefs.ReceiveDirectory = defaultReceiveDirectory()
+			}
+		}
+		if a.prefs.ReceiveDirectory != "" {
+			_ = a.core.StartInbox(a.prefs.ReceiveDirectory, a.directConfig())
+		}
+	}
+}
+
+func defaultReceiveDirectory() string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
 	if a.core != nil {
@@ -379,6 +400,11 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	a.prefs = next
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
+	if a.core != nil && next.ReceiveDirectory != "" {
+		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -490,6 +516,24 @@ func (a *App) AcceptTask(id string) error {
 	}
 	return a.core.AcceptTask(id)
 }
+func (a *App) AcceptTaskAlways(id string) error {
+	if a.core == nil {
+		if a.initErr != nil {
+			return a.initErr
+		}
+		return errBackendUnavailable
+	}
+	return a.core.AcceptTaskAlways(id)
+}
+func (a *App) SetAlwaysAccept(deviceID string, enabled bool) error {
+	if a.core == nil {
+		if a.initErr != nil {
+			return a.initErr
+		}
+		return errBackendUnavailable
+	}
+	return a.core.SetAlwaysAccept(deviceID, enabled)
+}
 func (a *App) RejectTask(id string) error {
 	if a.core == nil {
 		if a.initErr != nil {
@@ -526,6 +570,12 @@ func (a *App) JoinGroup(token, name string) (linksendapp.DeviceInfo, error) {
 	return a.core.Join(ctx, token, name)
 }
 
+// PairDevice is the user-facing alias for the simplified pairing-code flow.
+// JoinGroup remains for CLI/binding compatibility with existing clients.
+func (a *App) PairDevice(code, name string) (linksendapp.DeviceInfo, error) {
+	return a.JoinGroup(code, name)
+}
+
 func (a *App) TrustDevice(deviceID, fingerprint string) error {
 	if err := a.ensureConfig(); err != nil {
 		return err
@@ -541,6 +591,13 @@ func (a *App) TrustDevice(deviceID, fingerprint string) error {
 		ctx = context.Background()
 	}
 	return a.core.Trust(ctx, deviceID, fingerprint)
+}
+
+func (a *App) InboxStatus() linksendapp.InboxStatus {
+	if a.core == nil {
+		return linksendapp.InboxStatus{}
+	}
+	return a.core.InboxStatus()
 }
 
 func (a *App) OpenTaskDirectory(taskID string) error {

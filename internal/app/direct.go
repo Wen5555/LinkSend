@@ -414,7 +414,7 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 		hooks.Progress(transfer.Progress{TransferID: prepared.Manifest.TransferID, State: "Preparing", Total: prepared.Manifest.TotalBytes()})
 	}
 	cfg.phase("connecting")
-	peer, err := s.ConnectDirect(ctx, peerID, cfg)
+	peer, err := s.connectWithOnlineGrace(ctx, peerID, cfg)
 	if err != nil {
 		return DirectTransferResult{}, err
 	}
@@ -425,6 +425,34 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 	}
 	result, err := transfer.SendWithHooks(ctx, transport.WrapStream(stream), prepared, hooks)
 	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
+}
+
+// connectWithOnlineGrace covers the short hand-off in which the peer has just
+// finished a transfer and is reopening its persistent inbox. ICE or transport
+// failures are never blindly retried here because those may already own
+// resources or require a fresh user-visible recovery attempt.
+func (s *Service) connectWithOnlineGrace(ctx context.Context, peerID string, cfg DirectConfig) (*PeerSession, error) {
+	var last error
+	for attempt := 0; attempt < 4; attempt++ {
+		peer, err := s.ConnectDirect(ctx, peerID, cfg)
+		if err == nil {
+			return peer, nil
+		}
+		last = err
+		if protocol.ErrorCode(err) != protocol.PeerOffline || attempt == 3 {
+			return nil, err
+		}
+		cfg.phase("waiting_peer")
+		timer := time.NewTimer(time.Duration(attempt+1) * 350 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, protocol.Wrap(protocol.Cancelled, "peer wait cancelled", ctx.Err())
+		case <-timer.C:
+		}
+		cfg.phase("connecting")
+	}
+	return nil, last
 }
 
 func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (transfer.Result, error) {
@@ -464,6 +492,9 @@ func (s *Service) trustedDevice(ctx context.Context, id string) (signaling.Devic
 	}
 	devices, err := c.Devices(ctx)
 	if err != nil {
+		return signaling.Device{}, err
+	}
+	if err = s.syncPairedDevices(devices); err != nil {
 		return signaling.Device{}, err
 	}
 	peers, err := identity.LoadTrust(s.cfg.DataDir)

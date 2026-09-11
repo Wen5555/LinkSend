@@ -6,11 +6,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/identity"
@@ -144,21 +146,23 @@ func (s *Control) Invitation(ctx context.Context, member Device) (string, time.T
 	if err != nil || current.Revoked {
 		return "", time.Time{}, ErrUnauthorized
 	}
-	var raw [32]byte
+	var raw [5]byte
 	if _, err = rand.Read(raw[:]); err != nil {
 		return "", time.Time{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw[:])
-	sum := sha256.Sum256([]byte(token))
+	compact := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
+	token := compact[:4] + "-" + compact[4:]
+	sum := sha256.Sum256([]byte(compact))
 	expires := time.Now().Add(10 * time.Minute)
 	_, err = s.db.ExecContext(ctx, "INSERT INTO invitations(hash,group_id,inviter,expires) VALUES(?,?,?,?)", sum[:], current.GroupID, current.ID, expires.Unix())
 	return token, expires, err
 }
 func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Device, error) {
-	if len(token) != 43 || len(key) != 32 || len(name) == 0 || len(name) > 128 {
+	normalized, ok := normalizePairingCode(token)
+	if !ok || len(key) != 32 || len(name) == 0 || len(name) > 128 {
 		return Device{}, ErrInvitation
 	}
-	sum := sha256.Sum256([]byte(token))
+	sum := sha256.Sum256([]byte(normalized))
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Device{}, err
@@ -185,6 +189,28 @@ func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Dev
 		return Device{}, fmt.Errorf("register device: %w", err)
 	}
 	return d, tx.Commit()
+}
+
+// normalizePairingCode accepts the current human-readable ABCD-EFGH code and
+// legacy 43-character invitations during the compatibility window.
+func normalizePairingCode(token string) (string, bool) {
+	token = strings.TrimSpace(token)
+	if len(token) == 43 {
+		if _, err := base64.RawURLEncoding.DecodeString(token); err == nil {
+			return token, true
+		}
+		return "", false
+	}
+	compact := strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(token))
+	if len(compact) != 8 {
+		return "", false
+	}
+	for _, r := range compact {
+		if (r < 'A' || r > 'Z') && (r < '2' || r > '7') {
+			return "", false
+		}
+	}
+	return compact, true
 }
 
 // JoinTestCode adds a device to an explicitly selected compatibility group. It

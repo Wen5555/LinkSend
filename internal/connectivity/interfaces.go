@@ -15,6 +15,7 @@ type InterfaceAddress struct {
 	Address   string `json:"address"`
 	Family    string `json:"family"`
 	Index     int    `json:"index"`
+	MTU       int    `json:"mtu"`
 	Loopback  bool   `json:"loopback"`
 }
 
@@ -42,7 +43,7 @@ func DiscoverInterfaceAddresses(allowLoopback bool) ([]InterfaceAddress, error) 
 				family = "ipv4"
 				ip = ip.To4()
 			}
-			result = append(result, InterfaceAddress{Interface: iface.Name, Address: ip.String(), Family: family, Index: iface.Index, Loopback: ip.IsLoopback()})
+			result = append(result, InterfaceAddress{Interface: iface.Name, Address: ip.String(), Family: family, Index: iface.Index, MTU: iface.MTU, Loopback: ip.IsLoopback()})
 		}
 	}
 	return result, nil
@@ -83,6 +84,12 @@ func selectInterfaceAddress(addresses []InterfaceAddress, priority, excluded []s
 		if left.Loopback != right.Loopback {
 			return !left.Loopback
 		}
+		// Abnormally large MTUs are common on capture/TUN adapters. Prefer a
+		// normal physical-link range for automatic selection, while explicit
+		// user priority above still permits any adapter.
+		if a, b := ordinaryLinkMTU(left.MTU), ordinaryLinkMTU(right.MTU); a != b {
+			return a
+		}
 		if left.Family != right.Family {
 			return left.Family == "ipv4"
 		}
@@ -93,6 +100,8 @@ func selectInterfaceAddress(addresses []InterfaceAddress, priority, excluded []s
 	})
 	return eligible[0], nil
 }
+
+func ordinaryLinkMTU(mtu int) bool { return mtu >= 1280 && mtu <= 9000 }
 
 func interfaceForIP(ip net.IP) string {
 	interfaces, err := net.Interfaces()
@@ -129,6 +138,27 @@ func localAddressPresent(interfaceName string, ip net.IP) bool {
 	for _, address := range addresses {
 		candidate, _, parseErr := net.ParseCIDR(address.String())
 		if parseErr == nil && candidate.Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func directlyConnected(interfaceName string, remote net.IP) bool {
+	if interfaceName == "" || remote == nil || !safeIP(remote, false) {
+		return false
+	}
+	iface, err := net.InterfaceByName(interfaceName)
+	if err != nil || iface.Flags&net.FlagUp == 0 {
+		return false
+	}
+	addresses, err := iface.Addrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addresses {
+		local, network, parseErr := net.ParseCIDR(address.String())
+		if parseErr == nil && !local.Equal(remote) && network.Contains(remote) {
 			return true
 		}
 	}

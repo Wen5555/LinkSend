@@ -1,6 +1,6 @@
 # Roadmap
 
-当前候选产品版本为 `0.2.0`，协议保持 V1。里程碑状态以源码实现、自动化、物理实机和发布验证分别判定。
+当前源码产品版本为 `0.3.0`，已发布测试预览仍为 `0.2.0`，协议保持 V1。里程碑状态以源码实现、自动化、物理实机和发布验证分别判定。
 
 - M0 — **IMPLEMENTED / PASS**：两个 Go module、Wails 3、核心文档和 CI 已建立。
 - M1 — **PARTIAL**：真实 ICE/QUIC loopback、Windows↔macOS LAN 和独立双 NAT 固定映射正向均 PASS；MASQUERADE-only 仍 `CHECK_TIMEOUT` FAIL，其他 NAT/公网 IPv6未覆盖。

@@ -1,8 +1,8 @@
 # LinkSend
 
-LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令服务组成的点对点文件传输工具。当前产品版本为 **0.2.0**，文件/控制协议保持 **V1**；产品 SemVer 与协议版本独立演进。
+LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令服务组成的点对点文件传输工具。当前源码版本为 **0.3.0**，文件/控制协议保持 **V1**；产品 SemVer 与协议版本独立演进。已公开的最新测试预发布仍为 `v0.2.0`。
 
-服务器只负责设备组、在线状态、会话和 ICE 候选交换。文件正文始终通过经身份认证的 QUIC 直连传输，不经过 HTTP、WSS、JavaScript IPC 或第三方中继。当前没有 Relay/TURN 文件中继，能力固定为 `relay=false`。
+服务器只负责配对设备登记、在线状态、会话和 ICE 候选交换；内部兼容隔离范围不会出现在桌面操作流程中。文件正文始终通过经身份认证的 QUIC 直连传输，不经过 HTTP、WSS、JavaScript IPC 或第三方中继。当前没有 Relay/TURN 文件中继，能力固定为 `relay=false`。
 
 源码仓库：[github.com/Wen5555/LinkSend](https://github.com/Wen5555/LinkSend)。`v0.2.0` 已作为 [GitHub 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 发布，tag/源码为 `426d58b6ab62ab7213475007305c0a403955c00f`，三平台构建来自 [main run 34600609161](https://github.com/Wen5555/LinkSend/actions/runs/34600609161)，实现审阅见已合并的 [PR #6](https://github.com/Wen5555/LinkSend/pull/6)。该 Pre-release 不是 Latest，不代表生产可用或跨平台完整验收。
 
@@ -10,8 +10,9 @@ LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令�
 
 当前实现包括：
 
-- Ed25519 长期设备身份、邀请配对、本地公钥固定与撤销。
-- SQLite 信令控制面、HTTP/WSS 认证、设备组隔离和限流。
+- `ABCD-EFGH` 单次短码配对，成功后自动固定 Ed25519 设备公钥。
+- 应用打开即自动接收请求，接收端确认后开始正文传输，并支持按设备免确认。
+- SQLite 信令控制面、HTTP/WSS 认证、内部隔离和限流。
 - Pion ICE 与 quic-go 的同一 UDP socket 分流，TLS 1.3 双向身份认证。
 - manifest、BLAKE3 分块校验、安全 staging、不可覆盖提交与提交记录。
 - `task_id`、`attempt_id`、`session_id`、ICE generation 和单调 `revision` 分层状态模型。

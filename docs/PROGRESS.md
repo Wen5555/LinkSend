@@ -2,6 +2,16 @@
 
 Updated: 2026-09-11. Current published test prerelease: `v0.2.0`; protocol version: V1. This is not an accepted production release.
 
+## 2026-09-11 v0.3.0 局域网连接、配对码与自动接收简化（当前交付源码）
+
+- 按最新产品决策降低首次配对门槛：动态配对码改为 40 位随机量的 `ABCD-EFGH`，10 分钟有效、一次性、服务端仅存规范化摘要；输入忽略大小写/连字符/空格，旧 43 字符邀请继续兼容。配对成功后客户端自动固定认证成员列表中的 Ed25519 公钥，不再要求手工核对 64 位指纹；既有 pin 发生密钥变化仍拒绝。首次配对现在明确信任信令服务，安全边界已同步更新到 SPEC/SECURITY/PROTOCOL。
+- `internal/app/inbox.go` 增加不产生空闲任务历史的常驻接收器：桌面打开且存在接收目录时自动连接 WSS、保持设备在线、收到连接后才创建接收任务；任务结束后自动恢复监听。发送会有界停止本机空闲监听，完成后恢复；对端刚恢复监听的 `PEER_OFFLINE` 有 4 次短退避重试，ICE/QUIC 失败不会盲目重试。
+- 接收 manifest 后进入 `AwaitingAcceptance` 并由 React 弹出确认层，显示发送设备、内容、数量、总量和目标目录。用户可勾选“以后自动接收此设备”，偏好写入 `trust.json`；后续仍执行固定设备密钥、TLS 1.3、块哈希、完整摘要和安全落盘校验。设备页可恢复为每次确认。
+- 当前 Windows 网卡审计确认旧自动顺序会先选 Mihomo TUN `198.18.0.1`（Go MTU 65535），而不是物理以太网 `10.234.232.205`。自动选择现在在没有显式优先级时先选 1280–9000 的常规链路 MTU；不按接口名或私网段硬编码，显式优先级仍可选 TUN。实际选中远端地址属于本接口直接配置网段时才报告 `lan_direct`。
+- UI 移除“设备组、手工信任、开始等待接收”，收敛为生成码、输入码、选择设备发送和接收弹窗。`frontend-skill` 指导下保留既有克制桌面系统并强化发送主动作；Playwright 实际检查桌面传输页与 700px 配对页布局，截图位于 `output/playwright/`。浏览器预览缺 Wails runtime 的 404 仅作为预览限制，不计原生功能通过。
+- 实际通过：根模块普通测试、完整 race、vet、`GOWORK=off go test`；配对码规范化/单次消费测试；真实 loopback Pion ICE + quic-go 的“无手工 trust + 无 StartReceive + 首次确认 + 第二次自动接收”回归；桌面模块 `GOWORK=off` mod verify/test/vet/build；前端 typecheck/lint/8 tests/build；Wails 3 production Windows/amd64 build（1 service / 31 methods / 15 models）。最终本地 `apps/desktop/bin/LinkSend.exe` SHA256 为 `814C4AF7587733F199F081DF1211C715C4830F50005AA88AFADF35FB8C2AF7A1`；隔离 profile 隐藏启动 4 秒仍存活后由本轮检查结束。
+- 当前交付请求：产品版本提升为 `0.3.0`（协议仍为 V1），以同一源码提交更新香港测试主站并生成 Windows 与 macOS arm64 测试包；部署与产物证据追加在本节。新版物理 Windows↔macOS 局域网、真实原生接收弹窗、按设备免确认、跨 NAT、IPv6、网络切换和睡眠唤醒仍需单独实测，不能用 loopback 或浏览器预览冒充。
+
 ## 2026-09-11 v0.2.0 已合并并发布测试预发布
 
 - [PR #6](https://github.com/Wen5555/LinkSend/pull/6) 通过 fast-forward 合并到 `main`，merge/tag 目标均为 `426d58b6ab62ab7213475007305c0a403955c00f`。main 的 core run [`34600609146`](https://github.com/Wen5555/LinkSend/actions/runs/34600609146)、desktop run [`34600609047`](https://github.com/Wen5555/LinkSend/actions/runs/34600609047) 和三平台 packaging run [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161) 全部 PASS。

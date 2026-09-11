@@ -22,6 +22,10 @@ export function AcceptTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(1256230688, id);
 }
 
+export function AcceptTaskAlways(id: string): $CancellablePromise<void> {
+    return $Call.ByID(805976429, id);
+}
+
 export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
 }
@@ -50,6 +54,10 @@ export function Identity(): $CancellablePromise<app$0.IdentityInfo> {
     return $Call.ByID(1850161891);
 }
 
+export function InboxStatus(): $CancellablePromise<app$0.InboxStatus> {
+    return $Call.ByID(602828805);
+}
+
 export function JoinGroup(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
     return $Call.ByID(2730586904, token, name);
 }
@@ -64,6 +72,14 @@ export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfac
 
 export function OpenTaskDirectory(taskID: string): $CancellablePromise<void> {
     return $Call.ByID(3141333411, taskID);
+}
+
+/**
+ * PairDevice is the user-facing alias for the simplified pairing-code flow.
+ * JoinGroup remains for CLI/binding compatibility with existing clients.
+ */
+export function PairDevice(code: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(2450051719, code, name);
 }
 
 export function PauseTask(id: string): $CancellablePromise<void> {
@@ -104,6 +120,10 @@ export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
 
 export function SavePreferences(next: $models.DesktopPreferences): $CancellablePromise<void> {
     return $Call.ByID(3232231562, next);
+}
+
+export function SetAlwaysAccept(deviceID: string, enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3711226762, deviceID, enabled);
 }
 
 export function StartReceive(expectedPeerID: string, directory: string): $CancellablePromise<app$0.TaskSnapshot> {
