@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/transfer"
+	quic "github.com/quic-go/quic-go"
 )
 
 type completedReadGate struct {
@@ -159,5 +160,71 @@ func TestTransferCompletionWaitsForReceiverConfirmationOverQUIC(t *testing.T) {
 	}
 	if err = <-receiverDone; err != nil {
 		t.Fatalf("receiver completion failed: %v", err)
+	}
+}
+
+func TestTransferCompletionSurvivesReceiverNormalConnectionCloseOverQUIC(t *testing.T) {
+	client, server := fixturePair(t, false, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	source := filepath.Join(t.TempDir(), "empty.bin")
+	if err := os.WriteFile(source, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := transfer.Prepare(ctx, []string{source}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+
+	receiverDone := make(chan error, 1)
+	go func() {
+		stream, receiveErr := server.AcceptStream(ctx)
+		if receiveErr == nil {
+			_, receiveErr = transfer.Receive(ctx, WrapStream(stream), t.TempDir(), "pinned-peer", func(transfer.Manifest) bool { return true }, nil)
+		}
+		if receiveErr == nil {
+			receiveErr = server.CloseWithError(0, "closed")
+		}
+		receiverDone <- receiveErr
+	}()
+
+	stream, err := client.OpenStreamSync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = transfer.Send(ctx, WrapStream(stream), prepared, nil); err != nil {
+		t.Fatalf("sender lost a successful terminal exchange to normal receiver close: %v", err)
+	}
+	if err = <-receiverDone; err != nil {
+		t.Fatalf("receiver completion failed: %v", err)
+	}
+}
+
+func TestTerminalFlushRejectsNonzeroConnectionCloseOverQUIC(t *testing.T) {
+	client, server := fixturePair(t, false, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	receiverDone := make(chan error, 1)
+	go func() {
+		_, acceptErr := server.AcceptStream(ctx)
+		if acceptErr == nil {
+			acceptErr = server.CloseWithError(42, "terminal failure")
+		}
+		receiverDone <- acceptErr
+	}()
+
+	stream, err := client.OpenStreamSync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = WrapStream(stream).FlushTerminal(ctx)
+	var applicationErr *quic.ApplicationError
+	if !errors.As(err, &applicationErr) || !applicationErr.Remote || applicationErr.ErrorCode != 42 {
+		t.Fatalf("nonzero connection close was not preserved: %v", err)
+	}
+	if err = <-receiverDone; err != nil {
+		t.Fatalf("receiver close failed: %v", err)
 	}
 }

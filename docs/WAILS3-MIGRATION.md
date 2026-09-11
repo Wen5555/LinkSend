@@ -22,7 +22,7 @@ go vet ./...
 go build ./...
 $env:Path = 'D:\apps\Osend\.wails-bin;' + $env:Path
 wails3 version
-wails3 task --list
+wails3 task -list-all
 wails3 generate bindings -ts -i -clean=true
 Set-Location frontend
 pnpm install --frozen-lockfile
@@ -41,3 +41,5 @@ bindings 生成后必须核对生成模型、React 类型和 Go DTO；前端构�
 2026-09-11 的 r2 测试快照已在 Windows 11 amd64 通过 `WM_CLOSE` 空闲退出，并在 macOS arm64 创建真实窗口后通过 quit Apple Event 空闲退出。这只证明原生窗口与 idle quit，不证明文件/目录对话框、打开目录、红点实际点击、Cmd+Q 按键、活跃任务保护或恢复入口。辅助功能权限未具备时这些项目保持 NOT_RUN；不得用浏览器截图或修改 TCC 数据库替代。
 
 历史 commit/run/资产记录保留在 PROGRESS 和 BUILD-MACOS 中；旧 `0.1.0` 包不能通过改写元数据冒充 `0.2.0`。
+
+`0.2.0` committed 候选在 GitHub 的 Windows 2022、macOS arm64 和 macOS Intel runner 上均使用 Wails 3 `v3.0.0-beta.18` 重新生成 1 service / 27 methods / 14 models 并完成构建。Windows committed workflow 资产又通过真实窗口、非零句柄和 idle `WM_CLOSE`；macOS workflow 只完成 DMG 挂载、bundle/架构和 strict ad-hoc codesign，不把 runner 构建等同于完整原生交互验收。

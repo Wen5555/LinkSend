@@ -18,6 +18,10 @@ WSS 信令：设备/会话/候选
 
 逻辑任务在恢复过程中保留 `task_id`，每次执行创建新 `attempt_id`，每次连接创建新 `session_id`，ICE generation 只在该 session 内有效；完整任务快照通过单调 `revision` 防止旧回调覆盖。公开状态为 Preparing、AwaitingAcceptance、Transferring、Verifying、Paused、Recovering、Completed、Rejected、Cancelled、Failed。Completed 要求接收端唯一块验证、提交成功以及 completed/confirmed 双边终态完成。
 
+QUIC terminal flush 先发送并半关闭 stream，再有界等待对端终态。对单次传输连接，接收端只有在读到匹配 `confirmed` 后才会以 application code 0 正常关闭；因此发送端在已经验证 `completed` 并写出 `confirmed` 的 terminal 边界可接受该特定正常关闭早于 stream FIN 到达。任何非零 close、reset、deadline 或普通传输阶段的 close 都不能转换为成功。
+
+任务控制状态优先于同一 attempt 的迟到进度：Pause/Cancel 建立调度屏障后，ACK 可以补齐计数，但不能重新开放 `CanPause`、覆盖 `pause_requested` 或把任务误终结为 Cancelled。接收准备和测试同步使用明确的后端 phase/checkpoint 事件，不依赖固定 sleep。
+
 恢复仍复用现有 V1 transfer 帧，不建立第二套协议栈。恢复身份绑定 TransferID、manifest digest、块策略、源内容、接收目录、对端身份/指纹；接收端重验 staging 和 commit records 后请求缺失或损坏块。`sent_bytes`/`received_bytes` 是实际数据面字节，`retransmitted_bytes` 是旧 attempt 已发送又重发的子集，`verified_bytes`/逻辑完成量只计算唯一已验证数据。
 
 多网卡层自动枚举可用单播地址，并支持接口优先和排除；IPv6 link-local 当前排除。地址失效会废弃旧 endpoint 并进入新协商/恢复，不宣称 QUIC 透明迁移。路径分类只有独立路由证据充分时才可标为 `lan_direct` 或 `internet_p2p`，否则保持 `direct_unknown`。

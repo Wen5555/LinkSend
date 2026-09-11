@@ -15,6 +15,8 @@ go run ./cmd/devtool test-nat
 
 `net.Pipe` 测试只覆盖 transport-neutral fallback，不能证明 quic-go 行为。Stage 1B 的真实 loopback 测试现在使用 quic-go v0.62.0 的 client/server stream，覆盖 acceptance read、receive read、ACK wait 和重复 abort；它们不能替代 LAN/NAT 验收。
 
+终态回归还必须覆盖 `TestTransferCompletionSurvivesReceiverNormalConnectionCloseOverQUIC` 与 `TestTerminalFlushRejectsNonzeroConnectionCloseOverQUIC`：前者证明接收端已读 `confirmed` 后 code 0 连接关闭早于 stream FIN 不会把成功误报为失败，后者证明非零 close 仍被保留。2026-09-11 的 GitHub push core run `34592549314` 曾在 `TestDirectServiceSendAndReceive` 真实复现 `Application error 0x0 (remote): closed`；同 SHA 的 PR run 成功不撤销该 FAIL。最小修复后 Windows 真实 QUIC 两个完成用例 100 轮、含非零负例的三用例 50 轮、对应 race 20 轮，以及 app 端到端 100 轮均 PASS；最终 Linux CI 仍须从新提交重跑。
+
 Candidate exchange 测试覆盖发送失败、接收失败、缺少 `end_of_candidates`、父 context 取消和 malformed message，并使用确定的 done/context 同步点。阶段错误保留 `CANCELLED`、`CANDIDATE_EXCHANGE_TIMEOUT`、`CHECK_TIMEOUT`、`NO_VIABLE_CANDIDATE`、`ICE_FAILED` 和 QUIC handshake 分类，不能统一写成一个连接超时。
 
 传输测试还覆盖恶意 accept/ack 的 verified 上界、受限 peer error、恢复 JSON 尾随数据和未知文件 ID。`linksend send --evidence` 和 `receive --evidence` 会导出实际候选对、共享 socket、STUN 计数和 TLS/ALPN，不导出 ICE credentials、令牌或私钥。

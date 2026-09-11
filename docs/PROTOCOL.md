@@ -18,11 +18,15 @@
 
 QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送后，transport 先关闭发送方向，再有界等待对端结束读取，防止随后的 reset/连接关闭丢弃终态响应。该等待至多 2 秒且不延长调用者 deadline；原始错误仍作为任务结果。V1 帧结构和 completed/confirmed 语义保持不变，net.Pipe 兼容测试与真实 QUIC 负向回归分别覆盖同步和缓冲发送。
 
+`completed`/`confirmed` 成功边界还有一个 quic-go 可观察时序：接收端读到 `confirmed` 后按产品约定以 application code 0 正常关闭单次传输连接，发送端可能先收到 connection close、后收到 stream FIN。发送端仅在已经收到匹配 `completed`、已经写出匹配 `confirmed` 且正处于有界 terminal flush 时，把“远端 code 0 正常关闭”视为等价的已读终态证据；非零 application close、stream reset、timeout 和其他连接错误仍原样失败。此规则不增加帧、不改变 V1 wire compatibility，也不把任意 `net.ErrClosed` 当作成功。
+
 信令协商状态绑定当前认证连接。断开或被同设备的新认证连接替换时清理该设备参与的协商；旧连接的迟到帧不能写入新连接状态。已建立的 QUIC 数据连接不因此被关闭。此修复需要升级信令服务源码；客户端升级无法修复仍运行旧版本的服务。
 
 ## 任务、attempt 与恢复语义（schema 2）
 
 `task_id` 表示用户可识别的逻辑任务，暂停、重启和恢复时保持不变；`attempt_id` 表示一次执行，任何恢复都必须新建；`session_id` 表示一次端到端连接；ICE generation 只在对应 session 内解释，候选和 end-of-candidates 必须同时匹配 session 与 generation；`revision` 是任务快照的单调版本。旧 attempt/session/generation 的回调或消息不得更新较新的 revision。
+
+`pause_requested`/`cancel_requested` 是控制意图屏障：请求发出后，已经写入 QUIC 但稍后才确认的 ACK/进度仍可补记实际字节和唯一验证量，但不得把状态回退为 Transferring/Verifying，也不得启动新块。2026-09-11 的 macOS arm64 CI 首次复现了迟到 ACK 覆盖暂停请求；修复后 Windows 高重复真实 QUIC 和相同 arm64 runner 均通过，V1 帧格式没有变化。
 
 合法主路径是 `Preparing → AwaitingAcceptance → Transferring → Verifying → Completed`。AwaitingAcceptance/Transferring 可以进入 Paused；可恢复连接中断进入 Recovering；Resume 从 Paused/Recovering 创建新 attempt 与 session 后重新进入连接/协商。Rejected、Cancelled、Failed、Completed 是终态。校验或文件提交失败必须进入 Failed；只有接收端完成唯一块验证与文件提交，且 sender 收到 completed 并返回 confirmed 后，双方才记录 Completed / `bilateral_confirmed=true`。
 

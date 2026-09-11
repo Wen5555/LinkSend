@@ -14,6 +14,8 @@ Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol versio
 - 版本资源复现并修复：Wails 3 beta.18 自动 build-assets 生成的 Windows version info 缺 `FileVersion` 显示字符串，使主 EXE 的 PowerShell VersionInfo 为空；将 fixed file/product version 规范为 `0.2.0.0`、使用 `0409` string table 并补 `FileVersion=0.2.0` 后，主 EXE 与 installer 的 FileVersion/ProductVersion 均实际返回 `0.2.0`。新增跨源码/Wails/安装元数据同步测试防止回退。
 - 源码提交 `4b7ccf66f89c9720d9b5970e5d610b453048d69c` 已建立。直接在保留 untracked 的主工作树和共享 Git worktree 构建均被 Go 标为 `vcs.modified=true`，两次资产均拒绝部署；改用独立干净 clone 后 Linux amd64 rendezvous 的 `go version -m` 为该 revision、`vcs.modified=false`，大小 11,309,218 bytes，SHA256 `c549cdbf1bd461d6f583302f96700471000aacba1fed912c66d6e74912f30247`。
 - 香港测试主站已按 manager 事务完成 `0.2.0` 同步：备份 `/opt/linksend-lan-test/backups/20260911T101714Z-v0.2.0-4b7ccf6`，旧 PID `352572` → 新 PID `381064`；配置 SHA 与数据库 schema/integrity 不变。公网 health 报告产品 `0.2.0` / 协议 V1；两次完成后立即重连、拒绝后立即完成各传 2 MiB 均 PASS。测试运行时已删除，两条测试设备记录均撤销，额外数据库清理备份为 `/opt/linksend-lan-test/backups/20260911T102329Z-v0.2.0-lifecycle-cleanup`。旧主站立即重试 FAIL 因实际部署复核而关闭。
+- 候选提交 `9cce3eef20a6224f56c9da79d16f8966cabb61f9` 的三平台 packaging run `34592549254` 全部成功，但同 SHA 的 push core run `34592549314` 在真实 QUIC `TestDirectServiceSendAndReceive` 复现 `Application error 0x0 (remote): closed`；PR core 的成功 run 不抵消这个 FAIL。根因是接收端读到 `confirmed` 后正常关闭单次传输连接时，quic-go 可能先交付 application close code 0、后交付 stream FIN，发送端 terminal flush 将正常终态误判为失败。
+- 最小修复只在“已验证 completed、已写出 confirmed”的 terminal flush 内接受远端 QUIC application code 0；非零 close、reset、timeout 和其他阶段错误仍失败，协议 V1 不变。新增真实 QUIC 正向及非零 close 负向测试；Windows 上完成用例 100 轮、含负例套件 50 轮、race 20 轮和 app 端到端 100 轮均 PASS。`9cce3ee` 的四个 committed 包及哈希保留作前一候选证据，但必须从含本修复的新提交重建后才能成为最终候选资产。
 
 ## 2026-09-11 P0/P1/P2 分阶段可靠性改进（历史 dirty snapshot）
 

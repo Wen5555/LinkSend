@@ -22,6 +22,7 @@ go vet ./...
 go build ./...
 $env:Path = "D:\apps\Osend\.wails-bin;$env:Path"
 wails3 generate bindings -ts -i -clean=true
+wails3 task -list-all
 Remove-Item Env:GOWORK
 
 Set-Location frontend
@@ -33,6 +34,8 @@ pnpm run build
 ```
 
 前端 build 与桌面 production build 必须串行，因为 Vite 会重建被 Go `embed` 的 `frontend/dist`。随后从 `apps/desktop` 执行 `wails3 task build ARCH=amd64`，并核对 EXE 中嵌入的最新带 hash 资产名。
+
+发布候选资产由 `.github/workflows/wails3-packages.yml` 从干净 checkout 构建。包内 `BUILD-INFO.txt` 必须记录 source/workflow SHA、源码状态、UTC、目标 OS/arch、Go/Node/pnpm/Wails 与平台工具版本、包级验证、原生验证边界、签名和公证；`SHA256SUMS.txt` 必须针对实际 ZIP/installer/DMG，而不是 GitHub artifact 外层压缩包。候选尚未发布时，同一 `0.2.0` 内的修复不另造 `0.2.1`；首次公开发布后的兼容修复才按 SemVer 提升 patch，新增兼容功能提升 minor，破坏性变化提升 major 并同时评审协议版本。
 
 Windows race 需要可用 C 工具链；本机使用 Scoop MinGW 16.2.0，不能通过关闭 CGO 或跳过 race 掩盖工具链失败。Wails CLI 固定为 `v3.0.0-beta.18`，当前工程没有 Wails 2 构建入口。
 

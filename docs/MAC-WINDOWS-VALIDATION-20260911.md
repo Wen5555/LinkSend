@@ -2,7 +2,7 @@
 
 本轮为真实 Windows/Mac 联调；没有把模拟、浏览器预览或私网地址替代原生双机验收。实现状态与验证状态分别记录。所有相对证据路径均相对于 `D:\apps\Osend\.artifacts\lan-live-20260911`；该目录含本机测试身份，**不得整体提交或对外导出**。对外分享仅选择脱敏日志及 `deliverables`，不包含 profile、邀请、私钥、测试磁盘镜像或文件正文。
 
-> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后当前分支已将产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。当前实现与新资产以 [PROGRESS](PROGRESS.md) 顶部、[ACCEPTANCE](ACCEPTANCE.md) 和最新资产清单为准；不得用旧 `deliverables` 或本报告早期 NOT_IMPLEMENTED 行覆盖后续状态，也不得把旧包改名为 `0.2.0`。
+> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后候选分支已将产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。源码已形成真实提交与 PR #6；committed workflow 资产和新 CI 结果以 [PROGRESS](PROGRESS.md) 顶部、[ACCEPTANCE](ACCEPTANCE.md) 和 [v0.2.0 候选记录](RELEASE-v0.2.0-TEST-CANDIDATE.md) 为准。不得用旧 `deliverables`/r2 包或本报告早期 NOT_IMPLEMENTED 行覆盖后续状态，也不得把旧包改名为 `0.2.0`。
 
 ## 一、环境与拓扑
 
@@ -69,7 +69,8 @@ SSH 使用已安装公钥及 codex-ssh-manager。Mac 原非交互 PATH 未列出
 | Pion Marshal 把 ufrag 写入候选诊断 | IMPLEMENTED | PASS：诊断字段采用允许列表；签名候选交换不变 |
 | 文件冲突误标 DIRECT_FAILED；权限误标 DISK_FULL；对端错误类型丢失 | IMPLEMENTED | PASS：FILE_CONFLICT / PERMISSION_DENIED / DISK_FULL；未知远端文本不获得类型语义 |
 | QUIC 异步缓冲中的拒绝帧被立即 reset 丢弃 | IMPLEMENTED | PASS：有界终态发送收尾，真实 QUIC 与 Mac 复现回归 |
-| 断开的信令连接留下旧协商，阻止立即重试 | IMPLEMENTED | 源码测试 PASS；香港当前旧服务 FAIL，未部署 |
+| 断开的信令连接留下旧协商，阻止立即重试 | IMPLEMENTED | 源码测试 PASS；香港测试主站已部署 `0.2.0`，完成/拒绝后立即重试 PASS |
+| 暂停请求被迟到 ACK 进度覆盖，任务误回到 transferring/取消 | IMPLEMENTED | Windows 真实 QUIC 高重复与 GitHub macOS arm64 同架构回归 PASS；计数保留但控制状态不回退 |
 | srflx 就被标为 internet_p2p，双方标签不一致 | PARTIAL | PASS：移除无证据推断；真正 LAN/Internet 路由分类尚缺实现和证据 |
 | 界面混淆历史与恢复能力、常驻固定测试码、Mac 提示双击 exe | IMPLEMENTED | PASS：修正文案及能力展示，生成绑定与前端回归 |
 | Wails 3 空闲退出被 `ShouldQuit=false` 阻止 | IMPLEMENTED | PASS：空闲返回 true；Windows `WM_CLOSE`、Mac quit Apple Event 均退出；活跃任务对话框仍待原生交互验收 |
@@ -111,8 +112,8 @@ V1 帧结构不变，error 字符串只发送稳定允许码，不再泄漏本�
 - IMPLEMENTED / LOCAL PASS：桌面暂停/显式恢复、应用重启后恢复正文、字节级缺块恢复；物理双机恢复矩阵仍为 NOT_RUN。
 - NOT_IMPLEMENTED：中继。`relay=false` 保持不变。
 - PARTIAL：LAN/Internet 路由分类以及完整的文件/重启/网络切换现场验收；当前仅在证据不足时报告 `direct_unknown`。
-- FAIL：香港当前旧信令服务的立即重试。源码修复已通过测试，服务尚未升级；不是外部环境免责项。
-- BLOCKED_BY_EXTERNAL_ENV：当前没有可操作的原生辅助功能权限、独立 Intel Mac/Windows 第二台及可用全局 IPv6 现场；荷兰 SSH 此前超时。Linux 独立双 NAT 已运行，不再列为环境阻塞，但 MASQUERADE-only 结果仍为产品 FAIL。未操作生产路由来补造拓扑。
+- PASS：香港测试主站已同步 `0.2.0`，完成/拒绝后的立即新连接通过；旧服务 FAIL 作为历史前后对照保留。
+- BLOCKED_BY_EXTERNAL_ENV：当前没有可操作的原生辅助功能权限、独立 Intel Mac/Windows 第二台及可用全局 IPv6 现场；本轮收尾时 `mac-test-102342413` 的 manager probe 连续两次 TCP/22 timeout，因此未在该物理 Mac 启动 committed DMG。Linux 独立双 NAT 已运行，不再列为环境阻塞，但 MASQUERADE-only 结果仍为产品 FAIL。未操作生产路由来补造拓扑。
 - NOT_RUN：全局 IPv6、VPN/metric/DHCP/睡眠切换、信令中断后实际正文连续性、接收各提交阶段正常退出/强杀、完整源变化/部分提交/恶意路径双机矩阵。已有自动化测试范围单独记录，不冒充现场验收。
 
 ## 八、已知限制、数据兼容范围和回滚方法
@@ -127,13 +128,13 @@ V1 帧结构不变，error 字符串只发送稳定允许码，不再泄漏本�
 
 1. 阅读 AGENTS.md、SPEC、PROGRESS 和本报告；保存 `git status --short`、分支、HEAD。关闭需要备份的正式应用，备份数据目录；为测试选择全新 profile 和接收目录。
 2. Windows 运行 codex-ssh-manager 的 `resolve`、`probe`、`audit-host`，alias 为 `mac-test-102342413`。远端命令写入 LF `.sh`，使用 manager `run-script`；不要手写业务 SSH 或将密码写入脚本。
-3. 只使用 `.artifacts/final-20260911/` 中带 `-r2` 的对应架构包并核对 `SHA256SUMS.txt` 与 `ASSET-MANIFEST.json`；无 `-r2` 文件是退出修复前历史包。Windows 解压后按 README 设置 `LINKSEND_DATA_DIR` 再启动；Mac 用隔离测试 .app，不替换原 `/Applications/LinkSend.app`。这批是未提交测试快照，不是发布候选。
+3. 优先使用 [v0.2.0 候选记录](RELEASE-v0.2.0-TEST-CANDIDATE.md) 列出的 committed workflow 资产，并同时核对 run/head SHA、包内 `BUILD-INFO.txt` 和 `SHA256SUMS.txt`。`.artifacts/final-20260911/` 的 `-r2` 资产只保留为历史 dirty snapshot。Windows 解压后按 README 设置隔离 `LINKSEND_DATA_DIR`；Mac 挂载后复制到隔离测试位置，不替换原 `/Applications/LinkSend.app`。
 4. 两端使用现有组成员生成的独立一次性邀请加入，分别核对完整设备指纹并手动信任。不要使用测试固定码或在日志记录邀请。
 5. 设置真实绑定地址：Windows 当前 `10.234.232.205:0`，Mac 当前 `10.234.241.3:0`；每次重新检查 IP 是否变化。保留现场 VPN/TUN，记录接口/地址/路由/metric；不要为通过测试修改生产网络。
 6. 接收端选择全新空目录并点击等待接收。发送端依次测试空文件、中文文件、长文件名、多个文件、含空目录的目录和大于两个 chunk 的文件。先不接受，验证未写正文；再明确接受。完成后比较两端 SHA256 与协议结果，然后交换方向。
 7. 新建测试目标文件重复发送，验证 FILE_CONFLICT 且原摘要不变；拒绝、取消、超时应分别验证。Mac 权限和磁盘不足可复用本轮 `mac-permission-v3.sh`、`mac-disk-full-v4.sh`，先查看脚本中的范围、命令与 rollback，改用新的测试路径后执行，避免覆盖现有证据。
 8. 核对候选/base socket/TLS/ALPN/peer/session/generation；候选类型和在线状态都不能代替路径证据。核对界面稳定码、任务终态、逻辑完成量和能力声明与 CLI/后端一致。
-9. 香港旧服务升级前，立即重复同设备连接仍应记录 FAIL。修复版服务只能先在隔离实验服务验证；不能通过等待两分钟、延长超时或修改防火墙，把此缺陷标为已修复。
+9. 香港测试主站当前应报告产品 `0.2.0`、协议 V1；重复完成→立即完成、拒绝→立即完成。若回归失败直接记录产品 FAIL，并按 [DEPLOY-HK](DEPLOY-HK.md) 的备份回滚，不能靠等待两分钟、延长超时或修改网络配置掩盖。
 10. 有原生交互条件后逐项检查文件选择器、打开目录、焦点键盘、深色/高 DPI、红点/Cmd+Q/Windows 关闭和活动任务保护；保存真实原生窗口证据。历史持久化、重启恢复和字节级缺块续传分别验收，不以窗口创建或历史列表替代正文恢复。
 11. 执行根模块 test/race/vet/独立模块、前端 frozen install/typecheck/lint/test/build，再执行桌面独立 test/vet/build。前端构建与桌面编译不要并行，因为 Vite 会重建 dist。运行 Wails bindings 生成并核对差异，然后构建 Windows 与两种 Mac DMG。
 12. 将全部可运行 FAIL 修复并复测后，再按发布流程从真实提交构建、等待 required checks、核对合并后 SHA 和 Release 实际 digest。未具备的拓扑/签名/公证/原生证据继续明示，不复用本轮快照的提交来源声明。

@@ -72,6 +72,8 @@ Receive only beneath a user-selected root using current Go root-constrained APIs
 
 Persist task/peer/digest/destination/chunk strategy/verified recoverable blocks/state. On resume reauthenticate peer/manifest and revalidate staging files; request missing/corrupted chunks. Cover disconnect/kill/restart/IP change/staging damage/source change. DB marks cannot outrun recoverable disk; checkpoint batching allowed with durability. Pause stops scheduling and preserves state; resume reconfirms; cancel stops network/writes and offers keep/cleanup. Hash/I/O/DB off UI callbacks. Every goroutine/subscription has cancellation and shutdown.
 
+Pause/cancel control intent takes precedence over in-flight progress callbacks. A late acknowledgement may update counters for bytes already sent or verified, but must not reopen scheduling, revert the requested control state, or turn a pause into cancellation.
+
 ## 10. Application, CLI and UI
 
 Shared internal/app exposes pairing/devices/send/accept/pause/resume/cancel/events. Wails binding stays thin; no network state machine, file loops or DB transactions in binding. DTOs and throttled progress only, no file bytes through JavaScript. Cancel subscriptions on shutdown, no duplicate old listeners.

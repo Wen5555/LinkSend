@@ -56,6 +56,14 @@ func (s *QUICStream) FlushTerminal(ctx context.Context) error {
 			return nil
 		}
 		if err != nil {
+			var applicationErr *quic.ApplicationError
+			if errors.As(err, &applicationErr) && applicationErr.Remote && applicationErr.ErrorCode == 0 {
+				// The product closes a one-transfer QUIC session with code 0 only
+				// after the receiver has read the terminal frame. quic-go may
+				// deliver that connection close before the stream FIN, so it is
+				// equivalent terminal-delivery evidence at this exact boundary.
+				return nil
+			}
 			return err
 		}
 		if n == 0 {

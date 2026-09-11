@@ -6,6 +6,10 @@ QUIC 使用 TLS 1.3、自签 Ed25519 证书和固定对端公钥，验证证书�
 
 控制消息绑定 sender、recipient、session、generation、freshness 并使用明确的签名编码。断开连接只清理其拥有的协商；旧连接、旧 attempt 和旧 generation 不能修改新状态。拒绝、错误和 confirmed 在 QUIC 发送方向 FIN 后执行有界终态收尾，避免缓冲帧被 reset/close 丢弃，同时受调用者 deadline 限制。
 
+正常连接关闭的容错只适用于已验证 `completed`、已写出匹配 `confirmed` 之后的 terminal flush，并且只接受远端 QUIC application code 0。它不会吞掉非零 close、stream reset、deadline 或正文阶段连接错误；真实 QUIC 正向/负向用例分别锁定这两个边界。
+
+暂停/取消请求也是本地完整性边界。请求后的迟到 ACK 只能补记已发生的传输与验证计数，不能回滚控制状态或恢复正文调度；否则 UI 可能把用户已暂停的任务重新显示为传输中，甚至误记为取消。本边界由真实 QUIC 暂停回归覆盖。
+
 恢复私有元数据保存在本地 schema 2 数据库，不通过 WSS 或 Wails DTO 暴露。它绑定 TransferID、manifest、块策略、路径和 pinned peer；恢复前重新验证源文件、staging、已提交文件及对端指纹。接收提交使用受根目录约束的路径和默认不可覆盖策略；损坏历史记录会隔离，不阻塞启动。
 
 diagnostics 采用允许列表，仅记录实际 base socket、接口、地址族、脱敏候选类型、ICE 时间线、TLS/ALPN、连接方法、relay 实际值、STUN 请求/响应计数、信令字节和稳定失败阶段。禁止记录邀请、固定码、令牌、私钥、ICE ufrag/password、候选扩展、文件正文、用户主目录或未清洗的远端错误细节。

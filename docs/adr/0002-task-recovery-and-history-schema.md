@@ -8,6 +8,8 @@ LinkSend keeps one logical `task_id` across pause/restart recovery. Every execut
 
 Public task state is Preparing, AwaitingAcceptance, Transferring, Verifying, Paused, Recovering, Completed, Rejected, Cancelled, or Failed. Internal request phases such as `pause_requested`/`cancel_requested` are visible while cancellation is pending but are not extra success states. Completed requires verified receiver content, successful file commit, sender receipt of completed, and receiver receipt of confirmed.
 
+Control intent has precedence inside an attempt. An ACK/progress callback that arrives after `pause_requested` may advance actual/verified counters for work already performed, but it cannot change the state back to Transferring/Verifying or enable new scheduling. This rule was added after the macOS arm64 packaging CI exposed a late-ACK pause race; the regression now waits on a receiver checkpoint rather than scheduler timing and passes on Windows and the same arm64 runner.
+
 Private recovery metadata is never exposed through WSS or Wails. It binds direction, peer ID/fingerprint, source paths or target directory, TransferID, manifest digest, chunk size, total bytes/file count, sent-chunk bitmap and byte counters. Resume is an explicit user action. Sender rebuilds the manifest and rejects changed source content; receiver matches the recovery identity, rehashes staging/committed records, and requests only missing or damaged blocks.
 
 ## Persistence and migration

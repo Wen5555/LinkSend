@@ -30,6 +30,8 @@ Read/write deadlines and cancellation are adapter-local, never applied to the ba
 
 At the stream layer, `internal/transport.QUICStream` is the only quic-go-specific lifecycle adapter exposed to transfer orchestration. Normal completion calls `Stream.Close` (send-direction FIN); cancellation and protocol failure call `CancelRead` and `CancelWrite` with a local application error code. This does not change UDP ownership or close signaling sessions used by other work.
 
+Terminal flush handles quic-go's ordering between stream FIN and connection close without a sleep. Once the sender has validated `completed` and written the matching `confirmed`, a remote application close with code 0 is accepted as the product receiver's normal post-confirmation teardown even if it is observed before stream EOF. This exception exists only inside terminal flush; nonzero application errors, stream resets, deadlines and earlier connection closes remain failures. A real QUIC regression covers both the code-0 success case and the nonzero-close negative case.
+
 Synchronous initial `ReadNonQUICPacket` with an already-cancelled context initializes the upstream non-QUIC queue before any concurrent operation. This avoids its documented first-read initialization race. The subsequent read pump is the only caller.
 
 ## Path and security policy
