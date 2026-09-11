@@ -203,9 +203,10 @@ func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsCli
 }
 
 type TrustedPeer struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	PublicKey []byte `json:"public_key"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	PublicKey  []byte `json:"public_key"`
+	AutoAccept bool   `json:"auto_accept,omitempty"`
 }
 type TrustFile struct {
 	Peers []TrustedPeer `json:"peers"`
@@ -241,25 +242,68 @@ func LoadTrust(dir string) ([]TrustedPeer, error) {
 	return f.Peers, nil
 }
 
-// TrustPeer requires the full fingerprint confirmed through a trusted channel;
-// registration in the signaling group never implicitly establishes this trust.
+// TrustPeer is retained for CLI compatibility with the former manual
+// fingerprint flow. The desktop now uses TrustPairedPeer after code pairing.
 func TrustPeer(dir string, peer TrustedPeer, confirmedFingerprint string) error {
 	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || confirmedFingerprint != peer.ID {
 		return errors.New("UNPAIRED: fingerprint confirmation does not match")
 	}
+	return trustPeer(dir, peer)
+}
+
+// TrustPairedPeer pins a peer returned by the authenticated pairing service.
+// Possession of the short-lived pairing code replaces manual fingerprint
+// comparison in the desktop product; a previously pinned key can never be
+// replaced silently.
+func TrustPairedPeer(dir string, peer TrustedPeer) error {
+	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID {
+		return errors.New("UNPAIRED: invalid paired device identity")
+	}
+	return trustPeer(dir, peer)
+}
+
+func trustPeer(dir string, peer TrustedPeer) error {
 	peers, err := LoadTrust(dir)
 	if err != nil {
 		return err
 	}
-	for _, p := range peers {
+	for i, p := range peers {
 		if p.ID == peer.ID {
 			if !bytes.Equal(p.PublicKey, peer.PublicKey) {
 				return authenticationError("peer key changed")
+			}
+			changed := peer.Name != "" && peer.Name != p.Name
+			if changed {
+				peers[i].Name = peer.Name
+				return saveTrust(dir, peers)
 			}
 			return nil
 		}
 	}
 	peers = append(peers, peer)
+	return saveTrust(dir, peers)
+}
+
+// SetAutoAccept persists receiver consent for one already paired device.
+func SetAutoAccept(dir, peerID string, enabled bool) error {
+	peers, err := LoadTrust(dir)
+	if err != nil {
+		return err
+	}
+	for i := range peers {
+		if peers[i].ID != peerID {
+			continue
+		}
+		if peers[i].AutoAccept == enabled {
+			return nil
+		}
+		peers[i].AutoAccept = enabled
+		return saveTrust(dir, peers)
+	}
+	return errors.New("UNPAIRED: device is not paired")
+}
+
+func saveTrust(dir string, peers []TrustedPeer) error {
 	data, err := json.MarshalIndent(TrustFile{Peers: peers}, "", "  ")
 	if err != nil {
 		return err

@@ -35,7 +35,9 @@ type Service struct {
 	identity *identity.Identity
 	signal   *signaling.Client
 	mu       sync.RWMutex
+	trustMu  sync.Mutex
 	tasks    *taskManager
+	inbox    inboxManager
 }
 
 type IdentityInfo struct {
@@ -52,13 +54,14 @@ type DiagnosticIdentity struct {
 }
 
 type DeviceInfo struct {
-	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	Name      string `json:"name"`
-	PublicKey string `json:"public_key_hex"`
-	Admin     bool   `json:"admin"`
-	Online    bool   `json:"online"`
-	Trusted   bool   `json:"trusted"`
+	ID           string `json:"id"`
+	GroupID      string `json:"group_id"`
+	Name         string `json:"name"`
+	PublicKey    string `json:"public_key_hex"`
+	Admin        bool   `json:"admin"`
+	Online       bool   `json:"online"`
+	Trusted      bool   `json:"trusted"`
+	AlwaysAccept bool   `json:"always_accept"`
 }
 
 type InvitationInfo struct {
@@ -145,7 +148,17 @@ func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, err
 		return DeviceInfo{}, err
 	}
 	d, err := c.Join(ctx, token, s.name(name))
-	return s.device(d), err
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	devices, err := c.Devices(ctx)
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	if err = s.syncPairedDevices(devices); err != nil {
+		return DeviceInfo{}, err
+	}
+	return s.device(d), nil
 }
 
 func (s *Service) CreateInvitation(ctx context.Context) (InvitationInfo, error) {
@@ -166,21 +179,43 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = s.syncPairedDevices(devices); err != nil {
+		return nil, err
+	}
 	peers, err := identity.LoadTrust(s.cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
-	trusted := make(map[string]bool, len(peers))
+	trusted := make(map[string]identity.TrustedPeer, len(peers))
 	for _, p := range peers {
-		trusted[p.ID] = true
+		trusted[p.ID] = p
 	}
 	out := make([]DeviceInfo, 0, len(devices))
 	for _, d := range devices {
 		item := s.device(d)
-		item.Trusted = trusted[d.ID] || d.ID == s.identity.ID()
+		peer, ok := trusted[d.ID]
+		item.Trusted = ok || d.ID == s.identity.ID()
+		item.AlwaysAccept = ok && peer.AutoAccept
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+// syncPairedDevices intentionally implements the simplified trust model:
+// successful pairing-service membership pins every returned device key. This
+// removes the manual fingerprint step while still rejecting later key changes.
+func (s *Service) syncPairedDevices(devices []signaling.Device) error {
+	s.trustMu.Lock()
+	defer s.trustMu.Unlock()
+	for _, d := range devices {
+		if d.ID == s.identity.ID() {
+			continue
+		}
+		if err := identity.TrustPairedPeer(s.cfg.DataDir, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Membership reports only evidence returned by the authenticated server. A
@@ -203,7 +238,7 @@ func (s *Service) Membership(ctx context.Context) MembershipStatus {
 			return MembershipStatus{State: "member", Role: role}
 		}
 	}
-	return MembershipStatus{State: "not_member", Role: "unknown", Message: "当前身份不在该设备组中，请使用管理员邀请加入"}
+	return MembershipStatus{State: "not_member", Role: "unknown", Message: "当前设备尚未配对，请在另一台设备上生成配对码"}
 }
 
 func membershipFailure(err error) MembershipStatus {
@@ -213,9 +248,9 @@ func membershipFailure(err error) MembershipStatus {
 	case protocol.VersionIncompatible:
 		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "服务版本或能力不兼容，请升级后重试。"}
 	case protocol.AuthenticationFailed:
-		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "当前身份未通过该服务的成员或签名验证，请先使用一次性邀请加入。"}
+		return MembershipStatus{State: "auth_failed", Role: "unknown", Message: "当前设备尚未完成配对，请输入另一台设备生成的配对码。"}
 	default:
-		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "设备组状态暂时无法读取，请检查服务和网络。"}
+		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "配对状态暂时无法读取，请检查服务和网络。"}
 	}
 }
 
@@ -237,6 +272,32 @@ func (s *Service) Trust(ctx context.Context, deviceID, fingerprint string) error
 		}
 	}
 	return errors.New("UNPAIRED: device is not a current member of the server group")
+}
+
+// SetAlwaysAccept changes receiver consent for one paired device. Transport
+// identity checks remain mandatory even when the user confirmation is skipped.
+func (s *Service) SetAlwaysAccept(deviceID string, enabled bool) error {
+	if len(deviceID) != 64 || deviceID == s.identity.ID() {
+		return errors.New("UNPAIRED: paired peer is required")
+	}
+	s.trustMu.Lock()
+	defer s.trustMu.Unlock()
+	return identity.SetAutoAccept(s.cfg.DataDir, deviceID, enabled)
+}
+
+func (s *Service) alwaysAccept(deviceID string) bool {
+	s.trustMu.Lock()
+	defer s.trustMu.Unlock()
+	peers, err := identity.LoadTrust(s.cfg.DataDir)
+	if err != nil {
+		return false
+	}
+	for _, peer := range peers {
+		if peer.ID == deviceID {
+			return peer.AutoAccept
+		}
+	}
+	return false
 }
 
 func (s *Service) Revoke(ctx context.Context, deviceID string) error {

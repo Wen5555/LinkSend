@@ -122,6 +122,20 @@ type taskManager struct {
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
 
+func (m *taskManager) hasActive() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, task := range m.tasks {
+		task.mu.RLock()
+		active := task.cancel != nil
+		task.mu.RUnlock()
+		if active {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRecord, error) {
 	m.mu.Lock()
 	for _, t := range m.tasks {
@@ -474,21 +488,21 @@ func userErrorForCode(code protocol.Code) string {
 	case protocol.PeerOffline:
 		return "对端当前离线，请让对端保持 LinkSend 运行。"
 	case protocol.Unpaired:
-		return "设备尚未完成指纹信任，请在设备页核对完整指纹。"
+		return "设备尚未完成配对，请在设备页输入新的配对码。"
 	case protocol.AuthenticationFailed:
-		return "身份验证失败，请确认设备组成员资格和已保存指纹。"
+		return "设备认证失败，请重新生成配对码完成配对。"
 	case protocol.VersionIncompatible:
 		return "双方版本或传输能力不兼容，请升级到兼容版本。"
 	case protocol.NoCandidates, protocol.NoViableCandidate, protocol.CheckTimeout, protocol.ICEFailed:
 		return "未能建立直连，请检查绑定地址、UDP 防火墙和网络切换。"
 	case protocol.QUICHandshakeTimeout, protocol.QUICHandshakeFailed:
-		return "安全直连握手失败，请确认双方指纹一致并重试。"
+		return "安全直连握手失败，请确认双方在线且版本兼容；如设备密钥已变化请重新配对。"
 	case protocol.DirectFailed:
 		return "直连或传输未完成，请检查设备在线、网络和接收目录后重试。"
 	case protocol.ConnectionInterrupted:
 		return "连接已中断，已验证数据仍保留；请让双方确认后恢复。"
 	case protocol.ResumeMismatch:
-		return "恢复身份不匹配，已停止传输；请核对源文件、目标目录和对端指纹。"
+		return "恢复身份不匹配，已停止传输；请核对源文件、目标目录和已配对设备。"
 	case protocol.SessionConflict:
 		return "双方同时发起连接，LinkSend 正在合并为同一会话；如未继续请重试。"
 	case protocol.ReceiveRejected:
@@ -529,12 +543,19 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if strings.TrimSpace(peerID) == "" || len(paths) == 0 {
 		return TaskSnapshot{}, errors.New("INVALID_ARGUMENT: peer and source paths are required")
 	}
+	if s.tasks.hasActive() {
+		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
+	}
+	if err := s.stopInbox(false); err != nil {
+		return TaskSnapshot{}, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	base := make([]string, len(paths))
 	copy(base, paths)
 	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths)}, cancel)
 	if err != nil {
 		cancel()
+		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
 	t.peerID, t.paths, t.cfg = peerID, base, cfg
@@ -566,6 +587,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	s.tasks.workers.Add(1)
 	go func() {
 		defer s.tasks.workers.Done()
+		defer s.ensureInbox()
 		var result DirectTransferResult
 		prepared, runErr := transfer.Prepare(ctx, base, 0)
 		if runErr == nil {
@@ -629,10 +651,17 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	if strings.TrimSpace(directory) == "" {
 		return TaskSnapshot{}, errors.New("INVALID_ARGUMENT: receive directory is required")
 	}
+	if s.tasks.hasActive() {
+		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
+	}
+	if err := s.stopInbox(false); err != nil {
+		return TaskSnapshot{}, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory)}, cancel)
 	if err != nil {
 		cancel()
+		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
 	t.cfg = cfg
@@ -660,6 +689,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	s.tasks.workers.Add(1)
 	go func() {
 		defer s.tasks.workers.Done()
+		defer s.ensureInbox()
 		var lastReceived int64
 		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
 			n := m.TotalBytes()
@@ -866,6 +896,9 @@ func (s *Service) PauseTask(id string) error {
 }
 
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
+	if err := s.stopInbox(false); err != nil {
+		return TaskSnapshot{}, err
+	}
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	for otherID, other := range s.tasks.tasks {
@@ -877,20 +910,24 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		other.mu.RUnlock()
 		if running {
 			s.tasks.mu.RUnlock()
+			s.ensureInbox()
 			return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 		}
 	}
 	s.tasks.mu.RUnlock()
 	if t == nil {
+		s.ensureInbox()
 		return TaskSnapshot{}, errors.New("TASK_NOT_FOUND")
 	}
 	t.mu.Lock()
 	if t.cancel != nil || !t.snap.CanResume || !recoveryUsable(t.recovery) {
 		t.mu.Unlock()
+		s.ensureInbox()
 		return TaskSnapshot{}, errors.New("TASK_NOT_RESUMABLE")
 	}
 	if err := s.validateRecoveryPeer(t.recovery); err != nil {
 		t.mu.Unlock()
+		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -953,6 +990,7 @@ func taskAttemptConfig(t *taskRecord, attemptID string, cfg DirectConfig) Direct
 
 func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID string, recovery taskRecovery, cfg DirectConfig) {
 	defer s.tasks.workers.Done()
+	defer s.ensureInbox()
 	prepared, err := transfer.PrepareForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID)
 	if prepared != nil {
 		defer prepared.Close()
@@ -1002,6 +1040,7 @@ func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID st
 
 func (s *Service) runResumeReceive(ctx context.Context, t *taskRecord, attemptID string, recovery taskRecovery, cfg DirectConfig) {
 	defer s.tasks.workers.Done()
+	defer s.ensureInbox()
 	cfg = taskAttemptConfig(t, attemptID, cfg)
 	var lastReceived int64
 	var resumeMismatch error
@@ -1043,6 +1082,22 @@ func (s *Service) runResumeReceive(ctx context.Context, t *taskRecord, attemptID
 	t.finishAttempt(attemptID, "completed", nil)
 }
 func (s *Service) AcceptTask(id string) error { return s.decideTask(id, true) }
+func (s *Service) AcceptTaskAlways(id string) error {
+	s.tasks.mu.RLock()
+	t := s.tasks.tasks[id]
+	s.tasks.mu.RUnlock()
+	if t == nil {
+		return errors.New("TASK_NOT_FOUND")
+	}
+	snap := t.snapshot()
+	if snap.State != "awaiting_acceptance" || snap.Direction != "receive" || snap.PeerID == "" {
+		return errors.New("TASK_NOT_AWAITING_ACCEPTANCE")
+	}
+	if err := s.SetAlwaysAccept(snap.PeerID, true); err != nil {
+		return err
+	}
+	return s.decideTask(id, true)
+}
 func (s *Service) RejectTask(id string) error { return s.decideTask(id, false) }
 func (s *Service) decideTask(id string, accepted bool) error {
 	s.tasks.mu.RLock()
@@ -1078,6 +1133,10 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 
 // Shutdown cancels active in-process tasks. It does not claim restart recovery.
 func (s *Service) Shutdown() {
+	s.inbox.mu.Lock()
+	s.inbox.shutdown = true
+	s.inbox.mu.Unlock()
+	_ = s.stopInbox(true)
 	s.tasks.mu.RLock()
 	for _, t := range s.tasks.tasks {
 		if !isTerminal(t.snapshot().State) && t.cancel != nil {

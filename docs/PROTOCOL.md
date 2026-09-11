@@ -1,10 +1,12 @@
 # Protocol
 
-当前产品版本为 `0.2.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
+当前源码产品版本为 `0.3.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
 
 控制面使用有界 JSON `Envelope`，签名输入是明确的长度前缀二进制编码，不直接签任意 JSON map。字段包括协议版本、消息 ID、会话、发送方、接收方、generation、有效时间、payload 和 Ed25519 签名。
 
 消息类型为 `connect_request`、`connect_response`、`candidate`、`end_of_candidates` 和 `status`。服务端只转发已认证设备组内、会话归属和 generation 正确的消息。未知关键类型、版本错误、重放、过期和超限消息明确拒绝。
+
+桌面配对使用 40 位随机量的单次短码，规范显示为 `ABCD-EFGH`，服务端比较规范化后的摘要；输入时忽略大小写、连字符和空格。旧版 43 字符邀请在兼容期仍可加入。配对成功即由客户端固定认证成员列表中的 Ed25519 公钥，不再发送额外的人工指纹确认消息；已固定密钥不允许静默更换。
 
 文件控制帧使用长度前缀和独立的 QUIC stream，控制 metadata 上限为 8 MiB，文件内容不 Base64 化。传输顺序为 offer、用户 accept、块请求/数据、ack、finish、completed、confirmed。4 MiB 是默认分块，演示使用 64 KiB 以缩短测试时间。
 
@@ -27,6 +29,8 @@ QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送�
 `task_id` 表示用户可识别的逻辑任务，暂停、重启和恢复时保持不变；`attempt_id` 表示一次执行，任何恢复都必须新建；`session_id` 表示一次端到端连接；ICE generation 只在对应 session 内解释，候选和 end-of-candidates 必须同时匹配 session 与 generation；`revision` 是任务快照的单调版本。旧 attempt/session/generation 的回调或消息不得更新较新的 revision。
 
 `pause_requested`/`cancel_requested` 是控制意图屏障：请求发出后，已经写入 QUIC 但稍后才确认的 ACK/进度仍可补记实际字节和唯一验证量，但不得把状态回退为 Transferring/Verifying，也不得启动新块。2026-09-11 的 macOS arm64 CI 首次复现了迟到 ACK 覆盖暂停请求；修复后 Windows 高重复真实 QUIC 和相同 arm64 runner 均通过，V1 帧格式没有变化。
+
+桌面打开后维护一个不产生任务历史的后台接收监听。发送请求建立认证 QUIC 后，接收端读取 manifest 并进入 `AwaitingAcceptance`，前端弹出确认；只有确认后才请求正文块。对单个已配对设备保存 `auto_accept` 后，后续 manifest 自动通过同一决策点，身份和完整性校验不变。
 
 合法主路径是 `Preparing → AwaitingAcceptance → Transferring → Verifying → Completed`。AwaitingAcceptance/Transferring 可以进入 Paused；可恢复连接中断进入 Recovering；Resume 从 Paused/Recovering 创建新 attempt 与 session 后重新进入连接/协商。Rejected、Cancelled、Failed、Completed 是终态。校验或文件提交失败必须进入 Failed；只有接收端完成唯一块验证与文件提交，且 sender 收到 completed 并返回 confirmed 后，双方才记录 Completed / `bilateral_confirmed=true`。
 

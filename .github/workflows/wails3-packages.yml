@@ -1,7 +1,7 @@
 name: wails3-packages
 
 env:
-  PRODUCT_VERSION: 0.2.0
+  PRODUCT_VERSION: 0.3.0
 
 on:
   push:

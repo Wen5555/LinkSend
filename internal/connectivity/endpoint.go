@@ -354,10 +354,14 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 	if p == nil {
 		return Path{}, ErrNoViableCandidate
 	}
-	// A local srflx candidate can be nominated while QUIC sends from its base
-	// socket directly to a private host peer. Candidate types alone prove neither
-	// LAN nor Internet routing. Keep the method unknown pending route evidence.
+	// Candidate types alone prove neither LAN nor Internet routing. A remote
+	// address contained by an address prefix assigned to the selected local
+	// interface is concrete on-link evidence and can be labelled LAN.
 	method := "direct_unknown"
+	remoteIP := net.ParseIP(p.Remote.Address())
+	if directlyConnected(e.interfaceName, remoteIP) {
+		method = "lan_direct"
+	}
 	e.mu.Lock()
 	timeline := append([]ICEStateEvent(nil), e.iceTimeline...)
 	e.mu.Unlock()

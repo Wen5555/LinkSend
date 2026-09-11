@@ -6,6 +6,7 @@ export type {
     DiagnosticIdentity,
     Diagnostics,
     IdentityInfo,
+    InboxStatus,
     InvitationInfo,
     MembershipStatus,
     TaskSnapshot

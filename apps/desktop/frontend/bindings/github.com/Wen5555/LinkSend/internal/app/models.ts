@@ -16,6 +16,7 @@ export interface DeviceInfo {
     "admin": boolean;
     "online": boolean;
     "trusted": boolean;
+    "always_accept": boolean;
 }
 
 /**
@@ -48,6 +49,17 @@ export interface IdentityInfo {
     "id": string;
     "public_key_hex": string;
     "data_dir": string;
+}
+
+/**
+ * InboxStatus describes the persistent receiver without creating a visible
+ * transfer task merely because the application is idle.
+ */
+export interface InboxStatus {
+    "enabled": boolean;
+    "listening": boolean;
+    "directory"?: string;
+    "last_error"?: string;
 }
 
 export interface InvitationInfo {

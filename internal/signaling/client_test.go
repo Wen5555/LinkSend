@@ -51,7 +51,7 @@ func TestClientRegistrationAndSignedHTTP(t *testing.T) {
 		t.Fatalf("unexpected bootstrap device: %+v", admin)
 	}
 	invit, err := c.CreateInvitation(ctx)
-	if err != nil || len(invit.Token) != 43 {
+	if err != nil || len(invit.Token) != 9 || invit.Token[4] != '-' {
 		t.Fatalf("invitation: %v %+v", err, invit)
 	}
 	b, err := identity.Generate()
@@ -69,7 +69,7 @@ func TestClientRegistrationAndSignedHTTP(t *testing.T) {
 	// desktop product does not impose an administrator-only gate.
 	peerClient := testClient(t, h.URL, b)
 	secondInvite, err := peerClient.CreateInvitation(ctx)
-	if err != nil || len(secondInvite.Token) != 43 {
+	if err != nil || len(secondInvite.Token) != 9 || secondInvite.Token[4] != '-' {
 		t.Fatalf("member invitation: %v %+v", err, secondInvite)
 	}
 	devices, err := c.Devices(ctx)

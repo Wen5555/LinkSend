@@ -22,6 +22,7 @@ export function taskPhaseLabel(phase: string): string {
     authenticating: '验证设备身份',
     waiting: '等待接收请求',
     connecting: '建立安全直连',
+    waiting_peer: '等待对方重新上线',
     connected: '已建立直连',
     awaiting_acceptance: '等待接收确认',
     transferring: '传输中',
@@ -61,7 +62,7 @@ export function mergeTaskSnapshots<T extends RevisionedTask>(current: T[], incom
 export function humanizeBackendError(raw: unknown): string {
   const text = String(raw ?? '').replace(/^Error:\s*/, '');
   if (text.includes('request signature or membership invalid')) {
-    return '当前身份尚未加入或未通过这个设备组的成员验证。请先使用已加入且未撤销的设备生成一次性邀请，在“设备”页完成加入。';
+    return '当前设备尚未完成配对，或已被移除。请在另一台设备上生成新的配对码。';
   }
   if (text.includes('paired member required')) {
     return '当前设备尚未完成配对。请先使用已加入且未撤销的设备生成一次性配对码。';
@@ -70,14 +71,14 @@ export function humanizeBackendError(raw: unknown): string {
     return '服务端仍要求管理员生成邀请，可能与当前客户端权限模型不兼容；请升级服务端后重试。';
   }
   if (text.includes('invitation invalid, expired or used')) {
-    return '邀请无效、已过期或已使用，请让管理员重新生成邀请。';
+    return '配对码无效、已过期或已使用，请在另一台设备上重新生成。';
   }
   const code = text.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0];
   const byCode: Record<string, string> = {
     SIGNALING_UNREACHABLE: '无法连接信令服务，请检查服务地址和网络后重试。',
     SIGNALING_TIMEOUT: '信令服务响应超时，请检查网络后重试。',
-    UNPAIRED: '设备尚未完成指纹信任，请在设备页核对完整指纹。',
-    AUTHENTICATION_FAILED: '身份验证失败，请确认设备组成员资格和已保存指纹。',
+    UNPAIRED: '设备尚未完成配对，请在设备页输入配对码。',
+    AUTHENTICATION_FAILED: '设备认证失败，请重新生成配对码完成配对。',
     INVALID_CONFIG: '设置无效，请检查地址格式后重试。',
     CONFIG_BLOCKED: '本地偏好文件异常，请在设置页保存修复后的配置。',
     TASK_NOT_FOUND: '任务已不存在，请刷新任务列表。',
@@ -91,8 +92,8 @@ export function humanizeBackendError(raw: unknown): string {
     CHECK_TIMEOUT: '直连检查超时，请确认双方在线并允许 UDP 通信。',
     ICE_FAILED: '直连检查失败，请检查绑定地址和网络后重试。',
     CANDIDATE_EXCHANGE_TIMEOUT: '连接信息交换超时，请检查信令服务和网络。',
-    QUIC_HANDSHAKE_TIMEOUT: '安全连接握手超时，请确认双方指纹一致后重试。',
-    QUIC_HANDSHAKE_FAILED: '安全连接握手失败，请确认双方版本和指纹一致。',
+    QUIC_HANDSHAKE_TIMEOUT: '安全连接握手超时，请确认双方在线后重试。',
+    QUIC_HANDSHAKE_FAILED: '安全连接握手失败，请确认双方版本兼容；如设备密钥已变化请重新配对。',
     RECEIVE_REJECTED: '接收方拒绝了本次传输。',
     SOURCE_CHANGED: '源文件发生变化，请重新选择文件后重试。',
     INTEGRITY_FAILED: '文件完整性校验失败，请重试并检查磁盘或网络。',
@@ -116,10 +117,11 @@ export function humanizeBackendError(raw: unknown): string {
 	TASK_NOT_PAUSABLE: '当前阶段不能暂停；校验或提交已开始时请等待结果。',
 	TASK_NOT_RESUMABLE: '该任务没有可验证的恢复数据，请重新发起。',
 	CONNECTION_INTERRUPTED: '连接已中断，已验证数据仍保留；请让双方确认后恢复。',
-	RESUME_IDENTITY_MISMATCH: '恢复身份不匹配，已停止传输；请核对源文件、目录和对端指纹。',
+	RESUME_IDENTITY_MISMATCH: '恢复身份不匹配，已停止传输；请核对源文件、目录和已配对设备。',
 	SESSION_CONFLICT: '双方同时发起了连接，正在合并为唯一会话；如未继续请重试。',
     INVALID_TASK_DIRECTORY: '只能打开已完成接收任务的目录。',
     INVALID_DIRECTORY: '接收目录不存在或不可访问，请重新选择目录。',
+    INBOX_STOP_TIMEOUT: '后台接收切换超时，请重启 LinkSend 后重试。',
   };
   if (code && byCode[code]) return byCode[code];
   return text || '操作失败，请稍后重试。';

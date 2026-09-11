@@ -63,12 +63,6 @@ func newDirectFixtureServices(t *testing.T) directFixtureServices {
 	if _, err = b.Join(ctx, inv.Token, "b"); err != nil {
 		t.Fatal(err)
 	}
-	if err = a.Trust(ctx, bID.ID(), bID.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if err = b.Trust(ctx, aID.ID(), aID.ID()); err != nil {
-		t.Fatal(err)
-	}
 	return directFixtureServices{a: a, b: b, aID: aID, bID: bID, server: srv, http: h}
 }
 
