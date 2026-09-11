@@ -82,6 +82,12 @@ func TestPauseResumeTransfersOnlyMissingOrDamagedChunksOverRealQUIC(t *testing.T
 			case <-time.After(10 * time.Second):
 				t.Fatal("first chunk was not sent")
 			}
+			// The sender-side hook runs after the QUIC write but before the ACK.
+			// Wait for the receiver's verified checkpoint so this test measures a
+			// damaged persisted chunk, independent of scheduler speed or CPU arch.
+			waitTask(t, f.b, receiverTask.ID, func(s TaskSnapshot) bool {
+				return s.VerifiedBytes >= transfer.DefaultChunkSize
+			})
 			if err = f.a.PauseTask(senderTask.ID); err != nil {
 				t.Fatal(err)
 			}

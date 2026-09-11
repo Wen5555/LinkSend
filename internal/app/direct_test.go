@@ -62,8 +62,17 @@ func TestDirectServiceSendAndReceive(t *testing.T) {
 	dest := filepath.Join(root, "dest")
 	acceptErr := make(chan error, 1)
 	resultCh := make(chan DirectTransferResult, 1)
+	receiverReady := make(chan struct{})
+	var receiverReadyOnce sync.Once
 	go func() {
-		result, receiveErr := b.ReceiveOnceDetailed(ctx, aID.ID(), dest, DirectConfig{AllowLoopback: true}, func(transfer.Manifest) bool { return true }, nil)
+		result, receiveErr := b.ReceiveOnceDetailed(ctx, aID.ID(), dest, DirectConfig{
+			AllowLoopback: true,
+			onPhase: func(phase string) {
+				if phase == "waiting" {
+					receiverReadyOnce.Do(func() { close(receiverReady) })
+				}
+			},
+		}, func(transfer.Manifest) bool { return true }, nil)
 		if receiveErr != nil {
 			acceptErr <- receiveErr
 			return
@@ -71,6 +80,16 @@ func TestDirectServiceSendAndReceive(t *testing.T) {
 		resultCh <- result
 		acceptErr <- nil
 	}()
+	select {
+	case <-receiverReady:
+	case err = <-acceptErr:
+		if err == nil {
+			t.Fatal("receiver stopped before entering the signaling wait state")
+		}
+		t.Fatal(err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
 	sent, err := a.SendFilesDetailed(ctx, bID.ID(), []string{source}, DirectConfig{AllowLoopback: true}, nil)
 	if err != nil {
 		t.Fatal(err)

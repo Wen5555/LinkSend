@@ -204,21 +204,27 @@ func (t *taskRecord) progress(attemptID string, p transfer.Progress) {
 			return
 		}
 		v.TransferID = p.TransferID
-		v.Phase = strings.ToLower(p.State)
-		switch strings.ToLower(p.State) {
-		case "preparing":
-			if v.State != "recovering" {
-				v.State = "preparing"
+		// A progress callback may arrive after PauseTask has cancelled the
+		// attempt (for example, the ACK for the last body frame already written).
+		// Keep its verified-byte accounting, but never let it roll the control
+		// state back from pause_requested to transferring/verifying.
+		if v.State != "pause_requested" {
+			v.Phase = strings.ToLower(p.State)
+			switch strings.ToLower(p.State) {
+			case "preparing":
+				if v.State != "recovering" {
+					v.State = "preparing"
+				}
+			case "awaitingacceptance":
+				v.State = "awaiting_acceptance"
+			case "transferring":
+				v.State = "transferring"
+				v.CanPause = true
+				v.CanResume = false
+			case "verifying":
+				v.State = "verifying"
+				v.CanPause = false
 			}
-		case "awaitingacceptance":
-			v.State = "awaiting_acceptance"
-		case "transferring":
-			v.State = "transferring"
-			v.CanPause = true
-			v.CanResume = false
-		case "verifying":
-			v.State = "verifying"
-			v.CanPause = false
 		}
 		v.ProcessedBytes = p.Verified
 		v.VerifiedBytes = p.Verified
