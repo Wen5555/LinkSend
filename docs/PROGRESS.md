@@ -1,6 +1,15 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-09. This is an active implementation, not an accepted product release.
+Updated: 2026-09-11. This is an active implementation, not an accepted product release.
+
+## 2026-09-11 连续验收执行记录
+
+- 环境基线记录于 `.artifacts/acceptance-20260911/baseline.json`；当前工作树原有未跟踪构建/测试产物保持不变。Windows amd64、PowerShell 7.6.5、Go 1.26.5、Node 22.15.0、pnpm 11.19.0、Docker CLI 29.2.1；Wails 3 `v3.0.0-beta.18` 已按锁定版本安装到本地工具目录。
+- 根模块 `gofmt`、`git diff --check`、`go test -count=1 ./...`、`go test -race -count=1 ./...`、`go vet ./...`、`GOWORK=off go test -count=1 ./...` 均 PASS；桌面模块 GOWORK=off test/vet/build、前端 frozen install/typecheck/lint/6 tests/build 均 PASS。
+- Wails `task build ARCH=amd64` 首次因 PATH 未包含 CLI 而失败（环境配置缺陷，原始错误保留在会话记录）；补充 PATH 后重新运行 PASS，并重新生成 TypeScript bindings。生成器发现 `internal/protocol.Capabilities` 的三个历史/恢复字段未同步到 `apps/desktop/frontend/bindings/.../internal/protocol/models.ts`，已更新该绑定文件；未改变协议或数据路径。
+- `demo-local` PASS 仅限 loopback-direct（真实 TLS 1.3/QUIC、1 MiB 摘要一致）；`test-nat` 退出码 1，标记 BLOCKED_BY_EXTERNAL_ENV（Windows 无受控 Linux namespace/NAT fixture）。Docker Compose 静态解析 PASS（使用非生产 dummy token），Docker daemon 不可用，运行态 NOT_RUN。
+- `hk-main` 与 `nl-highdefense` 使用 codex-ssh-manager 完成 resolve/probe/audit 及扩展只读审计，均 PASS；未执行 sudo、配置变更、防火墙/路由/DNS/代理操作。扩展审计证据中的服务状态、监听端口和配置路径已脱敏记录于 `.artifacts/acceptance-20260911/results.txt`。
+- NSIS（`makensis` 缺失）、macOS arm64/amd64 DMG 挂载与原生窗口、双机 LAN/跨 NAT/IPv6/网络切换/睡眠唤醒均 NOT_RUN 或 BLOCKED_BY_EXTERNAL_ENV；模拟与 loopback 结果没有替代真实双机验收。
 
 ## 2026-09-09 Wails 3 migration and Hong Kong production verification
 
