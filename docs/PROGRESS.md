@@ -1,6 +1,6 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-11. Current published test prerelease: `v0.2.0`; protocol version: V1. This is not an accepted production release.
+Updated: 2026-09-12. Current published test prerelease: `v0.2.0`; current merged source: `0.3.0`; protocol version: V1. This is not an accepted production release.
 
 ## 2026-09-11 v0.3.0 局域网连接、配对码与自动接收简化（当前交付源码）
 
@@ -14,7 +14,11 @@ Updated: 2026-09-11. Current published test prerelease: `v0.2.0`; protocol versi
 - 源码提交为 `df8732b72ea18727b455441c94debc0ebf4b5d49`，本轮未覆盖 `v0.2.0` tag、未创建 Release。Linux rendezvous 从该提交的独立干净 clone 构建，`vcs.modified=false`，SHA256 `431a6939ab074e12a27a6e321691cd0be1a35f6529f09ce8e2dc8cdf8d0bfa99`。
 - `hk-main` 经 SSH manager resolve/probe/audit 后执行事务部署。首次只读脚本因错误假定数据库路径及源站系统 CA 信任退出 1，没有改动；修正后确认旧 PID `381064`、版本 `0.2.0`、数据库 `/opt/linksend-lan-test/data/server.db`、schema 1、integrity=ok。部署备份 `/opt/linksend-lan-test/backups/20260911T145102Z-v0.3.0-df8732b` 可读且备份数据库 integrity=ok；新 PID `384944`，公网 health 为 `0.3.0`/协议 V1/QUIC/`relay=false`。动态短码格式、单次加入和双方自动 pin 经隔离公网 profile 验证 PASS，测试设备已撤销、临时身份与候选已清理；独立复核 `RECENT_FATAL_COUNT=0`。部署 job `/tmp/codex-ssh/linksend-v030-deploy-20260911T145049Z`，独立复核 `/tmp/codex-ssh/linksend-v030-independent-verify-20260911T145144Z`；未触发回滚。
 - Windows amd64 从同一干净提交使用 Go 1.26.5、Wails `v3.0.0-beta.18`、pnpm 11.19.0、NSIS 3.12 构建。EXE 与安装器 FileVersion/ProductVersion 均为 `0.3.0`；便携 ZIP 完整性及精确 EXE 隔离启动 4 秒 PASS，安装器 7-Zip 检查包含 `LinkSend.exe` 和 WebView2 bootstrapper。便携 ZIP SHA256 `8fe347c28043dcce3083f6c0c664192da9ff1d13789b9429b57feb99b6007dcb`，NSIS 安装器 SHA256 `ba7b5f45f2ae149bef49c4e3b2d78995b5e0b1f525713896a5822a42a9a42b12`；两者均为 `UNSIGNED_TEST_BUILD`，安装/卸载未运行。
-- Mac 构建源包已由同一提交通过 `git archive` 生成并排除历史 `.artifacts`，SHA256 `d0c8224b39b424ef368bd3b57aa25d678652a1ba5f35412bb6a67fda9f59b2d6`。`mac-test-102342413` 两次 manager probe 均 TCP/22 timeout，audit 同样失败，因此本轮 arm64 DMG 暂为 `BLOCKED_BY_EXTERNAL_ENV`；没有用旧 `0.2.0` DMG 冒充，也没有未经授权自动 push。恢复路径是唤醒该 Mac 后继续上传构建，或经用户明确授权把精确提交推送到临时分支并使用 GitHub Actions。
+- Mac 构建源包先由同一提交通过 `git archive` 生成并排除历史 `.artifacts`，SHA256 `d0c8224b39b424ef368bd3b57aa25d678652a1ba5f35412bb6a67fda9f59b2d6`。`mac-test-102342413` 两次 manager probe 均 TCP/22 timeout，audit 同样失败；用户随后明确授权推送、合并并改走 GitHub Actions，因此该物理 Mac 阻塞不再阻止生成，但物理启动仍为 `NOT_RUN`。
+- [PR #7](https://github.com/Wen5555/LinkSend/pull/7) 从 `codex/v0.3.0-pairing-inbox` 合并到 `main`，merge commit 为 `0fc36f1ca79dc8af7e304b8c27a0b0607d3654c0`。分支的两组 core、两组 desktop 与三平台 packaging 全部 PASS；合并后的 main core run `34635195414`、desktop run `34635195393`、packaging run `34635195522` 也全部 PASS。仓库没有配置 required-check 规则；合并前仍显式核对了 7 个实际 check 全部成功，没有借此绕过失败。
+- main run `34635195522` 的 Windows ZIP/NSIS 与 macOS arm64 DMG 已下载并逐项复核，三者 `source_commit=workflow_head_sha=0fc36f1...`、`source_state=COMMITTED`、`source_checkout_clean=true`。Windows ZIP SHA256 `c88109e2c9d011bb66fdebbefa571516e856f8ea95f98626bc567d3b4db7d742`，安装器 SHA256 `bc984b6499a2b48f346f8990f1fd77b861f1753917e751bc27dd73ed75ec32c6`；版本资源、ZIP 完整性、NSIS 内置 EXE/WebView2 和精确 CI EXE 隔离启动 4 秒 PASS，仍为 unsigned，安装/卸载 NOT_RUN。
+- macOS arm64 DMG SHA256 `07604a4bd3efe69c12b34dbad502ad9aada4209d43aaab7e63bd961a7285a232`。runner 已执行真实 DMG 挂载、bundle id `com.linksend.desktop`、版本 `0.3.0`、arm64 与 `codesign --verify --deep --strict` 检查；本机又完成下载哈希、7-Zip HFS+ 完整性、plist 和 Mach-O `GOOS=darwin/GOARCH=arm64` 复核。Windows 展开 DMG 时仅因 `Applications` symlink 权限返回退出 2，其余 app 内容可读；这不替代物理 Mac 启动。DMG 仅 ad-hoc 签名、未公证。
+- 最终文件集中在 `.artifacts/v0.3.0-0fc36f1/deliverables/`，包含简化命名的 Windows 安装器、Windows 便携 ZIP、macOS arm64 DMG、BUILD-INFO、README 和 SHA256SUMS。没有创建或覆盖 `v0.2.0` tag，也没有创建 `v0.3.0` Release。
 
 ## 2026-09-11 v0.2.0 已合并并发布测试预发布
 
