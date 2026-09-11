@@ -1,5 +1,7 @@
 # Stage 2B readiness
 
+> 历史 readiness 文档：下文“暂缓/未执行”是 2026-09-09 当时状态。2026-09-11 已完成独立 Linux 双 NAT 固定映射正向实测，MASQUERADE-only 仍为产品 `CHECK_TIMEOUT` FAIL；当前结论与证据路径见 [TESTING](TESTING.md) 和 [ACCEPTANCE](ACCEPTANCE.md)。
+
 当前状态：暂缓跨 NAT，2A 同 LAN（Windows 接收、macOS 发送）已由 `docs/STAGE2A-20260909.md` 记录为 PASS。跨 NAT、IPv6、网络切换和桌面任务 UI 尚未验收。
 
 本轮加固已完成：两端脚本固定仓库根目录；`--skip-build` 必须显式提供已构建二进制并记录 SHA256；角色值受限；传输的 JSON 结果与 stderr 分离并保留失败结果。接收端可用 `--wait-timeout` 单独延长等待首个请求的时间，ICE/QUIC 阶段仍使用连接超时。

@@ -2,20 +2,36 @@
 
 Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol version: V1. This is an active implementation, not an accepted product release.
 
-## 2026-09-11 v0.2.0 版本化、总体文档与交付事务（进行中）
+## 2026-09-11 v0.2.0 候选已构建（未合并、未发布）
 
 - 版本决策：从 `0.1.0` 提升到 `0.2.0`，因为本轮在 1.0 前加入任务 schema 2、暂停/重启恢复、验证后缺块续传、多网卡诊断与连接生命周期修复，属于明显功能扩展；不提升到 `1.0.0`，因为 MASQUERADE-only NAT、物理网络切换、完整原生交互、签名/公证等仍未通过。
 - 产品版本与协议分离：`internal/protocol.ProductVersion=0.2.0`；协议 `Version=1`、TLS ALPN `linksend/1` 和 V1 文件帧保持不变。CLI/rendezvous `--version`、`/healthz.version`、capabilities、Wails DTO、Windows/NSIS、macOS plist 和前端 package metadata 统一使用 `0.2.0`。
 - 仓库实际使用 Wails 3 `v3.0.0-beta.18`；旧 AGENTS 项目说明中的 Wails 2 不是有效实现状态，不允许据此回迁。
 - `.artifacts`、本地 Wails 工具、Task cache、输出目录、WebView2 bootstrapper 和临时远程脚本已加入忽略规则，但没有删除任何既有文件。历史 `0.1.0` Stage/Release 文档保留原事实并标记为历史快照。
-- 用户已明确香港入口是测试主站，并授权以后每次版本更新同步服务。每次仍执行 manager resolve→probe→audit-host 与 `inspect → backup → change → verify → rollback-ready`；只操作 `/opt/linksend-lan-test` 的测试服务，不修改防火墙、路由、DNS、代理或正式身份数据。本轮实际部署证据完成后追加。
-- 本节开始时仍是 dirty 工作树，基线 HEAD `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`；旧 r2 资产继续标为 `UNCOMMITTED_TEST_SNAPSHOT`，不会放入新 ZIP/DMG 或改写为新提交来源。完成源码提交后从该真实 commit 重新构建并记录 revision、`vcs.modified=false`、大小、SHA256、工具、UTC 时间、签名/公证、原生状态和 workflow/head SHA。
+- 用户已明确香港入口是测试主站，并授权以后每次产品版本或服务端依赖更新时同步服务。每次仍执行 manager resolve→probe→audit-host 与 `inspect → backup → change → verify → rollback-ready`；只操作 `/opt/linksend-lan-test` 的测试服务，不修改防火墙、路由、DNS、代理或正式身份数据。本轮部署、验证和回滚方法见 [DEPLOY-HK](DEPLOY-HK.md)。
+- 本节开始时是基线 HEAD `fef3e3f59797a6de25cb7f9b1f2a1850512808d5` 加未提交修改；旧 r2 资产继续标为 `UNCOMMITTED_TEST_SNAPSHOT`。后续已从真实干净提交重新构建 committed 候选；旧资产没有被放入新 ZIP/DMG，也没有改写提交元数据。
 - `0.2.0` 本机预提交门槛：根 `diff --check`、mod verify、全量 test、race、vet、GOWORK=off test/build PASS；P0 立即重连 20 次和真实 QUIC 终态/恢复定向套件 3 次 PASS；Wails bindings 1 service / 27 methods / 14 models，生成后前端 frozen install/typecheck/lint/8 tests/build PASS；桌面独立 mod verify/test/vet/build、Wails production 与 NSIS 3.12 PASS。
 - 版本资源复现并修复：Wails 3 beta.18 自动 build-assets 生成的 Windows version info 缺 `FileVersion` 显示字符串，使主 EXE 的 PowerShell VersionInfo 为空；将 fixed file/product version 规范为 `0.2.0.0`、使用 `0409` string table 并补 `FileVersion=0.2.0` 后，主 EXE 与 installer 的 FileVersion/ProductVersion 均实际返回 `0.2.0`。新增跨源码/Wails/安装元数据同步测试防止回退。
 - 源码提交 `4b7ccf66f89c9720d9b5970e5d610b453048d69c` 已建立。直接在保留 untracked 的主工作树和共享 Git worktree 构建均被 Go 标为 `vcs.modified=true`，两次资产均拒绝部署；改用独立干净 clone 后 Linux amd64 rendezvous 的 `go version -m` 为该 revision、`vcs.modified=false`，大小 11,309,218 bytes，SHA256 `c549cdbf1bd461d6f583302f96700471000aacba1fed912c66d6e74912f30247`。
 - 香港测试主站已按 manager 事务完成 `0.2.0` 同步：备份 `/opt/linksend-lan-test/backups/20260911T101714Z-v0.2.0-4b7ccf6`，旧 PID `352572` → 新 PID `381064`；配置 SHA 与数据库 schema/integrity 不变。公网 health 报告产品 `0.2.0` / 协议 V1；两次完成后立即重连、拒绝后立即完成各传 2 MiB 均 PASS。测试运行时已删除，两条测试设备记录均撤销，额外数据库清理备份为 `/opt/linksend-lan-test/backups/20260911T102329Z-v0.2.0-lifecycle-cleanup`。旧主站立即重试 FAIL 因实际部署复核而关闭。
 - 候选提交 `9cce3eef20a6224f56c9da79d16f8966cabb61f9` 的三平台 packaging run `34592549254` 全部成功，但同 SHA 的 push core run `34592549314` 在真实 QUIC `TestDirectServiceSendAndReceive` 复现 `Application error 0x0 (remote): closed`；PR core 的成功 run 不抵消这个 FAIL。根因是接收端读到 `confirmed` 后正常关闭单次传输连接时，quic-go 可能先交付 application close code 0、后交付 stream FIN，发送端 terminal flush 将正常终态误判为失败。
-- 最小修复只在“已验证 completed、已写出 confirmed”的 terminal flush 内接受远端 QUIC application code 0；非零 close、reset、timeout 和其他阶段错误仍失败，协议 V1 不变。新增真实 QUIC 正向及非零 close 负向测试；Windows 上完成用例 100 轮、含负例套件 50 轮、race 20 轮和 app 端到端 100 轮均 PASS。`9cce3ee` 的四个 committed 包及哈希保留作前一候选证据，但必须从含本修复的新提交重建后才能成为最终候选资产。
+- 最小修复只在“已验证 completed、已写出 confirmed”的 terminal flush 内接受远端 QUIC application code 0；非零 close、reset、timeout 和其他阶段错误仍失败，协议 V1 不变。新增真实 QUIC 正向及非零 close 负向测试；Windows 上完成用例 100 轮、含负例套件 50 轮、race 20 轮和 app 端到端 100 轮均 PASS。修复提交为 `a88553180bd1defac5b236d75fe4dff5046734dd`；`9cce3ee` 及其包已被取代，只保留为缺陷前对照证据。
+- `a885531` 的 GitHub required checks 已完成：core push run `34596127764` PASS、core PR run `34596131146` PASS、desktop push run `34596127757` PASS、desktop PR run `34596131090` PASS；三平台 packaging run [`34596127738`](https://github.com/Wen5555/LinkSend/actions/runs/34596127738) 的 Windows amd64、macOS arm64 和 macOS amd64 jobs 全部 PASS。PR 为 [#6](https://github.com/Wen5555/LinkSend/pull/6)，仍不合并、不创建 tag 或 Release。
+- committed Windows ZIP 内 EXE 为 20,635,648 bytes、SHA256 `afd7bcbf9bc58a2a5d590b8a470a2c74a6caf6d2a80cc4dc4e0729627c55a0b0`，FileVersion/ProductVersion 都是 `0.2.0`，Wails 为 `v3.0.0-beta.18`。隔离 profile 下原生窗口句柄非零，`CloseMainWindow()`/`WM_CLOSE` 被接受并在 10 秒内 exit 0；这只验证窗口创建和空闲关闭。测试 profile 的两个文件因本地命令策略未能清理，仍留在 ignored `.artifacts` 检查目录且不得提交。
+- committed macOS runner 已完成 DMG 挂载、bundle、架构和 `codesign --verify --deep --strict`，但仅有 ad-hoc 签名，无 Developer ID、未公证。物理 Mac `mac-test-102342413` 在收尾时 resolve 成功，probe/audit-host 均 TCP/22 timeout，因此 committed arm64 DMG 启动为 `BLOCKED_BY_EXTERNAL_ENV`；不能用 runner 或历史 dirty r2 窗口证据替代。
+
+### `a885531` committed 候选资产
+
+所有资产均来自 workflow/head `a88553180bd1defac5b236d75fe4dff5046734dd`、`source_state=COMMITTED`、`source_checkout_clean=true`。工具为 Go 1.26.5、Node 22.15.0、pnpm 11.19.0、Wails 3 `v3.0.0-beta.18`；Windows 使用 NSIS 3.10，macOS 使用 Apple clang 17.0.0。
+
+| 资产 | 大小（bytes） | SHA256 | 构建时间 UTC | 签名 / 公证 | 原生验证 |
+|---|---:|---|---|---|---|
+| Windows amd64 ZIP | 8,403,530 | `316a11b74cf146762138384c0cd84ce76b8ec19a48943b1b0abf23f89de37690` | `2026-09-11T11:55:19Z` | unsigned / N/A | 窗口创建与 idle `WM_CLOSE` PASS；其余 NOT_RUN |
+| Windows amd64 installer | 9,996,125 | `aa346acecd333ea8757bb0ed2f6466de4767af82fdc6640332cd2d0c83311092` | `2026-09-11T11:55:19Z` | unsigned / N/A | 安装/卸载 NOT_RUN |
+| macOS arm64 DMG | 8,170,931 | `79857ce7ba336e6ceec516b19b737a1386100e9f6dfdf328a44deaeaee142e91` | `2026-09-11T11:54:30Z` | ad-hoc / NOT_RUN | runner 包级 PASS；物理启动 BLOCKED_BY_EXTERNAL_ENV |
+| macOS amd64 DMG | 8,808,731 | `15c34a786f5aba9b72e7e2e09eaf6502aebf315cfee6161b9918104543de621f` | `2026-09-11T11:57:59Z` | ad-hoc / NOT_RUN | runner 包级 PASS；Intel 真机 NOT_RUN |
+
+发布门槛仍未满足：MASQUERADE-only 独立双 NAT 保持产品 `CHECK_TIMEOUT` FAIL；物理网络切换、committed Mac 原生启动、完整 Windows/macOS 原生交互、Windows 安装/卸载、Developer ID 签名和公证仍未完成。`0.2.0` 因此只是测试候选，不能声称生产可用或跨平台完整验收。
 
 ## 2026-09-11 P0/P1/P2 分阶段可靠性改进（历史 dirty snapshot）
 

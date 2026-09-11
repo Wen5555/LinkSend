@@ -4,7 +4,9 @@ LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令�
 
 服务器只负责设备组、在线状态、会话和 ICE 候选交换。文件正文始终通过经身份认证的 QUIC 直连传输，不经过 HTTP、WSS、JavaScript IPC 或第三方中继。当前没有 Relay/TURN 文件中继，能力固定为 `relay=false`。
 
-源码仓库：[github.com/Wen5555/LinkSend](https://github.com/Wen5555/LinkSend)。`0.2.0` 仍是测试候选，不代表生产可用或跨平台完整验收。
+源码仓库：[github.com/Wen5555/LinkSend](https://github.com/Wen5555/LinkSend)。当前 `0.2.0` 候选源码为 `a88553180bd1defac5b236d75fe4dff5046734dd`，三平台 committed 构建见 [Actions run 34596127738](https://github.com/Wen5555/LinkSend/actions/runs/34596127738)，审阅入口为 [PR #6](https://github.com/Wen5555/LinkSend/pull/6)。`0.2.0` 仍是测试候选，不代表生产可用或跨平台完整验收。
+
+版本从 `0.1.0` 提升到 `0.2.0`，因为 1.0 前新增了 schema 2 持久化、暂停/重启恢复、验证后缺块续传、多网卡诊断和连接生命周期能力；协议 wire format 仍为 V1。由于 MASQUERADE-only NAT、完整原生交互、签名/公证等门槛未完成，不提升到 `1.0.0`。候选尚未发布期间的同轮可靠性修复继续构建为 `0.2.0`，不伪造已经发布后的 `0.2.1`。
 
 当前实现包括：
 
@@ -19,7 +21,7 @@ LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令�
 
 三项能力必须分开理解：`history_persisted` 只说明历史库当前可可靠写入，`restart_recovery_supported` 说明具备重启恢复所需身份和元数据，`byte_resume_supported` 只说明缺块校验、协商、请求和实际字节计数均已通过实现级验证。
 
-截至 2026-09-11，物理 Windows↔macOS 双向 QUIC 传输与摘要、Mac 拒绝/冲突/权限/独立磁盘镜像空间不足均 PASS；Linux 独立双 NAT 的固定 UDP 映射正向场景 PASS，MASQUERADE-only 场景仍为 `CHECK_TIMEOUT` FAIL。Windows 和 macOS arm64 的原生窗口创建与空闲退出 PASS，其余原生交互仍是 NOT_RUN。详见 [验收矩阵](docs/ACCEPTANCE.md) 与 [实机报告](docs/MAC-WINDOWS-VALIDATION-20260911.md)。
+截至 2026-09-11，物理 Windows↔macOS 双向 QUIC 传输与摘要、Mac 拒绝/冲突/权限/独立磁盘镜像空间不足均 PASS；Linux 独立双 NAT 的固定 UDP 映射正向场景 PASS，MASQUERADE-only 场景仍为 `CHECK_TIMEOUT` FAIL。committed Windows 包的原生窗口创建与空闲 `WM_CLOSE` PASS；Mac 原生窗口 PASS 仍来自较早 dirty r2 快照，最新 committed DMG 因物理 Mac SSH timeout 未启动，其余原生交互仍是 NOT_RUN。四类候选资产、真实 SHA256 和签名边界见 [v0.2.0 候选记录](docs/RELEASE-v0.2.0-TEST-CANDIDATE.md)，完整状态见 [验收矩阵](docs/ACCEPTANCE.md) 与 [实机报告](docs/MAC-WINDOWS-VALIDATION-20260911.md)。
 
 ## 快速开始
 

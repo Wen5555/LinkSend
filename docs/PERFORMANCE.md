@@ -1,5 +1,7 @@
 # Performance
 
+当前数据适用于产品 `0.2.0` 的实现级回归边界；协议为 V1，Pion ICE v4.4.2，quic-go v0.62.0。没有新物理跨平台吞吐基准时，不得把恢复正确性测试的字节计数解释为性能结论。
+
 `BenchmarkTransport` 比较同版本原生 quic-go UDP 与 Pion ICE 集成路径。Windows amd64 loopback 探索结果约为 native 96.88 MB/s、ICE 97.05 MB/s，均是应用有效吞吐，只证明本机 loopback 基线，不代表千兆网、2.5GbE、macOS、Linux、跨 NAT 或网络切换性能。
 
 ```powershell
