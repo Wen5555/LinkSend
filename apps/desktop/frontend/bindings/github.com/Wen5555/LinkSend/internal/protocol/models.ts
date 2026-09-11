@@ -5,4 +5,7 @@ export interface Capabilities {
     "protocol_version": number;
     "relay": boolean;
     "transport": string;
+    "history_persisted": boolean;
+    "restart_recovery_supported": boolean;
+    "byte_resume_supported": boolean;
 }
