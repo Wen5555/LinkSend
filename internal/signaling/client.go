@@ -18,6 +18,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/identity"
@@ -390,14 +391,24 @@ func (c *Client) Connect(ctx context.Context) (*Session, error) {
 // Session has one reader at a time. Writes are serialized to preserve control
 // message order even though coder/websocket permits concurrent Write calls.
 type Session struct {
-	conn         *websocket.Conn
-	identity     *identity.Identity
-	capabilities protocol.Capabilities
-	writeMu      sync.Mutex
-	closeOnce    sync.Once
+	conn          *websocket.Conn
+	identity      *identity.Identity
+	capabilities  protocol.Capabilities
+	writeMu       sync.Mutex
+	closeOnce     sync.Once
+	bytesSent     atomic.Uint64
+	bytesReceived atomic.Uint64
+}
+
+type SessionStats struct {
+	BytesSent     uint64 `json:"bytes_sent"`
+	BytesReceived uint64 `json:"bytes_received"`
 }
 
 func (s *Session) Capabilities() protocol.Capabilities { return s.capabilities }
+func (s *Session) Stats() SessionStats {
+	return SessionStats{BytesSent: s.bytesSent.Load(), BytesReceived: s.bytesReceived.Load()}
+}
 
 func (s *Session) SendEnvelope(ctx context.Context, env protocol.Envelope) error {
 	if env.Sender != s.identity.ID() || len(env.Signature) != 0 {
@@ -409,8 +420,12 @@ func (s *Session) SendEnvelope(ctx context.Context, env protocol.Envelope) error
 	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	if err := wsjson.Write(ctx, s.conn, Wire{Type: "signal", Message: &env}); err != nil {
+	wire := Wire{Type: "signal", Message: &env}
+	if err := wsjson.Write(ctx, s.conn, wire); err != nil {
 		return protocol.Wrap(protocol.SignalingUnreachable, "WSS signal write failed", err)
+	}
+	if encoded, err := json.Marshal(wire); err == nil {
+		s.bytesSent.Add(uint64(len(encoded)))
 	}
 	return nil
 }
@@ -418,8 +433,12 @@ func (s *Session) SendEnvelope(ctx context.Context, env protocol.Envelope) error
 func (s *Session) SendHeartbeat(ctx context.Context) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	if err := wsjson.Write(ctx, s.conn, Wire{Type: "heartbeat"}); err != nil {
+	wire := Wire{Type: "heartbeat"}
+	if err := wsjson.Write(ctx, s.conn, wire); err != nil {
 		return protocol.Wrap(protocol.SignalingUnreachable, "WSS heartbeat write failed", err)
+	}
+	if encoded, err := json.Marshal(wire); err == nil {
+		s.bytesSent.Add(uint64(len(encoded)))
 	}
 	return nil
 }
@@ -428,6 +447,9 @@ func (s *Session) Read(ctx context.Context) (Wire, error) {
 	var wire Wire
 	if err := wsjson.Read(ctx, s.conn, &wire); err != nil {
 		return wire, protocol.Wrap(protocol.SignalingUnreachable, "WSS signal read failed", err)
+	}
+	if encoded, err := json.Marshal(wire); err == nil {
+		s.bytesReceived.Add(uint64(len(encoded)))
 	}
 	switch wire.Type {
 	case "heartbeat":

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +114,14 @@ func fixturePair(t testing.TB, native bool, badPin bool) (*quic.Conn, *quic.Conn
 	p, err := endpoints[0].Connect(ctx, endpoints[1].Credentials(), true)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, candidate := range []string{p.LocalCandidate, p.RemoteCandidate} {
+		for _, endpoint := range endpoints {
+			credentials := endpoint.Credentials()
+			if strings.Contains(candidate, credentials.Ufrag) || strings.Contains(candidate, credentials.Password) {
+				t.Fatal("diagnostic candidate contains ICE credentials")
+			}
+		}
 	}
 	s, err := Establish(ctx, endpoints[0], p, clientTLS, true)
 	if badPin {

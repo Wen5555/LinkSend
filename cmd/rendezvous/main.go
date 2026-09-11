@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,13 +12,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/server"
 )
 
 func main() {
 	flagSet := flag.NewFlagSet("rendezvous", flag.ExitOnError)
 	configPath := flagSet.String("config", "configs/server.dev.toml", "server configuration path")
+	showVersion := flagSet.Bool("version", false, "print the LinkSend rendezvous version")
 	flagSet.Parse(os.Args[1:])
+	if *showVersion {
+		fmt.Printf("LinkSend rendezvous %s\n", protocol.ProductVersion)
+		return
+	}
 	cfg, err := server.LoadConfig(*configPath)
 	if err != nil {
 		slog.Error("load configuration", "error", err)

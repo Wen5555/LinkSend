@@ -1,66 +1,55 @@
 # macOS 测试 DMG 构建
 
-本轮目标是可安装测试包，不做 Developer ID 签名、公证或 App Store 发布。Wails 3 固定为 `v3.0.0-beta.18`，Go/Node/pnpm 版本分别为 Go 1.26.5、Node 22.15.0、pnpm 11.19.0。
+当前产品版本为 `0.2.0`，文件协议为 V1，Wails 3 固定为 `v3.0.0-beta.18`。测试包在没有 Developer ID/公证凭据时只能标记为 ad-hoc、NOT_NOTARIZED，不得描述为正式发行。
 
-## 获取候选源码
+## 获取可追溯源码
 
-在 Mac 上检出本轮任务分支或已核对的 commit（不要把未审查的 `main` 当候选）：
+在 Mac 上检出明确 commit，并确认工作树干净。不能把旧 EXE/.app/DMG 重新装包后改写 commit 元数据。
 
 ```sh
 git fetch origin
-git checkout <任务分支或commit>
+git checkout <reviewed-commit>
 git rev-parse HEAD
+git status --porcelain
+go run ./cmd/linksend --version
 ```
 
 ## 构建
 
-仓库根目录执行：
+仓库根目录串行执行：
 
 ```sh
 bash scripts/build-macos.sh --arch arm64 --format dmg
 bash scripts/build-macos.sh --arch amd64 --format dmg
 ```
 
-脚本会检查 Xcode Command Line Tools、`go`/`node`/`pnpm`/`hdiutil`/`plutil`/`lipo`/`codesign`、Wails 3 版本，设置 `GOWORK=off`，冻结安装前端依赖，生成绑定和图标，调用：
+脚本检查 Xcode Command Line Tools、Go/Node/pnpm、`hdiutil`/`plutil`/`lipo`/`codesign` 和 Wails 3 版本，设置 `GOWORK=off`，冻结安装前端依赖，重新生成 bindings/dist，然后调用 Wails 3 DMG task。输出位于：
 
-```sh
-wails3 task darwin:package:dmg ARCH=arm64 BIN_DIR=bin/macos-arm64
-wails3 task darwin:package:dmg ARCH=amd64 BIN_DIR=bin/macos-amd64
+```text
+apps/desktop/bin/macos-arm64/LinkSend.dmg
+apps/desktop/bin/macos-amd64/LinkSend.dmg
 ```
 
-输出分别为 `apps/desktop/bin/macos-arm64/LinkSend.dmg` 与 `apps/desktop/bin/macos-amd64/LinkSend.dmg`，旁边生成 `SHA256SUMS.txt`。脚本只做 ad-hoc 签名并验证 bundle，不声称已公证。
+前端构建与桌面编译不可并行。每个最终资产应使用 `LinkSend-v0.2.0-macos-<arch>-<shortsha>.dmg`，并记录 commit、workflow run/head SHA（本地构建则明确为 null）、`vcs.modified`、工具版本、UTC 时间、大小、SHA256、签名、公证和原生验证状态。
 
 ## 校验
 
 ```sh
 shasum -a 256 apps/desktop/bin/macos-arm64/LinkSend.dmg
 hdiutil imageinfo apps/desktop/bin/macos-arm64/LinkSend.dmg
-lipo -info apps/desktop/bin/macos-arm64/LinkSend.app/Contents/MacOS/LinkSend
-plutil -p apps/desktop/bin/macos-arm64/LinkSend.app/Contents/Info.plist
+hdiutil attach -readonly -nobrowse apps/desktop/bin/macos-arm64/LinkSend.dmg
+plutil -p /Volumes/LinkSend/LinkSend.app/Contents/Info.plist
+lipo -info /Volumes/LinkSend/LinkSend.app/Contents/MacOS/LinkSend
+codesign --verify --deep --strict --verbose=2 /Volumes/LinkSend/LinkSend.app
+codesign -dv --verbose=4 /Volumes/LinkSend/LinkSend.app
 ```
 
-首次打开：将 DMG 中的 `LinkSend.app` 拖入 `/Applications`，若系统提示未验证，进入“系统设置 → 隐私与安全 → 仍要打开”针对该应用确认。不要关闭 Gatekeeper 或批量清除隔离属性。
+必须核对 `CFBundleIdentifier=com.linksend.desktop`、`CFBundleShortVersionString=0.2.0`、目标架构和嵌入二进制的真实 Go revision。挂载后及时卸载测试卷。首次打开若提示未验证，只能在“系统设置 → 隐私与安全”对该应用单独确认，不能关闭 Gatekeeper 或批量移除隔离属性。
 
-## 本轮 CI 产物（2026-09-10）
+## 原生验收边界
 
-GitHub Actions run [34387753173](https://github.com/Wen5555/LinkSend/actions/runs/34387753173)
-在 commit `555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d` 的 Windows、macOS arm64、macOS amd64
-矩阵均通过（`fail-fast: false`）。artifact 名称分别为：
+arm64 的原生窗口创建和 idle quit Apple Event 已有 r2 测试快照证据；文件/目录选择器、打开目录、红点实际点击、Cmd+Q 按键、活跃任务保护、恢复入口和 Intel Mac 启动仍需对 `0.2.0` 提交构建重跑。详见 [MAC-SMOKE-TEST.md](MAC-SMOKE-TEST.md)。
 
-- `LinkSend-wails3-preview-windows-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
-- `LinkSend-wails3-preview-macos-arm64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
-- `LinkSend-wails3-preview-macos-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d`
+## 历史资产
 
-包内 SHA256（以 `SHA256SUMS.txt` 为准）：
-
-```text
-5ff0217fab3b257999eae710f29bc76f08979b37100b2f1b4347546a6d3645a2  LinkSend-wails3-preview-macos-arm64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.dmg
-653c2ceb098c5d81bc4c6f0a351cb20b446772c206888463aec7b34efff73819  LinkSend-wails3-preview-macos-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.dmg
-1c43b7576118c5480d139bd691a1c84b8c3d09f67d96f8815c1877c4055f8f80  apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d.zip
-```
-
-Windows 端 ZIP 含 `LinkSend.exe` 和 `README-WINDOWS-TEST.txt`；两个 DMG 均含完整
-`LinkSend.app`、`README-MACOS-TEST.txt`、Applications 拖拽入口和对应架构的 Mach-O。
-离线结构检查还确认 `CFBundleIdentifier=com.linksend.desktop`、Go 1.26.5、Wails 3
-`v3.0.0-beta.18`。当前 Windows 主机无法执行 `hdiutil` 挂载、`codesign --verify` 或原生
-WebKit 窗口操作，这些项目保持 `NOT_RUN`/`BLOCKED_BY_EXTERNAL_ENV`。
+2026-09-10 的 run `34387753173` 和 commit `555c3190c4c5f13a52eebe9b9a8f6208abb7ee7d` 是 `0.1.0` 历史测试快照，只证明当时的构建链和包结构；其 SHA256 和文件名保留在 PROGRESS 历史记录中，不能作为 `0.2.0` 资产复用。

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,6 +16,8 @@ import (
 	"time"
 
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -31,18 +32,20 @@ type App struct {
 	configBlocked bool
 	dataDir       string
 	closeMu       sync.Mutex
-	closePending  bool
+	closeDialog   bool
 	runtimeApp    *application.App
 	window        application.Window
 }
 
 type DesktopPreferences struct {
-	FormatVersion    int      `json:"format_version"`
-	ServerURL        string   `json:"server_url"`
-	BindAddress      string   `json:"bind_address"`
-	STUNURLs         []string `json:"stun_urls"`
-	ReceiveDirectory string   `json:"receive_directory"`
-	DeviceName       string   `json:"device_name"`
+	FormatVersion      int      `json:"format_version"`
+	ServerURL          string   `json:"server_url"`
+	BindAddress        string   `json:"bind_address"`
+	InterfacePriority  []string `json:"interface_priority"`
+	ExcludedInterfaces []string `json:"excluded_interfaces"`
+	STUNURLs           []string `json:"stun_urls"`
+	ReceiveDirectory   string   `json:"receive_directory"`
+	DeviceName         string   `json:"device_name"`
 }
 
 type PreferencesStatus struct {
@@ -51,20 +54,23 @@ type PreferencesStatus struct {
 }
 
 type EffectiveConfig struct {
-	ServerURL    string   `json:"server_url"`
-	ServerSource string   `json:"server_source"`
-	BindAddress  string   `json:"bind_address"`
-	BindSource   string   `json:"bind_source"`
-	STUNURLs     []string `json:"stun_urls"`
-	STUNSource   string   `json:"stun_source"`
-	NeedsRestart bool     `json:"needs_restart"`
-	Preferences  string   `json:"preferences_state"`
+	ServerURL          string   `json:"server_url"`
+	ServerSource       string   `json:"server_source"`
+	BindAddress        string   `json:"bind_address"`
+	BindSource         string   `json:"bind_source"`
+	InterfacePriority  []string `json:"interface_priority"`
+	ExcludedInterfaces []string `json:"excluded_interfaces"`
+	STUNURLs           []string `json:"stun_urls"`
+	STUNSource         string   `json:"stun_source"`
+	NeedsRestart       bool     `json:"needs_restart"`
+	Preferences        string   `json:"preferences_state"`
 }
 
 type NetworkInterfaceInfo struct {
-	Name       string   `json:"name"`
-	Addresses  []string `json:"addresses"`
-	IsLoopback bool     `json:"is_loopback"`
+	Name            string   `json:"name"`
+	Addresses       []string `json:"addresses"`
+	AddressFamilies []string `json:"address_families"`
+	IsLoopback      bool     `json:"is_loopback"`
 }
 
 type DesktopStatus struct {
@@ -136,67 +142,102 @@ func (a *App) shouldQuit() bool {
 	if a.core == nil {
 		return true
 	}
-	a.closeMu.Lock()
-	if a.closePending {
-		a.closeMu.Unlock()
-		return true
-	}
-	a.closePending = true
-	a.closeMu.Unlock()
-	defer func() { a.closeMu.Lock(); a.closePending = false; a.closeMu.Unlock() }()
 	active := make([]linksendapp.TaskSnapshot, 0)
 	for _, task := range a.core.Tasks() {
-		if task.State != "completed" && task.State != "failed" && task.State != "cancelled" {
+		if !terminalTaskState(task.State) {
 			active = append(active, task)
 		}
 	}
 	if len(active) == 0 {
-		return false
+		return true
 	}
 	if a.runtimeApp == nil {
 		return false
 	}
-	choice := make(chan bool, 1)
+	a.closeMu.Lock()
+	if a.closeDialog {
+		a.closeMu.Unlock()
+		return false
+	}
+	a.closeDialog = true
+	a.closeMu.Unlock()
 	dialog := a.runtimeApp.Dialog.Question().
 		SetTitle("LinkSend 仍有任务运行").
 		SetMessage(fmt.Sprintf("当前有 %d 个任务处于准备、等待确认、连接或传输阶段。请选择继续任务，或取消任务并退出。", len(active)))
-	keep := dialog.AddButton("继续任务").OnClick(func() { choice <- false })
-	dialog.AddButton("取消任务并退出").OnClick(func() { choice <- true })
+	keep := dialog.AddButton("继续任务").OnClick(func() { a.setCloseDialog(false) })
+	dialog.AddButton("取消任务并退出").OnClick(func() { go a.cancelTasksAndQuit(active) })
 	dialog.SetDefaultButton(keep).SetCancelButton(keep)
-	dialog.Show()
-	shouldExit := false
-	select {
-	case shouldExit = <-choice:
-	default:
-		// A native dialog that closes without a callback is treated as cancel.
+	if a.window != nil {
+		dialog.AttachToWindow(a.window)
 	}
-	if !shouldExit {
+	dialog.Show()
+	// Wails 3 message dialogs dispatch button callbacks asynchronously. The
+	// original quit request must be cancelled while the native sheet is open;
+	// the destructive choice explicitly calls App.Quit after cancellation has
+	// reached a terminal task state.
+	return false
+}
+
+func terminalTaskState(state string) bool {
+	switch state {
+	case "completed", "rejected", "cancelled", "failed":
+		return true
+	default:
 		return false
 	}
+}
+
+func (a *App) setCloseDialog(open bool) {
+	a.closeMu.Lock()
+	a.closeDialog = open
+	a.closeMu.Unlock()
+}
+
+func (a *App) cancelTasksAndQuit(active []linksendapp.TaskSnapshot) {
 	for _, task := range active {
 		if err := a.core.CancelTask(task.ID); err != nil && !strings.Contains(err.Error(), "TASK_TERMINAL") {
-			return false
+			a.setCloseDialog(false)
+			a.showQuitWarning("任务取消失败，窗口将保持打开。请检查任务状态后重试。")
+			return
 		}
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for {
 		allDone := true
 		for _, task := range active {
-			if current, ok := a.core.Task(task.ID); ok && current.State != "completed" && current.State != "failed" && current.State != "cancelled" {
+			if current, ok := a.core.Task(task.ID); ok && !terminalTaskState(current.State) {
 				allDone = false
 			}
 		}
 		if allDone {
-			return false
+			a.setCloseDialog(false)
+			if a.runtimeApp != nil {
+				a.runtimeApp.Quit()
+			}
+			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			a.setCloseDialog(false)
+			a.showQuitWarning("取消尚未确认，窗口将保持打开。请稍后重试。")
+			return
+		}
 	}
+}
+
+func (a *App) showQuitWarning(message string) {
 	if a.runtimeApp != nil {
-		warning := a.runtimeApp.Dialog.Warning().SetTitle("任务仍在清理").SetMessage("取消尚未确认，窗口将保持打开。请稍后重试。")
+		warning := a.runtimeApp.Dialog.Warning().SetTitle("任务仍在清理").SetMessage(message)
 		warning.AddButton("知道了").SetAsDefault()
+		if a.window != nil {
+			warning.AttachToWindow(a.window)
+		}
 		warning.Show()
 	}
-	return false
 }
 
 func (a *App) directConfig() linksendapp.DirectConfig {
@@ -208,7 +249,7 @@ func (a *App) directConfig() linksendapp.DirectConfig {
 		}
 	}
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
-	return linksendapp.DirectConfig{BindAddress: firstNonEmpty(os.Getenv("LINKSEND_BIND"), a.prefs.BindAddress), STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
+	return linksendapp.DirectConfig{BindAddress: firstNonEmpty(os.Getenv("LINKSEND_BIND"), a.prefs.BindAddress), InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -218,6 +259,21 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func normalizedList(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]bool)
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+	return result
 }
 
 func loadPreferences(dataDir string) DesktopPreferences {
@@ -274,7 +330,7 @@ func (a *App) EffectiveConfig() EffectiveConfig {
 	if len(stun) == 0 {
 		stun, stunSource = []string{"stun:stun.oooai.de:3478"}, "默认值"
 	}
-	return EffectiveConfig{ServerURL: server, ServerSource: serverSource, BindAddress: bind, BindSource: bindSource, STUNURLs: stun, STUNSource: stunSource, NeedsRestart: true, Preferences: a.prefsStatus.State}
+	return EffectiveConfig{ServerURL: server, ServerSource: serverSource, BindAddress: bind, BindSource: bindSource, InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, STUNSource: stunSource, NeedsRestart: true, Preferences: a.prefsStatus.State}
 }
 
 func (a *App) SavePreferences(next DesktopPreferences) error {
@@ -284,6 +340,9 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	next.FormatVersion = 1
 	next.ServerURL = strings.TrimSpace(next.ServerURL)
 	next.BindAddress = strings.TrimSpace(next.BindAddress)
+	next.InterfacePriority = normalizedList(next.InterfacePriority)
+	next.ExcludedInterfaces = normalizedList(next.ExcludedInterfaces)
+	next.STUNURLs = normalizedList(next.STUNURLs)
 	next.ReceiveDirectory = strings.TrimSpace(next.ReceiveDirectory)
 	next.DeviceName = strings.TrimSpace(next.DeviceName)
 	if next.ServerURL != "" {
@@ -331,20 +390,21 @@ func (a *App) ensureConfig() error {
 }
 
 func (a *App) NetworkInterfaces() []NetworkInterfaceInfo {
-	ifs, err := net.Interfaces()
+	addresses, err := connectivity.DiscoverInterfaceAddresses(true)
 	if err != nil {
 		return []NetworkInterfaceInfo{}
 	}
-	out := make([]NetworkInterfaceInfo, 0, len(ifs))
-	for _, in := range ifs {
-		addrs, _ := in.Addrs()
-		item := NetworkInterfaceInfo{Name: in.Name, IsLoopback: in.Flags&net.FlagLoopback != 0}
-		for _, addr := range addrs {
-			item.Addresses = append(item.Addresses, addr.String())
+	out := make([]NetworkInterfaceInfo, 0, len(addresses))
+	indexByName := make(map[string]int)
+	for _, address := range addresses {
+		index, ok := indexByName[address.Interface]
+		if !ok {
+			index = len(out)
+			indexByName[address.Interface] = index
+			out = append(out, NetworkInterfaceInfo{Name: address.Interface, IsLoopback: address.Loopback})
 		}
-		if len(item.Addresses) > 0 {
-			out = append(out, item)
-		}
+		out[index].Addresses = append(out[index].Addresses, address.Address)
+		out[index].AddressFamilies = append(out[index].AddressFamilies, address.Family)
 	}
 	return out
 }
@@ -399,6 +459,27 @@ func (a *App) CancelTask(id string) error {
 		return errBackendUnavailable
 	}
 	return a.core.CancelTask(id)
+}
+func (a *App) PauseTask(id string) error {
+	if a.core == nil {
+		if a.initErr != nil {
+			return a.initErr
+		}
+		return errBackendUnavailable
+	}
+	return a.core.PauseTask(id)
+}
+func (a *App) ResumeTask(id string) (linksendapp.TaskSnapshot, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.TaskSnapshot{}, err
+	}
+	if a.core == nil {
+		if a.initErr != nil {
+			return linksendapp.TaskSnapshot{}, a.initErr
+		}
+		return linksendapp.TaskSnapshot{}, errBackendUnavailable
+	}
+	return a.core.ResumeTask(id, a.directConfig())
 }
 func (a *App) AcceptTask(id string) error {
 	if a.core == nil {
@@ -524,7 +605,7 @@ func (a *App) PickSourceDirectory() (string, error) {
 
 // Status reports this running shell only; it does not claim a P2P connection.
 func (a *App) Status() DesktopStatus {
-	status := DesktopStatus{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Stage: "service", Ready: a.core != nil}
+	status := DesktopStatus{Version: protocol.ProductVersion, Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Stage: "service", Ready: a.core != nil}
 	if a.configBlocked {
 		status.Ready = false
 		status.Error = a.prefsStatus.Message
@@ -548,7 +629,7 @@ func (a *App) Identity() linksendapp.IdentityInfo {
 
 func (a *App) Diagnostics() linksendapp.Diagnostics {
 	if a.core == nil {
-		return linksendapp.Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, ServerHealth: "unavailable"}
+		return linksendapp.Diagnostics{Version: protocol.ProductVersion, Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, ServerHealth: "unavailable"}
 	}
 	ctx := a.ctx
 	if ctx == nil {

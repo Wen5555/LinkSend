@@ -66,6 +66,10 @@ export function OpenTaskDirectory(taskID: string): $CancellablePromise<void> {
     return $Call.ByID(3141333411, taskID);
 }
 
+export function PauseTask(id: string): $CancellablePromise<void> {
+    return $Call.ByID(3621607596, id);
+}
+
 export function PickDirectory(): $CancellablePromise<string> {
     return $Call.ByID(1347829059);
 }
@@ -88,6 +92,10 @@ export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStat
 
 export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
+}
+
+export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
+    return $Call.ByID(1059512591, id);
 }
 
 export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {

@@ -181,17 +181,34 @@ func (p *Prepared) Close() error {
 
 // Prepare precomputes both chunk and content hashes; it never serializes absolute source paths.
 func Prepare(ctx context.Context, paths []string, chunkSize int) (_ *Prepared, err error) {
+	return prepare(ctx, paths, chunkSize, "")
+}
+
+// PrepareForResume rebuilds a manifest for an existing logical transfer. The
+// caller must compare the resulting digest with its persisted recovery record
+// before opening a new network session.
+func PrepareForResume(ctx context.Context, paths []string, chunkSize int, transferID string) (_ *Prepared, err error) {
+	if !validHex(transferID, 16) {
+		return nil, errors.New("INVALID_TRANSFER_ID")
+	}
+	return prepare(ctx, paths, chunkSize, transferID)
+}
+
+func prepare(ctx context.Context, paths []string, chunkSize int, transferID string) (_ *Prepared, err error) {
 	if chunkSize == 0 {
 		chunkSize = DefaultChunkSize
 	}
 	if chunkSize < 64<<10 || chunkSize > 8<<20 {
 		return nil, errors.New("INVALID_CHUNK_SIZE")
 	}
-	id := make([]byte, 16)
-	if _, err = rand.Read(id); err != nil {
-		return nil, err
+	if transferID == "" {
+		id := make([]byte, 16)
+		if _, err = rand.Read(id); err != nil {
+			return nil, err
+		}
+		transferID = hex.EncodeToString(id)
 	}
-	p := &Prepared{Manifest: Manifest{Version: 1, TransferID: hex.EncodeToString(id), ChunkSize: chunkSize}, sources: make(map[uint32]source)}
+	p := &Prepared{Manifest: Manifest{Version: 1, TransferID: transferID, ChunkSize: chunkSize}, sources: make(map[uint32]source)}
 	defer func() {
 		if err != nil {
 			_ = p.Close()

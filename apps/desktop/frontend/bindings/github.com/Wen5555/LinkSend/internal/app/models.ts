@@ -3,6 +3,9 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as connectivity$0 from "../connectivity/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as protocol$0 from "../protocol/models.js";
 
 export interface DeviceInfo {
@@ -70,7 +73,12 @@ export interface MembershipStatus {
  * It intentionally contains metadata only; file bytes never cross this boundary.
  */
 export interface TaskSnapshot {
+    /**
+     * compatibility alias for task_id
+     */
     "id": string;
+    "task_id": string;
+    "attempt_id": string;
     "direction": string;
     "peer_id"?: string;
     "source_summary"?: string;
@@ -89,9 +97,33 @@ export interface TaskSnapshot {
     "error_message"?: string;
     "transfer_id"?: string;
     "session_id"?: string;
+    "ice_generation"?: number;
+    "manifest_digest"?: string;
+    "chunk_size"?: number;
+    "sent_bytes": number;
+    "received_bytes": number;
+    "retransmitted_bytes": number;
+    "verified_bytes": number;
+    "committed_bytes": number;
+    "committed_files": number;
+    "bilateral_confirmed": boolean;
     "connection_method"?: string;
     "transport_protocol"?: string;
     "relay": boolean;
+    "base_socket"?: string;
+    "network_interface"?: string;
+    "address_family"?: string;
+    "local_candidate"?: string;
+    "remote_candidate"?: string;
+    "local_candidate_type"?: string;
+    "remote_candidate_type"?: string;
+    "stun_requests_sent": number;
+    "stun_responses_received": number;
+    "signaling_bytes_sent": number;
+    "signaling_bytes_received": number;
+    "ice_state_timeline"?: connectivity$0.ICEStateEvent[] | null;
+    "tls_version"?: number;
+    "alpn"?: string;
     "can_cancel": boolean;
     "can_retry": boolean;
     "can_pause": boolean;

@@ -2,6 +2,8 @@ package app
 
 import (
 	"bufio"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -158,5 +160,102 @@ func TestTaskHistoryAcrossNormalExitAndKilledProcess(t *testing.T) {
 				t.Fatalf("lost completion: %+v", tasks)
 			}
 		})
+	}
+}
+
+func TestTaskHistoryMigratesV1AndQuarantinesCorruptRows(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "task-history.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, snapshot BLOB NOT NULL); CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL); PRAGMA user_version=1"); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	snap := TaskSnapshot{ID: "legacy", Direction: "send", State: "completed", Revision: 3, StartedAt: time.Now().UTC().Format(time.RFC3339Nano), UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	data, _ := json.Marshal(snap)
+	if _, err = db.Exec("INSERT INTO tasks(id,revision,snapshot) VALUES(?,?,?)", snap.ID, snap.Revision, data); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migrated, ok := service.Task("legacy"); !ok || migrated.TaskID != "legacy" || migrated.AttemptID == "" {
+		t.Fatalf("legacy task was not migrated compatibly: %+v", migrated)
+	}
+	backups, err := filepath.Glob(path + ".schema-v1-*.bak")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("migration backup count=%d err=%v", len(backups), err)
+	}
+	backupDB, err := sql.Open("sqlite", backups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var backupVersion, backupTasks int
+	if err = backupDB.QueryRow("PRAGMA user_version").Scan(&backupVersion); err == nil {
+		err = backupDB.QueryRow("SELECT count(*) FROM tasks WHERE id='legacy'").Scan(&backupTasks)
+	}
+	_ = backupDB.Close()
+	if err != nil || backupVersion != 1 || backupTasks != 1 {
+		t.Fatalf("migration backup is not a readable v1 rollback point: version=%d tasks=%d err=%v", backupVersion, backupTasks, err)
+	}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version int
+	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != taskStoreSchema {
+		t.Fatalf("schema version=%d err=%v", version, err)
+	}
+	if _, err = db.Exec("INSERT INTO tasks(id,revision,snapshot,recovery) VALUES('corrupt',1,?,NULL)", []byte("{not-json")); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	if _, err = New(Config{DataDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var tasks, quarantined int
+	if err = db.QueryRow("SELECT count(*) FROM tasks WHERE id='corrupt'").Scan(&tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow("SELECT count(*) FROM task_quarantine WHERE id='corrupt' AND reason='INVALID_SNAPSHOT'").Scan(&quarantined); err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 || quarantined != 1 {
+		t.Fatalf("corrupt row was not isolated: tasks=%d quarantine=%d", tasks, quarantined)
+	}
+}
+
+func TestTaskHistoryWriteFailureRevokesPersistenceClaim(t *testing.T) {
+	service, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := service.tasks.create(TaskSnapshot{Direction: "send"}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.tasks.historyPath = filepath.Join(t.TempDir(), "missing-parent", "task-history.sqlite")
+	record.update(func(v *TaskSnapshot) { v.Phase = "forced-persistence-failure" })
+	if got := record.snapshot(); got.HistoryPersisted {
+		t.Fatalf("task still claimed durable history after write failure: %+v", got)
+	}
+	diagnostics := service.Diagnostics(t.Context())
+	if service.tasks.historyError() == nil || diagnostics.HistoryPersisted {
+		t.Fatal("manager diagnostics did not retain the task-store failure")
+	}
+	if diagnostics.RestartRecoverySupported || !diagnostics.ByteResumeSupported {
+		t.Fatalf("persistence failure conflated independent recovery capabilities: %+v", diagnostics)
 	}
 }

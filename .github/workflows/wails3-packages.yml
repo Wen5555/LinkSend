@@ -1,5 +1,8 @@
 name: wails3-packages
 
+env:
+  PRODUCT_VERSION: 0.2.0
+
 on:
   push:
     branches: ['**']
@@ -61,29 +64,56 @@ jobs:
         shell: pwsh
         run: |
           $env:GOWORK = "off"
-          wails3 task build ARCH=${{ matrix.arch }}
-          Compress-Archive -Path "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -DestinationPath "bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip"
+          wails3 task package ARCH=${{ matrix.arch }} INSTALL_SCOPE=user
+          New-Item -ItemType Directory -Force -Path "bin/release" | Out-Null
+          Copy-Item "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -Destination "bin/release"
+          @(
+            "product_version=$env:PRODUCT_VERSION"
+            "protocol_version=1"
+            "source_commit=${{ github.sha }}"
+            "workflow_run=${{ github.run_id }}"
+            "workflow_head_sha=${{ github.sha }}"
+            "source_state=COMMITTED"
+            "signing=unsigned"
+          ) | Set-Content -Encoding utf8 "bin/release/BUILD-INFO.txt"
+          Compress-Archive -Path "bin/release/*" -DestinationPath "bin/LinkSend-v$env:PRODUCT_VERSION-windows-amd64-${{ github.sha }}.zip"
+          Copy-Item "bin/LinkSend-amd64-installer.exe" "bin/LinkSend-v$env:PRODUCT_VERSION-windows-amd64-installer-${{ github.sha }}.exe"
+          Copy-Item "bin/release/BUILD-INFO.txt" "$env:GITHUB_WORKSPACE/BUILD-INFO.txt"
+          if ((Get-Item "bin/LinkSend.exe").VersionInfo.ProductVersion -ne $env:PRODUCT_VERSION) { throw "LinkSend.exe ProductVersion mismatch" }
+          if ((Get-Item "bin/LinkSend-amd64-installer.exe").VersionInfo.ProductVersion -ne $env:PRODUCT_VERSION) { throw "installer ProductVersion mismatch" }
       - name: Build macOS DMG
         if: matrix.os == 'macos'
         shell: bash
         run: |
           bash scripts/build-macos.sh --arch ${{ matrix.arch }} --format dmg
-          cp "apps/desktop/bin/macos-${{ matrix.arch }}/LinkSend.dmg" "LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg"
+          cp "apps/desktop/bin/macos-${{ matrix.arch }}/LinkSend.dmg" "LinkSend-v${PRODUCT_VERSION}-macos-${{ matrix.arch }}-${{ github.sha }}.dmg"
+          {
+            echo "product_version=${PRODUCT_VERSION}"
+            echo "protocol_version=1"
+            echo "source_commit=${{ github.sha }}"
+            echo "workflow_run=${{ github.run_id }}"
+            echo "workflow_head_sha=${{ github.sha }}"
+            echo "source_state=COMMITTED"
+            echo "signing=ad-hoc"
+            echo "notarization=not_run"
+          } > BUILD-INFO.txt
       - name: Hash package
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = windows ]; then
-            sha256sum "apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip" > SHA256SUMS.txt
+            sha256sum "apps/desktop/bin/LinkSend-v${PRODUCT_VERSION}-windows-amd64-${{ github.sha }}.zip" "apps/desktop/bin/LinkSend-v${PRODUCT_VERSION}-windows-amd64-installer-${{ github.sha }}.exe" > SHA256SUMS.txt
           else
-            shasum -a 256 "LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg" > SHA256SUMS.txt
+            shasum -a 256 "LinkSend-v${PRODUCT_VERSION}-macos-${{ matrix.arch }}-${{ github.sha }}.dmg" > SHA256SUMS.txt
           fi
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: LinkSend-wails3-preview-${{ matrix.os }}-${{ matrix.arch }}-${{ github.sha }}
+          name: LinkSend-v${{ env.PRODUCT_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
-            apps/desktop/bin/LinkSend-wails3-preview-windows-amd64-${{ github.sha }}.zip
-            LinkSend-wails3-preview-macos-${{ matrix.arch }}-${{ github.sha }}.dmg
+            apps/desktop/bin/LinkSend-v${{ env.PRODUCT_VERSION }}-windows-amd64-${{ github.sha }}.zip
+            apps/desktop/bin/LinkSend-v${{ env.PRODUCT_VERSION }}-windows-amd64-installer-${{ github.sha }}.exe
+            LinkSend-v${{ env.PRODUCT_VERSION }}-macos-${{ matrix.arch }}-${{ github.sha }}.dmg
+            BUILD-INFO.txt
             SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

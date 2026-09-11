@@ -22,7 +22,7 @@ Unicode true
 ## !define INFO_PROJECTNAME    "my-project" # Default "LinkSendTemplate"
 ## !define INFO_COMPANYNAME    "My Company" # Default "My Company"
 ## !define INFO_PRODUCTNAME    "My Product Name" # Default "LinkSend"
-## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
+## !define INFO_PRODUCTVERSION "1.0.0"     # Default follows build/config.yml
 ## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "© 2026, My Company"
 ###
 ## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"
@@ -33,6 +33,14 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+!define INFO_PROJECTNAME "LinkSend"
+!define INFO_COMPANYNAME "LinkSend contributors"
+!define INFO_PRODUCTNAME "LinkSend"
+!define INFO_PRODUCTVERSION "0.2.0"
+!define INFO_COPYRIGHT "© 2026 LinkSend contributors"
+!define PRODUCT_EXECUTABLE "LinkSend.exe"
+!define UNINST_KEY_NAME "LinkSend.LinkSend"
+
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts

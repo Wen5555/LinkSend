@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"time"
 )
 
 const maxResumeStateBytes = 2 * MaxMetadata
@@ -19,11 +20,20 @@ const maxResumeStateBytes = 2 * MaxMetadata
 // ResumeState is atomically checkpointed only after file.Sync. Recovery rehashes
 // every purportedly completed chunk and thus tolerates lost checkpoints and damage.
 type ResumeState struct {
-	Peer     string            `json:"peer"`
-	Manifest Manifest          `json:"manifest"`
-	Digest   string            `json:"digest"`
-	State    string            `json:"state"`
-	Verified map[uint32][]bool `json:"verified"`
+	Peer      string                  `json:"peer"`
+	Manifest  Manifest                `json:"manifest"`
+	Digest    string                  `json:"digest"`
+	State     string                  `json:"state"`
+	Verified  map[uint32][]bool       `json:"verified"`
+	Committed map[uint32]CommitRecord `json:"committed,omitempty"`
+}
+
+type CommitRecord struct {
+	FileID      uint32 `json:"file_id"`
+	Path        string `json:"path"`
+	Digest      string `json:"digest"`
+	Size        int64  `json:"size"`
+	CommittedAt string `json:"committed_at"`
 }
 
 type Receiver struct {
@@ -46,7 +56,7 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 	if err != nil {
 		return nil, err
 	}
-	r := &Receiver{root: root, files: make(map[uint32]*os.File), State: ResumeState{peer, m, m.Digest(), "Recovering", make(map[uint32][]bool)}}
+	r := &Receiver{root: root, files: make(map[uint32]*os.File), State: ResumeState{Peer: peer, Manifest: m, Digest: m.Digest(), State: "Recovering", Verified: make(map[uint32][]bool), Committed: make(map[uint32]CommitRecord)}}
 	defer func() {
 		if err != nil {
 			_ = r.Close()
@@ -89,6 +99,12 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 			if int(id) >= len(m.Files) || m.Files[id].Type != "file" || len(saved.Verified[id]) != len(m.Files[id].Chunks) {
 				return nil, errors.New("INVALID_RESUME_STATE")
 			}
+		}
+		for id, committed := range saved.Committed {
+			if int(id) >= len(m.Files) || m.Files[id].Type != "file" || committed.FileID != id || committed.Path != m.Files[id].Path || committed.Digest != m.Files[id].Hash || committed.Size != m.Files[id].Size {
+				return nil, errors.New("INVALID_COMMIT_RECORD")
+			}
+			r.State.Committed[id] = committed
 		}
 	} else if !errors.Is(e, fs.ErrNotExist) {
 		return nil, e
@@ -278,6 +294,10 @@ func (r *Receiver) verifyParents(p string) error {
 }
 
 func (r *Receiver) Finish(ctx context.Context) error {
+	return r.FinishWithCommit(ctx, nil)
+}
+
+func (r *Receiver) FinishWithCommit(ctx context.Context, onCommit func(CommitRecord)) error {
 	r.State.State = "Verifying"
 	if err := r.checkpoint(); err != nil {
 		return err
@@ -333,6 +353,17 @@ func (r *Receiver) Finish(ctx context.Context) error {
 			} else {
 				return fmt.Errorf("COMMIT_FAILED: %w", err)
 			}
+		}
+		record := r.State.Committed[e.ID]
+		if record.Digest == "" {
+			record = CommitRecord{FileID: e.ID, Path: e.Path, Digest: e.Hash, Size: e.Size, CommittedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		}
+		r.State.Committed[e.ID] = record
+		if err = r.checkpoint(); err != nil {
+			return err
+		}
+		if onCommit != nil {
+			onCommit(record)
 		}
 	}
 	r.State.State = "Completed"

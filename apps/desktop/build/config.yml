@@ -10,8 +10,8 @@ info:
   productIdentifier: "com.linksend.desktop" # The unique product identifier
   description: "端到端直连文件传输" # The application description
   copyright: "© 2026 LinkSend contributors" # Copyright text
-  comments: "Wails 3 beta preview for internal testing" # Comments
-  version: "0.1.0" # The application version
+  comments: "Wails 3 desktop application for verified test deployments" # Comments
+  version: "0.2.0" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"

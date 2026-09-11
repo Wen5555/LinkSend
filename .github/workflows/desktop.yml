@@ -26,16 +26,10 @@ jobs:
           "$env:GITHUB_WORKSPACE\.wails-bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & "$env:GITHUB_WORKSPACE\.wails-bin\wails3.exe" version
           $env:PATH = "$env:GITHUB_WORKSPACE\.wails-bin;$env:PATH"
-      - name: Desktop Go checks
+      - name: Generate Wails 3 bindings
         working-directory: apps/desktop
         shell: pwsh
-        run: |
-          $env:GOWORK = "off"
-          go env GOMOD GOWORK
-          go mod verify
-          go test ./...
-          go build ./...
-          wails3 task build ARCH=amd64
+        run: wails3 generate bindings -ts -i -clean=true
       - name: Frontend checks
         working-directory: apps/desktop/frontend
         run: |
@@ -44,3 +38,14 @@ jobs:
           pnpm run lint
           pnpm run test
           pnpm run build
+      - name: Desktop Go and production checks
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $env:GOWORK = "off"
+          go env GOMOD GOWORK
+          go mod verify
+          go test ./...
+          go vet ./...
+          go build ./...
+          wails3 task build ARCH=amd64

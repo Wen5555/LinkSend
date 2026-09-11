@@ -118,6 +118,7 @@ type peer struct {
 	conn   *websocket.Conn
 	send   chan Wire
 	cancel context.CancelFunc
+	done   chan struct{}
 }
 type negotiation struct {
 	from, to   string
@@ -220,7 +221,7 @@ func (s *Server) Counters() Counters {
 func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, 200, map[string]any{"status": "ok", "capabilities": protocol.Supported()})
+		respond(w, 200, map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()})
 	})
 	m.HandleFunc("POST /v1/bootstrap", s.bootstrap)
 	m.HandleFunc("POST /v1/pairing/join", s.join)
@@ -450,13 +451,16 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "authentication failed")
 		return
 	}
-	p := &peer{device: d, conn: c, send: make(chan Wire, 64), cancel: cancel}
+	p := &peer{device: d, conn: c, send: make(chan Wire, 64), cancel: cancel, done: make(chan struct{})}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
 		return
 	}
 	old := s.clients[d.ID]
+	// Negotiations belong to a live signaling connection. Reauthentication
+	// starts fresh generations; an established QUIC data session is independent.
+	s.dropNegotiationsLocked(d.ID)
 	s.clients[d.ID] = p
 	s.wg.Add(1)
 	s.mu.Unlock()
@@ -465,10 +469,12 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		_ = old.conn.CloseNow()
 	}
 	defer s.wg.Done()
+	defer close(p.done)
 	defer func() {
 		s.mu.Lock()
 		if s.clients[d.ID] == p {
 			delete(s.clients, d.ID)
+			s.dropNegotiationsLocked(d.ID)
 		}
 		s.mu.Unlock()
 	}()
@@ -550,6 +556,16 @@ func (s *Server) sendError(p *peer, code protocol.Code, detail string) {
 		p.conn.CloseNow()
 	}
 }
+
+// Caller holds s.mu. Other device pairs must retain their in-flight state.
+func (s *Server) dropNegotiationsLocked(deviceID string) {
+	for id, session := range s.sessions {
+		if session.from == deviceID || session.to == deviceID {
+			delete(s.sessions, id)
+		}
+	}
+}
+
 func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) error {
 	now := time.Now()
 	if e.Sender != from.device.ID {
@@ -576,6 +592,9 @@ func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) e
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.clients[e.Sender] != from {
+		return protocol.Fail(protocol.AuthenticationFailed, "signaling connection was replaced")
+	}
 	for sid, n := range s.sessions {
 		if !n.expires.After(now) {
 			delete(s.sessions, sid)
@@ -591,12 +610,23 @@ func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) e
 			return protocol.Fail(protocol.Replay, "session identifier already active")
 		}
 		count := 0
-		for _, other := range s.sessions {
+		for sessionID, other := range s.sessions {
 			if other.from == e.Sender || other.to == e.Sender {
 				count++
 			}
-			if (other.from == e.Sender && other.to == e.Recipient) || (other.from == e.Recipient && other.to == e.Sender) {
-				return protocol.Fail(protocol.InvalidMessage, "a negotiation for this device pair is already active")
+			if other.from == e.Sender && other.to == e.Recipient {
+				return protocol.Fail(protocol.SessionConflict, "a negotiation in this direction is already active")
+			}
+			if other.from == e.Recipient && other.to == e.Sender {
+				// Simultaneous initiation deterministically keeps the request from
+				// the lexicographically smaller identity. The losing request is
+				// coalesced without a session-less error; its client receives the
+				// winning signed request and pivots to the responder role.
+				if other.from < e.Sender {
+					return nil
+				}
+				delete(s.sessions, sessionID)
+				count--
 			}
 		}
 		if count >= protocol.MaxSessionsPerDevice {

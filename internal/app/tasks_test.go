@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -114,6 +116,11 @@ func TestClassifyTaskErrorKeepsStableCodesAndHidesRawDetails(t *testing.T) {
 		{"changed", transfer.ErrChanged, protocol.SourceChanged, "源文件"},
 		{"integrity", transfer.ErrIntegrity, protocol.IntegrityFailed, "完整性"},
 		{"path", transfer.ErrPath, protocol.UnsafePath, "目标路径"},
+		{"conflict", transfer.ErrConflict, "FILE_CONFLICT", "不会覆盖"},
+		{"permission", fs.ErrPermission, "PERMISSION_DENIED", "权限"},
+		{"disk", syscall.ENOSPC, protocol.DiskFull, "空间不足"},
+		{"peer conflict", &transfer.PeerError{Detail: "FILE_CONFLICT"}, "FILE_CONFLICT", "不会覆盖"},
+		{"peer permission", &transfer.PeerError{Detail: "PERMISSION_DENIED"}, "PERMISSION_DENIED", "权限"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -137,5 +144,30 @@ func TestClassifyTaskErrorKeepsStableCodesAndHidesRawDetails(t *testing.T) {
 	msg = userError(protocol.Fail(protocol.DirectFailed, "private stack / token"))
 	if strings.Contains(msg, "private stack") || strings.Contains(msg, "token") {
 		t.Fatalf("protocol detail leaked: %q", msg)
+	}
+}
+
+func TestOldAttemptCallbacksCannotOverwriteNewAttempt(t *testing.T) {
+	manager := newTaskManager()
+	record, err := manager.create(TaskSnapshot{Direction: "send", PeerID: "peer"}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldAttempt := record.snapshot().AttemptID
+	record.mu.Lock()
+	record.snap.AttemptID = protocol.RandomID()
+	record.snap.State = "recovering"
+	record.snap.Phase = "recovering"
+	record.snap.Revision++
+	newAttempt := record.snap.AttemptID
+	newRevision := record.snap.Revision
+	record.mu.Unlock()
+	if record.updateAttempt(oldAttempt, func(v *TaskSnapshot) { v.State = "completed" }) {
+		t.Fatal("stale attempt update was accepted")
+	}
+	record.finishAttempt(oldAttempt, "failed", errors.New("late failure"))
+	got := record.snapshot()
+	if got.AttemptID != newAttempt || got.Revision != newRevision || got.State != "recovering" {
+		t.Fatalf("late callback overwrote new attempt: %+v", got)
 	}
 }

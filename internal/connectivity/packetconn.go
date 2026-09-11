@@ -42,6 +42,8 @@ type stunPacketConn struct {
 	closeOnce                   sync.Once
 	wg                          sync.WaitGroup
 	received, sent, rejected    atomic.Uint64
+	requestsSent                atomic.Uint64
+	responsesReceived           atomic.Uint64
 }
 
 func newSTUNPacketConn(t *quic.Transport, local net.Addr) (*stunPacketConn, error) {
@@ -89,6 +91,10 @@ func (p *stunPacketConn) readLoop() {
 			continue
 		}
 		p.received.Add(uint64(n))
+		message := &stun.Message{Raw: buf[:n]}
+		if message.Decode() == nil && (message.Type.Class == stun.ClassSuccessResponse || message.Type.Class == stun.ClassErrorResponse) {
+			p.responsesReceived.Add(1)
+		}
 		q := packet{data: append([]byte(nil), buf[:n]...), addr: addr}
 		select {
 		case p.reads <- q:
@@ -110,6 +116,10 @@ func (p *stunPacketConn) writeLoop() {
 			n, err := p.transport.WriteTo(q.data, q.addr)
 			if n > 0 {
 				p.sent.Add(uint64(n))
+				message := &stun.Message{Raw: q.data[:n]}
+				if message.Decode() == nil && message.Type.Class == stun.ClassRequest {
+					p.requestsSent.Add(1)
+				}
 			}
 			q.result <- packet{data: q.data[:n], err: err}
 		}

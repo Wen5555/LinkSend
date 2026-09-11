@@ -89,6 +89,104 @@ func fixture(t *testing.T) *Prepared {
 	return p
 }
 
+func TestPrepareForResumePreservesIdentityAndDetectsSourceChange(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "resume.bin")
+	if err := os.WriteFile(path, []byte("first contents"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := Prepare(ctx, []string{path}, 64<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialDigest := initial.Manifest.Digest()
+	transferID := initial.Manifest.TransferID
+	if err = initial.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, err := PrepareForResume(ctx, []string{path}, 64<<10, transferID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt.Manifest.Digest() != initialDigest {
+		t.Fatalf("unchanged source changed resume digest: %s != %s", rebuilt.Manifest.Digest(), initialDigest)
+	}
+	_ = rebuilt.Close()
+	if err = os.WriteFile(path, []byte("changed contents"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := PrepareForResume(ctx, []string{path}, 64<<10, transferID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer changed.Close()
+	if changed.Manifest.Digest() == initialDigest {
+		t.Fatal("changed source retained the persisted resume digest")
+	}
+}
+
+func TestPartialCommitPersistsVerifiableRecord(t *testing.T) {
+	ctx := context.Background()
+	sourceDir := t.TempDir()
+	first := filepath.Join(sourceDir, "a.txt")
+	second := filepath.Join(sourceDir, "b.txt")
+	if err := os.WriteFile(first, []byte("first"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("second"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := Prepare(ctx, []string{first, second}, 64<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	destination := t.TempDir()
+	receiver, err := OpenReceiver(ctx, destination, "peer", prepared.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, prepared.Manifest.ChunkSize)
+	for _, entry := range prepared.Manifest.Files {
+		for index := range entry.Chunks {
+			data, readErr := prepared.ReadChunk(ctx, entry.ID, index, buf)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if err = receiver.WriteChunk(ctx, entry.ID, index, data); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err = os.WriteFile(filepath.Join(destination, "b.txt"), []byte("protected"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var commits []CommitRecord
+	err = receiver.FinishWithCommit(ctx, func(record CommitRecord) { commits = append(commits, record) })
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("partial commit error=%v, want conflict", err)
+	}
+	if len(commits) != 1 || commits[0].Path != "a.txt" || commits[0].Digest != prepared.Manifest.Files[0].Hash {
+		t.Fatalf("unexpected commit records: %+v", commits)
+	}
+	if err = receiver.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenReceiver(ctx, destination, "peer", prepared.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	record, ok := reopened.State.Committed[prepared.Manifest.Files[0].ID]
+	if !ok || record.Digest != prepared.Manifest.Files[0].Hash || record.Size != prepared.Manifest.Files[0].Size || record.CommittedAt == "" {
+		t.Fatalf("persisted commit record missing or invalid: %+v", reopened.State.Committed)
+	}
+	got, err := os.ReadFile(filepath.Join(destination, "a.txt"))
+	if err != nil || !bytes.Equal(got, []byte("first")) {
+		t.Fatalf("first committed file invalid: %v %q", err, got)
+	}
+}
+
 func TestTransferOverStreamAndConsent(t *testing.T) {
 	p := fixture(t)
 	for _, accept := range []bool{false, true} {

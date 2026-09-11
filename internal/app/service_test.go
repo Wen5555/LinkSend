@@ -29,6 +29,9 @@ func TestProfileIdentityAndDiagnosticsAreLocal(t *testing.T) {
 	if d.Relay || d.ServerHealth != "not_configured" || d.Identity.ID != info.ID {
 		t.Fatalf("unexpected diagnostics: %+v", d)
 	}
+	if !d.HistoryPersisted || !d.RestartRecoverySupported || !d.ByteResumeSupported {
+		t.Fatalf("local persistence and resume capabilities were not reported independently: %+v", d)
+	}
 	b, _ := json.Marshal(d)
 	if strings.Contains(string(b), svc.cfg.DataDir) {
 		t.Fatal("diagnostics leaked data directory")

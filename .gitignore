@@ -21,3 +21,10 @@ apps/desktop/*.exe
 .stage2a/
 apps/desktop/frontend/output/
 apps/desktop/frontend/.playwright-cli/
+.artifacts/
+.wails-bin/
+apps/desktop/.task/
+apps/desktop/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+output/
+tmp/
+tmp-*.sh

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -30,6 +31,38 @@ func (s *QUICStream) Abort() {
 	}
 	s.CancelRead(streamAbortErrorCode)
 	s.CancelWrite(streamAbortErrorCode)
+}
+
+// FlushTerminal half-closes the terminal response and waits for peer teardown.
+// Close alone only queues FIN; immediately resetting the stream or connection
+// can discard the buffered rejection/error. The peer normally aborts after
+// reading it. Bound uncooperative peers without extending the transfer deadline.
+func (s *QUICStream) FlushTerminal(ctx context.Context) error {
+	if err := s.Close(); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	if err := s.SetReadDeadline(deadline); err != nil {
+		return err
+	}
+	var buf [256]byte
+	for read := 0; read < 4096; {
+		n, err := s.Read(buf[:])
+		read += n
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrNoProgress
+		}
+	}
+	return errors.New("terminal peer response exceeded limit")
 }
 
 func QUICConfig() *quic.Config {

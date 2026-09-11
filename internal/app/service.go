@@ -258,9 +258,11 @@ func (s *Service) Health(ctx context.Context) (protocol.Capabilities, error) {
 func (s *Service) Diagnostics(ctx context.Context) Diagnostics {
 	info := s.Identity()
 	peers, _ := identity.LoadTrust(s.cfg.DataDir)
-	d := Diagnostics{Version: "0.1.0-dev", Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: DiagnosticIdentity{ID: info.ID, PublicKey: info.PublicKey}, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
-	d.HistoryPersisted = s.tasks.historyPath != "" && s.tasks.historyErr == nil
-	if s.tasks.historyErr != nil {
+	d := Diagnostics{Version: protocol.ProductVersion, Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Identity: DiagnosticIdentity{ID: info.ID, PublicKey: info.PublicKey}, ServerURL: redactURL(s.cfg.ServerURL), ServerHealth: "not_configured", Capabilities: protocol.Supported(), TrustedPeers: len(peers), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	d.HistoryPersisted = s.tasks.historyAvailable()
+	d.RestartRecoverySupported = d.HistoryPersisted
+	d.ByteResumeSupported = true
+	if s.tasks.historyError() != nil {
 		d.HistoryError = "TASK_STORE_UNAVAILABLE"
 	}
 	if strings.TrimSpace(s.cfg.ServerURL) == "" {

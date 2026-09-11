@@ -1,6 +1,6 @@
-# LinkSend v1 implementation specification
+# LinkSend protocol V1 implementation specification
 
-Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from v1.
+Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. The current product release line is `0.2.x`; protocol V1 is an independent compatibility contract and is not the same as product SemVer. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from protocol V1.
 
 ## 1. Product scope
 

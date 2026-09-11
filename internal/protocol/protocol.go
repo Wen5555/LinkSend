@@ -19,7 +19,10 @@ import (
 	"time"
 )
 
-const Version = 1
+const (
+	Version        = 1
+	ProductVersion = "0.2.0"
+)
 const MaxMessageBytes = 32 * 1024
 const MaxPayloadBytes = 16 * 1024
 const MaxCandidates = 32
@@ -28,30 +31,35 @@ const MaxSessionsPerDevice = 8
 type Code string
 
 const (
-	SignalingUnreachable Code = "SIGNALING_UNREACHABLE"
-	SignalingTimeout     Code = "SIGNALING_TIMEOUT"
-	CandidateTimeout     Code = "CANDIDATE_EXCHANGE_TIMEOUT"
-	PeerOffline          Code = "PEER_OFFLINE"
-	Unpaired             Code = "UNPAIRED"
-	AuthenticationFailed Code = "AUTHENTICATION_FAILED"
-	VersionIncompatible  Code = "VERSION_INCOMPATIBLE"
-	NoCandidates         Code = "NO_CANDIDATES"
-	NoViableCandidate    Code = "NO_VIABLE_CANDIDATE"
-	CheckTimeout         Code = "CHECK_TIMEOUT"
-	ICEFailed            Code = "ICE_FAILED"
-	QUICHandshakeTimeout Code = "QUIC_HANDSHAKE_TIMEOUT"
-	QUICHandshakeFailed  Code = "QUIC_HANDSHAKE_FAILED"
-	DirectFailed         Code = "DIRECT_FAILED"
-	RelayNotImplemented  Code = "RELAY_NOT_IMPLEMENTED"
-	ReceiveRejected      Code = "RECEIVE_REJECTED"
-	SourceChanged        Code = "SOURCE_CHANGED"
-	IntegrityFailed      Code = "INTEGRITY_FAILED"
-	DiskFull             Code = "DISK_FULL"
-	UnsafePath           Code = "UNSAFE_PATH"
-	Cancelled            Code = "CANCELLED"
-	InvalidMessage       Code = "INVALID_MESSAGE"
-	Replay               Code = "REPLAY"
-	RateLimited          Code = "RATE_LIMITED"
+	SignalingUnreachable  Code = "SIGNALING_UNREACHABLE"
+	SignalingTimeout      Code = "SIGNALING_TIMEOUT"
+	CandidateTimeout      Code = "CANDIDATE_EXCHANGE_TIMEOUT"
+	PeerOffline           Code = "PEER_OFFLINE"
+	Unpaired              Code = "UNPAIRED"
+	AuthenticationFailed  Code = "AUTHENTICATION_FAILED"
+	VersionIncompatible   Code = "VERSION_INCOMPATIBLE"
+	NoCandidates          Code = "NO_CANDIDATES"
+	NoViableCandidate     Code = "NO_VIABLE_CANDIDATE"
+	CheckTimeout          Code = "CHECK_TIMEOUT"
+	ICEFailed             Code = "ICE_FAILED"
+	QUICHandshakeTimeout  Code = "QUIC_HANDSHAKE_TIMEOUT"
+	QUICHandshakeFailed   Code = "QUIC_HANDSHAKE_FAILED"
+	DirectFailed          Code = "DIRECT_FAILED"
+	RelayNotImplemented   Code = "RELAY_NOT_IMPLEMENTED"
+	ReceiveRejected       Code = "RECEIVE_REJECTED"
+	SourceChanged         Code = "SOURCE_CHANGED"
+	IntegrityFailed       Code = "INTEGRITY_FAILED"
+	DiskFull              Code = "DISK_FULL"
+	PermissionDenied      Code = "PERMISSION_DENIED"
+	FileConflict          Code = "FILE_CONFLICT"
+	UnsafePath            Code = "UNSAFE_PATH"
+	Cancelled             Code = "CANCELLED"
+	InvalidMessage        Code = "INVALID_MESSAGE"
+	Replay                Code = "REPLAY"
+	RateLimited           Code = "RATE_LIMITED"
+	SessionConflict       Code = "SESSION_CONFLICT"
+	ConnectionInterrupted Code = "CONNECTION_INTERRUPTED"
+	ResumeMismatch        Code = "RESUME_IDENTITY_MISMATCH"
 )
 
 type Error struct {
@@ -71,6 +79,7 @@ func Wrap(c Code, detail string, cause error) error {
 
 type Capabilities struct {
 	ProtocolVersion          int    `json:"protocol_version"`
+	ProductVersion           string `json:"product_version"`
 	Relay                    bool   `json:"relay"`
 	Transport                string `json:"transport"`
 	HistoryPersisted         bool   `json:"history_persisted"`
@@ -79,7 +88,7 @@ type Capabilities struct {
 }
 
 func Supported() Capabilities {
-	return Capabilities{ProtocolVersion: Version, Relay: false, Transport: "quic"}
+	return Capabilities{ProtocolVersion: Version, ProductVersion: ProductVersion, Relay: false, Transport: "quic"}
 }
 
 type Envelope struct {
@@ -273,7 +282,7 @@ func (s *StateMachine) Transition(next string) error {
 	if s.kind == "connection" {
 		allowed = map[string][]string{"Idle": {"Gathering", "Closed"}, "Gathering": {"Signaling", "Checking", "Failed", "Closed"}, "Signaling": {"Gathering", "Checking", "Failed", "Closed"}, "Checking": {"Nominating", "Failed", "Closed"}, "Nominating": {"Authenticating", "Failed", "Closed"}, "Authenticating": {"Connected", "Failed", "Closed"}, "Connected": {"Reconnecting", "Failed", "Closed"}, "Reconnecting": {"Gathering", "Failed", "Closed"}, "Failed": {"Reconnecting", "Closed"}}
 	} else {
-		allowed = map[string][]string{"Preparing": {"AwaitingAcceptance", "Failed", "Cancelled", "Paused"}, "AwaitingAcceptance": {"Transferring", "Recovering", "Failed", "Cancelled", "Paused"}, "Transferring": {"Verifying", "Paused", "Recovering", "Cancelled", "Failed"}, "Verifying": {"Completed", "Failed", "Cancelled"}, "Paused": {"Recovering", "Cancelled"}, "Recovering": {"AwaitingAcceptance", "Transferring", "Paused", "Failed", "Cancelled"}, "Failed": {"Recovering", "Cancelled"}}
+		allowed = map[string][]string{"Preparing": {"AwaitingAcceptance", "Failed", "Cancelled"}, "AwaitingAcceptance": {"Transferring", "Rejected", "Failed", "Cancelled", "Paused"}, "Transferring": {"Verifying", "Paused", "Recovering", "Cancelled", "Failed"}, "Verifying": {"Completed", "Failed", "Cancelled"}, "Paused": {"Recovering", "Cancelled"}, "Recovering": {"AwaitingAcceptance", "Transferring", "Paused", "Failed", "Cancelled"}, "Failed": {"Recovering", "Cancelled"}}
 	}
 	for _, n := range allowed[s.state] {
 		if n == next {

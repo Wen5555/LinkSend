@@ -1,11 +1,13 @@
 # Roadmap
 
-- M0：两个 Go module、Wails 模板、核心文档和 CI，已基本完成。
-- M1：真实 ICE/QUIC loopback 关卡已完成；双 NAT srflx 和两机 LAN 仍是架构冻结条件。
-- M2：身份、邀请、WSS presence、会话 generation、撤销和本地信任已落地，应用编排仍需扩展。
-- M3：正式控制面建立端到端单文件传输，当前由 `demo-local` 证明的 loopback 路径先行。
-- M4：多文件、文件夹、重启续传、暂停/取消和桌面任务状态待应用编排接入。
-- M5：Wails 共享服务绑定已开始，Windows/macOS 实机矩阵待目标设备。
-- M6：Docker、HTTPS/Caddy、STUN-only、诊断导出和性能报告待部署环境。
+当前候选产品版本为 `0.2.0`，协议保持 V1。里程碑状态以源码实现、自动化、物理实机和发布验证分别判定。
 
-Relay、TURN 文件中继、移动端、浏览器端、UPnP/NAT-PMP/PCP 和云端暂存只保留能力错误，不在本期实现。
+- M0 — **IMPLEMENTED / PASS**：两个 Go module、Wails 3、核心文档和 CI 已建立。
+- M1 — **PARTIAL**：真实 ICE/QUIC loopback、Windows↔macOS LAN 和独立双 NAT 固定映射正向均 PASS；MASQUERADE-only 仍 `CHECK_TIMEOUT` FAIL，其他 NAT/公网 IPv6未覆盖。
+- M2 — **IMPLEMENTED / PASS（自动化与测试主站待本轮同步复核）**：身份、邀请、WSS presence、session/generation/owner、撤销和本地信任已落地。
+- M3 — **IMPLEMENTED / PASS（已覆盖物理双机）**：正式信令上的双向 QUIC 文件/目录传输、摘要和安全错误处理已验证。
+- M4 — **IMPLEMENTED / PASS（本地真实 QUIC）/ NOT_RUN（完整物理恢复矩阵）**：多文件/目录、schema 2 历史、暂停、取消、重启恢复、缺块续传和提交记录已接入共享应用服务。
+- M5 — **PARTIAL**：Wails 3 绑定、revision 门控和原生 idle 退出 PASS；文件/目录选择、打开目录、活跃任务退出保护、恢复入口、macOS 红点/Cmd+Q 实际操作等仍 NOT_RUN。
+- M6 — **PARTIAL**：Windows ZIP/NSIS、macOS arm64/amd64 DMG 和诊断已有测试资产；签名、公证、Windows 安装卸载、Intel Mac 启动和干净 workflow 构建仍待完成。
+
+下一优先级是：消除可运行 NAT FAIL；完成物理断网/强杀/提交边界恢复矩阵；完成原生交互矩阵；从真实提交与 workflow SHA 生成可追溯资产。Relay、TURN 文件中继、移动/浏览器客户端和自动端口映射仍不在当前版本范围。

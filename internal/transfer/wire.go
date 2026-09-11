@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"math"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -19,8 +21,23 @@ type Progress struct {
 	Total          int64   `json:"total"`
 	Read           int64   `json:"read"`
 	Sent           int64   `json:"sent"`
+	Received       int64   `json:"received"`
+	Retransmitted  int64   `json:"retransmitted"`
 	Verified       int64   `json:"verified"`
+	Committed      int64   `json:"committed"`
+	CommittedFiles int     `json:"committed_files"`
 	BytesPerSecond float64 `json:"bytes_per_second"`
+}
+type ChunkTransmission struct {
+	FileID        uint32 `json:"file_id"`
+	Index         int    `json:"index"`
+	Bytes         int64  `json:"bytes"`
+	Retransmitted bool   `json:"retransmitted"`
+}
+type SendHooks struct {
+	Progress       func(Progress)
+	PreviouslySent func(fileID uint32, index int) bool
+	ChunkSent      func(ChunkTransmission)
 }
 type Result struct {
 	TransferID string `json:"transfer_id"`
@@ -63,7 +80,68 @@ type PeerError struct{ Detail string }
 func (e *PeerError) Error() string { return "PEER_ERROR: " + e.Detail }
 func (e *PeerError) Unwrap() error { return ErrPeerError }
 
+// Only exact, known codes acquire typed semantics. Never infer error classes
+// from arbitrary peer text (which older clients may send).
+func (e *PeerError) Is(target error) bool {
+	switch e.Detail {
+	case "FILE_CONFLICT":
+		return target == ErrConflict
+	case "PERMISSION_DENIED":
+		return target == fs.ErrPermission
+	case "DISK_FULL":
+		return target == syscall.ENOSPC
+	case "SOURCE_CHANGED":
+		return target == ErrChanged
+	case "CHECKSUM_FAILED":
+		return target == ErrIntegrity
+	case "DANGEROUS_PATH":
+		return target == ErrPath
+	case "CANCELLED":
+		return target == ErrCancelled
+	default:
+		return false
+	}
+}
+
+// Preserve the v1 error envelope while sending codes instead of local paths.
+func peerErrorCode(err error) string {
+	for _, candidate := range []struct {
+		err  error
+		code string
+	}{
+		{ErrConflict, "FILE_CONFLICT"}, {fs.ErrPermission, "PERMISSION_DENIED"},
+		{syscall.ENOSPC, "DISK_FULL"}, {ErrChanged, "SOURCE_CHANGED"},
+		{ErrIntegrity, "CHECKSUM_FAILED"}, {ErrPath, "DANGEROUS_PATH"},
+		{context.Canceled, "CANCELLED"}, {ErrCancelled, "CANCELLED"},
+	} {
+		if errors.Is(err, candidate.err) {
+			return candidate.code
+		}
+	}
+	return "TRANSFER_FAILED"
+}
+
 type streamAborter interface{ Abort() }
+type terminalFlusher interface {
+	FlushTerminal(context.Context) error
+}
+
+func flushTerminal(ctx context.Context, rw io.ReadWriteCloser, c control) error {
+	if err := writeControl(rw, c); err != nil {
+		return err
+	}
+	if flusher, ok := rw.(terminalFlusher); ok {
+		return flusher.FlushTerminal(ctx)
+	}
+	return nil
+}
+
+// QUIC writes are buffered. A terminal frame must reach the peer before the
+// deferred abort/session close can discard it. Synchronous test streams need
+// no additional flush. This does not change the v1 control-frame protocol.
+func writeTerminal(ctx context.Context, rw io.ReadWriteCloser, c control) {
+	_ = flushTerminal(ctx, rw, c)
+}
 
 func abortStream(rw io.ReadWriteCloser) {
 	if aborter, ok := rw.(streamAborter); ok {
@@ -256,6 +334,10 @@ func validateControl(c control) error {
 // The caller must pass an already mutually authenticated stream. Cancellation
 // closes it so blocked reads/writes terminate; file bytes never enter signaling.
 func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress func(Progress)) (result Result, err error) {
+	return SendWithHooks(ctx, rw, p, SendHooks{Progress: onProgress})
+}
+
+func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hooks SendHooks) (result Result, err error) {
 	complete, abort := streamLifecycle(ctx, rw)
 	defer func() {
 		if ctx.Err() != nil && err != nil {
@@ -268,8 +350,8 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 	start := time.Now()
 	progress := Progress{TransferID: m.TransferID, State: "AwaitingAcceptance", Total: m.TotalBytes()}
 	emit := func() {
-		if onProgress != nil {
-			onProgress(progress)
+		if hooks.Progress != nil {
+			hooks.Progress(progress)
 		}
 	}
 	emit()
@@ -301,9 +383,10 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 		}
 		switch c.Op {
 		case opChunk:
+			retransmitted := hooks.PreviouslySent != nil && hooks.PreviouslySent(c.File, c.Index)
 			data, e := p.ReadChunk(ctx, c.File, c.Index, buf)
 			if e != nil {
-				_ = writeControl(rw, control{Op: opError, Error: e.Error()})
+				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(e)})
 				return Result{}, e
 			}
 			progress.Read += int64(len(data))
@@ -311,6 +394,12 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 				return Result{}, e
 			}
 			progress.Sent += int64(len(data))
+			if retransmitted {
+				progress.Retransmitted += int64(len(data))
+			}
+			if hooks.ChunkSent != nil {
+				hooks.ChunkSent(ChunkTransmission{FileID: c.File, Index: c.Index, Bytes: int64(len(data)), Retransmitted: retransmitted})
+			}
 			ack, e := readControl(rw)
 			if e != nil {
 				return Result{}, e
@@ -326,7 +415,7 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			progress.State = "Verifying"
 			emit()
 			if err = p.Revalidate(ctx); err != nil {
-				_ = writeControl(rw, control{Op: opError, Error: err.Error()})
+				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 				return Result{}, err
 			}
 			if err = writeControl(rw, control{Op: opFinish, Digest: digest}); err != nil {
@@ -339,7 +428,10 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 			if done.Op != opCompleted || done.Digest != digest || done.Verified != m.TotalBytes() {
 				return Result{}, ErrIntegrity
 			}
-			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest}); err != nil {
+			// A successful sender does not return until the receiver has read the
+			// confirmation and gracefully closed its send direction. This closes
+			// the buffered-QUIC race near completed/confirmed without sleeping.
+			if err = flushTerminal(ctx, rw, control{Op: opConfirmed, Digest: digest}); err != nil {
 				return Result{}, err
 			}
 			progress.State = "Completed"
@@ -387,12 +479,12 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		return Result{}, ErrIntegrity
 	}
 	if accept == nil || !accept(m) {
-		_ = writeControl(rw, control{Op: opReject})
+		writeTerminal(ctx, rw, control{Op: opReject})
 		return Result{}, ErrRejected
 	}
 	r, err := OpenReceiver(ctx, directory, peer, m)
 	if err != nil {
-		_ = writeControl(rw, control{Op: opError, Error: err.Error()})
+		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return Result{}, err
 	}
 	defer r.Close()
@@ -409,9 +501,12 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	}
 	start := time.Now()
 	initial := r.VerifiedBytes()
+	var received int64
+	var committed int64
+	var committedFiles int
 	emit := func(state string) {
 		if onProgress != nil {
-			onProgress(Progress{TransferID: m.TransferID, State: state, Total: m.TotalBytes(), Verified: r.VerifiedBytes(), BytesPerSecond: safeRate(r.VerifiedBytes()-initial, time.Since(start))})
+			onProgress(Progress{TransferID: m.TransferID, State: state, Total: m.TotalBytes(), Received: received, Verified: r.VerifiedBytes(), Committed: committed, CommittedFiles: committedFiles, BytesPerSecond: safeRate(r.VerifiedBytes()-initial, time.Since(start))})
 		}
 	}
 	for _, e := range m.Files {
@@ -429,8 +524,10 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 			if eRead != nil {
 				return fail(eRead)
 			}
+			received += int64(len(data))
+			emit("Transferring")
 			if err = r.WriteChunk(ctx, e.ID, i, data); err != nil {
-				_ = writeControl(rw, control{Op: opError, Error: err.Error()})
+				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 				return fail(err)
 			}
 			if err = writeControl(rw, control{Op: opAck, File: e.ID, Index: i, Verified: r.VerifiedBytes()}); err != nil {
@@ -450,8 +547,12 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		return fail(ErrIntegrity)
 	}
 	emit("Verifying")
-	if err = r.Finish(ctx); err != nil {
-		_ = writeControl(rw, control{Op: opError, Error: err.Error()})
+	if err = r.FinishWithCommit(ctx, func(record CommitRecord) {
+		committed += record.Size
+		committedFiles++
+		emit("Verifying")
+	}); err != nil {
+		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return fail(err)
 	}
 	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {

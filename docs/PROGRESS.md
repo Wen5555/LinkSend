@@ -1,15 +1,49 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-11. This is an active implementation, not an accepted product release.
+Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol version: V1. This is an active implementation, not an accepted product release.
+
+## 2026-09-11 v0.2.0 版本化、总体文档与交付事务（进行中）
+
+- 版本决策：从 `0.1.0` 提升到 `0.2.0`，因为本轮在 1.0 前加入任务 schema 2、暂停/重启恢复、验证后缺块续传、多网卡诊断与连接生命周期修复，属于明显功能扩展；不提升到 `1.0.0`，因为 MASQUERADE-only NAT、物理网络切换、完整原生交互、签名/公证等仍未通过。
+- 产品版本与协议分离：`internal/protocol.ProductVersion=0.2.0`；协议 `Version=1`、TLS ALPN `linksend/1` 和 V1 文件帧保持不变。CLI/rendezvous `--version`、`/healthz.version`、capabilities、Wails DTO、Windows/NSIS、macOS plist 和前端 package metadata 统一使用 `0.2.0`。
+- 仓库实际使用 Wails 3 `v3.0.0-beta.18`；旧 AGENTS 项目说明中的 Wails 2 不是有效实现状态，不允许据此回迁。
+- `.artifacts`、本地 Wails 工具、Task cache、输出目录、WebView2 bootstrapper 和临时远程脚本已加入忽略规则，但没有删除任何既有文件。历史 `0.1.0` Stage/Release 文档保留原事实并标记为历史快照。
+- 用户已明确香港入口是测试主站，并授权以后每次版本更新同步服务。每次仍执行 manager resolve→probe→audit-host 与 `inspect → backup → change → verify → rollback-ready`；只操作 `/opt/linksend-lan-test` 的测试服务，不修改防火墙、路由、DNS、代理或正式身份数据。本轮实际部署证据完成后追加。
+- 本节开始时仍是 dirty 工作树，基线 HEAD `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`；旧 r2 资产继续标为 `UNCOMMITTED_TEST_SNAPSHOT`，不会放入新 ZIP/DMG 或改写为新提交来源。完成源码提交后从该真实 commit 重新构建并记录 revision、`vcs.modified=false`、大小、SHA256、工具、UTC 时间、签名/公证、原生状态和 workflow/head SHA。
+- `0.2.0` 本机预提交门槛：根 `diff --check`、mod verify、全量 test、race、vet、GOWORK=off test/build PASS；P0 立即重连 20 次和真实 QUIC 终态/恢复定向套件 3 次 PASS；Wails bindings 1 service / 27 methods / 14 models，生成后前端 frozen install/typecheck/lint/8 tests/build PASS；桌面独立 mod verify/test/vet/build、Wails production 与 NSIS 3.12 PASS。
+- 版本资源复现并修复：Wails 3 beta.18 自动 build-assets 生成的 Windows version info 缺 `FileVersion` 显示字符串，使主 EXE 的 PowerShell VersionInfo 为空；将 fixed file/product version 规范为 `0.2.0.0`、使用 `0409` string table 并补 `FileVersion=0.2.0` 后，主 EXE 与 installer 的 FileVersion/ProductVersion 均实际返回 `0.2.0`。新增跨源码/Wails/安装元数据同步测试防止回退。
+
+## 2026-09-11 P0/P1/P2 分阶段可靠性改进（历史 dirty snapshot）
+
+- 基线仍为 `main` / `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`；本节全部结果来自保留既有修改的 dirty working tree。未 reset、clean、提交、推送、创建 Release 或复用旧资产冒充本轮构建。桌面实际为 Wails 3 `v3.0.0-beta.18`。
+- P0：同设备信令连接替换时按连接所有权清理旧协商；旧 handler 和旧 generation 不能删除/污染新会话；同时发起以设备 ID 字典序收敛到一个 initiator/session；信令短断不关闭健康 QUIC；`confirmed`、拒绝和 error 使用真实 QUIC 半关闭/有界读取完成终态交付。真实 Pion ICE + quic-go 回归覆盖同时发起（10 次）、旧 handler（20 次）、无响应超时后立即重试、信令断开后继续 QUIC、拒绝/冲突/confirmed 终态；受影响包普通和 race 均 PASS。
+- 香港测试主站当时仍运行旧 dirty revision `8baaa1cf1d67a48adbceb32ecb469999361a1e09`，二进制 SHA256 `53445be88943fbabdaa7aabfaf98e299ad9780b1084daa764cf8804e48e5a338`；短时间重试仍为产品 `FAIL`，不是外部环境阻塞。本轮新构建 `fef3e3f+dirty` 只在 `hk-main` 的 `127.0.0.1:39117` 隔离实例验证：两次完成后立即重连、拒绝后立即重连均 PASS，每轮 2,097,152 bytes 且接收内容 `cmp` 一致。主站二进制与 PID 前后相同，实验进程、配置、DB、身份和正文已回滚删除。成功 job：`/tmp/codex-ssh/linksend-p0-isolated-healthz-retry-20260911T062201Z`；首次误用 `/v1/health` 的脚本 FAIL 证据保留于 `/tmp/codex-ssh/linksend-p0-isolated-validation-20260911T061946Z`。
+- P1：任务快照明确区分 `task_id`、`attempt_id`、`session_id`、ICE generation 与单调 `revision`；旧 attempt 回调不能覆盖新 attempt。状态覆盖 Preparing、AwaitingAcceptance、Transferring、Verifying、Paused、Recovering、Completed、Rejected、Cancelled、Failed，暂停/取消停止新块调度，校验/提交失败不能进入 Completed。
+- SQLite 历史升级为 schema 2：snapshot 与私有 recovery metadata 按 revision 原子更新；v1→v2 前用 SQLite `VACUUM INTO` 生成权限为 `0600` 的可读 v1 备份；损坏行进入 `task_quarantine` 且不阻塞启动；写失败撤销 `history_persisted`。旧二进制回滚必须在应用关闭后恢复 `task-history.sqlite.schema-v1-*.bak`，不能直接打开 schema 2。
+- 真暂停/重启恢复/缺块续传已接入现有 transfer 协议。恢复绑定 TransferID、manifest digest、chunk size、源路径及内容、接收目录、对端身份/指纹；`ResumeTask` 是正文恢复的显式用户确认，每次生成新 attempt/session/ICE credentials。接收端重哈希 staging，只请求缺失或损坏块；源内容变化和本地 pinned peer 变化在继续正文前失败。
+- 真实 QUIC 续传证据：12 MiB 首块后暂停，未损坏时本轮/累计实际发送与接收 12,582,912 bytes、重传 0、唯一验证/提交 12,582,912；损坏首个 4 MiB staging block 时实际发送/接收 16,777,216、重传 4,194,304、唯一验证/提交仍为 12,582,912；完整重启两个 Service 后恢复 8,388,608 bytes，沿用 task/TransferID、使用新 attempt/session，内容一致且无重传。只有这些缺块协商与计数通过后，当前实现才报告 `byte_resume_supported=true`。
+- `history_persisted`、`restart_recovery_supported`、`byte_resume_supported` 独立报告：模拟历史写失败时前两者为 false，而进程内 byte resume 实现仍为 true。部分文件提交记录会在每个成功 commit 后 checkpoint；后续文件失败时已提交文件和字节保持可验证，不显示整任务 Completed。
+- CLI 新增只读 `status [--task]` 与显式 `resume --task ...`；resume 只拥有当前 CLI 进程启动的 attempt，不宣称能暂停/取消另一个桌面进程。Wails 增加 PauseTask/ResumeTask 并重新生成 bindings；React 按 `can_pause/can_resume` 门控，使用 revision 合并防止迟到轮询覆盖新快照，分别展示实际发送/接收、重传、验证、提交与双方确认；固定测试配对码不再常驻界面。
+- P2 网络源码新增可用接口/地址族发现、显式接口优先级与排除、IPv6 link-local 排除、实际 base socket/interface/family、ICE 状态时间线、候选类型、TLS/ALPN、STUN 请求/响应计数和信令 JSON 字节计数。未按网卡名称、私网地址、presence 或 candidate type 推断 LAN/公网，连接方法仍为 `direct_unknown`。已选本地地址消失会废弃旧 endpoint、关闭当前 QUIC，并由任务恢复流程等待双方显式建立新 session。
+- `scripts/dual-nat-netns.sh` 已在 `lab-server` 的 rootless 外层 user/mount/network/PID namespace 中真实运行：内部创建两个独立 NAT namespace、重叠 `10.77.0.0/24`、独立 WAN、coturn 4.5.2 STUN-only 与 HTTPS 信令，不使用 loopback 或单 Docker bridge。MASQUERADE-only/状态过滤运行真实返回 `CHECK_TIMEOUT`；这是当前无 relay 情况下的端口受限 NAT 能力 FAIL。显式固定 UDP SNAT/DNAT 的可穿透 NAT 运行完成 8,388,608 bytes QUIC，双方同一 session、内容 SHA256 一致，STUN request/response 为发送侧 16/6、接收侧 20/8，NAT_A/NAT_B 计数 9/7，`relay=false` 且仍为 `direct_unknown`。脱敏包 `.artifacts/final-20260911/linux-dual-nat-evidence-20260911.tar.gz` SHA256 `ba7447fe3eb603b669db3a76ab7ba2be049d7abeeefdb94b4927161f43f7eebf`；远端身份、私钥、正文、coturn、namespace 和测试根已回滚删除。宿主地址/路由前后相同；宿主 iptables 因无非交互 sudo 不能读取，但实验规则全部位于 rootless 外层 namespace。
+- 仍未验收：真实网卡切换/睡眠唤醒、公共 IPv6、未配置固定映射的更多 NAT 类型、Windows/macOS 新版原生文件/目录选择、打开目录、红点/Cmd+Q 按键、退出保护和重启恢复入口。浏览器或窗口创建证据不能替代这些原生操作。
+- 最终 Windows 门槛：根模块格式、`git diff --check`、`go mod verify`、普通测试、race、vet、`GOWORK=off` 测试全部 PASS；桌面独立模块 `GOWORK=off` verify/test/vet/build PASS；前端 frozen install/typecheck/lint/8 tests/build PASS；最后一次 Wails production build 确认 EXE 中包含当前 `index-CQOAaBGW.css` 与 `index-Dz-ecqi4.js`。
+- 发布脚本复现出 NSIS 默认项目名仍为 `LinkSendTemplate`，会生成错误命名的安装器并把内置 EXE 改名。`apps/desktop/build/windows/nsis/project.nsi` 现显式固定 LinkSend 项目、公司、产品、版本、可执行文件和卸载注册键；NSIS 3.12 重建后输出 `LinkSend-amd64-installer.exe`，7-Zip 确认内含 `LinkSend.exe`。本机已有 `%APPDATA%\\LinkSend.exe` WebView 数据，因此未实际安装/卸载，避免触碰现有用户状态。
+- Windows 原生冒烟使用隔离 profile 启动本轮 EXE：进程存活、主窗口句柄非零、Windows close message 返回 true 且进程在 10 秒内退出；随后精确删除测试 identity/SQLite。该结果不替代文件/目录对话框、打开目录或活跃任务退出保护点击验收。
+- Mac 修复后包使用 `mac-test-102342413`，按 manager 的 resolve→probe→audit-host 和隔离目录流程执行。158 个明确源文件打包为 `linksend-source-fef3e3f-dirty-r2.tar.gz`，SHA256 `8612b015bdbdacae26d9d3915b95f9d9744d3576fbd280bfbef751faa940e3f8`，排除全部旧 `.artifacts`、bin、node_modules 和临时脚本；根普通/race/vet、桌面 test/vet/build、arm64/amd64 顺序构建均 PASS。r2 构建 job `/tmp/codex-ssh/linksend-mac-rebuild-r2-20260911T085119Z` 的构建步骤完成，但验证脚本把请求架构 `amd64` 与 Mach-O 名称 `x86_64` 直接比较而最终退出 1；修正后的只读验证 `/tmp/codex-ssh/linksend-mac-rebuild-r2-verify-final-20260911T085952Z` 退出 0。该脚本缺陷不改写为构建 PASS 的退出码，也不影响两份已独立核验的 DMG。
+- Wails 3 原生退出回调语义已修复：`ShouldQuit` 在无活跃任务时返回 true；`Rejected` 纳入终态；有活跃任务时先阻止原退出事件，由异步原生对话框回调取消任务，等待终态后再调用 `App.Quit`。桌面单元测试 PASS；Windows r2 EXE 的 `WM_CLOSE` 与 10 秒内退出 PASS；Mac arm64 r2 包创建 1 个约 1008×684 的原生窗口，idle quit Apple Event 与进程退出 PASS。由于 macOS Accessibility=false，红点实际点击、Cmd+Q 按键、原生对话框、键盘导航和活跃任务退出保护仍为 `NOT_RUN`，不能由 Apple Event 代替。
+- r2 两个 DMG 的只读挂载、bundle id `com.linksend.desktop`、架构和严格 codesign 验证 PASS，签名均为 ad-hoc、无 TeamIdentifier、未公证。Mac 远端 r2 源码、build root、身份和两个原生测试 profile 已由 `/tmp/codex-ssh/linksend-mac-rebuild-r2-cleanup-20260911T090331Z` 清理；用户原有 `/Volumes/LinkSend` 挂载不属于本轮测试，未操作。
+- 当前四个 r2 资产位于 `.artifacts/final-20260911/`，均标记 `UNCOMMITTED_TEST_SNAPSHOT` / 基线 `fef3e3f59797a6de25cb7f9b1f2a1850512808d5` / `vcs_modified=true`：Windows ZIP 8,403,482 bytes / `13d6e97ecbadf56f4f501af529eb7cde22d068f1dcdd23091bdaf7cd76454562`，Windows installer 9,996,336 bytes / `7b5c810a6a6a6609e130d870ba5754a203e27f65cdeb4d41020f71e8d679382b`，macOS arm64 DMG 8,077,571 bytes / `e0057c0293dc1cbb40f200f5fba82cb4985c37de8114eeae6a9e2fa7007e4d94`，macOS amd64 DMG 8,806,122 bytes / `2671d8e4f3c057112eb9f6bfb66e562c660aba6c9f692219c8654e5ccf6ac068`。完整工具、构建时间、签名、公证、来源和原生状态见同目录 `ASSET-MANIFEST.json`；旧无 `-r2` 资产仅保留历史，不是当前源码构建。未创建 workflow run、PR、提交、Release，未部署香港生产。
+- 2026-09-11T09:24Z 对最终工作树重验：gofmt、`git diff --check`、根 verify/test/race/vet/`GOWORK=off test`、桌面独立 verify/test/vet/build、前端 frozen install/typecheck/lint/8 tests/build 全部退出 0；P0 server 立即重连重复 20 次、真实 QUIC 生命周期/终态重复 3 次及 P1 缺块/重启恢复定向回归再次 PASS。`scripts/dual-nat-netns.sh` 的清理补丁 `bash -n` PASS，运行态证据仍来自上述隔离实测，不冒充重跑。强制 bindings 首次因 Taskfile 子进程 PATH 不含 `wails3` 退出 1，临时加入仓库 `.wails-bin` 后生成 PASS（1 service / 27 methods / 14 models），生成后 TypeScript/lint 再验通过。最终 Windows Wails build 退出 0，EXE SHA256 `c808e31a54c8d4819373902f460ef2d5ffbe28b6603f9ab5353465e908f548b7` 与 r2 staging EXE 相同，并嵌入当前 `index-Dz-ecqi4.js` / `index-CQOAaBGW.css`。
 
 ## 2026-09-11 连续验收执行记录
 
 - 环境基线记录于 `.artifacts/acceptance-20260911/baseline.json`；当前工作树原有未跟踪构建/测试产物保持不变。Windows amd64、PowerShell 7.6.5、Go 1.26.5、Node 22.15.0、pnpm 11.19.0、Docker CLI 29.2.1；Wails 3 `v3.0.0-beta.18` 已按锁定版本安装到本地工具目录。
-- 根模块 `gofmt`、`git diff --check`、`go test -count=1 ./...`、`go test -race -count=1 ./...`、`go vet ./...`、`GOWORK=off go test -count=1 ./...` 均 PASS；桌面模块 GOWORK=off test/vet/build、前端 frozen install/typecheck/lint/6 tests/build 均 PASS。
+- 根模块 `gofmt`、`git diff --check`、`go test -count=1 ./...`、`go test -race -count=1 ./...`、`go vet ./...`、`GOWORK=off go test -count=1 ./...` 均 PASS；桌面模块 GOWORK=off test/vet/build、前端 frozen install/typecheck/lint/8 tests/build 均 PASS。
 - Wails `task build ARCH=amd64` 首次因 PATH 未包含 CLI 而失败（环境配置缺陷，原始错误保留在会话记录）；补充 PATH 后重新运行 PASS，并重新生成 TypeScript bindings。生成器发现 `internal/protocol.Capabilities` 的三个历史/恢复字段未同步到 `apps/desktop/frontend/bindings/.../internal/protocol/models.ts`，已更新该绑定文件；未改变协议或数据路径。
 - `demo-local` PASS 仅限 loopback-direct（真实 TLS 1.3/QUIC、1 MiB 摘要一致）；`test-nat` 退出码 1，标记 BLOCKED_BY_EXTERNAL_ENV（Windows 无受控 Linux namespace/NAT fixture）。Docker Compose 静态解析 PASS（使用非生产 dummy token），Docker daemon 不可用，运行态 NOT_RUN。
 - `hk-main` 与 `nl-highdefense` 使用 codex-ssh-manager 完成 resolve/probe/audit 及扩展只读审计，均 PASS；未执行 sudo、配置变更、防火墙/路由/DNS/代理操作。扩展审计证据中的服务状态、监听端口和配置路径已脱敏记录于 `.artifacts/acceptance-20260911/results.txt`。
-- NSIS（`makensis` 缺失）、macOS arm64/amd64 DMG 挂载与原生窗口、双机 LAN/跨 NAT/IPv6/网络切换/睡眠唤醒均 NOT_RUN 或 BLOCKED_BY_EXTERNAL_ENV；模拟与 loopback 结果没有替代真实双机验收。
+- 该连续验收检查点当时尚缺 NSIS 和新 Mac 构建；两项已在本文顶部记录的后续发布准备阶段补齐。双 NAT/IPv6/网络切换/睡眠唤醒及完整原生交互仍为 NOT_RUN 或 BLOCKED_BY_EXTERNAL_ENV；模拟与 loopback 结果没有替代真实双机验收。
 
 ## 2026-09-09 Wails 3 migration and Hong Kong production verification
 
@@ -278,5 +312,17 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - `go run ./cmd/devtool demo-local` 退出码 0：真实 ICE host candidate、QUIC TLS 1.3、摘要一致（1 MiB），仅作为 loopback 证据，不能替代双机 LAN。
 - `go run ./cmd/devtool test-nat` 退出码 1，输出明确为 Windows 缺少受控 Linux namespace/NAT fixture；标记 `BLOCKED_BY_EXTERNAL_ENV`，没有伪造 NAT 成功。
 - GitHub Actions run [34523034011](https://github.com/Wen5555/LinkSend/actions/runs/34523034011) 对主分支提交 `a9646f21c3d088036ade6d7f0a44cd0cb4a75c9a` 的 Windows amd64、macOS arm64、macOS amd64 jobs 均 `success`；对应构建附件可从该 run 下载。尚未替换旧候选 release `v0.1.0-preview-e27`（其目标提交不是当前主分支），避免上传不匹配资产。
+
+## 2026-09-11 Windows ↔ Mac 实机联调与修复（阶段性历史记录）
+
+- 本节保留暂停/恢复实现之前的现场事实；当前实现和构建状态以本文顶部“P0/P1/P2 分阶段可靠性改进”为准，不应把本节当作最终能力声明。环境：Windows 物理以太网 `10.234.232.205/16` ↔ Mac 物理 Wi-Fi `10.234.241.3/16`；两端原有 TUN 保持启用。SSH 全部使用 codex-ssh-manager 的 `mac-test-102342413`。完整状态、命令和限制见 [本轮验收与复测步骤](MAC-WINDOWS-VALIDATION-20260911.md)。
+- `IMPLEMENTED / PASS`：真实双向 QUIC/TLS 1.3 传输空文件、中文文件、多文件、12 MiB（三 chunk）文件及中文空目录，接收文件 SHA256 匹配；Mac 真实拒绝、权限拒绝、冲突、独立 64 MiB 卷磁盘不足均保留稳定错误分类，权限恢复和实验卷卸载已核验。
+- `IMPLEMENTED / PASS`：修复候选诊断泄露 ICE ufrag；修复 QUIC 终态响应因立即 reset 而丢失；冲突/权限/磁盘错误在接收端、发送端、CLI/任务 DTO 和前端一致；移除仅凭 srflx 推断互联网路径的逻辑。前端分别显示历史持久化、重启恢复和字节级续传，移除常驻固定测试配对码。
+- 信令协商清理为 `IMPLEMENTED / PASS`（本地/原生 Go 回归），香港现有旧服务短时间重试仍为 `FAIL`。本轮没有部署生产服务；不能以源码修复替代线上验收。
+- `IMPLEMENTED / PASS`：Windows 根模块普通/race/vet/独立模块测试，桌面独立模块 test/vet/build，前端 frozen install/typecheck/lint/7 tests/build；Mac Go 1.26.5 根模块 test/race、桌面 test/vet；两端 Wails beta.18 bindings 及主要前端 JS SHA256 一致。
+- 原生构建：Windows production EXE、Mac arm64/amd64 DMG 均实际构建；Mac `hdiutil`、`plutil`、`file`、`lipo`、`codesign` 校验通过。隔离 arm64 应用由 CoreGraphics 观察到 1 个真实窗口，未进行原生控件操作。修复 Windows 源码拷贝到 Mac 后的 CRLF shell/HTML 问题，加入 `.gitattributes`。
+- 本轮包标记 `UNCOMMITTED_TEST_SNAPSHOT`，基线 `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`，不冒充该提交的干净构建。Windows 为 `UNSIGNED_TEST_BUILD`；Mac `code_signature=ADHOC / distribution_identity=NONE / notarization=NOT_RUN`。本轮无新 PR/合并/Release。
+- 该现场阶段当时 `NOT_IMPLEMENTED`：桌面重启恢复、字节级续传、桌面暂停/恢复；这些能力随后已在本文顶部所述源码快照中实现并通过本地真实 QUIC 回归，但尚未做新的物理双机恢复验收。中继仍为 `NOT_IMPLEMENTED`；真实双 NAT、Linux 双机、完整网卡矩阵、原生 UI 缺口仍见验收报告。
+- 历史交付勘误：较早的 Windows 便携包曾缺包内 SHA256/准确合并提交来源信息，不能视为满足本轮发布要求；本轮 ZIP 单独记录未提交来源并包含包内校验和。默认 Windows 身份数据目录通常为 `%APPDATA%\LinkSend`（`os.UserConfigDir()`），不是 `%LOCALAPPDATA%`。
 
 

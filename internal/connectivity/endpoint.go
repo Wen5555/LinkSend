@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,12 +31,15 @@ var (
 var endpointCtorMu sync.Mutex
 
 type Config struct {
-	// A concrete local address is required; unspecified binds are rejected.
-	BindAddress   string
-	STUNURLs      []string
-	AllowLoopback bool
-	Generation    uint64
-	CheckTimeout  time.Duration
+	// BindAddress wins when set. Otherwise one eligible address is selected
+	// deterministically from the explicit interface policy below.
+	BindAddress        string
+	InterfacePriority  []string
+	ExcludedInterfaces []string
+	STUNURLs           []string
+	AllowLoopback      bool
+	Generation         uint64
+	CheckTimeout       time.Duration
 }
 
 type Credentials struct {
@@ -47,21 +51,30 @@ type Candidate struct {
 	Generation uint64 `json:"generation"`
 }
 type Path struct {
-	Generation        uint64 `json:"generation"`
-	BaseSocket        string `json:"base_socket"`
-	LocalCandidate    string `json:"local_candidate"`
-	RemoteCandidate   string `json:"remote_candidate"`
-	LocalType         string `json:"local_type"`
-	RemoteType        string `json:"remote_type"`
-	RemoteAddress     string `json:"remote_address"`
-	ConnectionMethod  string `json:"connection_method"`
-	TransportProtocol string `json:"transport_protocol"`
-	Relay             bool   `json:"relay"`
+	Generation        uint64          `json:"generation"`
+	BaseSocket        string          `json:"base_socket"`
+	Interface         string          `json:"interface"`
+	AddressFamily     string          `json:"address_family"`
+	LocalCandidate    string          `json:"local_candidate"`
+	RemoteCandidate   string          `json:"remote_candidate"`
+	LocalType         string          `json:"local_type"`
+	RemoteType        string          `json:"remote_type"`
+	RemoteAddress     string          `json:"remote_address"`
+	ConnectionMethod  string          `json:"connection_method"`
+	TransportProtocol string          `json:"transport_protocol"`
+	Relay             bool            `json:"relay"`
+	ICEStateTimeline  []ICEStateEvent `json:"ice_state_timeline"`
+}
+type ICEStateEvent struct {
+	State string `json:"state"`
+	At    string `json:"at"`
 }
 type Stats struct {
-	STUNBytesSent     uint64 `json:"stun_bytes_sent"`
-	STUNBytesReceived uint64 `json:"stun_bytes_received"`
-	RejectedPackets   uint64 `json:"rejected_packets"`
+	STUNBytesSent         uint64 `json:"stun_bytes_sent"`
+	STUNBytesReceived     uint64 `json:"stun_bytes_received"`
+	STUNRequestsSent      uint64 `json:"stun_requests_sent"`
+	STUNResponsesReceived uint64 `json:"stun_responses_received"`
+	RejectedPackets       uint64 `json:"rejected_packets"`
 }
 
 type Endpoint struct {
@@ -80,17 +93,39 @@ type Endpoint struct {
 	remote                         map[string]bool
 	selected                       string
 	connecting                     bool
+	interfaceName                  string
+	addressFamily                  string
+	boundIP                        net.IP
+	iceTimeline                    []ICEStateEvent
+	monitorWG                      sync.WaitGroup
+	presenceProbe                  func(string, net.IP) bool
+	monitorInterval                time.Duration
 }
 
 func New(cfg Config) (*Endpoint, error) {
 	endpointCtorMu.Lock()
 	defer endpointCtorMu.Unlock()
+	if strings.TrimSpace(cfg.BindAddress) == "" {
+		addresses, err := DiscoverInterfaceAddresses(cfg.AllowLoopback)
+		if err != nil {
+			return nil, err
+		}
+		selected, err := selectInterfaceAddress(addresses, cfg.InterfacePriority, cfg.ExcludedInterfaces)
+		if err != nil {
+			return nil, err
+		}
+		cfg.BindAddress = net.JoinHostPort(selected.Address, "0")
+	}
 	addr, err := net.ResolveUDPAddr("udp", cfg.BindAddress)
 	if err != nil {
 		return nil, err
 	}
 	if addr.IP == nil || addr.IP.IsUnspecified() || !safeIP(addr.IP, cfg.AllowLoopback) || addr.Zone != "" {
 		return nil, errors.New("E_NO_CANDIDATE: bind a concrete unicast IP; IPv6 link-local unsupported")
+	}
+	interfaceName := interfaceForIP(addr.IP)
+	if interfaceListed(interfaceName, cfg.ExcludedInterfaces) {
+		return nil, errors.New("E_NO_CANDIDATE: selected interface is explicitly excluded")
 	}
 	if len(cfg.STUNURLs) > 4 {
 		return nil, errors.New("STUN server limit exceeded")
@@ -118,7 +153,13 @@ func New(cfg Config) (*Endpoint, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Endpoint{cfg: cfg, udp: u, tr: &quic.Transport{Conn: u, DisableVersionNegotiationPackets: true}, candidates: make(chan Candidate, MaxCandidates), done: make(chan struct{}), pathChanged: make(chan struct{}), remote: make(map[string]bool)}
+	addressFamily := "ipv4"
+	if addr.IP.To4() == nil {
+		addressFamily = "ipv6"
+	}
+	e := &Endpoint{cfg: cfg, udp: u, tr: &quic.Transport{Conn: u, DisableVersionNegotiationPackets: true}, candidates: make(chan Candidate, MaxCandidates), done: make(chan struct{}), pathChanged: make(chan struct{}), remote: make(map[string]bool), interfaceName: interfaceName, addressFamily: addressFamily, boundIP: append(net.IP(nil), addr.IP...)}
+	e.presenceProbe = localAddressPresent
+	e.monitorInterval = time.Second
 	// Only this Endpoint owns and ultimately closes the socket.
 	e.packets, err = newSTUNPacketConn(e.tr, u.LocalAddr())
 	if err != nil {
@@ -181,6 +222,21 @@ func New(cfg Config) (*Endpoint, error) {
 		_ = e.Close()
 		return nil, err
 	}
+	err = e.agent.OnConnectionStateChange(func(state ice.ConnectionState) {
+		e.mu.Lock()
+		if len(e.iceTimeline) < 32 {
+			e.iceTimeline = append(e.iceTimeline, ICEStateEvent{State: state.String(), At: time.Now().UTC().Format(time.RFC3339Nano)})
+		}
+		e.mu.Unlock()
+	})
+	if err != nil {
+		_ = e.Close()
+		return nil, err
+	}
+	if e.interfaceName != "" {
+		e.monitorWG.Add(1)
+		go e.monitorLocalAddress()
+	}
 	return e, nil
 }
 
@@ -205,7 +261,24 @@ func (e *Endpoint) PathChanged() <-chan struct{} { return e.pathChanged }
 func (e *Endpoint) Done() <-chan struct{}        { return e.done }
 func (e *Endpoint) BaseAddress() string          { return e.udp.LocalAddr().String() }
 func (e *Endpoint) Stats() Stats {
-	return Stats{e.packets.sent.Load(), e.packets.received.Load(), e.packets.rejected.Load()}
+	return Stats{STUNBytesSent: e.packets.sent.Load(), STUNBytesReceived: e.packets.received.Load(), STUNRequestsSent: e.packets.requestsSent.Load(), STUNResponsesReceived: e.packets.responsesReceived.Load(), RejectedPackets: e.packets.rejected.Load()}
+}
+
+func (e *Endpoint) monitorLocalAddress() {
+	defer e.monitorWG.Done()
+	ticker := time.NewTicker(e.monitorInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-e.done:
+			return
+		case <-ticker.C:
+			if !e.presenceProbe(e.interfaceName, e.boundIP) {
+				e.pathOnce.Do(func() { close(e.pathChanged) })
+				return
+			}
+		}
+	}
 }
 
 // AddRemoteCandidate must only be called after the application verifies the
@@ -281,11 +354,21 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 	if p == nil {
 		return Path{}, ErrNoViableCandidate
 	}
+	// A local srflx candidate can be nominated while QUIC sends from its base
+	// socket directly to a private host peer. Candidate types alone prove neither
+	// LAN nor Internet routing. Keep the method unknown pending route evidence.
 	method := "direct_unknown"
-	if p.Local.Type() == ice.CandidateTypeServerReflexive || p.Remote.Type() == ice.CandidateTypeServerReflexive {
-		method = "internet_p2p"
-	}
-	return Path{Generation: e.cfg.Generation, BaseSocket: e.BaseAddress(), LocalCandidate: p.Local.Marshal(), RemoteCandidate: p.Remote.Marshal(), LocalType: p.Local.Type().String(), RemoteType: p.Remote.Type().String(), RemoteAddress: net.JoinHostPort(p.Remote.Address(), strconv.Itoa(p.Remote.Port())), ConnectionMethod: method, TransportProtocol: "quic", Relay: false}, nil
+	e.mu.Lock()
+	timeline := append([]ICEStateEvent(nil), e.iceTimeline...)
+	e.mu.Unlock()
+	return Path{Generation: e.cfg.Generation, BaseSocket: e.BaseAddress(), Interface: e.interfaceName, AddressFamily: e.addressFamily, LocalCandidate: candidateEvidence(p.Local), RemoteCandidate: candidateEvidence(p.Remote), LocalType: p.Local.Type().String(), RemoteType: p.Remote.Type().String(), RemoteAddress: net.JoinHostPort(p.Remote.Address(), strconv.Itoa(p.Remote.Port())), ConnectionMethod: method, TransportProtocol: "quic", Relay: false, ICEStateTimeline: timeline}, nil
+}
+
+// candidateEvidence is a diagnostic description, not an ICE wire candidate.
+// Allowlist path fields: Marshal also includes credentials and peer extensions.
+// Authenticated signaling must continue to use the original ICE serialization.
+func candidateEvidence(c ice.Candidate) string {
+	return fmt.Sprintf("%s %s typ %s", c.NetworkType(), net.JoinHostPort(c.Address(), strconv.Itoa(c.Port())), c.Type())
 }
 
 func (e *Endpoint) Close() error {
@@ -312,10 +395,7 @@ func (e *Endpoint) Close() error {
 		if e.packets != nil {
 			e.packets.wg.Wait()
 		}
-		// Pion's UDPMuxDefault does not expose a wait handle for its reader
-		// goroutine. Give the closed channel a bounded quiescence window before
-		// another endpoint can be constructed (required for -race correctness).
-		time.Sleep(50 * time.Millisecond)
+		e.monitorWG.Wait()
 	})
 	return result
 }

@@ -48,7 +48,7 @@ func TestExchangeCandidatesSendFailureCancelsReader(t *testing.T) {
 		},
 	}
 	start := time.Now()
-	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), 100*time.Millisecond)
+	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), firstGeneration, 100*time.Millisecond)
 	if !errors.Is(err, sendErr) {
 		t.Fatalf("error = %v, want send failure", err)
 	}
@@ -67,7 +67,7 @@ func TestExchangeCandidatesReadFailureCancelsSender(t *testing.T) {
 		},
 		read: func(context.Context) (signaling.Wire, error) { return signaling.Wire{}, readErr },
 	}
-	err := exchangeCandidatesWithBudget(context.Background(), session, nil, []connectivity.Candidate{{Value: "candidate", Generation: 1}}, local, peer, protocol.RandomID(), time.Second)
+	err := exchangeCandidatesWithBudget(context.Background(), session, nil, []connectivity.Candidate{{Value: "candidate", Generation: 1}}, local, peer, protocol.RandomID(), firstGeneration, time.Second)
 	if !errors.Is(err, readErr) {
 		t.Fatalf("error = %v, want read failure", err)
 	}
@@ -83,7 +83,7 @@ func TestExchangeCandidatesMissingEndTimesOut(t *testing.T) {
 		},
 	}
 	start := time.Now()
-	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), 40*time.Millisecond)
+	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), firstGeneration, 40*time.Millisecond)
 	var protocolErr *protocol.Error
 	if !errors.As(err, &protocolErr) || protocol.ErrorCode(err) != protocol.CandidateTimeout {
 		t.Fatalf("error = %v, want candidate timeout", err)
@@ -107,7 +107,7 @@ func TestExchangeCandidatesParentCancellation(t *testing.T) {
 		},
 	}
 	cancel()
-	err := exchangeCandidatesWithBudget(ctx, session, nil, nil, local, peer, protocol.RandomID(), time.Second)
+	err := exchangeCandidatesWithBudget(ctx, session, nil, nil, local, peer, protocol.RandomID(), firstGeneration, time.Second)
 	if protocol.ErrorCode(err) != protocol.Cancelled {
 		t.Fatalf("error = %v, want cancellation", err)
 	}
@@ -121,7 +121,7 @@ func TestExchangeCandidatesMalformedMessageFailsImmediately(t *testing.T) {
 			return signaling.Wire{Type: "signal"}, nil
 		},
 	}
-	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), time.Second)
+	err := exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, protocol.RandomID(), firstGeneration, time.Second)
 	if protocol.ErrorCode(err) != protocol.InvalidMessage {
 		t.Fatalf("error = %v, want invalid message", err)
 	}
@@ -157,11 +157,39 @@ func TestExchangeCandidatesLateEndDoesNotEnterNextSession(t *testing.T) {
 			return wire, nil
 		},
 	}
-	if err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, firstSession, time.Second); err != nil {
+	if err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, firstSession, firstGeneration, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, secondSession, time.Second)
+	err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, secondSession, firstGeneration, time.Second)
 	if protocol.ErrorCode(err) != protocol.InvalidMessage {
 		t.Fatalf("late end error = %v, want invalid message for the new session", err)
+	}
+}
+
+func TestExchangeCandidatesRejectsStaleGeneration(t *testing.T) {
+	local, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerIdentity, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := signaling.Device{ID: peerIdentity.ID(), PublicKey: peerIdentity.PublicKey(), Name: "peer"}
+	sessionID := protocol.RandomID()
+	stale, err := protocol.NewEnvelope("end_of_candidates", peer.ID, local.ID(), sessionID, firstGeneration+1, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale.Signature = peerIdentity.Sign(stale.SigningBytes())
+	session := candidateSessionStub{
+		send: func(context.Context, protocol.Envelope) error { return nil },
+		read: func(context.Context) (signaling.Wire, error) {
+			return signaling.Wire{Type: "signal", Message: &stale}, nil
+		},
+	}
+	err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, sessionID, firstGeneration, time.Second)
+	if protocol.ErrorCode(err) != protocol.InvalidMessage {
+		t.Fatalf("stale generation error = %v, want invalid message", err)
 	}
 }

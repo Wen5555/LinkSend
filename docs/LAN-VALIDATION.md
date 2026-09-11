@@ -2,26 +2,21 @@
 
 ## 当前证据边界
 
-历史 `docs/STAGE2A-20260909.md` 证明 macOS→Windows 单次 16 MiB LAN PASS。本轮 Windows 端可执行的自动化验证已通过；无法从当前环境直接读取或控制 macOS，因此 LAN-01 双向六次实机重复仍为 `NOT_RUN`，不得将历史单次结果扩展为双向重复通过。
+2026-09-11 已在物理 Windows（以太网）↔macOS arm64（Wi-Fi）完成双向 QUIC 文件组传输，双方实际发送/接收、唯一验证和提交均为 12,582,949 bytes，摘要一致；Mac 端拒绝、冲突、权限拒绝和独立磁盘镜像 ENOSPC 也已 PASS。该结果是混合有线/无线同站点实测，不等价于所有 LAN、跨公网、网络切换或双 NAT。
 
-## Windows 当前网络前置（2026-09-09）
+## 已验证
 
-`go run ./cmd/devtool network-info` 显示物理接口“以太网”已启用，IPv4 `10.234.232.205/16`；`Mihomo` 为 `198.18.0.1/30` 虚拟接口，不用于 LAN bind。默认路由和 macOS 当前接口仍需在两端现场确认。
+- Windows→Mac 与 Mac→Windows 文件组、中文路径和 SHA256：PASS。
+- 接收前明确确认、拒绝、冲突不覆盖、权限拒绝、磁盘不足：PASS。
+- TLS 1.3 / ALPN `linksend/1`、pinned peer、session/generation、base socket 和候选证据：PASS。
+- 任务状态/错误语义、实际字节与逻辑完成量：自动化 PASS；现场旧证据缺少后来新增的完整 task/attempt/revision 字段，不能倒填。
 
-## LAN-01 / LAN-02 / LAN-03 状态
+## 尚未验证
 
-- LAN-01：`NOT_RUN`（需要 macOS 现场双向 3+3 次、独立接收目录和双端 SHA256）。
-- LAN-02：自动化 transfer 矩阵覆盖空文件、目录、冲突、路径安全和取消；Windows/macOS 实机矩阵 `NOT_RUN`。
-- LAN-03：底层取消、超时、checkpoint 测试已通过；CLI 应用层 `cancel/status/resume` 仍未实现，进程重启恢复不宣称完成。
+- 物理两机的暂停、强杀、重启、损坏 staging、receiver committed 但 sender unconfirmed 和部分文件提交后的恢复矩阵：NOT_RUN。
+- Wi-Fi/以太网切换、DHCP/IP 变化、睡眠唤醒、VPN/TUN 开关和全局 IPv6：NOT_RUN。
+- 完整 Wails 原生交互：NOT_RUN；原生窗口创建和 idle 退出不代表文件选择器或恢复入口已验收。
 
-每次实机运行应保存 `.lan-tests/<run-id>/` 的 run.json、双端 result/stderr、network-info、哈希与退出码。接收端使用 `--wait-timeout`，发送端和接收端均先构建并记录各自二进制 SHA256。
+每次实机运行必须保存独立 run ID、两端 binary SHA256/产品版本/commit、网络快照、脱敏连接证据、stdout/stderr/退出码、任务快照、字节计数和最终哈希。每个客户端使用新的 `--data-dir` 与接收目录；不得根据网卡名、私网地址或 candidate 类型推断网络性质，证据不足保持 `direct_unknown`。
 
-## macOS 操作包
-
-在仓库根目录执行 `bash scripts/stage2a.sh --role receiver|sender ...`，使用现场 `ifconfig`/`route -n get default` 确认物理 IPv4；不要填写 198.18.x.x、utun 或代理地址。每次使用新的 `--data-dir`/接收目录和唯一证据目录，回传 result.json、stderr.log、run.json、binary.sha256 及最终文件 SHA256。
-
-## 本轮桌面任务接口
-
-Wails 桌面端通过 `internal/app` 的进程内任务服务调用现有真实直连链路。发送支持文件和目录；接收先进入等待，收到已验证对端提议后由任务页确认或拒绝。任务快照提供状态/阶段/字节计数/错误码，取消显示请求后等待后端确认，失败的发送可重新发送并生成新任务 ID。任务不持久化，应用重启恢复仍未实现。
-
-桌面启动前可设置 `LINKSEND_SERVER_URL`、`LINKSEND_BIND`、`LINKSEND_STUN`（逗号分隔）和仅用于 loopback 开发的 `LINKSEND_ALLOW_INSECURE_LOOPBACK=true`。生产 LAN 应使用实际物理接口地址，不使用 198.18.x.x 虚拟接口。
+macOS 通过已配置的 `codex-ssh-manager` alias `mac-test-102342413` 操作，顺序为 resolve → probe → audit-host。远端实验遵循 inspect → backup → change → verify → rollback，只操作隔离测试目录、进程和磁盘镜像。

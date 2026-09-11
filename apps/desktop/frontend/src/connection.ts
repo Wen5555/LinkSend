@@ -26,12 +26,36 @@ export function taskPhaseLabel(phase: string): string {
     awaiting_acceptance: '等待接收确认',
     transferring: '传输中',
     verifying: '校验文件',
+	pausing: '正在暂停',
+	paused: '已暂停',
     cancelling: '正在取消',
     recovering: '恢复传输',
+	connection_interrupted: '连接已中断',
     completed: '已完成',
     failed: '失败',
   };
   return labels[phase.toLowerCase()] ?? phase;
+}
+
+export type RevisionedTask = { id: string; task_id?: string; revision: number };
+
+// A delayed poll must never replace a newer action response or task snapshot.
+// Missing entries are retained because history is append-only in V1.
+export function mergeTaskSnapshots<T extends RevisionedTask>(current: T[], incoming: T[]): T[] {
+  const merged = [...current];
+  const indexes = new Map<string, number>();
+  merged.forEach((task, index) => indexes.set(task.task_id || task.id, index));
+  for (const task of incoming) {
+    const key = task.task_id || task.id;
+    const index = indexes.get(key);
+    if (index == null) {
+      indexes.set(key, merged.length);
+      merged.push(task);
+      continue;
+    }
+    if (task.revision >= merged[index].revision) merged[index] = task;
+  }
+  return merged;
 }
 
 export function humanizeBackendError(raw: unknown): string {
@@ -72,7 +96,13 @@ export function humanizeBackendError(raw: unknown): string {
     RECEIVE_REJECTED: '接收方拒绝了本次传输。',
     SOURCE_CHANGED: '源文件发生变化，请重新选择文件后重试。',
     INTEGRITY_FAILED: '文件完整性校验失败，请重试并检查磁盘或网络。',
-    DISK_FULL: '接收目录空间不足或不可写，请选择其他目录。',
+    DISK_FULL: '接收磁盘空间不足，请清理空间后重试。',
+    PERMISSION_DENIED: '接收目录没有写入权限，请选择可写目录。',
+    FILE_CONFLICT: '目标文件已存在且不会覆盖，请选择空目录后重试。',
+    TASK_INTERRUPTED: '上次任务因应用退出而中断，请核对源文件和接收目录后重新发起。',
+    PEER_OFFLINE: '对端当前离线，请让对端保持 LinkSend 运行。',
+    VERSION_INCOMPATIBLE: '双方版本或传输能力不兼容，请升级到兼容版本。',
+    DIRECT_FAILED: '直连或传输未完成，请检查设备在线、网络和接收目录后重试。',
     UNSAFE_PATH: '目标路径不安全，请选择其他接收目录。',
     CANCELLED: '传输已取消。',
     RELAY_NOT_IMPLEMENTED: '当前网络需要中继，但 LinkSend 暂未实现中继。',
@@ -83,6 +113,11 @@ export function humanizeBackendError(raw: unknown): string {
     TASK_NOT_AWAITING_ACCEPTANCE: '该接收请求已处理或已过期。',
     TASK_DECISION_ALREADY_SET: '接收决定已提交，请等待任务更新。',
     TASK_CANCEL_ALREADY_REQUESTED: '取消请求已提交，请等待任务结束。',
+	TASK_NOT_PAUSABLE: '当前阶段不能暂停；校验或提交已开始时请等待结果。',
+	TASK_NOT_RESUMABLE: '该任务没有可验证的恢复数据，请重新发起。',
+	CONNECTION_INTERRUPTED: '连接已中断，已验证数据仍保留；请让双方确认后恢复。',
+	RESUME_IDENTITY_MISMATCH: '恢复身份不匹配，已停止传输；请核对源文件、目录和对端指纹。',
+	SESSION_CONFLICT: '双方同时发起了连接，正在合并为唯一会话；如未继续请重试。',
     INVALID_TASK_DIRECTORY: '只能打开已完成接收任务的目录。',
     INVALID_DIRECTORY: '接收目录不存在或不可访问，请重新选择目录。',
   };

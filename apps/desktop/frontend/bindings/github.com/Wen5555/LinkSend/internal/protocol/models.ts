@@ -3,6 +3,7 @@
 
 export interface Capabilities {
     "protocol_version": number;
+    "product_version": string;
     "relay": boolean;
     "transport": string;
     "history_persisted": boolean;

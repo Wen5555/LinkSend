@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Keep executable and generated cross-platform sources deterministic.
+*.sh text eol=lf
+*.html text eol=lf
+*.go text eol=lf
+*.png binary
+*.ico binary
+*.exe binary
+*.dmg binary

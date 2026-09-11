@@ -2,13 +2,41 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/Wen5555/LinkSend/internal/identity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/signaling"
 )
+
+func TestHealthReportsProductAndProtocolVersionsSeparately(t *testing.T) {
+	s, err := New(Config{Listen: "127.0.0.1:8787", Database: filepath.Join(t.TempDir(), "control.db"), AllowInsecureLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	h := httptest.NewServer(s.Handler())
+	defer h.Close()
+	response, err := http.Get(h.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var body struct {
+		Version      string                `json:"version"`
+		Capabilities protocol.Capabilities `json:"capabilities"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Version != protocol.ProductVersion || body.Capabilities.ProductVersion != protocol.ProductVersion || body.Capabilities.ProtocolVersion != protocol.Version {
+		t.Fatalf("health version drift: %+v", body)
+	}
+}
 
 func TestLoopbackTestPairingCode(t *testing.T) {
 	s, err := New(Config{

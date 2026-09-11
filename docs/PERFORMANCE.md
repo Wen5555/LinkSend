@@ -1,9 +1,11 @@
 # Performance
 
-`BenchmarkTransport` 比较原生 quic-go UDP 与 Pion ICE 集成路径。已记录的 Windows amd64 loopback 探索结果约为 native 96.88 MB/s、ICE 97.05 MB/s，均为应用有效吞吐；该结果没有代表千兆网、2.5GbE、macOS 或 Linux。
+`BenchmarkTransport` 比较同版本原生 quic-go UDP 与 Pion ICE 集成路径。Windows amd64 loopback 探索结果约为 native 96.88 MB/s、ICE 97.05 MB/s，均是应用有效吞吐，只证明本机 loopback 基线，不代表千兆网、2.5GbE、macOS、Linux、跨 NAT 或网络切换性能。
 
 ```powershell
 go run ./cmd/devtool bench-transport
 ```
 
-正式报告必须同时写明 Go/Pion/quic-go 版本、CPU、网卡、链路、文件大小、块大小、CPU、峰值内存、分配和 GC。1 Gbps 的 125 MB/s、2.5 Gbps 的 312.5 MB/s 只是扣除开销前换算上限，不是产品承诺。
+恢复测试必须同时报告实际发送、实际接收、重传、唯一验证和提交字节。当前自动化证据中：12 MiB 无损恢复发送/接收 12,582,912 bytes、重传 0；首个 4 MiB staging 块损坏后发送/接收 16,777,216 bytes、重传 4,194,304 bytes、唯一验证/提交仍为 12,582,912 bytes；完整 Service 重启恢复为 8,388,608 bytes、重传 0。完整重发不得标成字节续传。
+
+正式性能报告必须写明产品/协议/Go/Pion/quic-go 版本、OS/CPU/内存、网卡和链路、拓扑、候选对、文件/块大小、吞吐单位、CPU、峰值内存、分配与 GC。1 Gbps 的 125 MB/s 和 2.5 Gbps 的 312.5 MB/s 只是扣除开销前的换算上限，不是产品承诺。

@@ -4,17 +4,44 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 )
+
+func TestTerminalTaskStateIncludesEveryProtocolTerminal(t *testing.T) {
+	for _, state := range []string{"completed", "rejected", "cancelled", "failed"} {
+		if !terminalTaskState(state) {
+			t.Fatalf("expected %s to be terminal", state)
+		}
+	}
+	for _, state := range []string{"preparing", "awaiting_acceptance", "transferring", "verifying", "paused", "recovering"} {
+		if terminalTaskState(state) {
+			t.Fatalf("expected %s to remain protected", state)
+		}
+	}
+}
+
+func TestShouldQuitAllowsEmptyInitializedService(t *testing.T) {
+	core, err := linksendapp.New(linksendapp.Config{DataDir: t.TempDir(), ServerURL: "http://127.0.0.1:1", AllowInsecureLoopback: true, Name: "quit-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Shutdown()
+	a := &App{core: core}
+	if !a.shouldQuit() {
+		t.Fatal("Wails 3 requires true to allow an idle native application to quit")
+	}
+}
 
 func TestDesktopPreferencesAtomicRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{dataDir: dir}
-	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备"}
+	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}, STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备"}
 	if err := a.SavePreferences(got); err != nil {
 		t.Fatal(err)
 	}
 	loaded := loadPreferences(dir)
-	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName {
+	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName || len(loaded.InterfacePriority) != 2 || loaded.InterfacePriority[0] != "Wi-Fi" || len(loaded.ExcludedInterfaces) != 1 {
 		t.Fatalf("round trip mismatch: %#v", loaded)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "desktop-preferences.json")); err != nil {
@@ -26,6 +53,16 @@ func TestDesktopPreferencesAtomicRoundTrip(t *testing.T) {
 	}
 	if loaded := loadPreferences(dir); loaded.DeviceName != got.DeviceName {
 		t.Fatalf("second save did not replace preferences: %#v", loaded)
+	}
+}
+
+func TestDesktopDirectConfigCarriesExplicitInterfacePolicy(t *testing.T) {
+	a := &App{prefs: DesktopPreferences{InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}}}
+	t.Setenv("LINKSEND_BIND", "")
+	t.Setenv("LINKSEND_STUN", "stun:example.test:3478")
+	got := a.directConfig()
+	if got.BindAddress != "" || len(got.InterfacePriority) != 2 || got.InterfacePriority[0] != "Wi-Fi" || len(got.ExcludedInterfaces) != 1 || got.ExcludedInterfaces[0] != "TUN" {
+		t.Fatalf("interface policy drifted at desktop boundary: %+v", got)
 	}
 }
 

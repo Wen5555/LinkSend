@@ -5,6 +5,8 @@ export interface DesktopPreferences {
     "format_version": number;
     "server_url": string;
     "bind_address": string;
+    "interface_priority": string[] | null;
+    "excluded_interfaces": string[] | null;
     "stun_urls": string[] | null;
     "receive_directory": string;
     "device_name": string;
@@ -25,6 +27,8 @@ export interface EffectiveConfig {
     "server_source": string;
     "bind_address": string;
     "bind_source": string;
+    "interface_priority": string[] | null;
+    "excluded_interfaces": string[] | null;
     "stun_urls": string[] | null;
     "stun_source": string;
     "needs_restart": boolean;
@@ -34,6 +38,7 @@ export interface EffectiveConfig {
 export interface NetworkInterfaceInfo {
     "name": string;
     "addresses": string[] | null;
+    "address_families": string[] | null;
     "is_loopback": boolean;
 }
 
