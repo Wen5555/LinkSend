@@ -2,7 +2,7 @@
 
 本轮为真实 Windows/Mac 联调；没有把模拟、浏览器预览或私网地址替代原生双机验收。实现状态与验证状态分别记录。所有相对证据路径均相对于 `D:\apps\Osend\.artifacts\lan-live-20260911`；该目录含本机测试身份，**不得整体提交或对外导出**。对外分享仅选择脱敏日志及 `deliverables`，不包含 profile、邀请、私钥、测试磁盘镜像或文件正文。
 
-> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后候选分支已将产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。当前 committed 候选源码为 `a88553180bd1defac5b236d75fe4dff5046734dd`，PR 为 [#6](https://github.com/Wen5555/LinkSend/pull/6)，三平台构建 run 为 [`34596127738`](https://github.com/Wen5555/LinkSend/actions/runs/34596127738)。不得用旧 `deliverables`/r2 包或本报告早期 NOT_IMPLEMENTED 行覆盖后续状态，也不得把旧包改名为 `0.2.0`。
+> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。当前 [v0.2.0 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 的 tag/源码为 `426d58b6ab62ab7213475007305c0a403955c00f`，PR [#6](https://github.com/Wen5555/LinkSend/pull/6) 已合并，三平台 Release 构建 run 为 [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161)。不得用旧 `deliverables`/r2/发布前候选包覆盖 Release 资产或本报告的验证边界。
 
 ## 一、环境与拓扑
 
@@ -58,15 +58,15 @@ SSH 使用已安装公钥及 codex-ssh-manager。Mac 原非交互 PATH 未列出
 | 多 NIC 切换 / 全局 IPv6 | 原要求完整矩阵 | — | 此报告范围说明 | NOT_RUN | 源码/单元测试不替代物理切换、睡眠或公网 IPv6 |
 | 每个阶段强杀并恢复正文、断网后缺块请求 | 原要求恢复矩阵 | — | 后续本地真实 QUIC 恢复测试见 PROGRESS/TESTING | NOT_RUN | 当前源码已实现；物理双机恢复矩阵仍未运行 |
 
-### 当前 committed 候选补充矩阵
+### 当前 Release 补充矩阵
 
 | 场景 | 源码 / run | 状态 | 准确边界 |
 |---|---|---|---|
-| Linux core CI | `a885531`；push `34596127764`；PR `34596131146` | PASS | 包含真实 QUIC code-0 正向与非零关闭负向回归；`9cce3ee` push core FAIL 仍保留 |
-| desktop CI | `a885531`；push `34596127757`；PR `34596131090` | PASS | Wails 3；桌面 Go、bindings、前端和构建检查 |
-| 三平台打包 | `a885531`；run `34596127738` | PASS | Windows ZIP/NSIS、macOS 双架构 DMG 包级验证，不等于全部原生交互 |
-| committed Windows 原生窗口 | workflow ZIP 内 EXE；隔离 profile | PASS | 非零窗口句柄；idle `WM_CLOSE` 被接受，10 秒内 exit 0 |
-| committed macOS arm64 启动 | manager resolve→probe→audit-host | BLOCKED_BY_EXTERNAL_ENV | resolve 成功，但 probe/audit-host TCP/22 timeout；未启动该 DMG |
+| Linux core CI | `426d58b`；main run `34600609146` | PASS | 包含真实 QUIC code-0 正向与非零关闭负向回归；`9cce3ee` push core FAIL 仍保留 |
+| desktop CI | `426d58b`；main run `34600609047` | PASS | Wails 3；桌面 Go、bindings、前端和构建检查 |
+| 三平台打包 | `426d58b`；main run `34600609161` | PASS | Windows ZIP/NSIS、macOS 双架构 DMG 包级验证，不等于全部原生交互 |
+| Release Windows 原生窗口 | Release ZIP 内 EXE；隔离 profile | PASS | 非零窗口句柄；idle `WM_CLOSE` 被接受，10 秒内 exit 0 |
+| Release macOS arm64 启动 | 物理 Mac | NOT_RUN | 发布前候选收尾时 probe/audit-host TCP/22 timeout；Release 包未启动 |
 | 安装/卸载与完整原生交互 | 真实系统窗口/对话框 | NOT_RUN | 不由 CI runner、浏览器截图或仅窗口创建替代 |
 
 修复后双向候选记录保留了本地 srflx 与对端 host 的实际组合，但两端都不再仅凭类型标为互联网。最新反向会话 `24349d4780c01d9a206a132fc6e79a84`，generation 1，Windows base `10.234.232.205:53665`，Mac base `10.234.241.3:58164`，TLS 1.3 / ALPN `linksend/1`，relay=false。四文件 SHA256 验证结果见 `hash-verification-v3.json`。
@@ -100,28 +100,28 @@ V1 帧结构不变，error 字符串只发送稳定允许码，不再泄漏本�
 
 ## 五、桌面界面和原生窗口状态
 
-保留原导航、颜色和主要交互。退出缺陷的根因是将 Wails 3 `ShouldQuit` 返回值理解反了：无活跃任务返回 false 会取消原生退出。历史 r2 修复后，Mac arm64 构建在独立数据目录启动，CoreGraphics 返回 1 个该 PID 的原生窗口，边界约 1008×684；发送 idle quit Apple Event 后应用退出。committed `a885531` Windows EXE 也已重新证明原生窗口句柄非零、idle `WM_CLOSE` 被接受并在 10 秒内 exit 0。该 PASS 仅证明窗口创建和空闲退出，不证明具体按钮、键盘快捷键或活跃任务保护。原 `/Applications/LinkSend.app`、用户既有 `/Volumes/LinkSend` 挂载和正式身份数据保持不变。
+保留原导航、颜色和主要交互。退出缺陷的根因是将 Wails 3 `ShouldQuit` 返回值理解反了：无活跃任务返回 false 会取消原生退出。历史 r2 修复后，Mac arm64 构建在独立数据目录启动，CoreGraphics 返回 1 个该 PID 的原生窗口，边界约 1008×684；发送 idle quit Apple Event 后应用退出。Release `426d58b` Windows EXE 也已重新证明原生窗口句柄非零、idle `WM_CLOSE` 被接受并在 10 秒内 exit 0。该 PASS 仅证明窗口创建和空闲退出，不证明具体按钮、键盘快捷键或活跃任务保护。原 `/Applications/LinkSend.app`、用户既有 `/Volumes/LinkSend` 挂载和正式身份数据保持不变。
 
-修复前物理联调阶段两端生成的 service binding SHA256 为 `1ba146cda3ecda1c791ae601f7d9d02cb8f03b273964da23708bc8001b807836`，任务模型为 `83c9cc0a0571b5c9a1913c2d71caf8c1679692a4e1314f0e49744f1e1ce9ab4f`，主要前端 JS 为 `d05be5bb5f12105e6b4a61c370c080a77ef0ae43e16a533f8b21f96277421e40`。当前 `a885531` committed run 已重新生成并核对 1 service / 27 methods / 14 models，且构建使用最新 dist；这些一致性证据仍不替代原生控件交互。
+修复前物理联调阶段两端生成的 service binding SHA256 为 `1ba146cda3ecda1c791ae601f7d9d02cb8f03b273964da23708bc8001b807836`，任务模型为 `83c9cc0a0571b5c9a1913c2d71caf8c1679692a4e1314f0e49744f1e1ce9ab4f`，主要前端 JS 为 `d05be5bb5f12105e6b4a61c370c080a77ef0ae43e16a533f8b21f96277421e40`。Release main run 已重新生成并核对 1 service / 27 methods / 14 models，且构建使用 tag 内 dist；这些一致性证据仍不替代原生控件交互。
 
 辅助功能权限当前为 false；文件选择器、打开接收目录、红点/Cmd+Q、活动任务退出保护、Tab/Enter/Esc、高对比度、深色/高 DPI、reduced-motion 均未完成本轮原生验收。应用最小宽度 720；不能声称原生窗口已完成 720 以下检查。
 
 ## 六、构建与发布资产
 
-当前候选资产来自 GitHub Actions run `34596127738` 的真实 workflow/head `a88553180bd1defac5b236d75fe4dff5046734dd`，本地核验副本位于 ignored `.artifacts/v020-final/ci-34596127738-a885531/`。包内 `BUILD-INFO.txt` 明确 `source_state=COMMITTED`、`source_checkout_clean=true`；所有本地 SHA256 与各 artifact 内 `SHA256SUMS.txt` 一致。
+Release 资产来自 GitHub Actions main run `34600609161` 的真实 workflow/head/tag `426d58b6ab62ab7213475007305c0a403955c00f`，本地核验副本位于 ignored `.artifacts/v020-release/`。包内 `BUILD-INFO.txt` 明确 `source_state=COMMITTED`、`source_checkout_clean=true`；本地、workflow 清单、合并校验文件与 GitHub asset digest 一致。
 
 | 资产 | 大小（bytes） | SHA256 | 工具 / UTC | 签名 / 公证 | 原生验证 |
 |---|---:|---|---|---|---|
-| Windows amd64 portable ZIP | 8,403,530 | `316a11b74cf146762138384c0cd84ce76b8ec19a48943b1b0abf23f89de37690` | Go 1.26.5；Node 22.15.0；pnpm 11.19.0；Wails beta.18；`2026-09-11T11:55:19Z` | unsigned / N/A | committed EXE 窗口创建、idle `WM_CLOSE` PASS；其余 NOT_RUN |
-| Windows amd64 installer EXE | 9,996,125 | `aa346acecd333ea8757bb0ed2f6466de4767af82fdc6640332cd2d0c83311092` | 同上；NSIS 3.10；`2026-09-11T11:55:19Z` | unsigned / N/A | 安装/卸载 NOT_RUN |
-| macOS arm64 DMG | 8,170,931 | `79857ce7ba336e6ceec516b19b737a1386100e9f6dfdf328a44deaeaee142e91` | Go 1.26.5；Node 22.15.0；pnpm 11.19.0；Wails beta.18；Apple clang 17；`2026-09-11T11:54:30Z` | ad-hoc / TeamIdentifier none / notarization NOT_RUN | runner 包级 PASS；物理启动 BLOCKED_BY_EXTERNAL_ENV |
-| macOS amd64 DMG | 8,808,731 | `15c34a786f5aba9b72e7e2e09eaf6502aebf315cfee6161b9918104543de621f` | 同上；`2026-09-11T11:57:59Z` | ad-hoc / TeamIdentifier none / notarization NOT_RUN | runner 包级 PASS；Intel 真机 NOT_RUN |
+| Windows amd64 portable ZIP | 8,403,529 | `dcdd7127c527b1464f0ea025046ad871a35ed6eaba4a2c725884779071d81577` | Go 1.26.5；Node 22.15.0；pnpm 11.19.0；Wails beta.18；`2026-09-11T12:49:31Z` | unsigned / N/A | Release EXE 窗口创建、idle `WM_CLOSE` PASS；其余 NOT_RUN |
+| Windows amd64 installer EXE | 9,996,124 | `99a4d5d25dbc9761e4839ff435f362ec65aa75fcdafdf46f285f05defdde7370` | 同上；NSIS 3.10；`2026-09-11T12:49:31Z` | unsigned / N/A | 安装/卸载 NOT_RUN |
+| macOS arm64 DMG | 8,170,928 | `c637897290677c7deb8c50395b95568f55a93a14bdf51e2babbf7eaf974fdf4c` | Go 1.26.5；Node 22.15.0；pnpm 11.19.0；Wails beta.18；Apple clang 17；`2026-09-11T12:48:16Z` | ad-hoc / TeamIdentifier none / notarization NOT_RUN | runner 包级 PASS；Release 包物理启动 NOT_RUN |
+| macOS amd64 DMG | 8,808,743 | `f5f066634429e61312066c056b836482ca228315ea858cab3de28653e67120fe` | 同上；`2026-09-11T12:51:36Z` | ad-hoc / TeamIdentifier none / notarization NOT_RUN | runner 包级 PASS；Intel 真机 NOT_RUN |
 
 ### 历史 dirty r2 资产
 
 现场阶段 `deliverables` 和 `.artifacts/final-20260911/` 的 `-r2` 资产仅用于复核当时结果。其来源为基线 HEAD 加未提交修复，`commit=null`、`source_state=UNCOMMITTED_TEST_SNAPSHOT`；r2 源包 `linksend-source-fef3e3f-dirty-r2.tar.gz` 为 2,772,920 bytes、SHA256 `8612b015bdbdacae26d9d3915b95f9d9744d3576fbd280bfbef751faa940e3f8`。历史 Windows ZIP/installer 为 8,403,482 / 9,996,336 bytes，SHA256 分别为 `13d6e97ecbadf56f4f501af529eb7cde22d068f1dcdd23091bdaf7cd76454562` / `7b5c810a6a6a6609e130d870ba5754a203e27f65cdeb4d41020f71e8d679382b`；历史 macOS arm64/amd64 DMG 为 8,077,571 / 8,806,122 bytes，SHA256 分别为 `e0057c0293dc1cbb40f200f5fba82cb4985c37de8114eeae6a9e2fa7007e4d94` / `2671d8e4f3c057112eb9f6bfb66e562c660aba6c9f692219c8654e5ccf6ac068`。这些文件没有 workflow run ID，不能改名、复用或改写元数据冒充 committed `0.2.0` 资产。
 
-`0.2.0` 当前只有分支和 PR，没有合并、tag 或 GitHub Release。`9cce3ee` 虽生成过 committed 包，但其 push core run `34592549314` 真实 FAIL，已由含终态修复的 `a885531` 资产取代。完整原生交互、安装/卸载、签名、公证和 MASQUERADE-only NAT 仍未通过，因此不发布。
+`v0.2.0` 已按用户后续明确授权合并并作为 GitHub Pre-release 发布，且不是 Latest。`9cce3ee` 虽生成过 committed 包，但其 push core run `34592549314` 真实 FAIL，没有进入 Release；发布只使用含终态修复并从实际 tag SHA 重建的 main-run 资产。完整原生交互、安装/卸载、签名、公证和 MASQUERADE-only NAT 仍未通过，因此本版不得描述为稳定或生产版本。
 
 ## 七、未完成能力和外部阻塞
 
@@ -144,7 +144,7 @@ V1 帧结构不变，error 字符串只发送稳定允许码，不再泄漏本�
 
 1. 阅读 AGENTS.md、SPEC、PROGRESS 和本报告；保存 `git status --short`、分支、HEAD。关闭需要备份的正式应用，备份数据目录；为测试选择全新 profile 和接收目录。
 2. Windows 运行 codex-ssh-manager 的 `resolve`、`probe`、`audit-host`，alias 为 `mac-test-102342413`。远端命令写入 LF `.sh`，使用 manager `run-script`；不要手写业务 SSH 或将密码写入脚本。
-3. 优先使用 [v0.2.0 候选记录](RELEASE-v0.2.0-TEST-CANDIDATE.md) 列出的 committed workflow 资产，并同时核对 run/head SHA、包内 `BUILD-INFO.txt` 和 `SHA256SUMS.txt`。`.artifacts/final-20260911/` 的 `-r2` 资产只保留为历史 dirty snapshot。Windows 解压后按 README 设置隔离 `LINKSEND_DATA_DIR`；Mac 挂载后复制到隔离测试位置，不替换原 `/Applications/LinkSend.app`。
+3. 优先使用 [v0.2.0 发布记录](RELEASE-v0.2.0-TEST-CANDIDATE.md) 列出的 Release 资产，并同时核对 tag、run/head SHA、`BUILD-MANIFEST-v0.2.0.json` 和 `SHA256SUMS-v0.2.0.txt`。`.artifacts/final-20260911/` 的 `-r2` 资产只保留为历史 dirty snapshot。Windows 解压后按 README 设置隔离 `LINKSEND_DATA_DIR`；Mac 挂载后复制到隔离测试位置，不替换原 `/Applications/LinkSend.app`。
 4. 两端使用现有组成员生成的独立一次性邀请加入，分别核对完整设备指纹并手动信任。不要使用测试固定码或在日志记录邀请。
 5. 设置真实绑定地址：Windows 当前 `10.234.232.205:0`，Mac 当前 `10.234.241.3:0`；每次重新检查 IP 是否变化。保留现场 VPN/TUN，记录接口/地址/路由/metric；不要为通过测试修改生产网络。
 6. 接收端选择全新空目录并点击等待接收。发送端依次测试空文件、中文文件、长文件名、多个文件、含空目录的目录和大于两个 chunk 的文件。先不接受，验证未写正文；再明确接受。完成后比较两端 SHA256 与协议结果，然后交换方向。

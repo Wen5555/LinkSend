@@ -12,4 +12,4 @@
 8. 验证 Tab/Shift+Tab/Enter/Esc、可见焦点、系统字体、深色模式、高 DPI、窄窗口与“减少动态效果”。
 9. 重启后检查历史列表、Paused/Recovering 入口、损坏记录隔离和不可恢复任务的明确说明。
 
-截至 2026-09-11，macOS arm64 的窗口创建与 idle quit Apple Event PASS 来自历史 dirty r2 测试快照；committed `0.2.0` DMG 在 GitHub runner 的挂载、plist、架构和 strict ad-hoc codesign 为 PASS，但物理 Mac 在候选收尾时 SSH timeout，未重新启动该包。红点实际点击、Cmd+Q 按键、原生对话框、活跃任务保护和 GUI 恢复入口仍为 NOT_RUN；Intel Mac 启动仍为 NOT_RUN。
+截至 2026-09-11，macOS arm64 的窗口创建与 idle quit Apple Event PASS 来自历史 dirty r2 测试快照；`v0.2.0` Release DMG 在 GitHub runner 的挂载、plist、架构和 strict ad-hoc codesign 为 PASS，但物理 Mac 在发布前候选收尾时 SSH timeout，Release 包未完成启动。红点实际点击、Cmd+Q 按键、原生对话框、活跃任务保护和 GUI 恢复入口仍为 NOT_RUN；Intel Mac 启动仍为 NOT_RUN。

@@ -46,6 +46,6 @@ schema 变化必须在部署记录中给出迁移前备份、前后 `user_versio
 
 旧服务“立即重试”FAIL 已由部署后的测试主站行为复核消除。未修改 DNS、路由、防火墙、代理、Caddy/TLS、coturn、固定码配置或非 LinkSend 服务。
 
-部署后的候选分支继续产生 `fcc48ebfee7ce34ae73567c9cf0ab9fd0f00cbfe`（任务暂停迟到进度修复）、`a88553180bd1defac5b236d75fe4dff5046734dd`（客户端 QUIC 正常终态关闭修复）和 workflow/文档提交；这些提交没有修改 `cmd/rendezvous`、`internal/server`、`internal/signaling`、协议版本、服务配置或 schema。因此测试主站仍准确记录为从干净 commit `4b7ccf66…` 构建的产品 `0.2.0`，不是谎报为桌面候选 HEAD。以后产品版本变化或服务端依赖变化时按本页事务重新同步；纯客户端/桌面/文档提交不为追求 SHA 外观而无意义重启服务。
+部署后的分支继续产生 `fcc48ebfee7ce34ae73567c9cf0ab9fd0f00cbfe`（任务暂停迟到进度修复）、`a88553180bd1defac5b236d75fe4dff5046734dd`（客户端 QUIC 正常终态关闭修复）和最终 `v0.2.0` tag `426d58b6ab62ab7213475007305c0a403955c00f`；这些后续提交没有修改 `cmd/rendezvous`、`internal/server`、`internal/signaling`、协议版本、服务配置或 schema。因此测试主站仍准确记录为从干净 commit `4b7ccf66…` 构建的产品 `0.2.0`，不是谎报为桌面 Release SHA。以后产品版本变化或服务端依赖变化时按本页事务重新同步；纯客户端/桌面/文档提交不为追求 SHA 外观而无意义重启服务。
 
 准确回滚：先核对当前 PID 的 `/proc/<pid>/exe` 指向运行路径，TERM 并等待退出；将 `.../20260911T101714Z-v0.2.0-4b7ccf6/rendezvous.pre-v0.2.0` 以 mode 755 安装回 `/opt/linksend-lan-test/rendezvous`，按原 `--config /opt/linksend-lan-test/server-public.toml` 用 `nohup` 启动，原子更新 PID 文件，再核对旧 SHA、443 listener 和 health。配置与 schema 未改变，通常不应恢复旧数据库；只有明确要撤销部署后成员写入时才停服并使用已验证在线备份。

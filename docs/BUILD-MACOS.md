@@ -30,7 +30,7 @@ apps/desktop/bin/macos-arm64/LinkSend.dmg
 apps/desktop/bin/macos-amd64/LinkSend.dmg
 ```
 
-前端构建与桌面编译不可并行。每个最终资产应使用 `LinkSend-v0.2.0-macos-<arch>-<shortsha>.dmg`，并记录 commit、workflow run/head SHA（本地构建则明确为 null）、`vcs.modified`、工具版本、UTC 时间、大小、SHA256、签名、公证和原生验证状态。
+前端构建与桌面编译不可并行。每个最终资产应使用 `LinkSend-v0.2.0-macos-<arch>-<fullsha>.dmg`，并记录 commit、workflow run/head SHA（本地构建则明确为 null）、源码干净状态、工具版本、UTC 时间、大小、SHA256、签名、公证和原生验证状态。
 
 ## 校验
 
@@ -50,11 +50,11 @@ codesign -dv --verbose=4 /Volumes/LinkSend/LinkSend.app
 
 arm64 的原生窗口创建和 idle quit Apple Event 已有 r2 测试快照证据；文件/目录选择器、打开目录、红点实际点击、Cmd+Q 按键、活跃任务保护、恢复入口和 Intel Mac 启动仍需对 `0.2.0` 提交构建重跑。详见 [MAC-SMOKE-TEST.md](MAC-SMOKE-TEST.md)。
 
-## 当前 committed 候选（2026-09-11）
+## `v0.2.0` Release 资产（2026-09-11）
 
-[GitHub Actions run 34596127738](https://github.com/Wen5555/LinkSend/actions/runs/34596127738) 从干净 source/head `a88553180bd1defac5b236d75fe4dff5046734dd` 构建。两个 job 均使用 Go 1.26.5、Node 22.15.0、pnpm 11.19.0、Wails 3 beta.18 和 Apple clang 17.0.0；bindings 为 1 service / 27 methods / 14 models。arm64 DMG 为 8,170,931 bytes、SHA256 `79857ce7ba336e6ceec516b19b737a1386100e9f6dfdf328a44deaeaee142e91`、UTC `2026-09-11T11:54:30Z`；amd64 DMG 为 8,808,731 bytes、SHA256 `15c34a786f5aba9b72e7e2e09eaf6502aebf315cfee6161b9918104543de621f`、UTC `2026-09-11T11:57:59Z`。runner 的只读挂载、bundle ID/版本、`lipo` arm64/x86_64 与 `codesign --verify --deep --strict` 均 PASS；两包都是 ad-hoc、无 Developer ID、未公证。
+[GitHub Actions main run 34600609161](https://github.com/Wen5555/LinkSend/actions/runs/34600609161) 从干净 source/head/tag `426d58b6ab62ab7213475007305c0a403955c00f` 构建，并发布于 [v0.2.0 Pre-release](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0)。两个 job 均使用 Go 1.26.5、Node 22.15.0、pnpm 11.19.0、Wails 3 beta.18 和 Apple clang 17.0.0；bindings 为 1 service / 27 methods / 14 models。arm64 DMG 为 8,170,928 bytes、SHA256 `c637897290677c7deb8c50395b95568f55a93a14bdf51e2babbf7eaf974fdf4c`、UTC `2026-09-11T12:48:16Z`；amd64 DMG 为 8,808,743 bytes、SHA256 `f5f066634429e61312066c056b836482ca228315ea858cab3de28653e67120fe`、UTC `2026-09-11T12:51:36Z`。runner 的只读挂载、bundle ID/版本、`lipo` arm64/x86_64 与 `codesign --verify --deep --strict` 均 PASS；两包都是 ad-hoc、无 Developer ID、未公证。
 
-物理 Mac alias `mac-test-102342413` 在 committed 包收尾时按 manager 执行 resolve 成功，但 probe 与 audit-host 都是 TCP/22 timeout。因此 committed arm64 DMG 的真实启动和全部交互为 `BLOCKED_BY_EXTERNAL_ENV`，不能由 runner 包级 PASS 或历史 r2 原生窗口证据替代。
+物理 Mac alias `mac-test-102342413` 在发布前候选收尾时按 manager 执行 resolve 成功，但 probe 与 audit-host 都是 TCP/22 timeout；Release 资产发布前没有再次取得可用连接。因此 release arm64 DMG 的真实启动和全部交互为 `NOT_RUN`（此前连接阻塞证据为 `BLOCKED_BY_EXTERNAL_ENV`），不能由 runner 包级 PASS 或历史 r2 原生窗口证据替代。
 
 ## 历史资产
 

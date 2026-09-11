@@ -42,4 +42,4 @@ bindings 生成后必须核对生成模型、React 类型和 Go DTO；前端构�
 
 历史 commit/run/资产记录保留在 PROGRESS 和 BUILD-MACOS 中；旧 `0.1.0` 包不能通过改写元数据冒充 `0.2.0`。
 
-`0.2.0` committed 候选 `a88553180bd1defac5b236d75fe4dff5046734dd` 在 run `34596127738` 的 Windows 2022、macOS arm64 和 macOS Intel runner 上均使用 Wails 3 `v3.0.0-beta.18` 重新生成 1 service / 27 methods / 14 models 并完成构建。Windows committed workflow ZIP 中 EXE 又通过真实窗口、非零句柄和 idle `WM_CLOSE`；macOS workflow 只完成 DMG 挂载、bundle/架构和 strict ad-hoc codesign，物理 Mac SSH timeout，因此不把 runner 构建等同于完整原生交互验收。
+`v0.2.0` Release 源码 `426d58b6ab62ab7213475007305c0a403955c00f` 在 main run `34600609161` 的 Windows 2022、macOS arm64 和 macOS Intel runner 上均使用 Wails 3 `v3.0.0-beta.18` 重新生成 1 service / 27 methods / 14 models 并完成构建。Release Windows ZIP 中 EXE 又通过真实窗口、非零句柄和 idle `WM_CLOSE`；macOS workflow 只完成 DMG 挂载、bundle/架构和 strict ad-hoc codesign，Release 包未完成物理 Mac 启动，因此不把 runner 构建等同于完整原生交互验收。

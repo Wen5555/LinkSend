@@ -1,8 +1,26 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol version: V1. This is an active implementation, not an accepted product release.
+Updated: 2026-09-11. Current published test prerelease: `v0.2.0`; protocol version: V1. This is not an accepted production release.
 
-## 2026-09-11 v0.2.0 候选已构建（未合并、未发布）
+## 2026-09-11 v0.2.0 已合并并发布测试预发布
+
+- [PR #6](https://github.com/Wen5555/LinkSend/pull/6) 通过 fast-forward 合并到 `main`，merge/tag 目标均为 `426d58b6ab62ab7213475007305c0a403955c00f`。main 的 core run [`34600609146`](https://github.com/Wen5555/LinkSend/actions/runs/34600609146)、desktop run [`34600609047`](https://github.com/Wen5555/LinkSend/actions/runs/34600609047) 和三平台 packaging run [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161) 全部 PASS。
+- [GitHub Release v0.2.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 已公开为 Pre-release，并明确设为非 Latest。用户后续明确要求合并和发布，因此覆盖了发布前“暂不合并/发布”的决策；已知产品 FAIL 与 NOT_RUN 项没有被改写为 PASS。
+- Release 上传 Windows ZIP、Windows installer、macOS arm64/amd64 DMG、合并 SHA256 清单和构建 manifest。GitHub 返回的四个二进制资产 size/digest 与本地重新计算、workflow artifact 内 `SHA256SUMS.txt` 全部一致；三份 BUILD-INFO 均记录 `source_commit=workflow_head_sha=426d58b6ab62ab7213475007305c0a403955c00f`、`workflow_run=34600609161`、`source_state=COMMITTED`、`source_checkout_clean=true`。
+- Release Windows ZIP 内 EXE 为 20,635,648 bytes、SHA256 `afd7bcbf9bc58a2a5d590b8a470a2c74a6caf6d2a80cc4dc4e0729627c55a0b0`，FileVersion/ProductVersion `0.2.0`，Wails 3 beta.18。对该确切 EXE 的隔离可见原生冒烟为窗口句柄非零、idle `WM_CLOSE` 接受、10 秒内 exit 0；隐藏窗口方式不能取得句柄的测试方式 FAIL 也未冒充产品结果。
+- 两份 Release DMG 的 runner 挂载、bundle/版本、架构和 strict ad-hoc codesign PASS，但本 release 资产未在物理 Mac 启动；无 Developer ID、未公证。Windows 安装/卸载也仍为 NOT_RUN。
+- 香港测试主站继续运行服务端实际源码 `4b7ccf66...` 构建的产品 `0.2.0`；后续客户端/文档提交未改变 rendezvous/server/signaling/config/schema，因此未无意义重启。下一次产品版本或服务端依赖变化继续按 [DEPLOY-HK](DEPLOY-HK.md) 的事务流程同步。
+
+| Release 资产 | 大小（bytes） | SHA256 | 构建 UTC | 签名 / 公证 |
+|---|---:|---|---|---|
+| Windows amd64 ZIP | 8,403,529 | `dcdd7127c527b1464f0ea025046ad871a35ed6eaba4a2c725884779071d81577` | `2026-09-11T12:49:31Z` | unsigned / N/A |
+| Windows amd64 installer | 9,996,124 | `99a4d5d25dbc9761e4839ff435f362ec65aa75fcdafdf46f285f05defdde7370` | `2026-09-11T12:49:31Z` | unsigned / N/A |
+| macOS arm64 DMG | 8,170,928 | `c637897290677c7deb8c50395b95568f55a93a14bdf51e2babbf7eaf974fdf4c` | `2026-09-11T12:48:16Z` | ad-hoc / NOT_RUN |
+| macOS amd64 DMG | 8,808,743 | `f5f066634429e61312066c056b836482ca228315ea858cab3de28653e67120fe` | `2026-09-11T12:51:36Z` | ad-hoc / NOT_RUN |
+
+准确边界保持不变：MASQUERADE-only 独立双 NAT 是产品 `CHECK_TIMEOUT` FAIL；Relay 未实现；完整原生交互、物理跨平台恢复、安装/卸载、签名和公证未完成。`v0.2.0` 只能称为测试预发布。
+
+## 2026-09-11 v0.2.0 发布前候选记录（历史）
 
 - 版本决策：从 `0.1.0` 提升到 `0.2.0`，因为本轮在 1.0 前加入任务 schema 2、暂停/重启恢复、验证后缺块续传、多网卡诊断与连接生命周期修复，属于明显功能扩展；不提升到 `1.0.0`，因为 MASQUERADE-only NAT、物理网络切换、完整原生交互、签名/公证等仍未通过。
 - 产品版本与协议分离：`internal/protocol.ProductVersion=0.2.0`；协议 `Version=1`、TLS ALPN `linksend/1` 和 V1 文件帧保持不变。CLI/rendezvous `--version`、`/healthz.version`、capabilities、Wails DTO、Windows/NSIS、macOS plist 和前端 package metadata 统一使用 `0.2.0`。
@@ -16,7 +34,7 @@ Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol versio
 - 香港测试主站已按 manager 事务完成 `0.2.0` 同步：备份 `/opt/linksend-lan-test/backups/20260911T101714Z-v0.2.0-4b7ccf6`，旧 PID `352572` → 新 PID `381064`；配置 SHA 与数据库 schema/integrity 不变。公网 health 报告产品 `0.2.0` / 协议 V1；两次完成后立即重连、拒绝后立即完成各传 2 MiB 均 PASS。测试运行时已删除，两条测试设备记录均撤销，额外数据库清理备份为 `/opt/linksend-lan-test/backups/20260911T102329Z-v0.2.0-lifecycle-cleanup`。旧主站立即重试 FAIL 因实际部署复核而关闭。
 - 候选提交 `9cce3eef20a6224f56c9da79d16f8966cabb61f9` 的三平台 packaging run `34592549254` 全部成功，但同 SHA 的 push core run `34592549314` 在真实 QUIC `TestDirectServiceSendAndReceive` 复现 `Application error 0x0 (remote): closed`；PR core 的成功 run 不抵消这个 FAIL。根因是接收端读到 `confirmed` 后正常关闭单次传输连接时，quic-go 可能先交付 application close code 0、后交付 stream FIN，发送端 terminal flush 将正常终态误判为失败。
 - 最小修复只在“已验证 completed、已写出 confirmed”的 terminal flush 内接受远端 QUIC application code 0；非零 close、reset、timeout 和其他阶段错误仍失败，协议 V1 不变。新增真实 QUIC 正向及非零 close 负向测试；Windows 上完成用例 100 轮、含负例套件 50 轮、race 20 轮和 app 端到端 100 轮均 PASS。修复提交为 `a88553180bd1defac5b236d75fe4dff5046734dd`；`9cce3ee` 及其包已被取代，只保留为缺陷前对照证据。
-- `a885531` 的 GitHub required checks 已完成：core push run `34596127764` PASS、core PR run `34596131146` PASS、desktop push run `34596127757` PASS、desktop PR run `34596131090` PASS；三平台 packaging run [`34596127738`](https://github.com/Wen5555/LinkSend/actions/runs/34596127738) 的 Windows amd64、macOS arm64 和 macOS amd64 jobs 全部 PASS。PR 为 [#6](https://github.com/Wen5555/LinkSend/pull/6)，仍不合并、不创建 tag 或 Release。
+- 发布前当时，`a885531` 的 GitHub required checks 已完成：core push run `34596127764` PASS、core PR run `34596131146` PASS、desktop push run `34596127757` PASS、desktop PR run `34596131090` PASS；三平台 packaging run [`34596127738`](https://github.com/Wen5555/LinkSend/actions/runs/34596127738) 的 Windows amd64、macOS arm64 和 macOS amd64 jobs 全部 PASS。该检查点的决定是暂不合并或创建 Release；之后用户明确覆盖该决定，实际发布状态见本页顶部。
 - committed Windows ZIP 内 EXE 为 20,635,648 bytes、SHA256 `afd7bcbf9bc58a2a5d590b8a470a2c74a6caf6d2a80cc4dc4e0729627c55a0b0`，FileVersion/ProductVersion 都是 `0.2.0`，Wails 为 `v3.0.0-beta.18`。隔离 profile 下原生窗口句柄非零，`CloseMainWindow()`/`WM_CLOSE` 被接受并在 10 秒内 exit 0；这只验证窗口创建和空闲关闭。测试 profile 的两个文件因本地命令策略未能清理，仍留在 ignored `.artifacts` 检查目录且不得提交。
 - committed macOS runner 已完成 DMG 挂载、bundle、架构和 `codesign --verify --deep --strict`，但仅有 ad-hoc 签名，无 Developer ID、未公证。物理 Mac `mac-test-102342413` 在收尾时 resolve 成功，probe/audit-host 均 TCP/22 timeout，因此 committed arm64 DMG 启动为 `BLOCKED_BY_EXTERNAL_ENV`；不能用 runner 或历史 dirty r2 窗口证据替代。
 
@@ -31,7 +49,7 @@ Updated: 2026-09-11. Current candidate product version: `0.2.0`; protocol versio
 | macOS arm64 DMG | 8,170,931 | `79857ce7ba336e6ceec516b19b737a1386100e9f6dfdf328a44deaeaee142e91` | `2026-09-11T11:54:30Z` | ad-hoc / NOT_RUN | runner 包级 PASS；物理启动 BLOCKED_BY_EXTERNAL_ENV |
 | macOS amd64 DMG | 8,808,731 | `15c34a786f5aba9b72e7e2e09eaf6502aebf315cfee6161b9918104543de621f` | `2026-09-11T11:57:59Z` | ad-hoc / NOT_RUN | runner 包级 PASS；Intel 真机 NOT_RUN |
 
-发布门槛仍未满足：MASQUERADE-only 独立双 NAT 保持产品 `CHECK_TIMEOUT` FAIL；物理网络切换、committed Mac 原生启动、完整 Windows/macOS 原生交互、Windows 安装/卸载、Developer ID 签名和公证仍未完成。`0.2.0` 因此只是测试候选，不能声称生产可用或跨平台完整验收。
+发布前按原门槛判断仍未满足：MASQUERADE-only 独立双 NAT 保持产品 `CHECK_TIMEOUT` FAIL；物理网络切换、committed Mac 原生启动、完整 Windows/macOS 原生交互、Windows 安装/卸载、Developer ID 签名和公证仍未完成。后续虽按用户明确授权发布为 Pre-release，这些缺口仍然有效，不能声称生产可用或跨平台完整验收。
 
 ## 2026-09-11 P0/P1/P2 分阶段可靠性改进（历史 dirty snapshot）
 
@@ -344,5 +362,3 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 本轮包标记 `UNCOMMITTED_TEST_SNAPSHOT`，基线 `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`，不冒充该提交的干净构建。Windows 为 `UNSIGNED_TEST_BUILD`；Mac `code_signature=ADHOC / distribution_identity=NONE / notarization=NOT_RUN`。本轮无新 PR/合并/Release。
 - 该现场阶段当时 `NOT_IMPLEMENTED`：桌面重启恢复、字节级续传、桌面暂停/恢复；这些能力随后已在本文顶部所述源码快照中实现并通过本地真实 QUIC 回归，但尚未做新的物理双机恢复验收。中继仍为 `NOT_IMPLEMENTED`；真实双 NAT、Linux 双机、完整网卡矩阵、原生 UI 缺口仍见验收报告。
 - 历史交付勘误：较早的 Windows 便携包曾缺包内 SHA256/准确合并提交来源信息，不能视为满足本轮发布要求；本轮 ZIP 单独记录未提交来源并包含包内校验和。默认 Windows 身份数据目录通常为 `%APPDATA%\LinkSend`（`os.UserConfigDir()`），不是 `%LOCALAPPDATA%`。
-
-

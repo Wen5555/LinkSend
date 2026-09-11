@@ -57,18 +57,18 @@ schema 迁移测试必须确认：v1 数据可读、迁移前 `task-history.sqli
 
 香港测试主站 `0.2.0` 部署后公网复测使用两个隔离 Linux profile 和同一实际 `eth0`：完成→立即完成、拒绝→立即完成均 PASS，每轮 2,097,152 bytes，内容一致；服务 PID/SHA 保持稳定。该结果证明已部署信令生命周期修复，不是双 NAT 或跨平台恢复证明。测试 profile/正文/邀请/CLI 已删除，两条测试成员均撤销；完整 job/备份见 DEPLOY-HK。
 
-### Committed 候选、CI 与资产验证
+### `v0.2.0` Release、main CI 与资产验证
 
-最终源码候选 `a88553180bd1defac5b236d75fe4dff5046734dd` 的 core push/PR runs `34596127764` / `34596131146`、desktop push/PR runs `34596127757` / `34596131090` 和三平台 packaging run [`34596127738`](https://github.com/Wen5555/LinkSend/actions/runs/34596127738) 全部 PASS。该结果取代 `9cce3ee` 作为当前候选；不得删除或掩盖后者 push core 的真实 FAIL。
+发布 tag/源码 `426d58b6ab62ab7213475007305c0a403955c00f` 的 main core run [`34600609146`](https://github.com/Wen5555/LinkSend/actions/runs/34600609146)、desktop run [`34600609047`](https://github.com/Wen5555/LinkSend/actions/runs/34600609047) 和三平台 packaging run [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161) 全部 PASS。`a885531` 是终态修复的代码候选证据，`9cce3ee` 的 push core FAIL 仍保留；Release 只使用 main/tag SHA 重建资产。
 
 | 资产 | bytes | SHA256 | 包级验证 | 原生验证 |
 |---|---:|---|---|---|
-| Windows amd64 ZIP | 8,403,530 | `316a11b74cf146762138384c0cd84ce76b8ec19a48943b1b0abf23f89de37690` | EXE 版本 `0.2.0`、Wails 3、包内校验 PASS | committed EXE 窗口创建、非零句柄、idle `WM_CLOSE`、10 秒内 exit 0 PASS |
-| Windows amd64 installer | 9,996,125 | `aa346acecd333ea8757bb0ed2f6466de4767af82fdc6640332cd2d0c83311092` | NSIS 3 Unicode、内含 `LinkSend.exe`、版本 `0.2.0` PASS | 安装/卸载 NOT_RUN |
-| macOS arm64 DMG | 8,170,931 | `79857ce7ba336e6ceec516b19b737a1386100e9f6dfdf328a44deaeaee142e91` | mount/bundle/arm64/strict ad-hoc codesign PASS | 物理 Mac SSH timeout，启动 BLOCKED_BY_EXTERNAL_ENV |
-| macOS amd64 DMG | 8,808,731 | `15c34a786f5aba9b72e7e2e09eaf6502aebf315cfee6161b9918104543de621f` | mount/bundle/x86_64/strict ad-hoc codesign PASS | Intel 真机 NOT_RUN |
+| Windows amd64 ZIP | 8,403,529 | `dcdd7127c527b1464f0ea025046ad871a35ed6eaba4a2c725884779071d81577` | EXE 版本 `0.2.0`、Wails 3、包内与 GitHub digest PASS | Release EXE 窗口创建、非零句柄、idle `WM_CLOSE`、10 秒内 exit 0 PASS |
+| Windows amd64 installer | 9,996,124 | `99a4d5d25dbc9761e4839ff435f362ec65aa75fcdafdf46f285f05defdde7370` | NSIS 3 Unicode、内含 `LinkSend.exe`、版本 `0.2.0` PASS | 安装/卸载 NOT_RUN |
+| macOS arm64 DMG | 8,170,928 | `c637897290677c7deb8c50395b95568f55a93a14bdf51e2babbf7eaf974fdf4c` | mount/bundle/arm64/strict ad-hoc codesign 与 GitHub digest PASS | Release 包物理 Mac 启动 NOT_RUN；此前连接 BLOCKED_BY_EXTERNAL_ENV |
+| macOS amd64 DMG | 8,808,743 | `f5f066634429e61312066c056b836482ca228315ea858cab3de28653e67120fe` | mount/bundle/x86_64/strict ad-hoc codesign 与 GitHub digest PASS | Intel 真机 NOT_RUN |
 
-Windows 原生证据记录于 ignored `.artifacts/v020-final/ci-34596127738-a885531/WINDOWS-NATIVE-SMOKE.json`。它不证明文件/目录选择器、打开目录、活跃任务退出保护或安装/卸载。两个隔离 profile 文件因本地命令策略阻止清理而仍留在 ignored 检查目录，不提交、不复用。macOS 两包无 Developer ID、未公证；runner 包级验证不能代替物理原生交互。
+Release 下载与验证记录位于 ignored `.artifacts/v020-release/`；四个二进制文件与 workflow 清单、合并 checksum、构建 manifest 和 GitHub `sha256:` digest 一致。Windows 可见原生冒烟使用新的隔离 profile；隐藏窗口方式无法取得主窗口句柄，作为测试方式 FAIL 保留且没有冒充产品失败或 PASS。可见测试只证明窗口创建与 idle 关闭，不证明文件/目录选择器、打开目录、活跃任务退出保护或安装/卸载。macOS 两包无 Developer ID、未公证；runner 包级验证不能代替物理原生交互。
 
 Windows 最终顺序实际执行并退出 0：
 
@@ -90,11 +90,11 @@ pnpm run test -- --run
 pnpm run build
 ```
 
-前端与 Wails/桌面编译顺序执行。最后一次 `wails3 task build ARCH=amd64` 使用 Wails `v3.0.0-beta.18`，bindings 为 27 methods / 14 models，EXE 内可检索到最终 dist 资产名。Wails 3 的 `ShouldQuit` 在 idle 时必须返回 true；`TestShouldQuitAllowsEmptyInitializedService` 和完整终态集合测试用于防止该语义再次反转。committed `a885531` Windows EXE 的原生窗口创建、非零句柄、`WM_CLOSE` 接受和 10 秒内退出 PASS；其他原生交互不得据此判定通过。
+前端与 Wails/桌面编译顺序执行。Release main run 使用 Wails `v3.0.0-beta.18`，bindings 为 27 methods / 14 models。Wails 3 的 `ShouldQuit` 在 idle 时必须返回 true；`TestShouldQuitAllowsEmptyInitializedService` 和完整终态集合测试用于防止该语义再次反转。Release `426d58b` Windows EXE 的原生窗口创建、非零句柄、`WM_CLOSE` 接受和 10 秒内退出 PASS；其他原生交互不得据此判定通过。
 
 NSIS 3.12 使用 `wails3 task package ARCH=amd64 INSTALL_SCOPE=user` 构建。7-Zip 检查安装器为 NSIS 3 Unicode 且内含 `LinkSend.exe`。由于卸载脚本会清理现有 WebView 数据路径，而该路径在测试前已存在，真实安装/卸载保持 `NOT_RUN`；不得为冒烟删除现有用户目录。
 
-committed macOS DMG 由 run `34596127738` 在对应架构 runner 构建并完成包级验证。收尾时 `mac-test-102342413` 的 manager resolve 成功，但 probe 与 audit-host 均 TCP/22 timeout，所以没有上传或启动 committed DMG；状态为 `BLOCKED_BY_EXTERNAL_ENV`，而不是 PASS。
+Release macOS DMG 由 main run `34600609161` 在对应架构 runner 构建并完成包级验证。发布前候选收尾时 `mac-test-102342413` 的 manager resolve 成功，但 probe 与 audit-host 均 TCP/22 timeout；Release 包发布前未重新建立连接或启动，因此准确状态为 `NOT_RUN`，并保留此前 `BLOCKED_BY_EXTERNAL_ENV` 的连接证据。
 
 ### 历史 dirty r2 证据
 
