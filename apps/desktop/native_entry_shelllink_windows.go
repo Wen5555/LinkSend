@@ -30,10 +30,7 @@ type sendToPersistVTable struct {
 	GetClassID, IsDirty, Load, Save, SaveCompleted, GetCurFile uintptr
 }
 
-func sendToCOMCall(object *ole.IUnknown, method uintptr, args ...uintptr) error {
-	arguments := append([]uintptr{uintptr(unsafe.Pointer(object))}, args...)
-	hr, _, _ := syscall.SyscallN(method, arguments...)
-	runtime.KeepAlive(object)
+func sendToHRESULT(hr uintptr) error {
 	if int32(hr) < 0 {
 		return fmt.Errorf("Shell Link HRESULT 0x%08x", uint32(hr))
 	}
@@ -44,10 +41,21 @@ func sendToWideCall(object *ole.IUnknown, method uintptr, value string, tail ...
 	if err != nil {
 		return err
 	}
-	args := append([]uintptr{uintptr(unsafe.Pointer(&encoded[0]))}, tail...)
-	err = sendToCOMCall(object, method, args...)
+	// Keep pointer conversions in the SyscallN expression. Storing them in a
+	// []uintptr before another Go call bypasses the syscall's nosplit and
+	// pointer-lifetime guarantees; KeepAlive alone cannot prevent stack moves.
+	var hr uintptr
+	switch len(tail) {
+	case 0:
+		hr, _, _ = syscall.SyscallN(method, uintptr(unsafe.Pointer(object)), uintptr(unsafe.Pointer(&encoded[0])))
+	case 1:
+		hr, _, _ = syscall.SyscallN(method, uintptr(unsafe.Pointer(object)), uintptr(unsafe.Pointer(&encoded[0])), tail[0])
+	default:
+		return errors.New("unsupported Shell Link method arguments")
+	}
+	runtime.KeepAlive(object)
 	runtime.KeepAlive(encoded)
-	return err
+	return sendToHRESULT(hr)
 }
 func withSendToShellLink(fn func(*ole.IUnknown, *sendToLinkVTable, *ole.IUnknown, *sendToPersistVTable) error) error {
 	done := make(chan error, 1)
@@ -111,14 +119,18 @@ func readSendToShortcut(path string) (sendToShortcut, error) {
 			{table.GetDescription, &result.description, false}, {table.GetWorkingDirectory, &result.workingDir, false},
 		} {
 			buffer := make([]uint16, 32768)
-			args := []uintptr{uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer))}
+			var hr uintptr
 			if property.path {
-				args = append(args, 0, 4)
-			} // no WIN32_FIND_DATA, SLGP_RAWPATH
-			if err := sendToCOMCall(link, property.method, args...); err != nil {
+				// No WIN32_FIND_DATA, SLGP_RAWPATH; never call Resolve.
+				hr, _, _ = syscall.SyscallN(property.method, uintptr(unsafe.Pointer(link)), uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)), 0, 4)
+			} else {
+				hr, _, _ = syscall.SyscallN(property.method, uintptr(unsafe.Pointer(link)), uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)))
+			}
+			runtime.KeepAlive(link)
+			runtime.KeepAlive(buffer)
+			if err := sendToHRESULT(hr); err != nil {
 				return err
 			}
-			runtime.KeepAlive(buffer)
 			*property.to = windows.UTF16ToString(buffer)
 		}
 		return nil

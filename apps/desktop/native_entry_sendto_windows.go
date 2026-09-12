@@ -116,6 +116,36 @@ func uninstallSendToAt(executable, directory string) error {
 }
 
 func ownsSendTo(value sendToShortcut, executable string) bool {
-	return value.description == sendToMarker && value.arguments == sendToArgs &&
-		canonicalNativePathKey(value.target) == canonicalNativePathKey(executable)
+	if value.description != sendToMarker || value.arguments != sendToArgs {
+		return false
+	}
+	if canonicalNativePathKey(value.target) == canonicalNativePathKey(executable) {
+		return true
+	}
+	// Shell Link expands existing DOS 8.3 names when reading its target. For
+	// example, CI's TEMP uses RUNNER~1 while GetPath returns runneradmin.
+	// Expand only those path components: resolving links or comparing file IDs
+	// would also accept a different installation that hard-links the same EXE.
+	target, err := sendToLongPathKey(value.target)
+	if err != nil {
+		return false
+	}
+	expected, err := sendToLongPathKey(executable)
+	return err == nil && target == expected
+}
+
+func sendToLongPathKey(path string) (string, error) {
+	encoded, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return "", err
+	}
+	buffer := make([]uint16, 32768)
+	n, err := windows.GetLongPathName(encoded, &buffer[0], uint32(len(buffer)))
+	if err != nil {
+		return "", err
+	}
+	if n == 0 || n >= uint32(len(buffer)) {
+		return "", errors.New("invalid expanded Shell Link target length")
+	}
+	return canonicalNativePathKey(windows.UTF16ToString(buffer[:n])), nil
 }
