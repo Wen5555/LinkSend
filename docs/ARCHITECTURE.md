@@ -1,5 +1,11 @@
 # Architecture
 
+2026-09-12 M0 更新：Go1.27.1 + Wails3 beta.18，当前源码产品版本 0.5.0。
+`internal/app.New` 在身份/SQLite 前取得 profile 内核排他锁，退出待所有 owner 结束后释放。
+授权拒绝由唯一 identity trust schema 1 所有者持久化；应用的所有新连接、确认和恢复路径共用检查。
+保存退出建立派发屏障并保留可恢复任务，迟到事件不覆盖控制意图。
+后续设备/草稿/队列及接收计划尚按 M1–M6 推进，详见 [ADR 0003](adr/0003-desktop-ownership-and-local-denial.md)。
+
 当前产品版本为 LinkSend `0.4.0`，协议为 V1。根 module `github.com/Wen5555/LinkSend` 包含协议、身份、LAN 发现、信令客户端、Pion/quic-go 集成、文件传输、存储、应用服务、服务端和 CLI；`apps/desktop` 是唯一嵌套 Go module，使用 Wails 3 `v3.0.0-beta.18`。
 
 ```text

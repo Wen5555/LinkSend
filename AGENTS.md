@@ -1,7 +1,7 @@
 # LinkSend implementation rules
 
 - Read docs/SPEC.md and docs/PROGRESS.md before changing code.
-- Go core and Wails 2 desktop are separate modules; test both, including GOWORK=off.
+- Go core and Wails 3 desktop are separate modules; test both, including GOWORK=off.
 - V1 includes LAN and cross-NAT P2P. Relay is not implemented; relay=false.
 - Use verified Pion ICE and quic-go APIs. Never invent a simplified ICE implementation.
 - File bytes must never pass through signaling, JavaScript IPC, or third-party relays.
@@ -11,3 +11,8 @@
 - Record actual commands, outcomes, limitations and next steps at each milestone.
 - Preserve user files; no automatic push, production deployment or host firewall changes.
 - Default communication language: Chinese. Windows development shell: PowerShell 7.
+
+For the 2026-09-12 desktop six-feature goal, the user explicitly authorized
+milestone pushes, deployments and prereleases, overriding the default above.
+Use verified source commits and backup/verify/rollback transactions. Host
+firewall, route and proxy changes remain outside that authorization.

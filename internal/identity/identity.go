@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,15 @@ const ALPN = "linksend/1"
 const maxTrustFileBytes = 1 << 20
 
 var ErrAuthentication = errors.New("identity authentication failed")
+
+// ErrPeerDenied identifies an explicit local revocation. Discovery, pairing,
+// or completing an already running transfer cannot remove this decision.
+var ErrPeerDenied = errors.New("PEER_DENIED: device is locally blocked")
+var errUnsupportedTrustSchema = errors.New("unsupported trust policy schema")
+
+// The application owns the profile across processes. This mutex serializes
+// read-modify-write operations and fallback replacement within that process.
+var trustMu sync.Mutex
 
 func authenticationError(detail string) error {
 	return fmt.Errorf("%w: %s", ErrAuthentication, detail)
@@ -244,36 +254,104 @@ type TrustedPeer struct {
 	LastLANAddress string `json:"last_lan_address,omitempty"`
 }
 type TrustFile struct {
-	Peers []TrustedPeer `json:"peers"`
+	SchemaVersion int           `json:"schema_version,omitempty"`
+	Peers         []TrustedPeer `json:"peers"`
+	DeniedPeers   []DeniedPeer  `json:"denied_peers,omitempty"`
 }
 
+type DeniedPeer struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name,omitempty"`
+	DeniedAt time.Time `json:"denied_at"`
+}
+
+const trustSchemaVersion = 1
+const trustMigrationBackup = "trust.json.pre-schema-1"
+
 func LoadTrust(dir string) ([]TrustedPeer, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	return f.Peers, err
+}
+
+// LoadDeniedPeers exposes local policy independently of live presence or pins.
+func LoadDeniedPeers(dir string) ([]DeniedPeer, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	return f.DeniedPeers, err
+}
+
+// CheckPeerAllowed checks the revocation barrier; nil does not establish trust.
+// Unreadable, unsupported or corrupt policy is an error, never an empty denylist.
+func CheckPeerAllowed(dir, peerID string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if !validPeerID(peerID) {
+		return authenticationError("invalid device identity")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	return checkPeerAllowed(f, peerID)
+}
+
+func checkPeerAllowed(f TrustFile, peerID string) error {
+	for _, denied := range f.DeniedPeers {
+		if denied.ID == peerID {
+			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
+		}
+	}
+	return nil
+}
+
+func loadTrustFile(dir string) (TrustFile, error) {
 	path := filepath.Join(dir, "trust.json")
 	data, err := readTrustFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		// A migrated profile losing its policy file must not silently forget
+		// revocations. Preserve the backup for explicit recovery, not auto-use.
+		if _, backupErr := os.Lstat(filepath.Join(dir, trustMigrationBackup)); backupErr == nil {
+			return TrustFile{}, errors.New("trust policy missing after migration; explicit recovery required")
+		} else if !errors.Is(backupErr, os.ErrNotExist) {
+			return TrustFile{}, backupErr
+		}
+		return TrustFile{}, nil
 	}
 	if err == nil {
-		if peers, parseErr := parseTrustFile(data); parseErr == nil {
+		if f, parseErr := parseTrustFile(data); parseErr == nil {
 			_ = os.Remove(path + ".previous")
-			return peers, nil
+			return f, nil
 		} else {
 			err = parseErr
 		}
 	}
+	if errors.Is(err, errUnsupportedTrustSchema) {
+		return TrustFile{}, err
+	}
+	// Legacy replacement recovery is retained only for an unmigrated legacy
+	// file. Restoring an older policy can resurrect a subsequently revoked pin.
+	if _, backupErr := os.Lstat(filepath.Join(dir, trustMigrationBackup)); !errors.Is(backupErr, os.ErrNotExist) {
+		return TrustFile{}, errors.Join(err, backupErr)
+	}
 	backupPath := path + ".previous"
 	backup, backupErr := readTrustFile(backupPath)
 	if backupErr != nil {
-		return nil, err
+		return TrustFile{}, err
 	}
-	peers, backupErr := parseTrustFile(backup)
+	f, backupErr := parseTrustFile(backup)
 	if backupErr != nil {
-		return nil, errors.Join(err, backupErr)
+		return TrustFile{}, errors.Join(err, backupErr)
+	}
+	if f.SchemaVersion != 0 {
+		return TrustFile{}, errors.Join(err, errors.New("trust policy recovery requires explicit review"))
 	}
 	if restoreErr := overwriteFile(path, backup); restoreErr == nil {
 		_ = os.Remove(backupPath)
 	}
-	return peers, nil
+	return f, nil
 }
 
 func readTrustFile(path string) ([]byte, error) {
@@ -285,22 +363,40 @@ func readTrustFile(path string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(fh, maxTrustFileBytes+1))
 }
 
-func parseTrustFile(data []byte) ([]TrustedPeer, error) {
+func parseTrustFile(data []byte) (TrustFile, error) {
 	if len(data) > maxTrustFileBytes {
-		return nil, errors.New("trust file too large")
+		return TrustFile{}, errors.New("trust file too large")
 	}
 	var f TrustFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, err
+		return TrustFile{}, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil || fields["peers"] == nil {
+		return TrustFile{}, errors.New("invalid trust policy object")
+	}
+	if f.SchemaVersion < 0 || f.SchemaVersion > trustSchemaVersion || (f.SchemaVersion == 0 && len(f.DeniedPeers) != 0) {
+		return TrustFile{}, errUnsupportedTrustSchema
 	}
 	seen := map[string]bool{}
 	for _, p := range f.Peers {
 		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) {
-			return nil, errors.New("invalid trust file")
+			return TrustFile{}, errors.New("invalid trust file")
 		}
 		seen[p.ID] = true
 	}
-	return f.Peers, nil
+	for _, denied := range f.DeniedPeers {
+		if !validPeerID(denied.ID) || denied.DeniedAt.IsZero() || seen[denied.ID] {
+			return TrustFile{}, errors.New("invalid denied peer record")
+		}
+		seen[denied.ID] = true
+	}
+	return f, nil
+}
+
+func validPeerID(peerID string) bool {
+	decoded, err := hex.DecodeString(peerID)
+	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == peerID
 }
 
 // TrustPeer is retained for CLI compatibility with the former manual
@@ -324,21 +420,26 @@ func TrustPairedPeer(dir string, peer TrustedPeer) error {
 }
 
 func trustPeer(dir string, peer TrustedPeer) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
 	if !validLANAddress(peer.LastLANAddress) {
 		return errors.New("invalid remembered LAN address")
 	}
-	peers, err := LoadTrust(dir)
+	f, err := loadTrustFile(dir)
 	if err != nil {
 		return err
 	}
-	for index, existing := range peers {
+	if err = checkPeerAllowed(f, peer.ID); err != nil {
+		return err
+	}
+	for index, existing := range f.Peers {
 		if existing.ID == peer.ID {
 			if !bytes.Equal(existing.PublicKey, peer.PublicKey) {
 				return authenticationError("peer key changed")
 			}
 			if peer.LastLANAddress != "" && existing.LastLANAddress != peer.LastLANAddress {
-				peers[index].LastLANAddress = peer.LastLANAddress
-				return saveTrust(dir, peers)
+				f.Peers[index].LastLANAddress = peer.LastLANAddress
+				return saveTrust(dir, f)
 			}
 			// The authenticated service remains the live source of display names.
 			// A cosmetic rename must not rewrite the local key pin or make every
@@ -346,8 +447,10 @@ func trustPeer(dir string, peer TrustedPeer) error {
 			return nil
 		}
 	}
-	peers = append(peers, peer)
-	return saveTrust(dir, peers)
+	// Auto-accept is a separate local command, never an enrollment field.
+	peer.AutoAccept = false
+	f.Peers = append(f.Peers, peer)
+	return saveTrust(dir, f)
 }
 
 func validLANAddress(value string) bool {
@@ -360,44 +463,132 @@ func validLANAddress(value string) bool {
 
 // SetAutoAccept persists receiver consent for one already paired device.
 func SetAutoAccept(dir, peerID string, enabled bool) error {
-	peers, err := LoadTrust(dir)
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
 	if err != nil {
 		return err
 	}
-	for i := range peers {
-		if peers[i].ID != peerID {
+	if err = checkPeerAllowed(f, peerID); err != nil {
+		return err
+	}
+	for i := range f.Peers {
+		if f.Peers[i].ID != peerID {
 			continue
 		}
-		if peers[i].AutoAccept == enabled {
+		if f.Peers[i].AutoAccept == enabled {
 			return nil
 		}
-		peers[i].AutoAccept = enabled
-		return saveTrust(dir, peers)
+		f.Peers[i].AutoAccept = enabled
+		return saveTrust(dir, f)
 	}
 	return errors.New("UNPAIRED: device is not paired")
 }
 
-func saveTrust(dir string, peers []TrustedPeer) error {
-	data, err := json.MarshalIndent(TrustFile{Peers: peers}, "", "  ")
+// RevokePeer durably removes all privileges and records a local denial, even
+// when the peer has only been discovered and was never pinned. It is idempotent.
+func RevokePeer(dir, peerID string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if !validPeerID(peerID) {
+		return authenticationError("invalid device identity")
+	}
+	f, err := loadTrustFile(dir)
 	if err != nil {
+		return err
+	}
+	if errors.Is(checkPeerAllowed(f, peerID), ErrPeerDenied) {
+		return nil
+	}
+	denied := DeniedPeer{ID: peerID, DeniedAt: time.Now().UTC()}
+	for index, peer := range f.Peers {
+		if peer.ID == peerID {
+			denied.Name = peer.Name
+			f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
+			break
+		}
+	}
+	f.DeniedPeers = append(f.DeniedPeers, denied)
+	return saveTrust(dir, f)
+}
+
+// AllowPeer is an explicit local unblock command. It restores neither the old
+// pin nor auto-accept; subsequent pairing or confirmed LAN transfer must pin anew.
+func AllowPeer(dir, peerID string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if !validPeerID(peerID) {
+		return authenticationError("invalid device identity")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index, denied := range f.DeniedPeers {
+		if denied.ID == peerID {
+			f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
+			return saveTrust(dir, f)
+		}
+	}
+	return nil
+}
+
+func saveTrust(dir string, f TrustFile) error {
+	legacy := f.SchemaVersion == 0
+	f.SchemaVersion = trustSchemaVersion
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err = parseTrustFile(data); err != nil {
 		return err
 	}
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, "trust-*.tmp")
+	if legacy {
+		oldData, readErr := readTrustFile(filepath.Join(dir, "trust.json"))
+		if errors.Is(readErr, os.ErrNotExist) {
+			// Preserve an explicit empty baseline for new profiles too, so loss
+			// of the policy file never turns a known profile into first use.
+			oldData = []byte(`{"peers":[]}`)
+		} else if readErr != nil {
+			return readErr
+		}
+		backupPath := filepath.Join(dir, trustMigrationBackup)
+		if err = writeNewFile(backupPath, oldData); err != nil {
+			if !errors.Is(err, os.ErrExist) {
+				return fmt.Errorf("back up legacy trust policy: %w", err)
+			}
+			info, statErr := os.Lstat(backupPath)
+			if statErr != nil {
+				return statErr
+			}
+			if !info.Mode().IsRegular() {
+				return errors.New("legacy trust backup is not a regular file")
+			}
+			backup, readErr := readTrustFile(backupPath)
+			if readErr != nil {
+				return readErr
+			}
+			if _, parseErr := parseTrustFile(backup); parseErr != nil {
+				return fmt.Errorf("invalid legacy trust backup: %w", parseErr)
+			}
+		}
+	}
+	file, err := os.CreateTemp(dir, "trust-*.tmp")
 	if err != nil {
 		return err
 	}
-	name := f.Name()
+	name := file.Name()
 	defer os.Remove(name)
-	if err = f.Chmod(0600); err == nil {
-		_, err = f.Write(data)
+	if err = file.Chmod(0600); err == nil {
+		_, err = file.Write(data)
 	}
 	if err == nil {
-		err = f.Sync()
+		err = file.Sync()
 	}
-	closeErr := f.Close()
+	closeErr := file.Close()
 	if err != nil {
 		return err
 	}

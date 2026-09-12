@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:frontend/dist
@@ -51,6 +52,9 @@ func main() {
 		},
 	})
 	desktop.attachRuntime(host, window)
+	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+		slog.Info("desktop runtime ready")
+	})
 
 	if err := host.Run(); err != nil {
 		slog.Error("desktop failed", "error", err)

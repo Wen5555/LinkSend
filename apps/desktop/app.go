@@ -35,6 +35,7 @@ type App struct {
 	dataDir       string
 	closeMu       sync.Mutex
 	closeDialog   bool
+	quitReady     bool
 	runtimeApp    *application.App
 	window        application.Window
 }
@@ -162,6 +163,12 @@ func (a *App) ServiceShutdown() error {
 // task, including waiting/connecting phases, rather than relying on browser
 // unload events which do not cover the native window.
 func (a *App) shouldQuit() bool {
+	a.closeMu.Lock()
+	ready := a.quitReady
+	a.closeMu.Unlock()
+	if ready {
+		return true
+	}
 	if a.core == nil {
 		return true
 	}
@@ -186,8 +193,9 @@ func (a *App) shouldQuit() bool {
 	a.closeMu.Unlock()
 	dialog := a.runtimeApp.Dialog.Question().
 		SetTitle("LinkSend 仍有任务运行").
-		SetMessage(fmt.Sprintf("当前有 %d 个任务处于准备、等待确认、连接或传输阶段。请选择继续任务，或取消任务并退出。", len(active)))
+		SetMessage(fmt.Sprintf("当前有 %d 个未结束任务。保存并退出会保留已验证数据，下次启动需确认恢复。尚未准备完成的内容需重新发送。", len(active)))
 	keep := dialog.AddButton("继续任务").OnClick(func() { a.setCloseDialog(false) })
+	dialog.AddButton("保存并退出").OnClick(func() { go a.saveTasksAndQuit() })
 	dialog.AddButton("取消任务并退出").OnClick(func() { go a.cancelTasksAndQuit(active) })
 	dialog.SetDefaultButton(keep).SetCancelButton(keep)
 	if a.window != nil {
@@ -214,6 +222,22 @@ func (a *App) setCloseDialog(open bool) {
 	a.closeMu.Lock()
 	a.closeDialog = open
 	a.closeMu.Unlock()
+}
+
+func (a *App) saveTasksAndQuit() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.core.ShutdownContext(ctx); err != nil {
+		a.setCloseDialog(false)
+		a.showQuitWarning("保存或资源清理尚未完成，窗口保持打开。请检查任务状态后重试退出。")
+		return
+	}
+	a.closeMu.Lock()
+	a.quitReady, a.closeDialog = true, false
+	a.closeMu.Unlock()
+	if a.runtimeApp != nil {
+		a.runtimeApp.Quit()
+	}
 }
 
 func (a *App) cancelTasksAndQuit(active []linksendapp.TaskSnapshot) {

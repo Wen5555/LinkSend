@@ -1,5 +1,9 @@
 # Acceptance Matrix
 
+2026-09-12 六项桌面开发当前源码为 0.5.0；下表 0.4.0 保留历史已发布证据。
+新阶段证据与 S01–S06 完成边界单列在 [执行记录](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)。
+M0 依赖、授权和生命周期通过不等于六项 UI、原生入口或物理网络验收完成。
+
 Current test prerelease: `v0.4.0`, protocol V1, Wails 3 `v3.0.0-beta.18`. This matrix separates source implementation, automated evidence, package verification and real-network validation. A loopback result is never counted as LAN or NAT acceptance, and a Pre-release is not a production-readiness claim. Historical evidence remains labeled with the version and source state that actually produced it.
 
 | Area | Implemented source | Automated/current evidence | Target validation |

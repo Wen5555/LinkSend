@@ -21,6 +21,7 @@ func TestProfileIdentityAndDiagnosticsAreLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	info := svc.Identity()
 	if len(info.ID) != 64 || len(info.PublicKey) != 64 {
 		t.Fatalf("invalid identity info: %+v", info)
@@ -59,6 +60,7 @@ func TestDiagnosticsRedactsHealthFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	d := svc.Diagnostics(context.Background())
 	if d.ServerHealth != "error" || d.HealthFailure != "INVALID_MESSAGE" {
 		t.Fatalf("unexpected redacted health: %+v", d)

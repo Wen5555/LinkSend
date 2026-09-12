@@ -50,6 +50,9 @@ type inboxManager struct {
 // StartInbox keeps this device reachable while the app is open. It replaces
 // the old user-visible "start receiving" task with a quiet background listener.
 func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
+	if s.isClosing() {
+		return errors.New("APP_CLOSING")
+	}
 	directory = filepath.Clean(strings.TrimSpace(directory))
 	if directory == "." || directory == "" {
 		return errors.New("INVALID_ARGUMENT: receive directory is required")
@@ -59,6 +62,11 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	}
 	if err := s.stopInbox(false); err != nil {
 		return err
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.isClosing() {
+		return errors.New("APP_CLOSING")
 	}
 	s.inbox.mu.Lock()
 	s.inbox.enabled = true
@@ -144,7 +152,7 @@ func (s *Service) ensureInbox() {
 	s.ensureLANDiscovery()
 	s.inbox.mu.Lock()
 	defer s.inbox.mu.Unlock()
-	if !s.inbox.enabled || s.inbox.shutdown || s.inbox.cancel != nil || strings.TrimSpace(s.inbox.directory) == "" {
+	if !s.inbox.enabled || s.inbox.shutdown || s.isClosing() || s.inbox.cancel != nil || strings.TrimSpace(s.inbox.directory) == "" {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -152,7 +160,11 @@ func (s *Service) ensureInbox() {
 	s.inbox.cancel = cancel
 	s.inbox.done = done
 	s.inbox.listening = false
-	go s.runInbox(ctx, done, s.inbox.directory, s.inbox.cfg)
+	s.listenerWorkers.Add(1)
+	go func(directory string, cfg DirectConfig) {
+		defer s.listenerWorkers.Done()
+		s.runInbox(ctx, done, directory, cfg)
+	}(s.inbox.directory, s.inbox.cfg)
 }
 
 func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory string, cfg DirectConfig) {
@@ -268,14 +280,29 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 }
 
 func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, directory string) bool {
+	if err := s.checkPeerAllowed(peer.PeerID); err != nil {
+		return false
+	}
 	ctx, cancel := context.WithCancel(inboxCtx)
-	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory}, cancel)
-	if err != nil {
+	s.operationMu.Lock()
+	if s.isClosing() {
+		s.operationMu.Unlock()
 		cancel()
 		return false
 	}
+	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory}, cancel)
+	if err != nil {
+		s.operationMu.Unlock()
+		cancel()
+		return false
+	}
+	s.inbox.mu.Lock()
 	t.cfg = s.inbox.cfg
+	s.inbox.mu.Unlock()
 	t.decision = make(chan bool, 1)
+	s.tasks.workers.Add(1)
+	s.operationMu.Unlock()
+	defer s.tasks.workers.Done()
 	attemptID := t.snapshot().AttemptID
 	t.updateAttempt(attemptID, func(v *TaskSnapshot) {
 		v.SessionID = peer.SessionID
@@ -316,6 +343,9 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 			recovery.TotalBytes = n
 			recovery.FileCount = len(m.Files)
 		})
+		if s.checkPeerAllowed(peer.PeerID) != nil {
+			return false
+		}
 		if s.alwaysAccept(peer.PeerID) {
 			return true
 		}

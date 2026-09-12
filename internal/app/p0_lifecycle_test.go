@@ -57,10 +57,12 @@ func newDirectFixtureServices(t *testing.T) directFixtureServices {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(a.Shutdown)
 	b, err := New(Config{DataDir: filepath.Join(root, "b"), ServerURL: h.URL, AllowInsecureLoopback: true, Identity: bID})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(b.Shutdown)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err = a.Bootstrap(ctx, token, "a"); err != nil {

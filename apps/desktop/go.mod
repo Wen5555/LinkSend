@@ -1,6 +1,8 @@
 module github.com/Wen5555/LinkSend/apps/desktop
 
-go 1.26.0
+go 1.27.0
+
+toolchain go1.27.1
 
 require (
 	github.com/Wen5555/LinkSend v0.0.0

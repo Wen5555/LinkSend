@@ -18,6 +18,7 @@ export interface DeviceInfo {
     "trusted": boolean;
     "always_accept": boolean;
     "nearby": boolean;
+    "blocked": boolean;
 }
 
 /**

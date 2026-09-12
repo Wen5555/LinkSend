@@ -1,5 +1,11 @@
 # Testing
 
+2026-09-12 六项桌面阶段验证入口见 [执行记录](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)。
+本地便携工具环境 `. ./.tools/use-desktop-toolchain.ps1` 为 Go1.27.1/Node24.21.0/pnpm12.4.1；
+CI 固定同版本。Wails CLI 也须使用相同 Go 编译，不能把有语法解析警告的生成过程当作绑定通过。
+M0 增加 trust migration/denial、真实子进程锁释放，以及已确认 QUIC 块后的保存退出/重启回归。
+历史测试需先 Shutdown 旧服务再以同 profile New，不能用两个活跃 writer 模拟重启。
+
 本页适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
 
 ## v0.4.0 发布门槛

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/connectivity"
@@ -33,18 +34,25 @@ type Config struct {
 }
 
 type Service struct {
-	cfg       Config
-	identity  *identity.Identity
-	signal    *signaling.Client
-	mu        sync.RWMutex
-	trustMu   sync.Mutex
-	tasks     *taskManager
-	inbox     inboxManager
-	networkMu sync.Mutex
-	network   cachedNetworkSelection
-	lanMu     sync.RWMutex
-	lan       *lanRuntime
-	lanError  string
+	profileLock     *profileLock
+	cfg             Config
+	identity        *identity.Identity
+	signal          *signaling.Client
+	mu              sync.RWMutex
+	trustMu         sync.Mutex
+	tasks           *taskManager
+	inbox           inboxManager
+	networkMu       sync.Mutex
+	network         cachedNetworkSelection
+	lanMu           sync.RWMutex
+	lan             *lanRuntime
+	lanError        string
+	operationMu     sync.Mutex
+	closing         atomic.Bool
+	lanLifecycleMu  sync.Mutex
+	listenerWorkers sync.WaitGroup
+	shutdownOnce    sync.Once
+	shutdownDone    chan struct{}
 }
 
 type cachedNetworkSelection struct {
@@ -75,6 +83,7 @@ type DeviceInfo struct {
 	Trusted      bool   `json:"trusted"`
 	AlwaysAccept bool   `json:"always_accept"`
 	Nearby       bool   `json:"nearby"`
+	Blocked      bool   `json:"blocked"`
 }
 
 type InvitationInfo struct {
@@ -113,15 +122,24 @@ func New(cfg Config) (*Service, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		return nil, err
 	}
+	lock, err := acquireProfileLock(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	keepLock := false
+	defer func() {
+		if !keepLock {
+			_ = lock.Close()
+		}
+	}()
 	id := cfg.Identity
-	var err error
 	if id == nil {
 		id, err = identity.LoadOrCreate(cfg.DataDir)
 		if err != nil {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager()}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
@@ -129,6 +147,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
+	keepLock = true
 	return s, nil
 }
 
@@ -240,6 +259,22 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: true, Nearby: true})
 		seen[peer.ID] = true
 	}
+	denied, err := identity.LoadDeniedPeers(s.cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, blocked := range denied {
+		found := false
+		for i := range out {
+			if out[i].ID == blocked.ID {
+				out[i].Blocked, out[i].Trusted, out[i].AlwaysAccept = true, false, false
+				found = true
+			}
+		}
+		if !found {
+			out = append(out, DeviceInfo{ID: blocked.ID, Name: blocked.Name, Blocked: true})
+		}
+	}
 	if len(out) == 0 && serverErr != nil {
 		return nil, serverErr
 	}
@@ -257,6 +292,9 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 			continue
 		}
 		if err := identity.TrustPairedPeer(s.cfg.DataDir, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey}); err != nil {
+			if errors.Is(err, identity.ErrPeerDenied) {
+				continue
+			}
 			return err
 		}
 	}
@@ -346,6 +384,9 @@ func (s *Service) alwaysAccept(deviceID string) bool {
 }
 
 func (s *Service) Revoke(ctx context.Context, deviceID string) error {
+	if err := s.BlockPeer(deviceID); err != nil {
+		return err
+	}
 	c, err := s.client()
 	if err != nil {
 		return err

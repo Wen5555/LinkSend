@@ -18,6 +18,7 @@ func TestTaskHistoryPersistsAndMarksInterruptedRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s1.Shutdown)
 	cancel := func() {}
 	task, err := s1.tasks.create(TaskSnapshot{Direction: "send", PeerID: "peer", SourceSummary: "中文.txt"}, cancel)
 	if err != nil {
@@ -28,10 +29,12 @@ func TestTaskHistoryPersistsAndMarksInterruptedRecovery(t *testing.T) {
 	if _, err := os.Stat(history); err != nil {
 		t.Fatalf("history not written: %v", err)
 	}
+	s1.Shutdown()
 	s2, err := New(Config{DataDir: dir, AllowInsecureLoopback: true})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s2.Shutdown)
 	got, ok := s2.Task(task.snap.ID)
 	if !ok {
 		t.Fatal("persisted task missing")
@@ -47,9 +50,11 @@ func TestCorruptTaskHistoryDoesNotPreventStartup(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "task-history.sqlite"), []byte("not-sqlite"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(Config{DataDir: dir}); err != nil {
+	s, err := New(Config{DataDir: dir})
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s.Shutdown)
 }
 
 func TestTaskHistoryCompletedAndRevisionGuard(t *testing.T) {
@@ -58,6 +63,7 @@ func TestTaskHistoryCompletedAndRevisionGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s.Shutdown)
 	r, err := s.tasks.create(TaskSnapshot{Direction: "send"}, func() {})
 	if err != nil {
 		t.Fatal(err)
@@ -67,10 +73,12 @@ func TestTaskHistoryCompletedAndRevisionGuard(t *testing.T) {
 	if err = s.tasks.persistSnapshot(stale); err != nil {
 		t.Fatal(err)
 	}
+	s.Shutdown()
 	s2, err := New(Config{DataDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s2.Shutdown)
 	got, _ := s2.Task(stale.ID)
 	if got.State != "completed" || got.Revision <= stale.Revision {
 		t.Fatalf("stale row replaced completion: %+v", got)
@@ -86,6 +94,7 @@ func TestTaskHistoryProcessHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(s.Shutdown)
 	r, err := s.tasks.create(TaskSnapshot{Direction: "receive"}, func() {})
 	if err != nil {
 		t.Fatal(err)
@@ -148,6 +157,7 @@ func TestTaskHistoryAcrossNormalExitAndKilledProcess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(s.Shutdown)
 			tasks := s.Tasks()
 			if len(tasks) != 1 {
 				t.Fatalf("tasks=%d", len(tasks))
@@ -185,6 +195,7 @@ func TestTaskHistoryMigratesV1AndQuarantinesCorruptRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(service.Shutdown)
 	if migrated, ok := service.Task("legacy"); !ok || migrated.TaskID != "legacy" || migrated.AttemptID == "" {
 		t.Fatalf("legacy task was not migrated compatibly: %+v", migrated)
 	}
@@ -217,9 +228,12 @@ func TestTaskHistoryMigratesV1AndQuarantinesCorruptRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = db.Close()
-	if _, err = New(Config{DataDir: dir}); err != nil {
+	service.Shutdown()
+	restarted, err := New(Config{DataDir: dir})
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(restarted.Shutdown)
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -242,6 +256,7 @@ func TestTaskHistoryWriteFailureRevokesPersistenceClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(service.Shutdown)
 	record, err := service.tasks.create(TaskSnapshot{Direction: "send"}, func() {})
 	if err != nil {
 		t.Fatal(err)

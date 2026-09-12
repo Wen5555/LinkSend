@@ -1,5 +1,10 @@
 # Protocol
 
+2026-09-12 M0：当前源码产品为 0.5.0，V1 wire/ALPN/签名编码和任务 schema 2 保持兼容。
+本机拒绝在 LAN/WSS/恢复/接收确认前执行；拒绝使用既有 AUTHENTICATION_FAILED，不暴露本地拒绝详情。
+trust schema 1 与 profile 锁是本地迁移，不是协议版本。新内容及选收能力尚待 M4/M5 协商实现，
+本阶段不声称旧端支持这些能力。Go1.27 的 JSON/签名/manifest/恢复回归列入 M0 验证。
+
 当前源码产品版本为 `0.4.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
 
 控制面使用有界 JSON `Envelope`，签名输入是明确的长度前缀二进制编码，不直接签任意 JSON map。字段包括协议版本、消息 ID、会话、发送方、接收方、generation、有效时间、payload 和 Ed25519 签名。

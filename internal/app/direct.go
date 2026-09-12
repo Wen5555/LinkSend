@@ -182,6 +182,9 @@ func (s *Service) closePeerAfterTransfer(p *PeerSession) error {
 }
 
 func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectConfig) (*PeerSession, error) {
+	if err := s.checkPeerAllowed(peerID); err != nil {
+		return nil, err
+	}
 	connectStarted := time.Now()
 	var timings DirectTimings
 	phaseBudget := cfg.CheckTimeout
@@ -447,6 +450,10 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 		return nil, classifyPhaseError(peerCtx, err, protocol.SignalingTimeout, "peer lookup")
 	}
 	if err = requestWire.Message.Verify(peer.PublicKey, time.Now()); err != nil {
+		return nil, err
+	}
+	if err = s.checkPeerAllowed(peer.ID); err != nil {
+		sendSessionFailure(signalSession, s.identity, peer, *requestWire.Message, err)
 		return nil, err
 	}
 	reportFailure := func(setupErr error) error {
@@ -816,6 +823,9 @@ func (s *Service) prewarmNetwork(cfg DirectConfig) {
 }
 
 func (s *Service) trustedDevice(ctx context.Context, id string) (signaling.Device, error) {
+	if err := s.checkPeerAllowed(id); err != nil {
+		return signaling.Device{}, err
+	}
 	if id == "" || id == s.identity.ID() {
 		return signaling.Device{}, protocol.Fail(protocol.Unpaired, "peer identity is required")
 	}

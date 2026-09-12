@@ -228,7 +228,12 @@ func (t *taskRecord) updateRecordAttemptMode(attemptID string, persist bool, fn 
 		return false
 	}
 	previousPhase := t.snap.Phase
+	previousState := t.snap.State
 	fn(&t.snap, &t.recovery)
+	if previousState == "pause_requested" || previousState == "cancel_requested" || previousState == "shutdown_requested" {
+		t.snap.State, t.snap.Phase = previousState, previousPhase
+		t.snap.CanPause, t.snap.CanCancel = false, false
+	}
 	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if t.snap.Phase != "" && t.snap.Phase != previousPhase && len(t.snap.PhaseTimeline) < 64 {
@@ -442,6 +447,9 @@ func recoveryUsable(recovery taskRecovery) bool {
 }
 
 func (s *Service) validateRecoveryPeer(recovery taskRecovery) error {
+	if err := s.checkPeerAllowed(recovery.PeerID); err != nil {
+		return err
+	}
 	peers, err := identity.LoadTrust(s.cfg.DataDir)
 	if err != nil {
 		return protocol.Wrap(protocol.ResumeMismatch, "cannot validate persisted peer fingerprint", err)
@@ -581,11 +589,19 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if strings.TrimSpace(peerID) == "" || len(paths) == 0 {
 		return TaskSnapshot{}, errors.New("INVALID_ARGUMENT: peer and source paths are required")
 	}
+	if err := s.checkPeerAllowed(peerID); err != nil {
+		return TaskSnapshot{}, err
+	}
 	if s.tasks.hasActive() {
 		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 	}
 	if err := s.stopInbox(false); err != nil {
 		return TaskSnapshot{}, err
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.isClosing() {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	base := make([]string, len(paths))
@@ -700,6 +716,11 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	if err := s.stopInbox(false); err != nil {
 		return TaskSnapshot{}, err
 	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.isClosing() {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory)}, cancel)
 	if err != nil {
@@ -798,6 +819,10 @@ func handleTaskRunError(t *taskRecord, attemptID string, ctx context.Context, ru
 	runErr = classifyTaskError(runErr)
 	snap := t.snapshot()
 	if errors.Is(ctx.Err(), context.Canceled) {
+		if snap.State == "shutdown_requested" {
+			shutdownTask(t, attemptID, runErr)
+			return
+		}
 		if snap.State == "pause_requested" {
 			t.pauseAttempt(attemptID)
 			return
@@ -941,6 +966,11 @@ func (s *Service) PauseTask(id string) error {
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
 	if err := s.stopInbox(false); err != nil {
 		return TaskSnapshot{}, err
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.isClosing() {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
 	}
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
@@ -1153,6 +1183,11 @@ func (s *Service) decideTask(id string, accepted bool) error {
 	if snap.State != "awaiting_acceptance" {
 		return errors.New("TASK_NOT_AWAITING_ACCEPTANCE")
 	}
+	if accepted {
+		if err := s.checkPeerAllowed(snap.PeerID); err != nil {
+			return err
+		}
+	}
 	select {
 	case t.decision <- accepted:
 		return nil
@@ -1174,19 +1209,7 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 	return s.StartSend(t.peerID, t.paths, t.cfg)
 }
 
-// Shutdown cancels active in-process tasks. It does not claim restart recovery.
+// Shutdown preserves resumable tasks and joins all application workers.
 func (s *Service) Shutdown() {
-	s.inbox.mu.Lock()
-	s.inbox.shutdown = true
-	s.inbox.mu.Unlock()
-	_ = s.stopInbox(true)
-	_ = s.stopLANDiscovery()
-	s.tasks.mu.RLock()
-	for _, t := range s.tasks.tasks {
-		if !isTerminal(t.snapshot().State) && t.cancel != nil {
-			t.cancel()
-		}
-	}
-	s.tasks.mu.RUnlock()
-	s.tasks.workers.Wait()
+	_ = s.ShutdownContext(context.Background())
 }

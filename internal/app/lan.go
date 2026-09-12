@@ -24,6 +24,11 @@ type lanRuntime struct {
 }
 
 func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
+	s.lanLifecycleMu.Lock()
+	defer s.lanLifecycleMu.Unlock()
+	if s.isClosing() {
+		return
+	}
 	s.lanMu.RLock()
 	current := s.lan
 	s.lanMu.RUnlock()
@@ -35,7 +40,7 @@ func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
 		current.mu.Unlock()
 		return
 	}
-	_ = s.stopLANDiscovery()
+	_ = s.stopLANDiscoveryOwned()
 	manager, err := discovery.Start(discovery.Config{Identity: s.identity, Name: s.name(""), ExcludedInterfaces: cfg.ExcludedInterfaces, AllowLoopback: cfg.AllowLoopback || s.cfg.AllowInsecureLoopback})
 	if err != nil {
 		s.lanMu.Lock()
@@ -49,7 +54,11 @@ func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
 	s.lan = runtime
 	s.lanError = ""
 	s.lanMu.Unlock()
-	go s.runLANDiscovery(ctx, runtime)
+	s.listenerWorkers.Add(1)
+	go func() {
+		defer s.listenerWorkers.Done()
+		s.runLANDiscovery(ctx, runtime)
+	}()
 	if peers, loadErr := identity.LoadTrust(s.cfg.DataDir); loadErr == nil {
 		for _, peer := range peers {
 			if peer.LastLANAddress != "" {
@@ -76,7 +85,18 @@ func (s *Service) runLANDiscovery(ctx context.Context, runtime *lanRuntime) {
 			runtime.mu.RLock()
 			directory, cfg := runtime.directory, runtime.cfg
 			runtime.mu.RUnlock()
-			go s.receiveLANSession(ctx, incoming, directory, cfg)
+			s.operationMu.Lock()
+			if s.isClosing() {
+				s.operationMu.Unlock()
+				_ = incoming.Session.Close()
+				continue
+			}
+			s.tasks.workers.Add(1)
+			s.operationMu.Unlock()
+			go func() {
+				defer s.tasks.workers.Done()
+				s.receiveLANSession(ctx, incoming, directory, cfg)
+			}()
 		}
 	}
 }
@@ -104,6 +124,10 @@ func (s *Service) ensureLANDiscovery() {
 }
 
 func (s *Service) receiveLANSession(ctx context.Context, incoming discovery.Incoming, directory string, cfg DirectConfig) {
+	if err := s.checkPeerAllowed(incoming.Peer.ID); err != nil {
+		_ = incoming.Session.Close()
+		return
+	}
 	cfg.knownInterface = incoming.Route.Interface
 	cfg.BindAddress = net.JoinHostPort(incoming.Route.LocalAddress, "0")
 	peer := signaling.Device{ID: incoming.Peer.ID, Name: incoming.Peer.Name, PublicKey: ed25519.PublicKey(incoming.Peer.PublicKey)}
@@ -124,6 +148,12 @@ func (s *Service) receiveLANSession(ctx context.Context, incoming discovery.Inco
 }
 
 func (s *Service) stopLANDiscovery() error {
+	s.lanLifecycleMu.Lock()
+	defer s.lanLifecycleMu.Unlock()
+	return s.stopLANDiscoveryOwned()
+}
+
+func (s *Service) stopLANDiscoveryOwned() error {
 	s.lanMu.Lock()
 	runtime := s.lan
 	s.lan = nil

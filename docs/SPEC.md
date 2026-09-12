@@ -1,5 +1,13 @@
 # LinkSend protocol V1 implementation specification
 
+2026-09-12 desktop six-feature implementation: current source targets product
+0.5.0 milestone prereleases; protocol remains V1. The user's explicit milestone
+push/deploy/publish authorization overrides this document's default local-only
+rule for this task. Wails 3 beta.18 remains the desktop shell. Profile ownership,
+local denial, trust migration and saved shutdown are defined in
+[ADR 0003](adr/0003-desktop-ownership-and-local-denial.md); M1–M6 features remain
+pending until individually verified in the [execution record](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md).
+
 Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. The current product release line is `0.4.x`; protocol V1 is an independent compatibility contract and is not the same as product SemVer. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from protocol V1.
 
 ## 1. Product scope

@@ -234,7 +234,12 @@ func TestResumeRejectsChangedSourceBeforeSendingMoreBytes(t *testing.T) {
 
 func TestResumeRejectsChangedPinnedPeerBeforeStartingAttempt(t *testing.T) {
 	f, _, paused := preparePausedTaskForResumeNegativeTest(t)
-	if err := os.Remove(filepath.Join(f.a.cfg.DataDir, "trust.json")); err != nil {
+	// Explicitly remove the old pin through local policy. Deleting trust.json
+	// after migration is a corrupt-policy error, not a supported trust reset.
+	if err := identity.RevokePeer(f.a.cfg.DataDir, f.bID.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if err := identity.AllowPeer(f.a.cfg.DataDir, f.bID.ID()); err != nil {
 		t.Fatal(err)
 	}
 	replacement, err := identity.Generate()
@@ -307,10 +312,12 @@ func TestRestartRecoveryUsesPersistedTaskAndMissingBlocksOverRealQUIC(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(a2.Shutdown)
 	b2, err := New(Config{DataDir: f.b.cfg.DataDir, ServerURL: f.http.URL, AllowInsecureLoopback: true, Identity: f.bID})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(b2.Shutdown)
 	defer a2.Shutdown()
 	defer b2.Shutdown()
 	restoredSender := waitTask(t, a2, senderTask.ID, func(s TaskSnapshot) bool { return s.State == "recovering" && s.CanResume })

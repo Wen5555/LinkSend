@@ -36,6 +36,7 @@ func TestTaskManagerTerminalAndCancelRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	_, cancel := context.WithCancel(context.Background())
 	task, err := svc.tasks.create(TaskSnapshot{Direction: "send"}, cancel)
 	if err != nil {
@@ -72,8 +73,9 @@ func TestTaskAcceptanceDecisionAndRepeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(svc.Shutdown)
 	_, cancel := context.WithCancel(context.Background())
-	task, err := svc.tasks.create(TaskSnapshot{Direction: "receive"}, cancel)
+	task, err := svc.tasks.create(TaskSnapshot{Direction: "receive", PeerID: strings.Repeat("a", 64)}, cancel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +110,7 @@ func TestTaskBusyAndRetryCreatesNewID(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed.finish("failed", errors.New("source failed"))
-	failed.peerID, failed.paths, failed.cfg = "peer", []string{"missing"}, DirectConfig{}
+	failed.peerID, failed.paths, failed.cfg = strings.Repeat("a", 64), []string{"missing"}, DirectConfig{}
 	// A retry is a fresh task with a distinct local ID; its invalid source then fails independently.
 	retried, err := svc.RetryTask(failed.snap.ID)
 	if err != nil {
