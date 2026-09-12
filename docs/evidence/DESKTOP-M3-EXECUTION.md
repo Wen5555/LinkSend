@@ -54,5 +54,16 @@ TaskDialog 的 UIA Pane 没有 InvokePattern 时，先核对标签和所属进�
 
 ## 剩余边界
 
+Mac 精确 `62628d0` 源码归档实际完成普通测试、vet/build、前端与DMG构建，但完整race中
+`TestAdapterDatagramsDeadlinesAndClose` 收到排队的 `context canceled`，桌面并发首次创建日志锁曾有一次 `openat .lock: ENOENT`。
+前者现使已关闭适配器一致返回 `net.ErrClosed`；后者对同一 root 下创建锁的 ENOENT 做有界重试，其他错误仍直接拒绝。
+实体Mac补丁验证：关闭读取race重复100次、激活日志并发race重复30轮均PASS；作业
+`/tmp/codex-ssh/desktop-m3-platform-repeat-20260912T071151Z`。
+该次为 `62628d0_PLUS_REVIEWED_PLATFORM_FIXES`，不把补丁结果归给原始归档。
+
+Windows CI `34679582811` 的SendTo原生COM保存曾返回异常，本机原路径重复100轮未复现。
+现改为在唯一临时目录内直接创建新`.lnk`，不向COM提供占位空`.lnk`，并在所有COM对象释放后才发布/读取。
+Windows SendTo与激活日志race重复30轮PASS；最终CI需重新验证，未把未复现当作排除问题。
+
 Mac 最终主应用的后台/关闭/菜单流程，Windows/Mac 通知实际点击、真实睡眠唤醒、最终安装卸载和跨设备六项联调
 仍需对应独立记录。平台 lease/通知提交测试见 [adapter 记录](DESKTOP-M3-NATIVE-ADAPTER.md)，不能代替整机工作流。

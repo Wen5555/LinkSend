@@ -68,15 +68,14 @@ func installSendToAt(executable, directory string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	temp, err := os.CreateTemp(directory, ".linksend-sendto-*.lnk")
+	tempDirectory, err := os.MkdirTemp(directory, ".linksend-sendto-")
 	if err != nil {
 		return err
 	}
-	tempPath := temp.Name()
-	if err := temp.Close(); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
+	// Reserve a directory, not an empty .lnk that COM may try to load as a
+	// corrupt existing shortcut. Publish only the complete, released file.
+	defer os.Remove(tempDirectory)
+	tempPath := filepath.Join(tempDirectory, "entry.lnk")
 	defer os.Remove(tempPath)
 	value := sendToShortcut{target: executable, arguments: sendToArgs, description: sendToMarker, workingDir: filepath.Dir(executable)}
 	if err := writeSendToShortcut(tempPath, value); err != nil {
@@ -129,40 +128,40 @@ func ownsSendTo(value sendToShortcut, executable string) bool {
 func withSendToShortcut(path string, fn func(*ole.IDispatch) error) error {
 	done := make(chan error, 1)
 	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		if err := ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED); err != nil {
-			var oleErr *ole.OleError
-			if !errors.As(err, &oleErr) || oleErr.Code() != 1 { // S_FALSE is already initialised.
-				done <- err
-				return
+		result := func() error {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			if err := ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED); err != nil {
+				var oleErr *ole.OleError
+				if !errors.As(err, &oleErr) || oleErr.Code() != 1 { // S_FALSE is already initialised.
+					return err
+				}
 			}
-		}
-		defer ole.CoUninitialize()
-		unknown, err := oleutil.CreateObject("WScript.Shell")
-		if err != nil {
-			done <- err
-			return
-		}
-		defer unknown.Release()
-		shell, err := unknown.QueryInterface(ole.IID_IDispatch)
-		if err != nil {
-			done <- err
-			return
-		}
-		defer shell.Release()
-		variant, err := oleutil.CallMethod(shell, "CreateShortcut", path)
-		if err != nil {
-			done <- err
-			return
-		}
-		defer variant.Clear()
-		shortcut := variant.ToIDispatch()
-		if shortcut == nil {
-			done <- errors.New("shell did not return a shortcut object")
-			return
-		}
-		done <- fn(shortcut)
+			defer ole.CoUninitialize()
+			unknown, err := oleutil.CreateObject("WScript.Shell")
+			if err != nil {
+				return err
+			}
+			defer unknown.Release()
+			shell, err := unknown.QueryInterface(ole.IID_IDispatch)
+			if err != nil {
+				return err
+			}
+			defer shell.Release()
+			variant, err := oleutil.CallMethod(shell, "CreateShortcut", path)
+			if err != nil {
+				return fmt.Errorf("CreateShortcut: %w", err)
+			}
+			defer variant.Clear()
+			shortcut := variant.ToIDispatch()
+			if shortcut == nil {
+				return errors.New("shell did not return a shortcut object")
+			}
+			return fn(shortcut)
+		}()
+		// All COM objects and the apartment are released before the caller can
+		// link/remove the file or immediately open another shortcut.
+		done <- result
 	}()
 	return <-done
 }
@@ -193,7 +192,7 @@ func writeSendToShortcut(path string, value sendToShortcut) error {
 		} {
 			result, err := oleutil.PutProperty(shortcut, property.name, property.value)
 			if err != nil {
-				return err
+				return fmt.Errorf("set %s: %w", property.name, err)
 			}
 			if result != nil {
 				_ = result.Clear()
@@ -203,6 +202,9 @@ func writeSendToShortcut(path string, value sendToShortcut) error {
 		if result != nil {
 			_ = result.Clear()
 		}
-		return err
+		if err != nil {
+			return fmt.Errorf("save shortcut: %w", err)
+		}
+		return nil
 	})
 }

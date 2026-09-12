@@ -45,7 +45,17 @@ func withActivationStore(dataDir string, fn func(*os.Root) error) error {
 		return err
 	}
 	defer root.Close()
-	lock, err := root.OpenFile(".lock", os.O_CREATE|os.O_RDWR, 0600)
+	var lock *os.File
+	// Concurrent first creation returned ENOENT in the native APFS probe.
+	// Retry only absence, through the same Root;
+	// permission, capacity and persistent failures still reject intake visibly.
+	for attempt := 0; attempt < 5; attempt++ {
+		lock, err = root.OpenFile(".lock", os.O_CREATE|os.O_RDWR, 0600)
+		if !errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err != nil {
 		return err
 	}
