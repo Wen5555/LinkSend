@@ -7,6 +7,7 @@ export {
 };
 
 export type {
+    DesktopEntryStatus,
     DesktopPreferences,
     DesktopStatus,
     EffectiveConfig,

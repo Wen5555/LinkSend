@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { DesktopPreferences } from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
 import type { DeviceInfo, InboxStatus, SendDraft, WorkspaceSnapshot } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
@@ -15,6 +16,8 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
   const [waitForPeer, setWaitForPeer] = useState(false);
   const draft = workspace?.draft;
   const paths = draft?.paths ?? [];
+  const preview = useQuery({ queryKey: ['draft-preview', draft?.revision], enabled: available && !!draft?.paths?.length,
+    queryFn: () => Backend.PreviewDraft(), retry: false });
   const peers = devices.filter(device => device.id !== identityID && (device.trusted || device.nearby) && !device.blocked);
   const selected = devices.find(device => device.id === draft?.peer_id);
   const disabled = !!op || !available || !workspace?.persistence_available;
@@ -37,7 +40,7 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
   };
   return <div className="page-stack">
     <div className="transfer-grid">
-      <section className="surface send-surface"><div className="section-heading"><div><span className="section-kicker">本机持久草稿</span><h2>准备发送</h2></div><span className="task-count">{paths.length} 项</span></div>
+      <section className="surface send-surface" data-file-drop-target><div className="section-heading"><div><span className="section-kicker">本机持久草稿</span><h2>准备发送</h2></div><span className="task-count">{paths.length} 项</span></div>
         <label className="field-label">发送给<select value={draft?.peer_id ?? ''} disabled={disabled} onChange={event => saveDraft({ peer_id: event.target.value })}><option value="">选择设备</option>{draft?.peer_id && !peers.some(device => device.id === draft.peer_id) && <option value={draft.peer_id}>{selected ? deviceName(selected) : '已保存的目标'} · 当前不可发送</option>}{peers.map(device => <option key={device.id} value={device.id}>{deviceName(device)} · {device.nearby ? '附近' : device.online ? '在线' : '离线'}</option>)}</select></label>
         {selected && <div className="peer-inline"><span className="avatar small">{deviceName(selected)[0]}</span><div><strong>{deviceName(selected)}</strong><small>{selected.blocked ? '已屏蔽，请在设备页解除后重新建立信任' : selected.trusted ? '已信任 · 接收权限由对方决定' : '附近新设备 · 对方确认并完成传输后建立信任'}</small></div></div>}
         <div className="picker-row"><button className="secondary" disabled={disabled} onClick={() => void run('pick-files', async () => { const picked = await Backend.PickFiles(); if (picked?.length && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, ...picked])] }); })}>＋ 选择文件</button><button className="secondary" disabled={disabled} onClick={() => void run('pick-folder', async () => { const path = await Backend.PickSourceDirectory(); if (path && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, path])] }); })}>＋ 选择文件夹</button></div>
@@ -45,7 +48,8 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
         <label className="queue-wait"><input type="checkbox" checked={waitForPeer} disabled={disabled} onChange={event => setWaitForPeer(event.target.checked)} /><span>对方离线时，留在队列中等待</span></label>
         {selected && !selected.online && !waitForPeer && <p className="queue-notice">对方暂时离线。勾选等待后可加入队列，也可以稍后再发。</p>}
         <button className="primary full send-button" disabled={disabled || !draft?.peer_id || !paths.length || !selected || selected.blocked || (!selected.online && !waitForPeer)} onClick={enqueue}>{op === 'enqueue' ? '正在核对内容并加入…' : '加入发送队列'}</button>
-        <p className="hint">当前传输不会阻止加入下一项；重启后需确认继续。</p>
+        <p className="hint">可将文件或目录拖到这里；系统入口只加入草稿。当前传输不会阻止加入下一项，重启后需确认继续。</p>
+        {preview.data && preview.data.revision === draft?.revision && <p className="hint">{preview.data.complete ? '' : '已统计 '} {preview.data.files} 个文件 · {preview.data.directories} 个目录 · {(preview.data.bytes / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB{preview.data.problem && ` · ${preview.data.problem}`}</p>}
         {draft && <small className="draft-status">{draft.updated_at ? `草稿已保存 · ${new Date(draft.updated_at).toLocaleTimeString()}` : '选择内容后保存草稿'}</small>}
       </section>
       <section className="surface receive-ready"><div className="section-heading"><div><span className="section-kicker">接收</span><h2>{inbox?.listening || inbox?.lan_available ? '可以接收文件' : '接收状态'}</h2></div><span className={inbox?.signaling_connected || inbox?.lan_available ? 'receive-orb ready' : 'receive-orb'} aria-hidden="true">↓</span></div><p className="intro">应用打开时等待接收请求，收到后显示确认。</p>

@@ -40,6 +40,12 @@ Unicode true
 !define INFO_COPYRIGHT "© 2026 LinkSend contributors"
 !define PRODUCT_EXECUTABLE "LinkSend.exe"
 !define UNINST_KEY_NAME "LinkSend.LinkSend"
+!ifndef WAILS_INSTALL_SCOPE
+!define WAILS_INSTALL_SCOPE "user"
+!endif
+!ifndef REQUEST_EXECUTION_LEVEL
+!define REQUEST_EXECUTION_LEVEL "user"
+!endif
 
 !include "wails_tools.nsh"
 
@@ -108,14 +114,23 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+
+    # Install for the current user; preserve an entry owned by another install.
+    ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --install-sendto' $0
+    ${If} $0 != 0
+        DetailPrint "SendTo entry was preserved or could not be installed. Configure it from LinkSend settings."
+    ${EndIf}
 SectionEnd
 
 Section "uninstall"
     !insertmacro wails.setShellContext
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+    # Unregister only our marker and executable target before deleting binaries.
+    ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --uninstall-sendto' $0
 
-    RMDir /r $INSTDIR
+    # Preserve profile, received files and WebView data on uninstall.
+
+    Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
@@ -124,4 +139,5 @@ Section "uninstall"
     !insertmacro wails.unassociateCustomProtocols
 
     !insertmacro wails.deleteUninstaller
+    RMDir "$INSTDIR" # Remove only when empty; preserve user-added files.
 SectionEnd

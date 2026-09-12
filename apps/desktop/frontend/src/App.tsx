@@ -29,6 +29,15 @@ export default function App() {
   }, [workspace?.queue]);
   const devices = desktop.devices.data ?? [];
   const shell = desktop.shell.data;
+  const entryRevision = useRef(0);
+  useEffect(() => {
+    const revision = shell?.entries.draft_revision ?? 0;
+    if (revision > entryRevision.current) {
+      entryRevision.current = revision;
+      setTab('transfer');
+      void desktop.refresh();
+    }
+  }, [shell?.entries.draft_revision, desktop.refresh]);
   const config = desktop.configuration.data;
   const prefs = desktop.preferences.data ?? emptyPreferences;
   const inbox = shell?.inbox;
@@ -44,13 +53,14 @@ export default function App() {
       {!desktop.enabled && <div className="banner error-banner" role="status"><p>桌面后端未连接。请启动 LinkSend 桌面应用；浏览器预览只显示界面，不执行传输。</p></div>}
       {desktop.enabled && loadError && <div className="banner error-banner" role="alert"><p>{humanizeBackendError(loadError)}</p><button className="ghost" onClick={() => void desktop.refresh()}>重试读取</button></div>}
       {desktop.enabled && desktop.workspace.isPending && <p className="loading-status" role="status">正在读取保存的草稿与队列…</p>}
+      {shell?.entries.error && <div className="banner error-banner" role="alert"><p>{shell.entries.error}</p></div>}
       {command.error && <div className="banner error-banner" role="alert"><p>{command.error}</p><button onClick={command.clearError} aria-label="关闭错误提示">×</button></div>}
       {command.notice && <div className="banner notice-banner" role="status"><p>{command.notice}</p><button onClick={command.clearNotice} aria-label="关闭操作提示">×</button></div>}
       {control.error && <div className="banner error-banner" role="alert"><p>{control.error}</p><button onClick={control.clearError} aria-label="关闭传输控制错误">×</button></div>}
       {control.notice && <div className="banner notice-banner" role="status"><p>{control.notice}</p><button onClick={control.clearNotice} aria-label="关闭传输控制提示">×</button></div>}
       {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} inbox={inbox} preferences={desktop.preferences.data} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} /> :
         tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
-          <SettingsPage key={JSON.stringify(prefs)} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} />}
+          <SettingsPage sendToSupported={shell?.entries.send_to_supported} key={JSON.stringify(prefs)} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} />}
     </section>
     {incoming && <IncomingConfirm key={incoming.id} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
   </div>;

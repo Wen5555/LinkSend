@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)][long]$RunId,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedCommit,
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [string]$ArtifactNamePattern = '*'
+    [string]$ArtifactNamePattern = '*',
+    [ValidateRange(1, 60)][int]$DownloadTimeoutMinutes = 15
 )
 $ErrorActionPreference = 'Stop'
 $repository = 'Wen5555/LinkSend'
@@ -30,7 +31,7 @@ $apiClient.DefaultRequestHeaders.Authorization = [Net.Http.Headers.Authenticatio
 # Separate client deliberately has no bearer header. .NET uses the configured
 # Windows HTTP proxy, including for the signed Azure artifact location.
 $downloadClient = [Net.Http.HttpClient]::new()
-$downloadClient.Timeout = [TimeSpan]::FromMinutes(5)
+$downloadClient.Timeout = [TimeSpan]::FromMinutes($DownloadTimeoutMinutes)
 $verified = [Collections.Generic.List[object]]::new()
 try {
     foreach ($artifact in $artifacts) {
@@ -44,18 +45,27 @@ try {
                 if ([int]$reply.StatusCode -ne 302 -or $reply.Headers.Location.Scheme -ne 'https') { throw 'Artifact redirect was not the expected HTTPS response.' }
                 $signedLocation = $reply.Headers.Location
             } finally { $reply.Dispose() }
-            $temporary = $zipPath + '.' + [Guid]::NewGuid().ToString('N') + '.partial'
+            $partialFiles = @(Get-ChildItem -LiteralPath $outputRoot -File | Where-Object { $_.Name -like ($artifact.name + '.zip.*.partial') } | Sort-Object Length -Descending)
+            $temporary = if ($partialFiles.Count) { $partialFiles[0].FullName } else { $zipPath + '.' + [Guid]::NewGuid().ToString('N') + '.partial' }
+            [long]$offset = if (Test-Path -LiteralPath $temporary) { (Get-Item -LiteralPath $temporary).Length } else { 0 }
+            if ($offset -gt $artifact.size_in_bytes) { throw 'Partial artifact is larger than expected; preserved for inspection.' }
             Write-Output ('Downloading ' + $artifact.name)
-            $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromMinutes(5))
+            $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromMinutes($DownloadTimeoutMinutes))
             try {
-                $response = $downloadClient.GetAsync($signedLocation, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
+              if ($offset -lt $artifact.size_in_bytes) {
+                $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $signedLocation)
+                if ($offset -gt 0) { $request.Headers.Range = [Net.Http.Headers.RangeHeaderValue]::new($offset, $null); Write-Output ('Resuming at byte ' + $offset) }
+                $response = $downloadClient.SendAsync($request, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
                 try {
                     if (-not $response.IsSuccessStatusCode) { throw ('Artifact HTTP status ' + [int]$response.StatusCode) }
+                    if ($offset -gt 0 -and ([int]$response.StatusCode -ne 206 -or $response.Content.Headers.ContentRange.From -ne $offset -or $response.Content.Headers.ContentRange.Length -ne $artifact.size_in_bytes)) { throw 'Server did not confirm the exact requested artifact range; partial file preserved.' }
                     $stream = $response.Content.ReadAsStreamAsync($deadline.Token).GetAwaiter().GetResult()
-                    $file = [IO.FileStream]::new($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                    $mode = if ($offset -gt 0) { [IO.FileMode]::Append } else { [IO.FileMode]::CreateNew }
+                    $file = [IO.FileStream]::new($temporary, $mode, [IO.FileAccess]::Write, [IO.FileShare]::None)
                     try { [void]$stream.CopyToAsync($file, $deadline.Token).GetAwaiter().GetResult(); $file.Flush($true) }
                     finally { $file.Dispose(); $stream.Dispose() }
-                } finally { $response.Dispose() }
+                } finally { $response.Dispose(); $request.Dispose() }
+              }
             } finally { $deadline.Dispose(); $signedLocation = $null }
             if ((Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) { throw 'Downloaded artifact SHA256 mismatch; partial file retained for inspection.' }
             Move-Item -LiteralPath $temporary -Destination $zipPath

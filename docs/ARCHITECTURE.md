@@ -11,6 +11,10 @@ M1元数据现为task schema3：DeviceProfile、SendDraft及send_queue共用任�
 Wails只发送有epoch/revision的合并失效事件，React Query重取Go快照，命令无通用重试。
 最低macOS13由用户明确授权，未声称当前macOS26.5原生检查等同macOS13实机。
 
+M2 把原生文件入口接入同一 Go 草稿：Wails New 前持久化有界路径日志，首实例事务合并后确认，
+第二进程不打开身份和数据库。通知失败由定时消费补偿；入队与发送仍需用户命令。
+细节和原生证据见 [M2 执行记录](evidence/DESKTOP-M2-EXECUTION.md)。
+
 当前产品版本为 LinkSend `0.4.0`，协议为 V1。根 module `github.com/Wen5555/LinkSend` 包含协议、身份、LAN 发现、信令客户端、Pion/quic-go 集成、文件传输、存储、应用服务、服务端和 CLI；`apps/desktop` 是唯一嵌套 Go module，使用 Wails 3 `v3.0.0-beta.18`。
 
 ```text

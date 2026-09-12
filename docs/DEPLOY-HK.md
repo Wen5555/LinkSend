@@ -2,7 +2,16 @@
 
 香港入口是长期测试主站，不承载生产身份或生产可用性承诺。目标 SSH alias 为 `hk-main`（Debian 12 amd64，SSH 端口由 manager inventory 管理），服务位于 `/opt/linksend-lan-test`。所有远程连接必须通过 `codex-ssh-manager` 执行 resolve → probe → audit-host；不得把密码、令牌、固定码、私钥或完整配置复制进提示词、脚本和证据。
 
-## 当前基线（Desktop M0，v0.5.0）
+## 当前基线（Desktop M1，v0.5.0）
+
+2026-09-12 北京时间 13:49，已从精确提交 `2f2656d940c96e142d5639b2bc3012ab0ce5fb6e` 完成 M1 事务部署。
+运行 MainPID `396692`，SHA256 `299fef50fec3e4c84194b546b8ce8366a71033939a8ab810961e1fc6a347db06`，
+Go1.27.1、`vcs.modified=false`；schema2、origin/public health、443、STUN、续期和最近 fatal=0 独立检查 PASS。
+备份 `/opt/linksend-lan-test/backups/20260912T054903.070440Z-desktop-m0-2f2656d940c9`，
+部署及独立作业路径、回滚边界见 [M1 部署记录](evidence/DESKTOP-M1-DEPLOYMENT.md)。
+用户已决定 M0/M1 合并测试预发布，不再单独发布 m0 标签。
+
+## 历史基线（Desktop M0）
 
 - 2026-09-12 北京时间 12:46 完成用户授权的 M0 测试主站事务部署；产品为 `0.5.0`，计划测试预发布标签为 `v0.5.0-m0`。它只对应六项桌面功能的 M0 前置工作，不代表 M1–M6 或六项原生验收完成；本节不声明 Release 已发布。
 - `linksend-rendezvous.service` 运行 `/opt/linksend-lan-test/rendezvous`，部署后及独立复核 MainPID 均为 `395859`。资产来自精确干净提交 `b3d5fc7b6acf49dfc07671d774e2a7f20c28cc94`，Go `1.27.1`、Linux amd64、`vcs.modified=false`；17,880,415 bytes，SHA256 `631db1cd5c5079a11c1b8a90bfed4eb0a6591c5ff6907203c3d71f4197a145a3`。

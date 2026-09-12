@@ -38,12 +38,20 @@ export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
 }
 
+export function ConfigureSendTo(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1248637316, enabled);
+}
+
 export function ConfirmQueue(id: string, revision: number): $CancellablePromise<void> {
     return $Call.ByID(3080801262, id, revision);
 }
 
 export function CreateInvitation(): $CancellablePromise<app$0.InvitationInfo> {
     return $Call.ByID(997854590);
+}
+
+export function DesktopEntries(): $CancellablePromise<$models.DesktopEntryStatus> {
+    return $Call.ByID(339176457);
 }
 
 export function Devices(): $CancellablePromise<app$0.DeviceInfo[] | null> {
@@ -120,6 +128,10 @@ export function Preferences(): $CancellablePromise<$models.DesktopPreferences> {
 
 export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStatus> {
     return $Call.ByID(2639668847);
+}
+
+export function PreviewDraft(): $CancellablePromise<app$0.DraftPreview> {
+    return $Call.ByID(887061994);
 }
 
 export function ProbeLANAddress(address: string): $CancellablePromise<void> {

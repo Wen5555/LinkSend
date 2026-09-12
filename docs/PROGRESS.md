@@ -1,6 +1,6 @@
 # LinkSend implementation progress
 
-## 2026-09-12 六项桌面能力 M0/M1（合并候选进行中）
+## 2026-09-12 六项桌面能力（分阶段执行中）
 
 基线 `fbfc250`，工作分支 `codex/desktop-six-features`；用户明确授权逐目标推送、部署和发布。
 依赖官方核实与安装完成：Go1.27.1、Node24.21.0、pnpm12.4.1、React19.3、TS6.0.3、Vite8.3、Vitest5、Query5.102.8，Wails保留beta.18。
@@ -12,6 +12,12 @@ Mac地址按用户最新信息更新为10.234.184.6，SSH已通过，隔离工�
 M1已增加task schema3、设备偏好、持久草稿、幂等队列、离线旁路、源变化确认及200ms合并的epoch/revision事件；
 前端已拆分且使用Query/真实绑定，29项测试通过。根完整普通/race及双模块检查通过，原生UI与包级验证进行中。
 具体实现与真实QUIC负例见 [M1执行记录](evidence/DESKTOP-M1-EXECUTION.md)。
+
+M0/M1 精确提交 `2f2656d` 的三平台 CI、四个包哈希/来源校验及 Windows CI payload 原生六项操作 PASS，
+香港 M1 事务部署与独立复核 PASS；[部署和备份](evidence/DESKTOP-M1-DEPLOYMENT.md)。
+M2 已接入单实例、有界持久入口日志、窗口拖放、SendTo/Finder provider、数量大小预览；
+Windows 同时入口/相对路径/隐藏/双 profile/冷启动/重启原生检查 PASS，完整菜单/拖放验收继续。
+M3 平台 adapter、M4 接收协议和 M5 内容快照在各自 worktree 并行实现，按依赖串行接入。
 
 Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol version: V1. This is not an accepted production release.
 

@@ -12,12 +12,12 @@
 
 | 阶段 | 状态 | 当前内容 / 下一步 |
 |---|---|---|
-| M0 | IMPLEMENTED / RELEASE_PENDING | 官方依赖、升级、本地拒绝、profile 锁、保存退出及Windows构建已验证；精确提交的跨平台构建/部署/发布进行中 |
-| M1 | IN_PROGRESS | schema3设备/草稿/队列、类型化事件及真实单并发调度已实现；UI和跨功能联调进行中 |
-| M2 | PENDING | Wails 单实例、拖放、SendTo、Finder Services |
-| M3 | PENDING | 托盘、后台设置、通知与防睡眠生命周期 |
-| M4 | PENDING | ReceivePlan、子集协商、原子保留两份、恢复 |
-| M5 | PENDING | 文本/URL/图片快照、内容能力协商与接收动作 |
+| M0 | IMPLEMENTED / RELEASE_PENDING | 官方依赖、拒绝/profile锁/保存退出已验；与M1合并发布 |
+| M1 | IMPLEMENTED / RELEASE_PENDING | schema3设备/草稿/队列、事件与真实调度；CI四包及Windows精确payload原生通过，香港已部署 |
+| M2 | INTEGRATED / NATIVE_PARTIAL | 单实例与持久入口已接Go草稿；Windows并发/隐藏/冷启动/重启通过，完整系统菜单/拖放联调继续 |
+| M3 | IN_PROGRESS | 原生托盘、通知、防睡眠adapter已通过平台定向检查；主生命周期待接线 |
+| M4 | IN_PROGRESS | ReceivePlan与子集协议在独立分支；安全审查发现的恢复/晚冲突问题已修复待合并 |
+| M5 | IN_PROGRESS | 独立内容快照与平台图片剪贴板adapter；协议和应用路径待整合 |
 | M6 | PENDING | 分页收件箱、调度完善、跨功能/原生/包级验证 |
 
 M0 依赖与原生源码核查分别见 [依赖](DESKTOP-M0-DEPENDENCIES.md)、

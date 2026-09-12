@@ -7,6 +7,7 @@ export type {
     DiagnosticIdentity,
     Diagnostics,
     DirectTimings,
+    DraftPreview,
     EnqueueRequest,
     IdentityInfo,
     InboxStatus,

@@ -29,6 +29,12 @@ func (a *App) Workspace() (coreapp.WorkspaceSnapshot, error) {
 	}
 	return a.core.Workspace()
 }
+func (a *App) PreviewDraft() (coreapp.DraftPreview, error) {
+	if err := a.workspaceAvailable(); err != nil {
+		return coreapp.DraftPreview{}, err
+	}
+	return a.core.PreviewDraft()
+}
 func (a *App) SaveDraft(draft coreapp.SendDraft) (coreapp.SendDraft, error) {
 	if err := a.workspaceAvailable(); err != nil {
 		return coreapp.SendDraft{}, err

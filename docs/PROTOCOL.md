@@ -5,6 +5,9 @@
 trust schema 1 与 profile 锁是本地迁移，不是协议版本。新内容及选收能力尚待 M4/M5 协商实现，
 本阶段不声称旧端支持这些能力。Go1.27 的 JSON/签名/manifest/恢复回归列入 M0 验证。
 
+M1/M2 的 task schema3、设备偏好、路径草稿、队列和激活日志均为本地状态；没有改变 V1 offer/accept、
+ALPN 或签名。通过系统菜单选择文件不会在 WSS 中增加路径、文件清单或正文。
+
 当前源码产品版本为 `0.4.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
 
 控制面使用有界 JSON `Envelope`，签名输入是明确的长度前缀二进制编码，不直接签任意 JSON map。字段包括协议版本、消息 ID、会话、发送方、接收方、generation、有效时间、payload 和 Ed25519 签名。

@@ -73,6 +73,15 @@ export interface DirectTimings {
     "total_connect_ms": number;
 }
 
+export interface DraftPreview {
+    "revision": number;
+    "files": number;
+    "directories": number;
+    "bytes": number;
+    "complete": boolean;
+    "problem"?: string;
+}
+
 export interface EnqueueRequest {
     "request_id": string;
     "peer_id": string;

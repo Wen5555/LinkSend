@@ -41,6 +41,7 @@ type App struct {
 	runtimeApp    *application.App
 	window        application.Window
 	eventsDone    chan struct{}
+	entries       *desktopEntries
 }
 
 type DesktopPreferences struct {
@@ -91,7 +92,9 @@ type DesktopStatus struct {
 
 var errBackendUnavailable = errors.New("BACKEND_UNAVAILABLE: desktop core is not initialized")
 
-func NewApp() *App { return &App{} }
+func NewApp() *App {
+	return &App{entries: &desktopEntries{wake: make(chan struct{}, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}}
+}
 
 // attachRuntime is called by the Wails 3 host before Run. Keeping the host
 // reference here lets bound methods use native dialogs without exposing the
@@ -103,15 +106,11 @@ func (a *App) attachRuntime(host *application.App, window application.Window) {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
-	dataDir := os.Getenv("LINKSEND_DATA_DIR")
-	explicitDataDir := dataDir != ""
-	if dataDir == "" {
-		if root, err := os.UserConfigDir(); err == nil {
-			dataDir = filepath.Join(root, "LinkSend")
-		} else {
-			dataDir = filepath.Join(os.TempDir(), "LinkSend")
-		}
+	dataDir := desktopProfileDirectory()
+	if a.dataDir != "" {
+		dataDir = a.dataDir
 	}
+	explicitDataDir := os.Getenv("LINKSEND_DATA_DIR") != ""
 	a.dataDir = dataDir
 	a.prefs, a.prefsStatus = loadPreferencesDetailed(dataDir)
 	a.configBlocked = a.prefsStatus.State != "missing" && a.prefsStatus.State != "valid"
@@ -133,6 +132,7 @@ func (a *App) startup(ctx context.Context) {
 		_ = a.core.StartQueue(a.directConfig())
 		a.startWorkspaceEvents()
 	}
+	a.startNativeEntries()
 }
 
 func defaultReceiveDirectory() string {
@@ -148,6 +148,9 @@ func (a *App) shutdown() {
 	}
 	if a.eventsDone != nil {
 		<-a.eventsDone
+	}
+	if a.entries != nil && a.entries.done != nil {
+		<-a.entries.done
 	}
 	if a.core != nil {
 		a.core.Shutdown()
@@ -178,9 +181,11 @@ func (a *App) shouldQuit() bool {
 	ready := a.quitReady
 	a.closeMu.Unlock()
 	if ready {
+		a.closeNativeEntries()
 		return true
 	}
 	if a.core == nil {
+		a.closeNativeEntries()
 		return true
 	}
 	active := make([]linksendapp.TaskSnapshot, 0)
@@ -190,6 +195,7 @@ func (a *App) shouldQuit() bool {
 		}
 	}
 	if len(active) == 0 {
+		a.closeNativeEntries()
 		return true
 	}
 	if a.runtimeApp == nil {

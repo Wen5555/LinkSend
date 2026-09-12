@@ -6,6 +6,12 @@ CI 固定同版本。Wails CLI 也须使用相同 Go 编译，不能把有语法
 M0 增加 trust migration/denial、真实子进程锁释放，以及已确认 QUIC 块后的保存退出/重启回归。
 历史测试需先 Shutdown 旧服务再以同 profile New，不能用两个活跃 writer 模拟重启。
 
+M1 精确 CI 包的 Windows 真窗口、M2 单实例并发/冷启动/隐藏/重启证据分别见
+[M1 Windows](evidence/DESKTOP-M1-WINDOWS.md)、[M2 系统入口](evidence/DESKTOP-M2-EXECUTION.md)。
+发布资产可用 `scripts/fetch-milestone-artifacts.ps1` 按精确 commit 下载并续传，
+再用 `scripts/verify-milestone-packages.ps1` 核对包哈希、BUILD-INFO 和 Windows 内部 payload；
+Mac 的挂载、架构、最低系统与原生启动仍须在 Mac 上执行。
+
 本页适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
 
 ## v0.4.0 发布门槛

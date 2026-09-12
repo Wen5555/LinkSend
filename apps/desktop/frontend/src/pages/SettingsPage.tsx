@@ -4,15 +4,16 @@ import type { DesktopPreferences, EffectiveConfig, NetworkInterfaceInfo, Prefere
 import type { Diagnostics, InboxStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
 
-type Props = { preferences: DesktopPreferences; effective?: EffectiveConfig; preferencesStatus?: PreferencesStatus; interfaces: NetworkInterfaceInfo[]; diagnostics?: Diagnostics; inbox?: InboxStatus; run: CommandRunner; op: string; available: boolean };
+type Props = { preferences: DesktopPreferences; effective?: EffectiveConfig; preferencesStatus?: PreferencesStatus; interfaces: NetworkInterfaceInfo[]; diagnostics?: Diagnostics; inbox?: InboxStatus; run: CommandRunner; op: string; available: boolean; sendToSupported?: boolean };
 const splitNames = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
 
-export function SettingsPage({ preferences, effective, preferencesStatus, interfaces, diagnostics, inbox, run, op, available }: Props) {
+export function SettingsPage({ preferences, effective, preferencesStatus, interfaces, diagnostics, inbox, run, op, available, sendToSupported }: Props) {
   const [prefs, setPrefs] = useState(preferences);
   const update = (patch: Partial<DesktopPreferences>) => setPrefs(current => ({ ...current, ...patch }));
   return <form className="page-stack" onSubmit={event => { event.preventDefault(); void run('preferences', () => Backend.SavePreferences(prefs), '设置已保存'); }}>
     <div className="page-intro"><div><p className="eyebrow">本机偏好</p><h2>设置与诊断</h2><p>通常无需修改网络选项；接收目录保存后用于新的接收任务。</p></div><button className="primary" disabled={!!op || !available}>保存设置</button></div>
     {preferencesStatus?.state && !['valid', 'missing'].includes(preferencesStatus.state) && <div className="banner error-banner" role="alert">{preferencesStatus.message || '偏好文件异常，原文件已保留。请核对设置后保存。'}</div>}
+    <section className="surface"><span className="section-kicker">系统入口</span><h2>从文件管理器添加内容</h2><p className="field-help">Windows 可添加当前用户的“发送到 LinkSend”；macOS 可在 Finder 的“服务”菜单中使用“发送到 LinkSend”。窗口拖放也会保存到同一草稿。</p>{sendToSupported && <div className="picker-row"><button type="button" className="secondary" disabled={!!op || !available} onClick={() => void run('install-sendto', () => Backend.ConfigureSendTo(true), '已安装当前用户的发送到入口')}>安装 Windows 发送到</button><button type="button" className="secondary" disabled={!!op || !available} onClick={() => void run('uninstall-sendto', () => Backend.ConfigureSendTo(false), '已移除本安装拥有的发送到入口')}>移除发送到入口</button></div>}</section>
     <div className="settings-grid"><section className="surface"><span className="section-kicker">连接</span><h2>服务与网卡</h2>
       <label className="field-label">信令服务地址<input value={prefs.server_url} onChange={event => update({ server_url: event.target.value })} placeholder="https://linksend.oooai.de" /></label>
       <label className="field-label">本机绑定地址<input value={prefs.bind_address} onChange={event => update({ bind_address: event.target.value })} placeholder="留空自动选择；或填 192.168.1.20:0" /></label>
