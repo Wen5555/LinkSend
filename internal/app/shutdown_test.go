@@ -4,13 +4,54 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
+
+func TestShutdownKeepsProfileUntilPendingDeviceLookupFinishes(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer server.Close()
+	var releaseOnce sync.Once
+	releaseLookup := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseLookup()
+	directory := t.TempDir()
+	s, err := New(Config{DataDir: directory, ServerURL: server.URL, AllowInsecureLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookupDone := make(chan struct{})
+	go func() { defer close(lookupDone); _, _ = s.Devices(context.Background()) }()
+	<-entered
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err = s.ShutdownContext(ctx); err == nil {
+		t.Fatal("pending lookup was not joined")
+	}
+	if _, err = New(Config{DataDir: directory}); !errors.Is(err, ErrProfileInUse) {
+		t.Fatalf("profile unlocked while callback may still pin: %v", err)
+	}
+	releaseLookup()
+	<-lookupDone
+	s.Shutdown()
+	reopened, err := New(Config{DataDir: directory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened.Shutdown()
+}
 
 func TestSaveExitPreservesRealQUICCheckpointAndProfileOwnership(t *testing.T) {
 	f := newDirectFixtureServices(t)

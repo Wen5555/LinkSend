@@ -53,6 +53,13 @@ type Service struct {
 	listenerWorkers sync.WaitGroup
 	shutdownOnce    sync.Once
 	shutdownDone    chan struct{}
+	store           *desktopStore
+	storeErr        error
+	queue           queueManager
+	changes         changeHub
+	epoch           string
+	workCtx         context.Context
+	workCancel      context.CancelFunc
 }
 
 type cachedNetworkSelection struct {
@@ -74,16 +81,17 @@ type DiagnosticIdentity struct {
 }
 
 type DeviceInfo struct {
-	ID           string `json:"id"`
-	GroupID      string `json:"group_id"`
-	Name         string `json:"name"`
-	PublicKey    string `json:"public_key_hex"`
-	Admin        bool   `json:"admin"`
-	Online       bool   `json:"online"`
-	Trusted      bool   `json:"trusted"`
-	AlwaysAccept bool   `json:"always_accept"`
-	Nearby       bool   `json:"nearby"`
-	Blocked      bool   `json:"blocked"`
+	ID           string        `json:"id"`
+	GroupID      string        `json:"group_id"`
+	Name         string        `json:"name"`
+	PublicKey    string        `json:"public_key_hex"`
+	Admin        bool          `json:"admin"`
+	Online       bool          `json:"online"`
+	Trusted      bool          `json:"trusted"`
+	AlwaysAccept bool          `json:"always_accept"`
+	Nearby       bool          `json:"nearby"`
+	Blocked      bool          `json:"blocked"`
+	Profile      DeviceProfile `json:"profile"`
 }
 
 type InvitationInfo struct {
@@ -147,6 +155,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
+	s.initializeWorkspace()
 	keepLock = true
 	return s, nil
 }
@@ -176,6 +185,11 @@ func (s *Service) Bootstrap(ctx context.Context, token, name string) (DeviceInfo
 }
 
 func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return DeviceInfo{}, workErr
+	}
+	defer done()
 	c, err := s.client()
 	if err != nil {
 		return DeviceInfo{}, err
@@ -208,6 +222,11 @@ func (s *Service) CreateInvitation(ctx context.Context) (InvitationInfo, error) 
 }
 
 func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return nil, workErr
+	}
+	defer done()
 	c, err := s.client()
 	var devices []signaling.Device
 	serverErr := err
@@ -278,7 +297,7 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	if len(out) == 0 && serverErr != nil {
 		return nil, serverErr
 	}
-	return out, nil
+	return s.decorateDevices(out), nil
 }
 
 // syncPairedDevices intentionally implements the simplified trust model:
@@ -338,6 +357,11 @@ func membershipFailure(err error) MembershipStatus {
 }
 
 func (s *Service) Trust(ctx context.Context, deviceID, fingerprint string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	if len(deviceID) != 64 || deviceID != fingerprint {
 		return errors.New("UNPAIRED: full device fingerprint confirmation is required")
 	}
@@ -360,6 +384,11 @@ func (s *Service) Trust(ctx context.Context, deviceID, fingerprint string) error
 // SetAlwaysAccept changes receiver consent for one paired device. Transport
 // identity checks remain mandatory even when the user confirmation is skipped.
 func (s *Service) SetAlwaysAccept(deviceID string, enabled bool) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	if len(deviceID) != 64 || deviceID == s.identity.ID() {
 		return errors.New("UNPAIRED: paired peer is required")
 	}

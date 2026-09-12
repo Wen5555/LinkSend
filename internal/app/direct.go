@@ -24,18 +24,20 @@ const firstGeneration uint64 = 1
 const candidateExchangeBudget = 10 * time.Second
 
 type DirectConfig struct {
-	BindAddress        string
-	InterfacePriority  []string
-	ExcludedInterfaces []string
-	STUNURLs           []string
-	AllowLoopback      bool
-	CheckTimeout       time.Duration
-	WaitTimeout        time.Duration // receiver only: time allowed for an incoming request
-	onPhase            func(string)  // local application observation; never serialized
-	onSession          func(string, string)
-	onEvidence         func(DirectEvidence)
-	onChunkSent        func(transfer.ChunkTransmission)
-	knownInterface     string
+	BindAddress          string
+	InterfacePriority    []string
+	ExcludedInterfaces   []string
+	STUNURLs             []string
+	AllowLoopback        bool
+	CheckTimeout         time.Duration
+	WaitTimeout          time.Duration // receiver only: time allowed for an incoming request
+	onPhase              func(string)  // local application observation; never serialized
+	onSession            func(string, string)
+	onEvidence           func(DirectEvidence)
+	onChunkSent          func(transfer.ChunkTransmission)
+	knownInterface       string
+	expectedSourceDigest string
+	beforeDispatch       func(TaskSnapshot) error
 }
 
 func (c DirectConfig) phase(value string) {

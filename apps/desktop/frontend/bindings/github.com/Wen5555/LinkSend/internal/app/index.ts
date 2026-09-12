@@ -3,13 +3,19 @@
 
 export type {
     DeviceInfo,
+    DeviceProfile,
     DiagnosticIdentity,
     Diagnostics,
     DirectTimings,
+    EnqueueRequest,
     IdentityInfo,
     InboxStatus,
     InvitationInfo,
     MembershipStatus,
+    QueueItem,
+    SendDraft,
     TaskPhaseEvent,
-    TaskSnapshot
+    TaskSnapshot,
+    WorkspaceChange,
+    WorkspaceSnapshot
 } from "./models.js";

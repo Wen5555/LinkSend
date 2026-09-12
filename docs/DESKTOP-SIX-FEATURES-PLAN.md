@@ -4,6 +4,10 @@
 适用仓库：D:/apps/Osend；规划时 HEAD：fbfc250159ea65dbb5840d6dadb03fe4423cf868。
 用户场景：个人多电脑互传，兼顾日常临时交接。本轮仅覆盖上一轮回复的第 1–6 项。
 
+2026-09-12 执行决策更新：用户明确取消 macOS12 支持，最低版本为 macOS13，采用 Go1.27.1；
+M0 与 M1 合并发布。该授权取代下文规划时保留旧最低系统版本的限制，具体证据见
+[平台兼容性纠正](evidence/DESKTOP-M0-COMPATIBILITY-CORRECTION.md)。
+
 ## 1. 范围与编号
 
 本文件的 S01–S06 对应用户所选六项，不是 PRODUCT-PLAN.md 中 F01–F06 的顺序。

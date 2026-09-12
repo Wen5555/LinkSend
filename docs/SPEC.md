@@ -8,6 +8,11 @@ local denial, trust migration and saved shutdown are defined in
 [ADR 0003](adr/0003-desktop-ownership-and-local-denial.md); M1–M6 features remain
 pending until individually verified in the [execution record](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md).
 
+M1 source uses task schema3 for local device preferences, drafts and the single-owner
+persistent queue (ADR0004). Go holds all scheduling and source validation; UI commands
+are revision checked and enqueue is idempotent. The user explicitly set minimum
+macOS13 on 2026-09-12, permitting Go1.27.1, and approved one combined M0/M1 prerelease.
+
 Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. The current product release line is `0.4.x`; protocol V1 is an independent compatibility contract and is not the same as product SemVer. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from protocol V1.
 
 ## 1. Product scope

@@ -35,6 +35,10 @@ func (s *Service) shutdownOwners() {
 	s.inbox.mu.Lock()
 	s.inbox.shutdown = true
 	s.inbox.mu.Unlock()
+	if s.workCancel != nil {
+		s.workCancel()
+	}
+	s.stopQueue()
 	// Set intent before cancelling parent listeners, including inbound tasks.
 	s.tasks.mu.RLock()
 	for _, task := range s.tasks.tasks {
@@ -61,6 +65,9 @@ func (s *Service) shutdownOwners() {
 	_ = s.stopLANDiscovery()
 	s.listenerWorkers.Wait()
 	s.tasks.workers.Wait()
+	if s.store != nil {
+		_ = s.store.Close()
+	}
 	if s.profileLock != nil {
 		_ = s.profileLock.Close()
 	}

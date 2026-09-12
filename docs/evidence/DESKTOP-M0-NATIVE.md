@@ -102,7 +102,7 @@ PowerShell 7 使用：`git status --short`、`git branch --show-current`、`git 
 
 只读检查 job `/tmp/codex-ssh/desktop-m0-mac-inspect-20260912T043317Z` 退出 0，实际发现 Homebrew Go 1.26.4、Node 26.0.0、pnpm 11.3.0；wails3 不在检查 PATH；CLT/Apple clang 21.0.0/macOS SDK 26.5 可用，没有完整 Xcode。现有 `/Applications/LinkSend.app` 产品版本 0.3.0，运行进程 1 个、控制台用户 wen；没有关闭或替换该应用，没有改用户 LinkSend profile。
 
-工具链准备使用新的 `/Users/wen/linksend-desktop-six/tools`，不替换 Homebrew、不改 shell 配置。后台安装 job 为 `/tmp/codex-ssh/desktop-m0-mac-tools-20260912T043432Z`，最终 `exit-code=0`；Go 1.27.1、Node 24.21.0、pnpm 12.4.1、Wails CLI beta.18 已安装并输出实际版本。固定官方来源：
+最初的工具链准备使用新的 `/Users/wen/linksend-desktop-six/tools`，不替换 Homebrew、不改 shell 配置。后台安装 job 为 `/tmp/codex-ssh/desktop-m0-mac-tools-20260912T043432Z`，最终 `exit-code=0`；Go 1.27.1、Node 24.21.0、pnpm 12.4.1、Wails CLI beta.18 已安装并输出实际版本。**随后发现 Go 1.27 官方最低要求 macOS 13，不能用于本产品保留的 macOS 12 目标，已按下文回退 Go 1.26.8；此处保留历史安装记录。** 固定官方来源：
 
 | 工具包 | 一手校验来源 | 已取期望值 |
 | --- | --- | --- |
@@ -117,3 +117,13 @@ manager 的 tail-job 在 Mac 默认 zsh 中出现 `read-only variable: status`�
 物理 Mac 的 profile 锁测试也已运行：上传 Go 1.27.1 编译的 darwin/arm64 测试二进制（SHA256 `38c0b914a21704a7dd9ce387e896787dc0b49e4a2d133c7de5711b5ef3169b8b`），执行 `-test.run '^TestProfileLock' -test.v -test.count=1`。job `/tmp/codex-ssh/desktop-m0-profile-lock-test-20260912T043634Z` 退出 0，同进程互斥、独立 profile、原文件保留、真实子进程正常退出/强杀释放全部 PASS；测试后用户原 LinkSend 进程仍为 1 个。这份二进制仅覆盖新增 OS 锁测试，后追加 Service 构造接入用例应随最终测试包重新执行。
 
 安装运行状态和功能原生验收仍需分开记录；连接恢复、工具安装和 profile OS 锁测试不是 Finder/通知/睡眠等产品交互 PASS。
+
+## macOS 最低版本核实与最终用户决策
+
+官方 [Go 1.27 Darwin 发布说明](https://go.dev/doc/go1.27#darwin) 明确写明 Go 1.27 要求 macOS 13 Ventura；[Go 1.26 说明](https://go.dev/doc/go1.26#darwin) 明确 Go 1.26 是最后支持 macOS 12 Monterey 的版本。Go 1.27.1 linker `src/cmd/link/internal/ld/macho.go:449` 的默认最低版本为 `macVersionFlag{13,0,0}`；强行设置 CGo minimum=12 不能恢复 Go runtime 的受支持兼容性。
+
+发现问题时曾按原总提示词准备保留 macOS 12，安装精确 Go 1.26.8。官方 `go1.26.8.darwin-arm64.tar.gz` 大小 64,626,620 bytes，SHA256 `a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b`，从 `https://go.dev/dl/?mode=json&include=all` 取得并在远端解压前校验 PASS。
+
+独立安装路径 `/Users/wen/linksend-desktop-six/tools-go1.26.8`；安装 job `/tmp/codex-ssh/desktop-m0-mac-go1268-20260912T050200Z` 最终退出 0。该目录 `bin/wails3` 的 `go version -m` 显示由 Go 1.26.8 编译、Wails beta.18；Go 1.27.1 工具完整保留。
+
+**用户随后明确决定最低 macOS 13、取消 macOS 12 支持、继续使用 Go 1.27.1，并合并发布 M0/M1。** 因此最终构建 PATH 重新使用 `/Users/wen/linksend-desktop-six/tools` 下原有 Go 1.27.1/Wails CLI，而不是 `tools-go1.26.8`；后者仅保留审计/回滚工具，不再是候选。Info.plist、CGo/Taskfile minimum OS 和 Vite 浏览器目标须一致更新，新包须检查 Mach-O minimum/SDK。这个最低系统提升有明确用户授权，不能归因于静默升级。

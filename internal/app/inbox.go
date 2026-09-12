@@ -283,6 +283,14 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	if err := s.checkPeerAllowed(peer.PeerID); err != nil {
 		return false
 	}
+	var policyErr error
+	directory, policyErr = s.receiveDirectory(peer.PeerID, directory)
+	if policyErr != nil {
+		s.inbox.mu.Lock()
+		s.inbox.lastError = "RECEIVE_DIRECTORY_UNAVAILABLE"
+		s.inbox.mu.Unlock()
+		return false
+	}
 	ctx, cancel := context.WithCancel(inboxCtx)
 	s.operationMu.Lock()
 	if s.isClosing() {

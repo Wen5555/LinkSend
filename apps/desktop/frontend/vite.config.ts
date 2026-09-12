@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    // Preserve Windows WebView2 and the existing macOS 12 deployment baseline.
+    // Match Windows WebView2 and the user-approved macOS 13 deployment baseline.
     // Syntax transforms do not polyfill Web APIs; those remain platform checks.
-    target: ['chrome109', 'safari15']
+    target: ['chrome109', 'safari16']
   }
 })

@@ -26,8 +26,20 @@ export function AcceptTaskAlways(id: string): $CancellablePromise<void> {
     return $Call.ByID(805976429, id);
 }
 
+export function BlockPeer(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1661110154, id);
+}
+
+export function CancelQueue(id: string, revision: number): $CancellablePromise<void> {
+    return $Call.ByID(3632256226, id, revision);
+}
+
 export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
+}
+
+export function ConfirmQueue(id: string, revision: number): $CancellablePromise<void> {
+    return $Call.ByID(3080801262, id, revision);
 }
 
 export function CreateInvitation(): $CancellablePromise<app$0.InvitationInfo> {
@@ -44,6 +56,10 @@ export function Diagnostics(): $CancellablePromise<app$0.Diagnostics> {
 
 export function EffectiveConfig(): $CancellablePromise<$models.EffectiveConfig> {
     return $Call.ByID(329529236);
+}
+
+export function Enqueue(request: app$0.EnqueueRequest): $CancellablePromise<app$0.QueueItem> {
+    return $Call.ByID(2200678053, request);
 }
 
 export function GetTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -118,6 +134,10 @@ export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
 }
 
+export function ReorderQueue(ids: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(1496578879, ids);
+}
+
 export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(1059512591, id);
 }
@@ -126,12 +146,24 @@ export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(3354333520, id);
 }
 
+export function SaveDeviceProfile(profile: app$0.DeviceProfile): $CancellablePromise<app$0.DeviceProfile> {
+    return $Call.ByID(3209168119, profile);
+}
+
+export function SaveDraft(draft: app$0.SendDraft): $CancellablePromise<app$0.SendDraft> {
+    return $Call.ByID(3025273299, draft);
+}
+
 export function SavePreferences(next: $models.DesktopPreferences): $CancellablePromise<void> {
     return $Call.ByID(3232231562, next);
 }
 
 export function SetAlwaysAccept(deviceID: string, enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(3711226762, deviceID, enabled);
+}
+
+export function SetQueuePaused(paused: boolean): $CancellablePromise<void> {
+    return $Call.ByID(102829032, paused);
 }
 
 export function StartReceive(expectedPeerID: string, directory: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -155,4 +187,12 @@ export function Tasks(): $CancellablePromise<app$0.TaskSnapshot[] | null> {
 
 export function TrustDevice(deviceID: string, fingerprint: string): $CancellablePromise<void> {
     return $Call.ByID(4070375595, deviceID, fingerprint);
+}
+
+export function UnblockPeer(id: string): $CancellablePromise<void> {
+    return $Call.ByID(493225303, id);
+}
+
+export function Workspace(): $CancellablePromise<app$0.WorkspaceSnapshot> {
+    return $Call.ByID(4123709102);
 }

@@ -19,6 +19,22 @@ export interface DeviceInfo {
     "always_accept": boolean;
     "nearby": boolean;
     "blocked": boolean;
+    "profile": DeviceProfile;
+}
+
+/**
+ * DeviceProfile contains local presentation and destination preferences only.
+ * Key pins, local denial, and auto-accept remain owned by the identity layer.
+ */
+export interface DeviceProfile {
+    "peer_id": string;
+    "alias": string;
+    "my_device": boolean;
+    "pinned": boolean;
+    "position": number;
+    "receive_directory": string;
+    "last_used_at": string;
+    "revision": number;
 }
 
 /**
@@ -55,6 +71,14 @@ export interface DirectTimings {
     "ice_ms": number;
     "quic_handshake_ms": number;
     "total_connect_ms": number;
+}
+
+export interface EnqueueRequest {
+    "request_id": string;
+    "peer_id": string;
+    "paths": string[] | null;
+    "wait_for_peer": boolean;
+    "expires_at": string;
 }
 
 export interface IdentityInfo {
@@ -97,6 +121,34 @@ export interface MembershipStatus {
      */
     "role": string;
     "message"?: string;
+}
+
+export interface QueueItem {
+    "id": string;
+    "request_id": string;
+    "peer_id": string;
+    "source_summary": string;
+    "state": string;
+    "position": number;
+    "task_id": string;
+    "expires_at": string;
+    "revision": number;
+    "created_at": string;
+    "updated_at": string;
+    "last_error": string;
+    "wait_for_peer": boolean;
+}
+
+/**
+ * SendDraft is local metadata. Paths are never used as file-content IPC, and
+ * persisting a draft does not authorise a send or open any of its file bodies.
+ */
+export interface SendDraft {
+    "id": string;
+    "paths": string[] | null;
+    "peer_id": string;
+    "revision": number;
+    "updated_at": string;
 }
 
 /**
@@ -170,4 +222,23 @@ export interface TaskSnapshot {
     "history_persisted": boolean;
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
+}
+
+export interface WorkspaceChange {
+    "epoch": string;
+    "revision": number;
+}
+
+/**
+ * WorkspaceSnapshot contains local presentation metadata only. Private source
+ * recovery maps, checkpoint paths and file/image bytes never cross this DTO.
+ */
+export interface WorkspaceSnapshot {
+    "epoch": string;
+    "revision": number;
+    "draft": SendDraft;
+    "queue": QueueItem[] | null;
+    "tasks": TaskSnapshot[] | null;
+    "queue_paused": boolean;
+    "persistence_available": boolean;
 }

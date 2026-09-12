@@ -30,6 +30,8 @@ type App struct {
 	core          *linksendapp.Service
 	initErr       error
 	prefs         DesktopPreferences
+	prefsMu       sync.RWMutex
+	prefsWriteMu  sync.Mutex
 	prefsStatus   PreferencesStatus
 	configBlocked bool
 	dataDir       string
@@ -38,6 +40,7 @@ type App struct {
 	quitReady     bool
 	runtimeApp    *application.App
 	window        application.Window
+	eventsDone    chan struct{}
 }
 
 type DesktopPreferences struct {
@@ -127,6 +130,8 @@ func (a *App) startup(ctx context.Context) {
 		if a.prefs.ReceiveDirectory != "" {
 			_ = a.core.StartInbox(a.prefs.ReceiveDirectory, a.directConfig())
 		}
+		_ = a.core.StartQueue(a.directConfig())
+		a.startWorkspaceEvents()
 	}
 }
 
@@ -138,6 +143,12 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	if a.cancel != nil {
+		a.cancel()
+	}
+	if a.eventsDone != nil {
+		<-a.eventsDone
+	}
 	if a.core != nil {
 		a.core.Shutdown()
 	}
@@ -288,16 +299,17 @@ func (a *App) showQuitWarning(message string) {
 }
 
 func (a *App) directConfig() linksendapp.DirectConfig {
+	prefs := a.Preferences()
 	stun := make([]string, 0)
-	rawSTUN := firstNonEmpty(os.Getenv("LINKSEND_STUN"), strings.Join(a.prefs.STUNURLs, ","), "stun:stun.oooai.de:3478")
+	rawSTUN := firstNonEmpty(os.Getenv("LINKSEND_STUN"), strings.Join(prefs.STUNURLs, ","), "stun:stun.oooai.de:3478")
 	for _, value := range strings.Split(rawSTUN, ",") {
 		if value = strings.TrimSpace(value); value != "" {
 			stun = append(stun, value)
 		}
 	}
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
-	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), a.prefs.BindAddress)
-	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
+	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), prefs.BindAddress)
+	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -394,20 +406,34 @@ func loadPreferencesDetailed(dataDir string) (DesktopPreferences, PreferencesSta
 	return loaded, PreferencesStatus{State: "valid"}
 }
 
-func (a *App) Preferences() DesktopPreferences      { return a.prefs }
-func (a *App) PreferencesStatus() PreferencesStatus { return a.prefsStatus }
+func (a *App) Preferences() DesktopPreferences {
+	a.prefsMu.RLock()
+	defer a.prefsMu.RUnlock()
+	prefs := a.prefs
+	prefs.InterfacePriority = append([]string(nil), prefs.InterfacePriority...)
+	prefs.ExcludedInterfaces = append([]string(nil), prefs.ExcludedInterfaces...)
+	prefs.STUNURLs = append([]string(nil), prefs.STUNURLs...)
+	return prefs
+}
+func (a *App) PreferencesStatus() PreferencesStatus {
+	a.prefsMu.RLock()
+	defer a.prefsMu.RUnlock()
+	return a.prefsStatus
+}
 
 func (a *App) EffectiveConfig() EffectiveConfig {
+	prefs := a.Preferences()
+	status := a.PreferencesStatus()
 	envServer, envBind, envSTUN := os.Getenv("LINKSEND_SERVER_URL"), os.Getenv("LINKSEND_BIND"), os.Getenv("LINKSEND_STUN")
-	server, serverSource := a.prefs.ServerURL, "已保存偏好"
+	server, serverSource := prefs.ServerURL, "已保存偏好"
 	if strings.TrimSpace(envServer) != "" {
 		server, serverSource = strings.TrimSpace(envServer), "环境变量 LINKSEND_SERVER_URL"
 	}
 	if strings.TrimSpace(server) == "" {
 		server, serverSource = "https://linksend.oooai.de", "默认值"
 	}
-	bind, bindSource := resolvedDesktopBind(envBind, a.prefs.BindAddress)
-	stun := append([]string(nil), a.prefs.STUNURLs...)
+	bind, bindSource := resolvedDesktopBind(envBind, prefs.BindAddress)
+	stun := append([]string(nil), prefs.STUNURLs...)
 	stunSource := "已保存偏好"
 	if strings.TrimSpace(envSTUN) != "" {
 		stun = make([]string, 0, 4)
@@ -421,10 +447,12 @@ func (a *App) EffectiveConfig() EffectiveConfig {
 	if len(stun) == 0 {
 		stun, stunSource = []string{"stun:stun.oooai.de:3478"}, "默认值"
 	}
-	return EffectiveConfig{ServerURL: server, ServerSource: serverSource, BindAddress: bind, BindSource: bindSource, InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, STUNSource: stunSource, NeedsRestart: true, Preferences: a.prefsStatus.State}
+	return EffectiveConfig{ServerURL: server, ServerSource: serverSource, BindAddress: bind, BindSource: bindSource, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, STUNSource: stunSource, NeedsRestart: true, Preferences: status.State}
 }
 
 func (a *App) SavePreferences(next DesktopPreferences) error {
+	a.prefsWriteMu.Lock()
+	defer a.prefsWriteMu.Unlock()
 	if a.dataDir == "" {
 		return errBackendUnavailable
 	}
@@ -444,7 +472,7 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	}
 	tmp := filepath.Join(a.dataDir, fmt.Sprintf("desktop-preferences.json.tmp-%d", time.Now().UnixNano()))
 	var recoveryBackup string
-	if a.configBlocked {
+	if a.ensureConfig() != nil {
 		original := filepath.Join(a.dataDir, "desktop-preferences.json")
 		if _, err := os.Stat(original); err == nil {
 			recoveryBackup = filepath.Join(a.dataDir, fmt.Sprintf("desktop-preferences.json.recovery-%d.bak", time.Now().UnixNano()))
@@ -467,9 +495,11 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 		_ = os.Remove(tmp)
 		return err
 	}
+	a.prefsMu.Lock()
 	a.prefs = next
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
+	a.prefsMu.Unlock()
 	if a.core != nil && next.ReceiveDirectory != "" {
 		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {
 			return err
@@ -479,6 +509,8 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 }
 
 func (a *App) ensureConfig() error {
+	a.prefsMu.RLock()
+	defer a.prefsMu.RUnlock()
 	if a.configBlocked {
 		return errors.New("CONFIG_BLOCKED: 偏好文件异常，先在设置页重置或修复桌面偏好")
 	}
@@ -747,10 +779,12 @@ func (a *App) PickSourceDirectory() (string, error) {
 // Status reports this running shell only; it does not claim a P2P connection.
 func (a *App) Status() DesktopStatus {
 	status := DesktopStatus{Version: protocol.ProductVersion, Platform: runtime.GOOS + "/" + runtime.GOARCH, Relay: false, Stage: "service", Ready: a.core != nil}
+	a.prefsMu.RLock()
 	if a.configBlocked {
 		status.Ready = false
 		status.Error = a.prefsStatus.Message
 	}
+	a.prefsMu.RUnlock()
 	if a.core != nil {
 		status.Identity = a.core.Identity().ID
 	}

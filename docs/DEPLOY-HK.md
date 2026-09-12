@@ -2,10 +2,21 @@
 
 香港入口是长期测试主站，不承载生产身份或生产可用性承诺。目标 SSH alias 为 `hk-main`（Debian 12 amd64，SSH 端口由 manager inventory 管理），服务位于 `/opt/linksend-lan-test`。所有远程连接必须通过 `codex-ssh-manager` 执行 resolve → probe → audit-host；不得把密码、令牌、固定码、私钥或完整配置复制进提示词、脚本和证据。
 
-## 当前基线（v0.4.0）
+## 当前基线（Desktop M0，v0.5.0）
 
-- 公共入口 `https://linksend.oooai.de/healthz` 返回产品 `0.4.0`、协议 V1、`transport=quic`、`relay=false`。
-- `linksend-rendezvous.service` 管理 `/opt/linksend-lan-test/rendezvous`。当前二进制来自干净提交 `7303f34260c09b8ad71c117ee2d6837fac4dfe46`，`vcs.modified=false`，SHA256 为 `227e2ec9fb029fcc8a568637376318e4eae4099f1cc2ce79bc7224557f07fa45`。
+- 2026-09-12 北京时间 12:46 完成用户授权的 M0 测试主站事务部署；产品为 `0.5.0`，计划测试预发布标签为 `v0.5.0-m0`。它只对应六项桌面功能的 M0 前置工作，不代表 M1–M6 或六项原生验收完成；本节不声明 Release 已发布。
+- `linksend-rendezvous.service` 运行 `/opt/linksend-lan-test/rendezvous`，部署后及独立复核 MainPID 均为 `395859`。资产来自精确干净提交 `b3d5fc7b6acf49dfc07671d774e2a7f20c28cc94`，Go `1.27.1`、Linux amd64、`vcs.modified=false`；17,880,415 bytes，SHA256 `631db1cd5c5079a11c1b8a90bfed4eb0a6591c5ff6907203c3d71f4197a145a3`。
+- 备份 `/opt/linksend-lan-test/backups/20260912T044648.234152Z-desktop-m0-b3d5fc7b6acf` 包含可读的旧二进制、配置、unit、SQLite 在线备份和 manifest。旧版本为 `0.4.0`；事务门槛全部通过，无需触发自动回滚，没有回退数据库。
+- 控制数据库的真实版本位于 `schema_version` 表，值为 `2`；`PRAGMA user_version` 仍为 `0`。两者均未变化，`integrity_check=ok`，邀请表仍为 19 条、`used_by/used_at` 存在。桌面任务库或 trust 文件版本不能混用于服务数据库。
+- origin 与公网 health 独立复核均返回产品 `0.5.0`、协议 V1、QUIC、`relay=false`；443 由 MainPID 监听，UDP 3478 保持存在；续期 timer active，最近 30 分钟 fatal/panic=0。配置和 unit 哈希均未变，没有修改证书、续期脚本、coturn 或主机网络。
+- 公开 WSS 另做 4 轮实际连接/快速关闭/重连检查；未注册随机身份认证返回 close 1008，正常关闭为 1000，之后立即重连仍可收到真实 0.5.0 hello。未创建成员/profile，也未传输正文；不等同于认证后配对、传输、跨 NAT 或原生 UI 验收。
+- 部署 job：`/tmp/codex-ssh/linksend-desktop-m0-deploy-20260912T044635Z`；独立复核 job：`/tmp/codex-ssh/linksend-desktop-m0-independent-20260912T044754Z`。完整实际命令、版本哈希、限制和确切回滚入口见 [M0 部署证据](evidence/DESKTOP-M0-DEPLOYMENT.md)。
+- 回滚使用该备份中的旧二进制并保留当前 schema 2 数据；执行器的 `-RollbackBackup` 会先核对部署 manifest、当前新 SHA、旧备份 SHA 和配置，避免覆盖后续其他事务。若意外出现不兼容 schema，应停服审阅新写入，不能自动用旧数据库抹掉部署后成员数据。
+
+## 上一基线（v0.4.0）
+
+- 该版本部署后的公共入口 `https://linksend.oooai.de/healthz` 返回产品 `0.4.0`、协议 V1、`transport=quic`、`relay=false`。
+- `linksend-rendezvous.service` 管理 `/opt/linksend-lan-test/rendezvous`。该版本二进制来自干净提交 `7303f34260c09b8ad71c117ee2d6837fac4dfe46`，`vcs.modified=false`，SHA256 为 `227e2ec9fb029fcc8a568637376318e4eae4099f1cc2ce79bc7224557f07fa45`。
 - 控制数据库为 schema 2、`PRAGMA integrity_check=ok`，邀请表包含 `used_by` 和 `used_at`；公网测试确认 TTL=600 秒、同身份重复加入幂等成功、其他身份复用返回 `PAIRING_CODE_USED`。
 - `linksend-origin-renew.timer` 保持启用。续期脚本使用 Python 解析 Cloudflare API JSON、强制 HTTP/1.1 并进行有界重试；更新证书后通过 `systemctl restart linksend-rendezvous.service` 重启，不再依赖缺失的 `jq`、模糊 `pkill` 或从 systemd oneshot 派生后台进程。
 

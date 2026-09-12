@@ -6,6 +6,11 @@
 保存退出建立派发屏障并保留可恢复任务，迟到事件不覆盖控制意图。
 后续设备/草稿/队列及接收计划尚按 M1–M6 推进，详见 [ADR 0003](adr/0003-desktop-ownership-and-local-denial.md)。
 
+M1元数据现为task schema3：DeviceProfile、SendDraft及send_queue共用任务库，身份授权仍在trust。
+队列先持久关联task再启动worker，准备时与派发时比较源摘要；重启需要确认，离线项不阻塞其他在线设备。
+Wails只发送有epoch/revision的合并失效事件，React Query重取Go快照，命令无通用重试。
+最低macOS13由用户明确授权，未声称当前macOS26.5原生检查等同macOS13实机。
+
 当前产品版本为 LinkSend `0.4.0`，协议为 V1。根 module `github.com/Wen5555/LinkSend` 包含协议、身份、LAN 发现、信令客户端、Pion/quic-go 集成、文件传输、存储、应用服务、服务端和 CLI；`apps/desktop` 是唯一嵌套 Go module，使用 Wails 3 `v3.0.0-beta.18`。
 
 ```text

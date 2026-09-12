@@ -1,5 +1,8 @@
 # M0 依赖兼容性核查与升级记录
 
+**最终结论：用户已明确取消 macOS12 支持、最低支持 macOS13，采用 Go1.27.1；M0 与 M1 合并发布。**
+初始 M0 提交 `b3d5fc7` 的包仍声明 macOS12，不能直接作为最终 Release；必须等待最低系统元数据修正及 M1 整合后重新构建和验证。第 6 节保留遗漏、原生发现和实际回退记录，第 7 节记录用户最终决策。
+
 核查日期：2026-09-12。基线：`main` / `fbfc250159ea65dbb5840d6dadb03fe4423cf868`。
 开始时有未跟踪的规划、`.playwright-cli/`、iOS/Linux build 文件，全部保留；没有 `.codegraph/` 索引。
 本记录区分官方发布与声明兼容、实际安装/编译和原生验收。版本存在不代表本项目已经通过测试。
@@ -10,7 +13,7 @@
 
 | 依赖 | 精确目标 | 本次官方结果 / 约束 | 决策 |
 |---|---|---|---|
-| Go | 1.27.1 | [下载 JSON](https://go.dev/dl/?mode=json&include=all) HTTP 200，`stable=true`，Windows amd64 ZIP 存在 | 升级两个 module 与 workspace toolchain，单独回归签名/JSON/manifest/恢复 |
+| Go | 1.27.1 | [下载 JSON](https://go.dev/dl/?mode=json&include=all) HTTP 200，`stable=true`；[Go1.27 Darwin notes](https://go.dev/doc/go1.27#darwin) 明确要求 macOS13 | 用户明确取消macOS12支持后采用1.27.1；两份module/workspace及平台最低声明同步 |
 | Node | 24.21.0 | [发行索引](https://nodejs.org/dist/index.json) HTTP 200，2026-09-07 发布、LTS `Krypton` | 本地便携安装；CI 同步精确版本 |
 | pnpm | 12.4.1 | [精确包](https://registry.npmjs.org/pnpm/12.4.1) HTTP 200，Node `>=18.*` | 精确锁定 packageManager；保留唯一项目 pnpm lockfile |
 | React / React DOM | 19.3.0 | [React](https://registry.npmjs.org/react/19.3.0)、[React DOM](https://registry.npmjs.org/react-dom/19.3.0) HTTP 200；DOM peer `react: ^19.3.0` | 同步升级 |
@@ -27,7 +30,7 @@
 
 本次没有“无法验证却写为已发布”的候选版本。TypeScript 7.0.2 官方 npm 也存在，但不在 typescript-eslint 8.70.0 peer 范围；[TS 7 公告](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/) 本次 HTTP 200。不使用 force、忽略 peer 或禁用 lint。
 
-Go 依赖的缓存固定源码 `go.mod` 最低版本：Pion ICE 4.4.2 要求 Go 1.24.0，quic-go 0.62.0 要求 1.26.0，modernc SQLite 1.58.0 要求 1.25.0，Wails beta.18 要求 1.25.0。因此声明层面接受 Go 1.27.1；运行正确性仍须测试。
+Go 依赖的缓存固定源码 `go.mod` 最低版本：Pion ICE 4.4.2 要求 Go 1.24.0，quic-go 0.62.0 要求 1.26.0，modernc SQLite 1.58.0 要求 1.25.0，Wails beta.18 要求 1.25.0。声明层面接受 Go1.26.8 和 Go1.27.1，但不能据此推导操作系统兼容性；初审漏查 Go1.27 的最低 macOS，已依据原生证据纠正。
 
 ## 2. 实际基线与原生边界
 
@@ -49,7 +52,7 @@ Wails doctor 同时明确：MSIX Packaging Tool、MakeAppx、SignTool 未安装�
 - `pkg/application/single_instance.go` 的 `SingleInstanceOptions`、`OnSecondInstanceLaunch` 与 `SecondInstanceData.Args/WorkingDir`；profile 键和 CLI/GUI 写入归属仍由产品实现。
 - `pkg/application/systemtray.go`、窗口 `WindowFilesDropped` 与 notifications service 确实存在；未据此声称原生菜单/通知已操作成功。
 - `pkg/application/clipboard.go` 与 `clipboard_manager.go` 只有 `Text/SetText`；截图必须经过薄原生适配。
-- 当前 `build/darwin/Info.plist` 的 `LSMinimumSystemVersion=12.0.0`，Taskfile 使用 `-mmacosx-version-min=12.0`；升级不提高此部署目标。Vite target 明确为 Chrome109 / Safari15（macOS12 初始 Safari 系列），实际 Web API 支持仍单独验收。
+- 基线 `build/darwin/Info.plist` 的 `LSMinimumSystemVersion=12.0.0`，Taskfile 使用 `-mmacosx-version-min=12.0`。初始前端目标为 Chrome109 / Safari15；发现 Go1.27 的 macOS13 要求后没有将这套旧声明继续作为兼容证据。最终用户批准最低macOS13，按第7节调整为13与Safari16；实际 Web API 支持仍单独验收。
 
 [Go 1.27 notes](https://go.dev/doc/go1.27)、[Vitest migration](https://vitest.dev/guide/migration) 本次 HTTP 200。Vite 网站 migration 页面首次静态请求 TLS 连接失败；随后 [Vite 8.3.0 tag 的官方迁移原文](https://raw.githubusercontent.com/vitejs/vite/v8.3.0/docs/guide/migration.md) HTTP 200（21,418 字符），确认默认浏览器目标更新以及 Rolldown/Oxc 替代 Rollup/esbuild。实际源码已留存 `vite8-migration.md`，显式 target 不依赖新默认值。
 
@@ -91,7 +94,7 @@ Wails doctor 同时明确：MSIX Packaging Tool、MakeAppx、SignTool 未安装�
 - pnpm npm 包 SRI：`sha512-LoHjmdc/6DkNqyXgaqeIq3pZCCSNL1o3D4K0gRR6ano2e/gEj5pv22Rg8hpm8FQt7bi5TKLIcjWWdBkgsWVtTA==`。
 - pnpm Windows native 包 SRI：`sha512-x7gJHZgHo6hp354xCYA2NvoFzYJkHwovt2kVsUBK5EmXULLcP51JGMq09CX+5FRFJUZFKoXjLu3mZWmfP7o6PQ==`。
 
-前端 `packageManager=pnpm@12.4.1`、`engines.node=^24.21.0`；两份 module 与 workspace `go=1.27.0` / `toolchain=go1.27.1`。三份 GitHub workflow 同步 Go1.27.1 / Node24.21.0 / pnpm12.4.1，Windows 多命令步骤增加逐条退出码检查，避免前面失败被最后成功掩盖。Wails 保留 beta.18；前端和 packaging 产品版本经本轮集成决定提升为 0.5.0，M0 阶段标识由测试预发布 tag `v0.5.0-m0` 区分；此处不声明 Release 已发布。
+前端 `packageManager=pnpm@12.4.1`、`engines.node=^24.21.0`。本节首次交接时两份 module、workspace 和三份 workflow 使用 Go1.27.1；第6节记录按旧平台契约回退Go1.26.8，第7节记录用户批准macOS13后恢复Go1.27.1。Node24.21.0 / pnpm12.4.1、Windows 多命令逐条退出码检查保持。Wails 保留 beta.18；前端和 packaging 产品版本提升为0.5.0，发布阶段后来调整为M0/M1合并，初拟 `v0.5.0-m0` 不再视为既定发布计划；此处不声明 Release 已发布。
 
 安装日志有 ESLint9.39.4 与间接 glob10.5.0 的 deprecated 警告；本次保留已经与 TS-eslint peer、实际 lint 通过的 ESLint 9，不把警告描述为失败或升级为未核实版本。现有 `pnpm-workspace.yaml` 仅含构建许可及 Wails 发包等待排除策略，没有创建第二个 package/workspace。
 
@@ -110,4 +113,32 @@ Wails doctor 同时明确：MSIX Packaging Tool、MakeAppx、SignTool 未安装�
 
 生成后 `pnpm --dir frontend run typecheck:bindings` 与 `pnpm --dir frontend run typecheck` 均退出 0。首次复查错误地把 `--dir frontend` 放在脚本参数末尾，使 pnpm 在 desktop 目录查找 package.json，返回 `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND` / 退出 1；修正命令参数位置后通过，未改动绑定规避检查。
 
-Wails production build 仍由集成负责人串行运行。CI 已先 setup Go1.27.1 再安装同版本 Wails CLI，避免复用旧 Go 编译的 CLI。
+Wails production build 仍由集成负责人串行运行。本节验证时 CI 先 setup Go1.27.1 再安装同版本 Wails CLI；第6节临时回退为Go1.26.8重编，第7节最终恢复Go1.27.1对应CLI，始终禁止编译工具链与 source-processing 工具链混用。
+
+## 6. 真实 Mac 探针发现平台最低版本不兼容，回退 Go1.26.8
+
+初始核查只对照 Go 模块 `go` 最低声明和 Windows 测试，没有把已下载的 Go1.27 release notes 中 Darwin 最低系统要求纳入门槛，这是本次依赖审计的遗漏。Mac 原生 adapter 编译随后真实报告 `go.o built for newer macOS13.0`，而项目 Info.plist / Taskfile 声明 macOS12。该警告不能通过更低 `build.target`、仅修改 CFLAGS 或忽略 linker 警告解决。
+
+一手证据：
+
+- [Go1.27 官方 Darwin release notes](https://go.dev/doc/go1.27#darwin) 原文：`Go 1.27 requires macOS 13 Ventura or later; support for previous versions has been discontinued.` 本次早先 HTTP200 保存的原文为 `.artifacts/desktop-m0-dependencies-20260912/go127-release.txt`，后续定向复核确认。
+- 同页 Linker 说明 `-macos` 默认选择 oldest supported macOS，当前为 `13.0.0`；经过官方哈希校验的 Go1.27.1 源码 `src/cmd/link/internal/ld/macho.go` 也使用 macOS13 基线。
+- 真实 Mac 端编译警告由原生验证负责人提供；当前平台支持契约仍为 macOS12，用户总提示词禁止因升级静默提高最低 macOS。
+
+当时按原macOS12契约执行兼容回退Go1.26.8：两份module/workspace使用 `go1.26.0` / `toolchain go1.26.8`，三份workflow暂改1.26.8，其余依赖保持。该临时回退没有提交或发布；用户随后明确改变最低系统支持范围，最终配置见第7节。
+
+Go1.26.8 Windows amd64 官方 ZIP 已下载、实际SHA256与官方 `official-releases.json` 匹配：`b92c3b2adae85a11ba71fe7216daf0d84e82af4c8ab6c5625807f28622043a59`。便携 `go version` 为go1.26.8；用它 `go install .../wails3@v3.0.0-beta.18` 退出0，同版CLI buildinfo确认为Go1.26.8，SHA256为 `500a4c14815abbde0611856e2fc25b9c3062e763acce8322d95934689276faf4`。Node24.21.0、pnpm12.4.1、Wailsbeta.18版本检查均退出0，未在回退期间再生成绑定或宣称全套测试通过。
+
+[Go1.26官方notes](https://go.dev/doc/go1.26) 再次HTTP200核实原文：`Go 1.26 is the last release that will run on macOS 12 Monterey.` 已验证的便携1.26.8源码 `macho.go:440` 基线为12.0.0。回退工具和CLI均保留于ignored `.tools`，不删除真实验证记录。
+
+旧 M0 `b3d5fc7` 没有发布 Release；挂起的旧 run 下载进程 251264 经确认 Name 为 gh.exe 且命令属于 `run download 34673760351` 后已停止。没有继续下载、发布或打 tag 旧资产。
+
+## 7. 用户明确将最低系统调整为 macOS13，最终恢复 Go1.27.1
+
+用户随后明确选择最低macOS13、取消12支持、使用Go1.27.1，并同意M0/M1合并发布。这次提高系统门槛有明确用户授权，不能倒写成最初Go1.27已兼容macOS12。
+
+最终两份module/workspace为 `go1.27.0` / `toolchain go1.27.1`，三份workflow为Go1.27.1。Darwin Taskfile的CGO_CFLAGS、CGO_LDFLAGS与MACOSX_DEPLOYMENT_TARGET均为13.0；Vite target为Chrome109 / Safari16，匹配macOS13初始Safari系列。Info.plist/Info.dev.plist由原生负责人独占同步，最终包必须再次核对实际bundle最低系统与Mach-O负载命令。
+
+本地入口 `.tools/use-desktop-toolchain.ps1` 已恢复Go1.27.1。同版Wails CLI复用此前已构建的 `.tools/wails3-go127-bin/wails3.exe`：先重新检查buildinfo为Go1.27.1、SHA256仍为 `2dd3fe8072981b6c20177c051f01086a798199062a692de557dee55bd88445db`，然后复制至 `.tools/bin`；`go version` / `wails3 version` 均退出0。没有因切换重复生成绑定或与M1前端构建并行写产物。
+
+当前可用物理Mac为macOS26.5 / Darwin25.5。其原生运行/构建证据不能称为macOS13实测；macOS13现场运行仍待验收。合并后的新源码、新最低系统元数据和新的包哈希必须一起验证后发布，不能复用声明12的旧M0资产。

@@ -1,6 +1,65 @@
 # Desktop M0 香港部署预检与回滚准备
 
-本记录对应六项桌面功能的 M0。目标产品版本为 `0.5.0`，计划测试预发布标签为 `v0.5.0-m0`；该标签不表示 M1–M6 或六项原生验收完成。当前状态是 **PRECHECK PASS / TRANSACTION PREPARED / DEPLOYMENT NOT_RUN / RELEASE NOT_RUN**。本记录生成时，尚未拿到目标提交对应的已验证 Linux 二进制，未替换或重启远端服务。
+本记录对应六项桌面功能的 M0。产品版本为 `0.5.0`，计划测试预发布标签为 `v0.5.0-m0`；该标签不表示 M1–M6 或六项原生验收完成。当前状态是 **PRECHECK PASS / DEPLOYMENT PASS / INDEPENDENT VERIFY PASS / RELEASE NOT_RUN**。首次预检阶段未改动服务；随后收到精确提交的干净 Linux 二进制后，已执行用户授权的事务部署，事实分别记录如下。
+
+## M0 实际部署与独立复核（2026-09-12）
+
+只使用主线程提供的已有资产，没有从正在继续 M1 开发的工作区重新编译：
+
+| 资产或检查 | 实际结果 |
+| --- | --- |
+| 产品 / 目标提交 | `0.5.0` / `b3d5fc7b6acf49dfc07671d774e2a7f20c28cc94` |
+| 本地资产 | `D:/apps/Osend/.artifacts/desktop-six-features/rendezvous-m0` |
+| 构建元数据 | `go1.27.1`、Linux amd64、`vcs.modified=false`、精确 revision 匹配 |
+| 二进制大小 / SHA256 | 17,880,415 bytes / `631db1cd5c5079a11c1b8a90bfed4eb0a6591c5ff6907203c3d71f4197a145a3` |
+| 替换前 | `0.4.0`，PID `394992`，旧 SHA 与预检完全匹配 |
+| 替换后 | `0.5.0`，PID `395859`，运行路径、ELF 和 SHA 一致 |
+| 备份可读性 | PASS，旧二进制/config/unit 与 SQLite 在线备份已留存，备份数据库 `integrity_check=ok` |
+| 配置与 unit | 哈希未变；未修改证书、续期任务、coturn、网络或系统设置 |
+| 数据库 | `schema_version=[2]`、`PRAGMA user_version=0`，integrity=ok，邀请表仍 19 条 |
+| origin / 公网 health | PASS，均 0.5.0、V1、QUIC、`relay=false` |
+| 运行与监听 | systemd `active/running`；443 属于 MainPID；3478/UDP 仍存在 |
+| 续期 / 日志 | timer active；独立复核最近 30 分钟 fatal/panic=0 |
+| 自动回滚 | 未触发，全部事务门槛通过；未回退数据库 |
+
+实际执行命令退出码为 0，manager 和远端事务也均返回退出码 0：
+
+```powershell
+. .tools/use-desktop-toolchain.ps1
+& .artifacts/desktop-six-features/deploy-m0.ps1 `
+  -BinaryPath D:/apps/Osend/.artifacts/desktop-six-features/rendezvous-m0 `
+  -Commit b3d5fc7b6acf49dfc07671d774e2a7f20c28cc94 `
+  -Sha256 631db1cd5c5079a11c1b8a90bfed4eb0a6591c5ff6907203c3d71f4197a145a3 `
+  -Version 0.5.0 -Execute
+```
+
+可追溯路径：
+
+```text
+备份：/opt/linksend-lan-test/backups/20260912T044648.234152Z-desktop-m0-b3d5fc7b6acf
+部署 job：/tmp/codex-ssh/linksend-desktop-m0-deploy-20260912T044635Z
+独立只读 job：/tmp/codex-ssh/linksend-desktop-m0-independent-20260912T044754Z
+本地事务证据：.artifacts/desktop-six-features/deploy-m0-20260912T044612412Z-b3d5fc7b6acf/
+```
+
+部署后另起 manager 只读作业，使用 `verify-hk-m0.sh` 于 `2026-09-12T04:48:07.285418+00:00`（北京时间 12:48:07）重新核对运行版本、commit、SHA、MainPID、配置哈希、schema、origin/public health、timer 和日志，退出 0。该检查没有复用部署进程内的缓存结果。
+
+随后在 Windows 使用 Node 原生 WebSocket 对公开 `wss://linksend.oooai.de/v1/ws` 运行 4 轮独立连接：连续两次正常关闭（1000）、随机未注册身份认证被拒绝（1008）、拒绝后立即重新连接并正常关闭（1000），每轮均收到 0.5.0/V1 的真实 hello。脚本退出 0，记录时间 `2026-09-12T04:48:37.775Z`，输出保存在 `.artifacts/desktop-six-features/verify-public-wss-m0.json`。没有创建 profile/成员，没有读取或传输文件正文。
+
+上述 WSS 检查只证明公开入口快速连断与未认证拒绝边界。**认证后的配对/WSS/传输终态生命周期、新旧客户端混合连接、Windows↔macOS 与跨 NAT 六项工作流并未由本次部署检查重新验收**；不可把这些结果扩写为全部桌面功能完成。
+
+本次确切回滚入口如下，默认仅回滚二进制并保留部署后数据库写入：
+
+```powershell
+& .artifacts/desktop-six-features/deploy-m0.ps1 `
+  -BinaryPath D:/apps/Osend/.artifacts/desktop-six-features/rendezvous-m0 `
+  -Commit b3d5fc7b6acf49dfc07671d774e2a7f20c28cc94 `
+  -Sha256 631db1cd5c5079a11c1b8a90bfed4eb0a6591c5ff6907203c3d71f4197a145a3 `
+  -RollbackBackup /opt/linksend-lan-test/backups/20260912T044648.234152Z-desktop-m0-b3d5fc7b6acf `
+  -Execute
+```
+
+没有提交/推送这些记录或创建 Release。`v0.5.0-m0` 的 CI 最终资产、发布状态和桌面包由主线程继续处理。
 
 ## 2026-09-12 实际只读预检
 
@@ -59,9 +118,9 @@
 
 部署成功记录只证明版本替换与服务检查。独立配对、WSS 生命周期和客户端混合版本行为仍需另行运行，脚本会明确输出 `NOT_RUN_REQUIRES_INDEPENDENT_ACCEPTANCE`。
 
-## 精确提交就绪后的执行方式
+## 后续同类事务的准备方式
 
-下列参数必须替换为主线程提供的已提交源码构建资产；不是可直接运行的已完成部署记录。
+下列参数是后续事务的使用模板，必须替换为主线程提供的已提交源码构建资产；本次已执行的精确命令见顶部。部署到其他版本时也必须更新 `-Version` 与重新预检后的 `-ExpectedOldSha256`。
 
 ```powershell
 . .tools/use-desktop-toolchain.ps1
@@ -101,5 +160,5 @@ $candidateSha256 = '<64位实测SHA256>'
 - Python 远端模板语法编译：PASS。
 - 离线事务控制检查：成功、相同版本、备份失败不变更、验证失败仅回滚一次、schema 不兼容停止且不替换二进制/数据库，共 5 项 PASS。
 - 首次尝试调用 PATH 中的 `python` 实际命中 WindowsApps 占位程序，退出 1、没有完成验证；随后改用 Codex bundled Python，验证命令退出 0。上述 PASS 均来自后一次真实运行。
-- 未在真实远端执行部署脚本，未制造线上故障测试自动回滚；离线控制检查不能替代 systemd/SQLite/网络现场验收。
-- 此刻没有 M0 新二进制哈希、新 PID、新备份路径、发布资产或 Release URL，故全部保留 NOT_RUN；待精确 commit 和资产就绪后在本页追加实际事务与独立复核结果。
+- 随后已在真实远端执行成功事务，并进行了独立 systemd/SQLite/网络复核；未制造线上故障测试自动回滚，离线控制检查仍不能宣称为真实故障恢复演练。
+- 本次新二进制、PID、备份与作业路径见顶部实际记录；Release 和本文明确列出的认证后/跨设备验收仍保留 NOT_RUN。

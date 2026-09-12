@@ -19,6 +19,11 @@ func (s *Service) checkPeerAllowed(peerID string) error {
 // BlockPeer is local and works even when the membership server is unavailable.
 // Persist the denial before stopping tasks so discovery cannot restore the pin.
 func (s *Service) BlockPeer(peerID string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	if peerID == s.identity.ID() {
 		return errors.New("INVALID_ARGUMENT: cannot block this device")
 	}
@@ -39,6 +44,11 @@ func (s *Service) BlockPeer(peerID string) error {
 // UnblockPeer removes only the local denial. Pairing/explicit LAN consent is
 // still required; neither the previous pin nor auto-accept is restored here.
 func (s *Service) UnblockPeer(peerID string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	s.trustMu.Lock()
 	defer s.trustMu.Unlock()
 	return identity.AllowPeer(s.cfg.DataDir, peerID)

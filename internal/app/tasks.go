@@ -96,6 +96,7 @@ type taskRecord struct {
 	paths    []string
 	cfg      DirectConfig
 	persist  func(TaskSnapshot, taskRecovery) error
+	changed  func(TaskSnapshot)
 }
 
 type taskRecovery struct {
@@ -125,6 +126,7 @@ type taskManager struct {
 	historyMu   sync.RWMutex
 	historyErr  error
 	workers     sync.WaitGroup
+	onChange    func(TaskSnapshot)
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
@@ -168,6 +170,7 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.HistoryPersisted = m.historyAvailable()
 	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory}}
 	t.persist = m.persistRecordTracked
+	t.changed = m.onChange
 	m.tasks[s.ID] = t
 	m.mu.Unlock()
 	if err := m.persistRecord(s, t.recovery); err != nil {
@@ -244,6 +247,8 @@ func (t *taskRecord) updateRecordAttemptMode(attemptID string, persist bool, fn 
 	t.mu.Unlock()
 	if persist {
 		t.save(snap, recovery)
+	} else if t.changed != nil {
+		t.changed(snap)
 	}
 	return true
 }
@@ -474,6 +479,9 @@ func (t *taskRecord) save(snap TaskSnapshot, recovery taskRecovery) {
 			t.mu.Unlock()
 		}
 	}
+	if t.changed != nil {
+		t.changed(t.snapshot())
+	}
 }
 func userError(err error) string {
 	if err == nil {
@@ -613,6 +621,14 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		return TaskSnapshot{}, err
 	}
 	t.peerID, t.paths, t.cfg = peerID, base, cfg
+	if cfg.beforeDispatch != nil {
+		if err = cfg.beforeDispatch(t.snapshot()); err != nil {
+			cancel()
+			t.finish("failed", err)
+			s.ensureInbox()
+			return TaskSnapshot{}, err
+		}
+	}
 	attemptID := t.snapshot().AttemptID
 	t.updateRecovery(attemptID, func(recovery *taskRecovery) {
 		recovery.SourcePaths = append([]string(nil), base...)
@@ -644,6 +660,11 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		defer s.ensureInbox()
 		var result DirectTransferResult
 		prepared, peer, runErr := s.prepareAndConnect(ctx, peerID, base, cfg)
+		if runErr == nil && cfg.expectedSourceDigest != "" && queueSourceDigest(prepared.Manifest) != cfg.expectedSourceDigest {
+			_ = prepared.Close()
+			_ = peer.Close()
+			runErr = transfer.ErrChanged
+		}
 		if runErr == nil {
 			defer prepared.Close()
 			sentChunks := make(map[uint32][]bool)
@@ -903,6 +924,11 @@ func (s *Service) Task(id string) (TaskSnapshot, bool) {
 	return t.snapshot(), true
 }
 func (s *Service) CancelTask(id string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()
@@ -938,6 +964,11 @@ func (s *Service) CancelTask(id string) error {
 }
 
 func (s *Service) PauseTask(id string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()
@@ -1029,6 +1060,13 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	snap, recovery := t.snap, t.recovery
 	t.mu.Unlock()
 	t.save(snap, recovery)
+	if cfg.beforeDispatch != nil {
+		if err := cfg.beforeDispatch(snap); err != nil {
+			cancel()
+			t.recoverAttempt(attemptID, err)
+			return TaskSnapshot{}, err
+		}
+	}
 	s.tasks.workers.Add(1)
 	if recovery.Direction == "send" {
 		go s.runResumeSend(ctx, t, attemptID, recovery, cfg)
@@ -1173,6 +1211,11 @@ func (s *Service) AcceptTaskAlways(id string) error {
 }
 func (s *Service) RejectTask(id string) error { return s.decideTask(id, false) }
 func (s *Service) decideTask(id string, accepted bool) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()

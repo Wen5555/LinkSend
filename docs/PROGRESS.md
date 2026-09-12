@@ -1,12 +1,17 @@
 # LinkSend implementation progress
 
-## 2026-09-12 六项桌面能力 M0（进行中）
+## 2026-09-12 六项桌面能力 M0/M1（合并候选进行中）
 
 基线 `fbfc250`，工作分支 `codex/desktop-six-features`；用户明确授权逐目标推送、部署和发布。
 依赖官方核实与安装完成：Go1.27.1、Node24.21.0、pnpm12.4.1、React19.3、TS6.0.3、Vite8.3、Vitest5、Query5.102.8，Wails保留beta.18。
 已实现本机拒绝与trust schema1迁移、profile内核锁、保存退出及调度/迟到事件屏障；真实QUIC保存退出与针对性race通过。
 完整命令/失败修复/各阶段状态见 [六项执行记录](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)。
 Mac地址按用户最新信息更新为10.234.184.6，SSH已通过，隔离工具链安装已完成。
+
+用户后续明确最低macOS13、取消12支持，并允许M0/M1合并发布；M2/M3平台层和M4接收协议在隔离分支并行推进。
+M1已增加task schema3、设备偏好、持久草稿、幂等队列、离线旁路、源变化确认及200ms合并的epoch/revision事件；
+前端已拆分且使用Query/真实绑定，29项测试通过。根完整普通/race及双模块检查通过，原生UI与包级验证进行中。
+具体实现与真实QUIC负例见 [M1执行记录](evidence/DESKTOP-M1-EXECUTION.md)。
 
 Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol version: V1. This is not an accepted production release.
 

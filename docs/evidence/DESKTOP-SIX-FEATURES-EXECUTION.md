@@ -5,13 +5,15 @@
 `apps/desktop/build/ios/` 与 `apps/desktop/build/linux/` 已保留。
 
 用户本轮明确授权每阶段推送、部署和发布，覆盖总提示词中的默认禁止条款。
+随后用户明确允许 M0 与 M1 合并发布；最低系统为 macOS13，取消macOS12支持并保留Go1.27.1。
+详情见 [工具链平台兼容性纠正](DESKTOP-M0-COMPATIBILITY-CORRECTION.md)。
 阶段产物发布为测试预发布，只有通过的实际结果列为 PASS。2026-09-12 又授权通过 SSH
 在 Mac 安装软件并测试，当前给定地址为 `10.234.184.6`；连接沿用管理器现有 alias。
 
 | 阶段 | 状态 | 当前内容 / 下一步 |
 |---|---|---|
 | M0 | IMPLEMENTED / RELEASE_PENDING | 官方依赖、升级、本地拒绝、profile 锁、保存退出及Windows构建已验证；精确提交的跨平台构建/部署/发布进行中 |
-| M1 | PENDING | 设备元数据、类型化事件快照、持久草稿、幂等队列 |
+| M1 | IN_PROGRESS | schema3设备/草稿/队列、类型化事件及真实单并发调度已实现；UI和跨功能联调进行中 |
 | M2 | PENDING | Wails 单实例、拖放、SendTo、Finder Services |
 | M3 | PENDING | 托盘、后台设置、通知与防睡眠生命周期 |
 | M4 | PENDING | ReceivePlan、子集协商、原子保留两份、恢复 |

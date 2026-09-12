@@ -12,7 +12,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 2
+const taskStoreSchema = 3
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -40,6 +40,20 @@ func historyDB(path string) (*sql.DB, error) {
 		}
 		if err = os.Chmod(backupPath, 0600); err != nil {
 			_ = os.Remove(backupPath)
+			return fail(fmt.Errorf("TASK_STORE_BACKUP_FAILED: %w", err))
+		}
+		if err = verifyHistoryBackup(backupPath, schema); err != nil {
+			return fail(fmt.Errorf("TASK_STORE_BACKUP_FAILED: %w", err))
+		}
+		// Explicitly flush the verified rollback file before a schema commit,
+		// independent of the source connection's synchronous configuration.
+		backup, openErr := os.OpenFile(backupPath, os.O_RDWR, 0)
+		if openErr != nil {
+			return fail(fmt.Errorf("TASK_STORE_BACKUP_FAILED: %w", openErr))
+		}
+		syncErr := backup.Sync()
+		closeErr := backup.Close()
+		if err = errors.Join(syncErr, closeErr); err != nil {
 			return fail(fmt.Errorf("TASK_STORE_BACKUP_FAILED: %w", err))
 		}
 	}
@@ -78,6 +92,11 @@ func historyDB(path string) (*sql.DB, error) {
 	if _, err = tx.Exec("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
 		return rollback(err)
 	}
+	if schema < 3 {
+		if err = migrateDesktopMetadata(tx); err != nil {
+			return rollback(err)
+		}
+	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {
 		return rollback(err)
 	}
@@ -88,6 +107,42 @@ func historyDB(path string) (*sql.DB, error) {
 		return fail(err)
 	}
 	return db, nil
+}
+
+// Verify the actual rollback file before any schema mutation. VACUUM INTO
+// produces a consistent SQLite snapshot, including committed WAL contents.
+func verifyHistoryBackup(path string, schema int) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return errors.New("backup is not a nonempty regular file")
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if _, err = db.Exec("PRAGMA query_only=ON"); err != nil {
+		return err
+	}
+	var integrity string
+	if err = db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return errors.New("backup integrity check failed")
+	}
+	var gotSchema, taskCount int
+	if err = db.QueryRow("PRAGMA user_version").Scan(&gotSchema); err != nil {
+		return err
+	}
+	if gotSchema != schema {
+		return errors.New("backup schema does not match source")
+	}
+	return db.QueryRow("SELECT count(*) FROM tasks").Scan(&taskCount)
 }
 
 func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
