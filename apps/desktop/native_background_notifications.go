@@ -152,19 +152,21 @@ func (n *nativeNotifier) recordPermission(allowed bool, err error, requested boo
 }
 
 func validNativeTaskID(taskID string) bool {
-	if len(taskID) == 0 || len(taskID) > 128 {
+	if len(taskID) == 0 || len(taskID) > 128 || strings.HasPrefix(taskID, ".") || strings.HasSuffix(taskID, ".") || strings.Contains(taskID, "..") {
 		return false
 	}
 	for _, c := range taskID {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
 			return false
 		}
 	}
 	return true
 }
 
+const nativeNotificationPrefix = "linksend."
+
 func nativeNotificationID(note nativeNotification) string {
-	return "linksend." + note.TaskID + "." + strconv.FormatUint(note.Revision, 10)
+	return nativeNotificationPrefix + note.TaskID + "." + strconv.FormatUint(note.Revision, 10)
 }
 
 func (n *nativeNotifier) notify(note nativeNotification) (nativeNotificationResult, error) {
@@ -259,21 +261,34 @@ func (n *nativeNotifier) handleResponse(result notifications.NotificationResult)
 	if result.Error != nil {
 		return
 	}
-	parts := strings.Split(result.Response.ID, ".")
-	if len(parts) != 3 || parts[0] != "linksend" || !validNativeTaskID(parts[1]) {
+	encoded := result.Response.ID
+	if !strings.HasPrefix(encoded, nativeNotificationPrefix) || len(encoded) > len(nativeNotificationPrefix)+128+1+20 {
 		return
 	}
-	if revision, err := strconv.ParseUint(parts[2], 10, 64); err != nil || revision == 0 {
+	payload := strings.TrimPrefix(encoded, nativeNotificationPrefix)
+	separator := strings.LastIndexByte(payload, '.')
+	if separator <= 0 || !validNativeTaskID(payload[:separator]) {
 		return
 	}
-	if id, ok := result.Response.UserInfo["task_id"].(string); ok && id != parts[1] {
+	taskID, revisionText := payload[:separator], payload[separator+1:]
+	if revision, err := strconv.ParseUint(revisionText, 10, 64); err != nil || revision == 0 || strconv.FormatUint(revision, 10) != revisionText {
 		return
+	}
+	if value, exists := result.Response.UserInfo["task_id"]; exists {
+		if id, ok := value.(string); !ok || id != taskID {
+			return
+		}
+	}
+	if value, exists := result.Response.UserInfo["revision"]; exists {
+		if revision, ok := value.(string); !ok || revision != revisionText {
+			return
+		}
 	}
 	n.mu.Lock()
 	callback := n.onTaskClick
 	closed := n.closed
 	n.mu.Unlock()
 	if !closed && callback != nil {
-		callback(parts[1]) // An opaque lookup key, never a path or command.
+		callback(taskID) // An opaque lookup key, never a path or command.
 	}
 }

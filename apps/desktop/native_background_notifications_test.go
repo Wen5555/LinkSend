@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -149,5 +150,59 @@ func TestNativeNotificationClicksUseOpaqueIDsAndStopOnShutdown(t *testing.T) {
 	}
 	if result, err := n.notify(nativeNotification{TaskID: "task-closed", Revision: 1, Title: "任务"}); err != nil || result.State != "closed" {
 		t.Fatal("notification was submitted after shutdown")
+	}
+}
+
+func TestNativeNotificationRealCoreIDRoundTrip(t *testing.T) {
+	const taskID = "20260912T065442.536203100Z-00000001"
+	backend := &testNativeNotifications{allowed: true}
+	n := testNativeNotifier(t, backend, "windows")
+	var clicked []string
+	n.onTaskClick = func(id string) { clicked = append(clicked, id) }
+	note := nativeNotification{TaskID: taskID, Revision: 23, Title: "任务已完成", Body: "打开应用查看结果"}
+	result, err := n.notify(note)
+	if err != nil || result.State != "submitted" || len(backend.sent) != 1 {
+		t.Fatal(result, err)
+	}
+	sent := backend.sent[0]
+	if sent.ID != "linksend."+taskID+".23" || sent.Data["task_id"] != taskID || sent.Data["revision"] != "23" {
+		t.Fatal(sent)
+	}
+	backend.response(notifications.NotificationResult{Response: notifications.NotificationResponse{ID: sent.ID, UserInfo: sent.Data}})
+	if len(clicked) != 1 || clicked[0] != taskID {
+		t.Fatal("decimal task ID lost during notification click", clicked)
+	}
+	if duplicate, err := n.notify(note); err != nil || duplicate.State != "duplicate" || len(backend.sent) != 1 {
+		t.Fatal(duplicate, err)
+	}
+}
+
+func TestNativeNotificationTaskIDAndRevisionBoundaries(t *testing.T) {
+	for _, id := range []string{"20260912T065442.536203100Z-00000001", "opaque.part_three-4", strings.Repeat("a", 128)} {
+		if !validNativeTaskID(id) {
+			t.Fatal("valid opaque ID rejected", id)
+		}
+	}
+	for _, id := range []string{"", ".", "..", ".hidden", "task.", "task..other", "../private", `C:\private`, "a/b", "a;cmd", "a&cmd", "a b", "a\ncmd", "a\x00b", "a%2eb", "a．b", strings.Repeat("a", 129)} {
+		if validNativeTaskID(id) {
+			t.Fatal("invalid task ID accepted", id)
+		}
+	}
+	backend := &testNativeNotifications{allowed: true}
+	n := testNativeNotifier(t, backend, "darwin")
+	var clicked []string
+	n.onTaskClick = func(id string) { clicked = append(clicked, id) }
+	for _, id := range []string{"other.opaque.part.1", "linksend.opaque.part", "linksend.opaque.part.", "linksend.opaque.part.0", "linksend.opaque.part.+1", "linksend.opaque.part.01", "linksend.opaque.part.18446744073709551616", "linksend.opaque.part.1/command", "linksend." + strings.Repeat("a", 129) + ".1"} {
+		n.handleResponse(notifications.NotificationResult{Response: notifications.NotificationResponse{ID: id}})
+	}
+	for _, info := range []map[string]interface{}{{"task_id": "different"}, {"task_id": 42}, {"revision": "2"}, {"revision": uint64(1)}} {
+		n.handleResponse(notifications.NotificationResult{Response: notifications.NotificationResponse{ID: "linksend.opaque.part.1", UserInfo: info}})
+	}
+	if len(clicked) != 0 {
+		t.Fatal("malformed notification became a task lookup", clicked)
+	}
+	n.handleResponse(notifications.NotificationResult{Response: notifications.NotificationResponse{ID: "linksend.opaque.part.18446744073709551615"}})
+	if len(clicked) != 1 || clicked[0] != "opaque.part" {
+		t.Fatal("last separator did not preserve opaque task ID", clicked)
 	}
 }
