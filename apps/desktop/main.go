@@ -49,6 +49,9 @@ func main() {
 		slog.Error("single instance setup failed", "error", err)
 		os.Exit(1)
 	}
+	// Hidden must be part of native window creation: on macOS a runtime-ready
+	// Hide can race the initial orderFront and AppKit's last-window policy.
+	startHidden := slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && loadPreferences(dataDir).Background.CloseMode == "background"
 	host := application.New(application.Options{
 		SingleInstance: single,
 		Name:           "LinkSend",
@@ -60,7 +63,9 @@ func main() {
 			Handler: application.BundledAssetFileServer(assets),
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// The close hook owns exit/background policy. AppKit must not
+			// terminate when --background orders the only window off screen.
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 		ShouldQuit: desktop.shouldQuit,
 		ErrorHandler: func(err error) {
@@ -71,6 +76,7 @@ func main() {
 	window := host.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:               "main",
 		Title:              "LinkSend",
+		Hidden:             startHidden,
 		Width:              1120,
 		Height:             760,
 		MinWidth:           720,
@@ -94,8 +100,9 @@ func main() {
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
 		slog.Info("desktop runtime ready")
 		desktop.runtimeEntriesReady()
-		if slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && desktop.Preferences().Background.CloseMode == "background" && desktop.background.tray != nil {
-			window.Hide()
+		if startHidden && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
+			// A missing tray must not leave the application unreachable.
+			window.Show()
 		}
 	})
 
