@@ -33,6 +33,7 @@ func runNativeBackgroundHarness() error {
 		return err
 	}
 	name := "LinkSend Native Test " + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(time.Now().UnixNano(), 16)
+	fmt.Println("NATIVE_TEST_APPLICATION=" + name)
 	cleanup, err := prepareNativeNotificationHarness(name)
 	if err != nil {
 		return err
@@ -60,7 +61,10 @@ func runNativeBackgroundHarness() error {
 			} else {
 				fmt.Println("NATIVE_SLEEP_ACTIVE=" + strconv.FormatBool(inhibitor.Active()))
 			}
-			result, err := notifier.notify(nativeNotification{TaskID: "native-test", Revision: 1, Title: "LinkSend 原生适配验证", Body: "仅验证本机通知接口，不含文件或剪贴板内容。"})
+			// Same opaque shape as core taskManager.create, including nanoseconds.
+			taskID := time.Now().UTC().Format("20060102T150405.000000000Z") + "-00000001"
+			fmt.Println("NATIVE_NOTIFICATION_TASK_ID=" + taskID)
+			result, err := notifier.notify(nativeNotification{TaskID: taskID, Revision: 1, Title: "LinkSend 原生适配验证", Body: "仅验证真实任务 ID 的本机通知接口，不含文件或剪贴板内容。"})
 			encoded, _ := json.Marshal(result)
 			fmt.Println("NATIVE_NOTIFICATION_RESULT=" + string(encoded))
 			if err != nil {
