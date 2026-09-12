@@ -21,6 +21,7 @@ function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: De
     <div className="task-main">
       <div className="task-title"><strong>{t.direction === 'send' ? '发送' : '接收'} · {t.source_summary || t.manifest_summary || '文件传输'}</strong><span className={`state-badge ${t.state}`}>{taskLabels[t.state] || t.state}</span></div>
       {t.manifest_summary && <div className="task-meta">{t.manifest_summary} · {t.file_count || 0} 项</div>}
+      {t.receive_plan_digest && <div className="task-meta">所选 {t.selected_files} 个文件、{t.selected_entries - t.selected_files} 个目录 · 跳过 {t.skipped_entries} 项（{formatBytes(t.skipped_bytes)}）</div>}
       <div className="task-meta">{taskPhaseLabel(t.phase)} · {device ? deviceName(device) : t.peer_id?.slice(0, 10) || '等待对端'}{t.connection_method && ` · ${connectionMethodLabel(t.connection_method)}`}{t.rate_bytes_per_second ? ` · ${formatBytes(t.rate_bytes_per_second)}/s` : ''}</div>
       {!terminal && <div className="progress-line" role="progressbar" aria-label="已验证进度" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${pct}%` }} /></div>}
       <div className="task-accounting"><span>实际{t.direction === 'send' ? '发送' : '接收'} {formatBytes(t.direction === 'send' ? t.sent_bytes : t.received_bytes)}</span>{t.retransmitted_bytes > 0 && <span>其中重传 {formatBytes(t.retransmitted_bytes)}</span>}<span>已验证 {formatBytes(t.verified_bytes)}</span><span>已提交 {formatBytes(t.committed_bytes)}</span><span>{t.bilateral_confirmed ? '双方已确认' : '尚未完成双方确认'}</span></div>

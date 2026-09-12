@@ -54,10 +54,16 @@ export function useDesktop() {
   } });
   useEffect(() => {
     if (!enabled) return;
-    return Events.On('workspace:changed', event => {
+    let timer: number | undefined;
+    const unsubscribe = Events.On('workspace:changed', event => {
       const payload: unknown = event.data;
       invalidateWorkspace(client, gate.current, payload);
+      if (timer === undefined) timer = window.setTimeout(() => {
+        timer = undefined;
+        void client.invalidateQueries({ queryKey: ['inbox'] }, { cancelRefetch: false });
+      }, 1000);
     });
+    return () => { unsubscribe(); if (timer !== undefined) window.clearTimeout(timer); };
   }, [client, enabled]);
   // An invalidation can arrive while a query is already reading SQLite. Once
   // that read finishes, fetch again if its snapshot predates the observed event.
@@ -71,6 +77,7 @@ export function useDesktop() {
       client.invalidateQueries({ queryKey: workspaceKey }), client.invalidateQueries({ queryKey: deviceKey }),
       client.invalidateQueries({ queryKey: shellKey }),
       client.invalidateQueries({ queryKey: ['preferences'] }), client.invalidateQueries({ queryKey: ['configuration'] }),
+      client.invalidateQueries({ queryKey: ['inbox'] }),
     ]);
   }, [client]);
   useEffect(() => {

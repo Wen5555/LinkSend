@@ -29,6 +29,8 @@ M4 传输与 App 后端已接入不可变清单、分页选收、冲突策略、
 
 M4/M5 wire整合保留三个可选能力；发送端选择和实际内容解释的持久化回调都成功后才发accepted，并同时验证manifest/selection/content摘要。联合真实QUIC及旧端兼容验证见 [整合证据](evidence/DESKTOP-M4-M5-ACCEPTANCE-INTEGRATION.md)。
 
+M4/M6 已完成 Windows 真窗口选收、原生目录选择、保留两份、空目录、全跳过、真实 QUIC 双方确认及收件箱检索、Explorer 定位、仅清记录和孤立暂存清理；证据见 [原生验收](evidence/DESKTOP-M4-WINDOWS-UI.md)。Mac M3 --background 启动退出缺陷正在修复，通知真实含点任务 ID 已修复；未将源码通过等同已发布。
+
 Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m1`; protocol: V1.
 The following `v0.4.0` sections preserve earlier evidence. No prerelease is an accepted production release.
 

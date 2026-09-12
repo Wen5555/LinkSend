@@ -18,6 +18,7 @@ const device: DeviceInfo = { id: 'peer', name: '对方远端名称', group_id: '
 const task: TaskSnapshot = {
   id: 'task', task_id: 'task', attempt_id: 'attempt', direction: 'send', peer_id: 'peer', state: 'transferring', phase: 'transferring',
   processed_bytes: 0, started_at: '', updated_at: '', sent_bytes: 0, received_bytes: 0, retransmitted_bytes: 0, verified_bytes: 0,
+  original_total: 0, selected_files: 1, selected_entries: 1, skipped_files: 0, skipped_entries: 0, skipped_bytes: 0,
   committed_bytes: 0, committed_files: 0, bilateral_confirmed: false, relay: false, stun_requests_sent: 0, stun_responses_received: 0,
   signaling_bytes_sent: 0, signaling_bytes_received: 0, connect_timings: { peer_lookup_ms: 0, signaling_connect_ms: 0, endpoint_setup_ms: 0, peer_response_ms: 0, ice_ms: 0, quic_handshake_ms: 0, total_connect_ms: 0 },
   can_cancel: true, can_retry: false, can_pause: true, can_resume: false, revision: 1, history_persisted: true, restart_recovery_supported: true, byte_resume_supported: true,

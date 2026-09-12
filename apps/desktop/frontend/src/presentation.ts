@@ -1,6 +1,6 @@
 import type { DeviceInfo, QueueItem } from '../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 
-export const formatBytes = (n?: number | null) => n == null ? '未知' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(1)} GB`;
+export const formatBytes = (n?: number | null) => n == null ? '未知' : n < 1024 ? `${Math.round(n)} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(1)} GB`;
 export const deviceName = (device?: DeviceInfo) => device?.profile.alias || device?.name || '未命名设备';
 export const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 export const taskLabels: Record<string, string> = {

@@ -53,6 +53,7 @@ export function taskPhaseLabel(phase: string): string {
     awaiting_acceptance: '等待接收确认',
     transferring: '传输中',
     verifying: '校验文件',
+    no_content: '全部跳过，未接收内容',
 	pausing: '正在暂停',
 	paused: '已暂停',
     cancelling: '正在取消',

@@ -1,0 +1,19 @@
+.receive-plan-modal { width: min(760px, calc(100vw - 40px)); max-height: calc(100vh - 56px); overflow-y: auto; }
+.receive-plan-toolbar { display: flex; align-items: end; gap: 12px; }
+.receive-plan-toolbar .field-label { flex: 1; min-width: 0; }
+.receive-plan-toolbar > button { margin-bottom: 16px; flex-shrink: 0; }
+.receive-plan-selection, .receive-plan-pager { display: flex; align-items: center; gap: 12px; margin-block: 14px; }
+.receive-plan-selection strong { margin-right: auto; }
+.receive-plan-files { max-height: 260px; overflow-y: auto; border-block: 1px solid #dce1e7; }
+.receive-plan-file { display: flex; align-items: start; gap: 12px; padding: 10px 4px; border-bottom: 1px solid #edf0f3; }
+.receive-plan-file > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.receive-plan-file strong { display: block; font-size: 13px; font-weight: 500; }
+.receive-plan-file small { display: block; color: #626b78; font-size: 12px; }
+.receive-plan-file > input { margin-top: 3px; flex: 0 0 auto; }
+.receive-plan-file > small { white-space: nowrap; }
+.receive-plan-pager { justify-content: space-between; }
+.receive-plan-summary { display: grid; gap: 6px; padding: 14px 0; font-size: 13px; }
+.receive-plan-summary small { color: #626b78; }
+.background-settings { margin-bottom: 24px; }
+.task-row:focus { outline: 2px solid #3978e7; outline-offset: 2px; }
+@media(max-width: 720px) { .receive-plan-toolbar { display: block; } .receive-plan-toolbar > button { margin-bottom: 12px; } }

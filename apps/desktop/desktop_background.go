@@ -258,11 +258,28 @@ func (a *App) navigateToTask(id string) {
 			return
 		}
 		if _, ok := a.core.Task(id); !ok {
-			a.backgroundError("该任务记录已移除，请在收件箱查看现有记录。")
-			id = ""
+			// Old history is paged from SQLite and may not be resident in Tasks.
+			go func(taskID string) {
+				ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+				defer cancel()
+				if _, err := a.core.InboxFiles(ctx, taskID, "", 1); err != nil {
+					a.backgroundError("该任务记录不可用，请在收件箱查看现有记录。")
+					taskID = ""
+				}
+				a.publishInboxNavigation(taskID)
+			}(id)
+			return
 		}
 	}
+	a.publishInboxNavigation(id)
+}
+
+func (a *App) publishInboxNavigation(id string) {
 	a.background.mu.Lock()
+	if a.background.closed {
+		a.background.mu.Unlock()
+		return
+	}
 	a.background.status.TaskID = id
 	a.background.status.NavigationRevision++
 	a.background.mu.Unlock()

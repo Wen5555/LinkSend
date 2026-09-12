@@ -7,6 +7,9 @@ import * as connectivity$0 from "../connectivity/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as protocol$0 from "../protocol/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as transfer$0 from "../transfer/models.js";
 
 export interface DeviceInfo {
     "id": string;
@@ -96,6 +99,73 @@ export interface IdentityInfo {
     "data_dir": string;
 }
 
+export interface InboxCleanupIssue {
+    "task_id": string;
+    "code": string;
+}
+
+export interface InboxCleanupResult {
+    "removed": string[] | null;
+    "protected": string[] | null;
+    "issues": InboxCleanupIssue[] | null;
+}
+
+export interface InboxFile {
+    "file_id": number;
+    "name": string;
+    "kind": string;
+    "size": number;
+    "selected": boolean;
+}
+
+export interface InboxFilesPage {
+    "files": InboxFile[] | null;
+    "next_cursor": string;
+    "available": boolean;
+}
+
+/**
+ * InboxItem is a reduced historical view, never a recovery record or an export
+ * of absolute filesystem locations and private connection diagnostics.
+ */
+export interface InboxItem {
+    "task_id": string;
+    "peer_id": string;
+    "direction": string;
+    "state": string;
+    "summary": string;
+    "file_count": number;
+    "verified_bytes": number;
+    "committed_bytes": number;
+    "bilateral_confirmed": boolean;
+    "started_at": string;
+    "ended_at": string;
+    "revision": number;
+    "can_resend": boolean;
+    "can_forget": boolean;
+}
+
+export interface InboxPage {
+    "items": InboxItem[] | null;
+    "next_cursor": string;
+}
+
+export interface InboxQuery {
+    "peer_id": string;
+    "direction": string;
+    "states": string[] | null;
+    "after": string;
+    "before": string;
+    "search": string;
+    "cursor": string;
+    "limit": number;
+}
+
+export interface InboxRecordRef {
+    "task_id": string;
+    "revision": number;
+}
+
 /**
  * InboxStatus describes the persistent receiver without creating a visible
  * transfer task merely because the application is idle.
@@ -111,6 +181,52 @@ export interface InboxStatus {
     "lan_available": boolean;
     "lan_peer_count": number;
     "lan_last_error"?: string;
+}
+
+export interface IncomingFile {
+    "id": number;
+    "path": string;
+    "type": string;
+    "size": number;
+    "selected": boolean;
+    "target_path"?: string;
+}
+
+export interface IncomingFilesPage {
+    "revision": number;
+    "files": IncomingFile[] | null;
+    "offset": number;
+    "total_entries": number;
+    "original_total": number;
+    "directory": string;
+    "subset_supported": boolean;
+    "resume": boolean;
+}
+
+export interface IncomingFilesRequest {
+    "expected_revision": number;
+    "offset": number;
+    "limit": number;
+}
+
+export interface IncomingPlanPreview {
+    "revision": number;
+    "plan_digest": string;
+    "directory": string;
+    "summary": transfer$0.PlanSummary;
+    "available_bytes": number;
+    "reserved_bytes": number;
+    "required_bytes": number;
+    "space_sufficient": boolean;
+    "space_estimate": string;
+}
+
+export interface IncomingPlanRequest {
+    "expected_revision": number;
+    "directory": string;
+    "selected_ids": number[] | null;
+    "conflict_policy": transfer$0.ConflictPolicy;
+    "policies": { [_ in `${number}`]?: transfer$0.ConflictPolicy } | null;
 }
 
 export interface InvitationInfo {
@@ -148,6 +264,12 @@ export interface QueueItem {
     "wait_for_peer": boolean;
 }
 
+export interface ResendInboxRequest {
+    "task_id": string;
+    "request_id": string;
+    "wait_for_peer": boolean;
+}
+
 /**
  * SendDraft is local metadata. Paths are never used as file-content IPC, and
  * persisting a draft does not authorise a send or open any of its file bodies.
@@ -180,6 +302,14 @@ export interface TaskSnapshot {
     "peer_id"?: string;
     "source_summary"?: string;
     "manifest_summary"?: string;
+    "original_total": number;
+    "selected_files": number;
+    "selected_entries": number;
+    "skipped_files": number;
+    "skipped_entries": number;
+    "skipped_bytes": number;
+    "receive_plan_digest"?: string;
+    "selection_digest"?: string;
     "file_count"?: number;
     "target_directory"?: string;
     "state": string;

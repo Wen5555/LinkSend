@@ -18,6 +18,10 @@ import * as app$0 from "../../internal/app/models.js";
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function AcceptReceivePlan(id: string, revision: number, digest: string): $CancellablePromise<void> {
+    return $Call.ByID(1555079805, id, revision, digest);
+}
+
 export function AcceptTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(1256230688, id);
 }
@@ -40,6 +44,10 @@ export function CancelQueue(id: string, revision: number): $CancellablePromise<v
 
 export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
+}
+
+export function CleanupInboxStaging(limit: number): $CancellablePromise<app$0.InboxCleanupResult> {
+    return $Call.ByID(1036648570, limit);
 }
 
 export function ConfigureAutostart(enabled: boolean): $CancellablePromise<void> {
@@ -78,6 +86,10 @@ export function Enqueue(request: app$0.EnqueueRequest): $CancellablePromise<app$
     return $Call.ByID(2200678053, request);
 }
 
+export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
+    return $Call.ByID(2230930606, records);
+}
+
 export function GetTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(3930404422, id);
 }
@@ -86,8 +98,24 @@ export function Identity(): $CancellablePromise<app$0.IdentityInfo> {
     return $Call.ByID(1850161891);
 }
 
+export function Inbox(query: app$0.InboxQuery): $CancellablePromise<app$0.InboxPage> {
+    return $Call.ByID(2965701459, query);
+}
+
+export function InboxFiles(taskID: string, cursor: string, limit: number): $CancellablePromise<app$0.InboxFilesPage> {
+    return $Call.ByID(28942970, taskID, cursor, limit);
+}
+
 export function InboxStatus(): $CancellablePromise<app$0.InboxStatus> {
     return $Call.ByID(602828805);
+}
+
+export function IncomingFiles(id: string, request: app$0.IncomingFilesRequest): $CancellablePromise<app$0.IncomingFilesPage> {
+    return $Call.ByID(598197132, id, request);
+}
+
+export function IncomingPlan(id: string, request: app$0.IncomingPlanRequest): $CancellablePromise<app$0.IncomingPlanPreview> {
+    return $Call.ByID(2659825470, id, request);
 }
 
 export function JoinGroup(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
@@ -166,12 +194,24 @@ export function RequestNotificationPermission(): $CancellablePromise<$models.Bac
     return $Call.ByID(3109134518);
 }
 
+export function ResendInbox(request: app$0.ResendInboxRequest): $CancellablePromise<app$0.QueueItem> {
+    return $Call.ByID(1667322102, request);
+}
+
 export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(1059512591, id);
 }
 
 export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(3354333520, id);
+}
+
+/**
+ * RevealInboxFile accepts opaque IDs, never a path or shell command from JS.
+ * Core resolves the persisted receive plan and checks the actual filesystem.
+ */
+export function RevealInboxFile(taskID: string, fileID: number): $CancellablePromise<void> {
+    return $Call.ByID(4148502446, taskID, fileID);
 }
 
 export function SaveDeviceProfile(profile: app$0.DeviceProfile): $CancellablePromise<app$0.DeviceProfile> {

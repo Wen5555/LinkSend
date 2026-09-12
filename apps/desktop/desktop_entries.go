@@ -127,6 +127,14 @@ func (a *App) startNativeEntries() {
 }
 
 func (a *App) showEntryWindow() {
+	if a.entries != nil {
+		a.entries.mu.Lock()
+		closed := a.entries.closed
+		a.entries.mu.Unlock()
+		if closed {
+			return
+		}
+	}
 	if a.window != nil {
 		a.window.Show()
 		a.window.Focus()
