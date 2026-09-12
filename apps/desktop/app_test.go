@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/connectivity"
 )
 
 func TestTerminalTaskStateIncludesEveryProtocolTerminal(t *testing.T) {
@@ -63,6 +64,19 @@ func TestDesktopDirectConfigCarriesExplicitInterfacePolicy(t *testing.T) {
 	got := a.directConfig()
 	if got.BindAddress != "" || len(got.InterfacePriority) != 2 || got.InterfacePriority[0] != "Wi-Fi" || len(got.ExcludedInterfaces) != 1 || got.ExcludedInterfaces[0] != "TUN" {
 		t.Fatalf("interface policy drifted at desktop boundary: %+v", got)
+	}
+}
+
+func TestUnavailableSavedBindFallsBackToAutomatic(t *testing.T) {
+	addresses := []connectivity.InterfaceAddress{{Interface: "en0", Address: "10.234.171.192", Family: "ipv4"}}
+	if got, fallback := savedBindOrAutomatic("10.234.0.86:0", addresses); got != "" || !fallback {
+		t.Fatalf("stale DHCP address did not fall back to automatic selection: %q %v", got, fallback)
+	}
+	if got, fallback := savedBindOrAutomatic("10.234.171.192", addresses); got != "10.234.171.192" || fallback {
+		t.Fatalf("current IP-only bind was changed: %q %v", got, fallback)
+	}
+	if got, fallback := savedBindOrAutomatic("[2001:db8::1]:0", []connectivity.InterfaceAddress{{Address: "2001:db8::1", Family: "ipv6"}}); got != "[2001:db8::1]:0" || fallback {
+		t.Fatalf("current IPv6 bind was changed: %q %v", got, fallback)
 	}
 }
 

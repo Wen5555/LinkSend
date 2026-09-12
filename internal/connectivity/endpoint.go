@@ -33,7 +33,10 @@ var endpointCtorMu sync.Mutex
 type Config struct {
 	// BindAddress wins when set. Otherwise one eligible address is selected
 	// deterministically from the explicit interface policy below.
-	BindAddress        string
+	BindAddress string
+	// KnownInterface avoids a second OS-wide adapter enumeration when the
+	// concrete BindAddress came from ResolveInterfaceAddress and was revalidated.
+	KnownInterface     string
 	InterfacePriority  []string
 	ExcludedInterfaces []string
 	STUNURLs           []string
@@ -92,6 +95,7 @@ type Endpoint struct {
 	mu                             sync.Mutex
 	remote                         map[string]bool
 	selected                       string
+	pathArmed                      bool
 	connecting                     bool
 	interfaceName                  string
 	addressFamily                  string
@@ -105,6 +109,7 @@ type Endpoint struct {
 func New(cfg Config) (*Endpoint, error) {
 	endpointCtorMu.Lock()
 	defer endpointCtorMu.Unlock()
+	interfaceName := strings.TrimSpace(cfg.KnownInterface)
 	if strings.TrimSpace(cfg.BindAddress) == "" {
 		addresses, err := DiscoverInterfaceAddresses(cfg.AllowLoopback)
 		if err != nil {
@@ -115,6 +120,12 @@ func New(cfg Config) (*Endpoint, error) {
 			return nil, err
 		}
 		cfg.BindAddress = net.JoinHostPort(selected.Address, "0")
+		interfaceName = selected.Interface
+	} else if ip, err := netip.ParseAddr(strings.Trim(strings.TrimSpace(cfg.BindAddress), "[]")); err == nil {
+		// The desktop setting is user-facing and an IP without an explicit
+		// port is unambiguous here: every transfer needs a fresh ephemeral UDP
+		// endpoint. Keep accepting the documented IP:port form as-is.
+		cfg.BindAddress = net.JoinHostPort(ip.String(), "0")
 	}
 	addr, err := net.ResolveUDPAddr("udp", cfg.BindAddress)
 	if err != nil {
@@ -123,7 +134,13 @@ func New(cfg Config) (*Endpoint, error) {
 	if addr.IP == nil || addr.IP.IsUnspecified() || !safeIP(addr.IP, cfg.AllowLoopback) || addr.Zone != "" {
 		return nil, errors.New("E_NO_CANDIDATE: bind a concrete unicast IP; IPv6 link-local unsupported")
 	}
-	interfaceName := interfaceForIP(addr.IP)
+	if interfaceName != "" {
+		if !localAddressPresent(interfaceName, addr.IP) {
+			return nil, errors.New("E_NO_CANDIDATE: cached interface address is no longer present")
+		}
+	} else {
+		interfaceName = interfaceForIP(addr.IP)
+	}
 	if interfaceListed(interfaceName, cfg.ExcludedInterfaces) {
 		return nil, errors.New("E_NO_CANDIDATE: selected interface is explicitly excluded")
 	}
@@ -211,7 +228,7 @@ func New(cfg Config) (*Endpoint, error) {
 	err = e.agent.OnSelectedCandidatePairChange(func(local, remote ice.Candidate) {
 		key := local.Marshal() + "|" + remote.Marshal()
 		e.mu.Lock()
-		changed := e.selected != "" && e.selected != key
+		changed := e.pathArmed && e.selected != "" && e.selected != key
 		e.selected = key
 		e.mu.Unlock()
 		if changed {
@@ -320,6 +337,17 @@ func (e *Endpoint) AddRemoteCandidate(c Candidate) error {
 }
 
 func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling bool) (Path, error) {
+	return e.connect(ctx, remote, controlling, true)
+}
+
+// ConnectProvisional starts checks while trickle gathering is still active.
+// Candidate-pair changes are expected during this initial convergence and do
+// not become runtime path-change events until FinalizePath arms monitoring.
+func (e *Endpoint) ConnectProvisional(ctx context.Context, remote Credentials, controlling bool) (Path, error) {
+	return e.connect(ctx, remote, controlling, false)
+}
+
+func (e *Endpoint) connect(ctx context.Context, remote Credentials, controlling, armPath bool) (Path, error) {
 	e.mu.Lock()
 	if e.connecting {
 		e.mu.Unlock()
@@ -347,6 +375,14 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 		}
 		return Path{}, fmt.Errorf("%w: %v", ErrICEFailed, err)
 	}
+	return e.selectedPath(armPath)
+}
+
+// FinalizePath captures the selected pair after trickle exchange has finished
+// and makes later pair changes observable as real runtime path changes.
+func (e *Endpoint) FinalizePath() (Path, error) { return e.selectedPath(true) }
+
+func (e *Endpoint) selectedPath(arm bool) (Path, error) {
 	p, err := e.agent.GetSelectedCandidatePair()
 	if err != nil {
 		return Path{}, err
@@ -363,6 +399,10 @@ func (e *Endpoint) Connect(ctx context.Context, remote Credentials, controlling 
 		method = "lan_direct"
 	}
 	e.mu.Lock()
+	if arm {
+		e.selected = p.Local.Marshal() + "|" + p.Remote.Marshal()
+		e.pathArmed = true
+	}
 	timeline := append([]ICEStateEvent(nil), e.iceTimeline...)
 	e.mu.Unlock()
 	return Path{Generation: e.cfg.Generation, BaseSocket: e.BaseAddress(), Interface: e.interfaceName, AddressFamily: e.addressFamily, LocalCandidate: candidateEvidence(p.Local), RemoteCandidate: candidateEvidence(p.Remote), LocalType: p.Local.Type().String(), RemoteType: p.Remote.Type().String(), RemoteAddress: net.JoinHostPort(p.Remote.Address(), strconv.Itoa(p.Remote.Port())), ConnectionMethod: method, TransportProtocol: "quic", Relay: false, ICEStateTimeline: timeline}, nil
@@ -376,8 +416,6 @@ func candidateEvidence(c ice.Candidate) string {
 }
 
 func (e *Endpoint) Close() error {
-	endpointCtorMu.Lock()
-	defer endpointCtorMu.Unlock()
 	var result error
 	e.once.Do(func() {
 		close(e.done)

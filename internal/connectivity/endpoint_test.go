@@ -21,6 +21,21 @@ func localEndpoint(t *testing.T) *Endpoint {
 	return e
 }
 
+func TestIPOnlyBindUsesEphemeralPort(t *testing.T) {
+	e, err := New(Config{BindAddress: "127.0.0.1", AllowLoopback: true, Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+	host, port, err := net.SplitHostPort(e.BaseAddress())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host != "127.0.0.1" || port == "" || port == "0" {
+		t.Fatalf("IP-only bind did not use an ephemeral port: %q", e.BaseAddress())
+	}
+}
+
 func TestCandidatePolicy(t *testing.T) {
 	for _, addr := range []string{"0.0.0.0:0", "[::]:0", "255.255.255.255:0", "[fe80::1]:0", "127.0.0.1:0"} {
 		if e, err := New(Config{BindAddress: addr}); err == nil {

@@ -20,6 +20,11 @@ import (
 
 // TaskSnapshot is the process-lifetime application view used by Wails and CLI.
 // It intentionally contains metadata only; file bytes never cross this boundary.
+type TaskPhaseEvent struct {
+	Phase string `json:"phase"`
+	At    string `json:"at"`
+}
+
 type TaskSnapshot struct {
 	ID                       string                       `json:"id"` // compatibility alias for task_id
 	TaskID                   string                       `json:"task_id"`
@@ -67,8 +72,10 @@ type TaskSnapshot struct {
 	SignalingBytesSent       uint64                       `json:"signaling_bytes_sent"`
 	SignalingBytesReceived   uint64                       `json:"signaling_bytes_received"`
 	ICEStateTimeline         []connectivity.ICEStateEvent `json:"ice_state_timeline,omitempty"`
+	PhaseTimeline            []TaskPhaseEvent             `json:"phase_timeline,omitempty"`
 	TLSVersion               uint16                       `json:"tls_version,omitempty"`
 	ALPN                     string                       `json:"alpn,omitempty"`
+	ConnectTimings           DirectTimings                `json:"connect_timings"`
 	CanCancel                bool                         `json:"can_cancel"`
 	CanRetry                 bool                         `json:"can_retry"`
 	CanPause                 bool                         `json:"can_pause"`
@@ -153,6 +160,10 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.AttemptID = protocol.RandomID()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.StartedAt, s.UpdatedAt, s.State, s.CanCancel = now, now, "preparing", true
+	if s.Phase == "" {
+		s.Phase = "preparing"
+	}
+	s.PhaseTimeline = append(s.PhaseTimeline, TaskPhaseEvent{Phase: s.Phase, At: now})
 	s.Revision = 1
 	s.HistoryPersisted = m.historyAvailable()
 	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory}}
@@ -180,7 +191,14 @@ func isTerminal(s string) bool {
 	return s == "completed" || s == "rejected" || s == "failed" || s == "cancelled"
 }
 
-func (t *taskRecord) snapshot() TaskSnapshot { t.mu.RLock(); defer t.mu.RUnlock(); return t.snap }
+func (t *taskRecord) snapshot() TaskSnapshot {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	snapshot := t.snap
+	snapshot.ICEStateTimeline = append([]connectivity.ICEStateEvent(nil), t.snap.ICEStateTimeline...)
+	snapshot.PhaseTimeline = append([]TaskPhaseEvent(nil), t.snap.PhaseTimeline...)
+	return snapshot
+}
 func (t *taskRecord) recoverySnapshot() taskRecovery {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -194,26 +212,41 @@ func (t *taskRecord) update(fn func(*TaskSnapshot)) {
 func (t *taskRecord) updateAttempt(attemptID string, fn func(*TaskSnapshot)) bool {
 	return t.updateRecordAttempt(attemptID, func(snap *TaskSnapshot, _ *taskRecovery) { fn(snap) })
 }
+func (t *taskRecord) updateAttemptTransient(attemptID string, fn func(*TaskSnapshot)) bool {
+	return t.updateRecordAttemptMode(attemptID, false, func(snap *TaskSnapshot, _ *taskRecovery) { fn(snap) })
+}
 func (t *taskRecord) updateRecovery(attemptID string, fn func(*taskRecovery)) bool {
 	return t.updateRecordAttempt(attemptID, func(_ *TaskSnapshot, recovery *taskRecovery) { fn(recovery) })
 }
 func (t *taskRecord) updateRecordAttempt(attemptID string, fn func(*TaskSnapshot, *taskRecovery)) bool {
+	return t.updateRecordAttemptMode(attemptID, true, fn)
+}
+func (t *taskRecord) updateRecordAttemptMode(attemptID string, persist bool, fn func(*TaskSnapshot, *taskRecovery)) bool {
 	t.mu.Lock()
 	if isTerminal(t.snap.State) || (attemptID != "" && t.snap.AttemptID != attemptID) {
 		t.mu.Unlock()
 		return false
 	}
+	previousPhase := t.snap.Phase
 	fn(&t.snap, &t.recovery)
 	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if t.snap.Phase != "" && t.snap.Phase != previousPhase && len(t.snap.PhaseTimeline) < 64 {
+		t.snap.PhaseTimeline = append(t.snap.PhaseTimeline, TaskPhaseEvent{Phase: t.snap.Phase, At: t.snap.UpdatedAt})
+	}
 	snap := t.snap
 	recovery := t.recovery
 	t.mu.Unlock()
-	t.save(snap, recovery)
+	if persist {
+		t.save(snap, recovery)
+	}
 	return true
 }
 func (t *taskRecord) progress(attemptID string, p transfer.Progress) {
-	t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, recovery *taskRecovery) {
+	// Progress is process-live UI state. Durable byte checkpoints are written by
+	// recordChunkSent/recordReceived and terminal transitions; synchronously
+	// committing every UI callback would add disk latency to every QUIC ACK.
+	t.updateRecordAttemptMode(attemptID, false, func(v *TaskSnapshot, recovery *taskRecovery) {
 		if v.State == "cancel_requested" {
 			return
 		}
@@ -223,13 +256,17 @@ func (t *taskRecord) progress(attemptID string, p transfer.Progress) {
 		// Keep its verified-byte accounting, but never let it roll the control
 		// state back from pause_requested to transferring/verifying.
 		if v.State != "pause_requested" {
-			v.Phase = strings.ToLower(p.State)
-			switch strings.ToLower(p.State) {
+			phase := strings.ToLower(p.State)
+			if phase == "awaitingacceptance" {
+				phase = "awaiting_acceptance"
+			}
+			v.Phase = phase
+			switch phase {
 			case "preparing":
 				if v.State != "recovering" {
 					v.State = "preparing"
 				}
-			case "awaitingacceptance":
+			case "awaiting_acceptance":
 				v.State = "awaiting_acceptance"
 			case "transferring":
 				v.State = "transferring"
@@ -310,6 +347,7 @@ func applyDirectEvidence(snapshot *TaskSnapshot, evidence DirectEvidence) {
 	snapshot.ICEStateTimeline = append([]connectivity.ICEStateEvent(nil), evidence.ICEStateTimeline...)
 	snapshot.TLSVersion = evidence.TLSVersion
 	snapshot.ALPN = evidence.ALPN
+	snapshot.ConnectTimings = evidence.Timings
 }
 
 func clearDirectEvidence(snapshot *TaskSnapshot) {
@@ -566,14 +604,14 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		recovery.PeerFingerprint = peerID
 	})
 	cfg.onPhase = func(phase string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			if v.State != "cancel_requested" {
 				v.Phase = phase
 			}
 		})
 	}
 	cfg.onSession = func(sessionID, peerID string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			v.SessionID = sessionID
 			v.PeerID = peerID
 			v.ICEGeneration = firstGeneration
@@ -589,7 +627,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		defer s.tasks.workers.Done()
 		defer s.ensureInbox()
 		var result DirectTransferResult
-		prepared, runErr := transfer.Prepare(ctx, base, 0)
+		prepared, peer, runErr := s.prepareAndConnect(ctx, peerID, base, cfg)
 		if runErr == nil {
 			defer prepared.Close()
 			sentChunks := make(map[uint32][]bool)
@@ -616,7 +654,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 				recovery.FileCount = len(prepared.Manifest.Files)
 				recovery.SentChunks = sentChunks
 			})
-			result, runErr = s.SendPreparedWithHooksDetailed(ctx, peerID, prepared, cfg, transfer.SendHooks{
+			result, runErr = s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{
 				Progress:       func(p transfer.Progress) { t.progress(attemptID, p) },
 				PreviouslySent: t.wasChunkSent,
 				ChunkSent: func(sent transfer.ChunkTransmission) {
@@ -626,6 +664,11 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 					}
 				},
 			})
+			if runErr == nil {
+				runErr = s.closePeerAfterTransfer(peer)
+			} else {
+				runErr = errors.Join(runErr, peer.Close())
+			}
 		}
 		if runErr != nil {
 			handleTaskRunError(t, attemptID, ctx, runErr)
@@ -668,14 +711,14 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	t.decision = make(chan bool, 1)
 	attemptID := t.snapshot().AttemptID
 	cfg.onPhase = func(phase string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			if v.State != "cancel_requested" {
 				v.Phase = phase
 			}
 		})
 	}
 	cfg.onSession = func(sessionID, peerID string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			v.SessionID = sessionID
 			v.PeerID = peerID
 			v.ICEGeneration = firstGeneration
@@ -967,14 +1010,14 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 
 func taskAttemptConfig(t *taskRecord, attemptID string, cfg DirectConfig) DirectConfig {
 	cfg.onPhase = func(phase string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			if v.State != "cancel_requested" && v.State != "pause_requested" {
 				v.Phase = phase
 			}
 		})
 	}
 	cfg.onSession = func(sessionID, peerID string) {
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
+		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
 			v.SessionID = sessionID
 			v.PeerID = peerID
 			v.ICEGeneration = firstGeneration
@@ -1137,6 +1180,7 @@ func (s *Service) Shutdown() {
 	s.inbox.shutdown = true
 	s.inbox.mu.Unlock()
 	_ = s.stopInbox(true)
+	_ = s.stopLANDiscovery()
 	s.tasks.mu.RLock()
 	for _, t := range s.tasks.tasks {
 		if !isTerminal(t.snapshot().State) && t.cancel != nil {

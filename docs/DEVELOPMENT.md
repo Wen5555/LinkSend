@@ -2,7 +2,7 @@
 
 PowerShell 7 下从仓库根目录工作。先阅读 `AGENTS.md`、`docs/SPEC.md` 和 `docs/PROGRESS.md`，再保存当前 branch、HEAD 与 `git status --short`。仓库可能有用户未提交改动和大量 untracked；禁止 `reset --hard`、`clean` 或整目录盲目暂存。
 
-产品版本当前为 `0.2.0`，协议版本为 V1。产品版本的唯一 Go 常量是 `internal/protocol.ProductVersion`，并同步到 Wails `build/config.yml`、Windows manifest/NSIS、macOS plist 与前端 `package.json`。版本更新后必须重新生成 bindings/build assets，并检查 CLI、`/healthz`、桌面 DTO 和安装包元数据一致。Wails 3 beta.18 的 build-assets 会把 Windows fixed version 生成为三段且省略 `FileVersion` 字符串；提交前必须将 `info.json` 的 fixed file/product version 规范为四段 `<semver>.0`，使用 `0409` string table 并保留三段显示字符串，`TestProductVersionMetadataSynchronized` 会阻止该回归。
+产品版本当前为 `0.4.0`，协议版本为 V1。产品版本的唯一 Go 常量是 `internal/protocol.ProductVersion`，并同步到 Wails `build/config.yml`、Windows manifest/NSIS、macOS plist、前端 `package.json` 与打包 workflow。版本更新后必须重新生成 bindings/build assets，并检查 CLI、`/healthz`、桌面 DTO 和安装包元数据一致。Wails 3 beta.18 的 build-assets 会把 Windows fixed version 生成为三段且省略 `FileVersion` 字符串；提交前必须将 `info.json` 的 fixed file/product version 规范为四段 `<semver>.0`，使用 `0409` string table 并保留三段显示字符串，`TestProductVersionMetadataSynchronized` 会阻止该回归。
 
 ```powershell
 gofmt -w <本轮修改的.go文件>

@@ -103,4 +103,24 @@ func TestReconnectAllowsFreshNegotiationImmediately(t *testing.T) {
 	if wire, readErr := receiver.Read(ctx); readErr != nil || wire.Message == nil || wire.Message.SessionID != freshRequest.SessionID {
 		t.Fatalf("old callback deleted fresh negotiation state: %v", readErr)
 	}
+	receiverEnd, err := protocol.NewEnvelope("end_of_candidates", b.ID(), a.ID(), freshRequest.SessionID, 1, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = receiver.SendEnvelope(ctx, receiverEnd); err != nil {
+		t.Fatal(err)
+	}
+	if wire, readErr := newSender.Read(ctx); readErr != nil || wire.Message == nil || wire.Message.SessionID != freshRequest.SessionID {
+		t.Fatalf("second end_of_candidates was not forwarded: %v", readErr)
+	}
+	reusedRequest, err := protocol.NewEnvelope("connect_request", a.ID(), b.ID(), protocol.RandomID(), 1, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = newSender.SendEnvelope(ctx, reusedRequest); err != nil {
+		t.Fatal(err)
+	}
+	if wire, readErr := receiver.Read(ctx); readErr != nil || wire.Message == nil || wire.Message.SessionID != reusedRequest.SessionID {
+		t.Fatalf("completed candidate exchange prevented WSS reuse: %v", readErr)
+	}
 }

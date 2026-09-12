@@ -17,6 +17,7 @@ export interface DeviceInfo {
     "online": boolean;
     "trusted": boolean;
     "always_accept": boolean;
+    "nearby": boolean;
 }
 
 /**
@@ -45,6 +46,16 @@ export interface Diagnostics {
     "health_failure"?: string;
 }
 
+export interface DirectTimings {
+    "peer_lookup_ms": number;
+    "signaling_connect_ms": number;
+    "endpoint_setup_ms": number;
+    "peer_response_ms": number;
+    "ice_ms": number;
+    "quic_handshake_ms": number;
+    "total_connect_ms": number;
+}
+
 export interface IdentityInfo {
     "id": string;
     "public_key_hex": string;
@@ -57,14 +68,21 @@ export interface IdentityInfo {
  */
 export interface InboxStatus {
     "enabled": boolean;
+    "signaling_connected": boolean;
     "listening": boolean;
     "directory"?: string;
+    "connected_at"?: string;
+    "connection_count": number;
     "last_error"?: string;
+    "lan_available": boolean;
+    "lan_peer_count": number;
+    "lan_last_error"?: string;
 }
 
 export interface InvitationInfo {
     "token": string;
     "expires_at": string;
+    "expires_in_seconds": number;
 }
 
 export interface MembershipStatus {
@@ -84,6 +102,11 @@ export interface MembershipStatus {
  * TaskSnapshot is the process-lifetime application view used by Wails and CLI.
  * It intentionally contains metadata only; file bytes never cross this boundary.
  */
+export interface TaskPhaseEvent {
+    "phase": string;
+    "at": string;
+}
+
 export interface TaskSnapshot {
     /**
      * compatibility alias for task_id
@@ -134,8 +157,10 @@ export interface TaskSnapshot {
     "signaling_bytes_sent": number;
     "signaling_bytes_received": number;
     "ice_state_timeline"?: connectivity$0.ICEStateEvent[] | null;
+    "phase_timeline"?: TaskPhaseEvent[] | null;
     "tls_version"?: number;
     "alpn"?: string;
+    "connect_timings": DirectTimings;
     "can_cancel": boolean;
     "can_retry": boolean;
     "can_pause": boolean;

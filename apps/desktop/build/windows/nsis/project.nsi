@@ -36,7 +36,7 @@ Unicode true
 !define INFO_PROJECTNAME "LinkSend"
 !define INFO_COMPANYNAME "LinkSend contributors"
 !define INFO_PRODUCTNAME "LinkSend"
-!define INFO_PRODUCTVERSION "0.3.0"
+!define INFO_PRODUCTVERSION "0.4.0"
 !define INFO_COPYRIGHT "© 2026 LinkSend contributors"
 !define PRODUCT_EXECUTABLE "LinkSend.exe"
 !define UNINST_KEY_NAME "LinkSend.LinkSend"

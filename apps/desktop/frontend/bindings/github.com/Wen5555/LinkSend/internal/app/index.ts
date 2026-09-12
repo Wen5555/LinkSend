@@ -5,9 +5,11 @@ export type {
     DeviceInfo,
     DiagnosticIdentity,
     Diagnostics,
+    DirectTimings,
     IdentityInfo,
     InboxStatus,
     InvitationInfo,
     MembershipStatus,
+    TaskPhaseEvent,
     TaskSnapshot
 } from "./models.js";

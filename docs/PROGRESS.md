@@ -1,6 +1,47 @@
 # LinkSend implementation progress
 
-Updated: 2026-09-12. Current published test prerelease: `v0.2.0`; current merged source: `0.3.0`; protocol version: V1. This is not an accepted production release.
+Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol version: V1. This is not an accepted production release.
+
+## 2026-09-12 v0.4.0 文档、主分支与测试预发布
+
+- 产品版本从 `0.3.0` 提升到 `0.4.0`，协议仍为 V1。该 minor 版本汇总配对幂等与错误语义、安全 LAN 发现、WSS 读泵复用、trickle ICE、响应端 QUIC listener 预注册、显式双方完成确认、DHCP/EFS 修复和接收热路径优化。
+- 公开 README 按使用者视角说明功能、数据路径、快速开始和边界；架构、协议、安全、性能、测试、验收、路线图、部署及平台测试文档同步到 `0.4.0`。旧版本发布记录和当时的失败/未运行结论继续作为历史事实保留。
+- Release 只使用 GitHub Actions 从 tag 对应干净提交生成的 Windows amd64 ZIP、Windows NSIS 安装程序与 macOS arm64/amd64 DMG；本地 dirty snapshot 和实机临时包不作为 Release 资产。Windows 未代码签名，macOS 仅 ad-hoc 签名且未公证。
+- 仍保留真实限制：无 Relay/TURN 文件中继；MASQUERADE-only 双 NAT 曾返回 `CHECK_TIMEOUT`；公共 IPv6、更多 NAT 类型、网络切换/睡眠唤醒、完整安装卸载与全量原生交互没有因本次发布而自动变为 PASS。
+
+## 2026-09-12 配对幂等、LAN 直接发现与接收热路径优化（v0.4.0）
+
+- 配对服务将原先统一的“invalid/expired/used”拆分为稳定错误码，控制库迁移到 schema 2，增加 `used_by/used_at`；同一身份在成功响应丢失或前端重复点击后可幂等取得既有成员，其他身份仍被拒绝。邀请响应增加服务端相对 TTL，前端显示真实倒计时并用同步门闩阻止同一渲染帧重复提交；输入兼容大小写、空格和常见连字符。新码生成事务清理超过 24 小时的失效摘要并对极低概率摘要碰撞重试。
+- 新增 `internal/discovery`：UDP/53318 签名组播、每接口定向广播、单播响应和受限手工 IP 探测；公告 2048-byte 上限、TTL=1、直连前缀校验、15 秒过期、nonce 重放窗、响应限频。发现后用临时 TLS 1.3 双向 Ed25519 控制通道交换现有签名 ICE envelope，文件仍只经 Pion ICE + QUIC。未配对 LAN 设备只有在发送方选择、接收方确认且双方完整完成后才 pin；失败/拒绝不留信任。成功地址随 pin 保存，重启后定向探测，不扫网段。
+- Windows 物理网卡为 `10.234.232.205/16`、Private，Mac 为 `en0=10.234.171.192/16`，双方另有 Mihomo/utun。校园混合有线/Wi-Fi过滤组播与定向广播；受限单播实测 Windows 正确选择“以太网”、Mac 正确选择 `en0`，互相发现签名身份，Windows→Mac TLS 控制心跳 PASS。Mac→Windows 被测试探针现有两条 Windows Private/Public 入站 Block 规则拒绝，未修改防火墙，正式应用仍需首次运行允许专用网络。证据 `/tmp/codex-ssh/linksend-lanprobe-unicast-v3-20260911T235205Z`。
+- 接收热路径把已验证字节统计从每 ACK 全量扫描改为 O(1) 单调计数；正文仍逐块 `file.Sync`，恢复位图最多每 8 块或 500ms 批量 checkpoint。checkpoint 落后不丢数据，因为重启仍逐块重算 staging 哈希。传输中保存设置不会取消 LAN 任务，发现配置在当前任务完成后再重启。
+- 已通过 Windows 根普通/race/vet/`GOWORK=off`、桌面独立 verify/test/vet/build、前端 typecheck/lint/11 tests/build、Wails 3 production（1 service / 33 methods / 17 models）。香港 schema 1 只读审计为 integrity=ok、24 个邀请中 6 used/18 expired-unused、NTP synchronized；新版服务和两端 GUI 尚待本节后续事务部署与物理文件传输，不在此提前标记完成。
+
+## 2026-09-12 DHCP、trickle ICE 与双机连续发送修复
+
+- 后续及时性优化把认证 WSS 改为单后台读泵，空闲接收与发送借还同一连接；业务 context 取消不再破坏 socket，心跳响应由泵消化。Mac 10 轮接收始终 `connection_count=1`，本地双向复用回归两端总 WSS 数保持 2。香港主站在双方 `end_of_candidates` 转发后立即释放协商，事务部署前备份 `/opt/linksend-lan-test/backups/20260911T223124Z-transport-wss-reuse` 校验可读且数据库 integrity=ok；新 PID `389489`、二进制 SHA256 `d48c2c9ec50a71eddfdcf8caf97307c7b45c70b18c629e63fc2127fd3ef83d13`，公网 health/协议 V1/QUIC/`relay=false`、schema 1 和 recent fatal=0 均 PASS。部署 job `/tmp/codex-ssh/deploy-linksend-wss-reuse-20260911T223111Z`，未触发回滚。
+- 源文件 Prepare/hash 与信令、ICE、QUIC 并行；安全自动网卡结果在后台接收启动时预热，并在每次复用前按原接口和当前 IP 复核，DHCP 变化会重新枚举。任务保存最多 64 个本地 phase 时间点及连接阶段耗时；纯 UI 进度/phase 不再同步提交 SQLite，块发送/接收、恢复元数据和终态仍持久化，避免历史写入阻塞每个 QUIC ACK。
+- 响应端在发出 `connect_response` 前注册 pinned TLS QUIC listener，避免 initiator 首包早到后等待 PTO；成功终态增加兼容 `confirmed_ack`，标准 QUIC close 的 draining/endpoint 回收移出用户完成路径。物理 Windows→Mac 新版连续 10/10 PASS：1,296–1,604 ms，平均 1,452 ms，相对同现场旧 3,521–3,749 ms 平均缩短约 59%；发送端 WSS 0–0.7 ms、endpoint 81–90 ms、QUIC 多数 11–15 ms。十个不同文件两端 SHA256 逐一一致，证据 `/tmp/codex-ssh/inbox-opt-v16-20260911T223358Z`、复核 `/tmp/codex-ssh/verify-linksend-files-v16-20260911T223613Z`。跨 NAT、原生弹窗人工点击、IPv6/网络切换/睡眠唤醒仍未据此宣称通过。
+- 最终源码快照在 Windows 通过根普通/race/vet/`GOWORK=off`，桌面独立 verify/test/vet/build，前端 typecheck/lint/8 tests/build 与 Wails production。Windows 当前运行 `apps/desktop/bin/LinkSend.exe`，版本 0.3.0、SHA256 `9df2116bb23ebaaf6b4790fd7b01b21f488d99f761a9880ccf8129729473dacc`。Mac 同源码普通/race、桌面、前端及 arm64 DMG 构建通过，DMG SHA256 `7988bf1bf99f1155de4d4c2d3e382faf185ebeaf35ac0f8ecb4c896d8061ae25`；已事务安装到 `/Applications/LinkSend.app`，运行二进制 SHA256 `8fd1c04724dd97e5b49cf5917fd254d78f6f0406550ac0647f7882f98405eb2c`，替换前备份为 `/Users/wen/Library/Application Support/LinkSend/app-backups/20260911T224737Z-transport-v16/LinkSend.app.copy`。
+
+- 使用 `codex-ssh-manager` 将 `mac-test-102342413` 更新为 `wen@10.234.171.192`，resolve/probe/audit-host 通过。Mac 当时运行 0.3.0，但偏好仍固定旧地址 `10.234.0.86:0`；已先备份再清空为自动选择并重启。备份为 `/Users/wen/Library/Application Support/LinkSend/desktop-preferences.json.pre-dhcp-bind-fix-20260911T193855Z.bak`。
+- 桌面运行时现在检查已保存的字面量 IP 是否仍属于当前接口；DHCP 旧地址本次运行回退自动选择，环境变量显式绑定不被覆盖。endpoint 接受纯 IPv4/IPv6 并补 `:0`；普通 MTU 相同时优先非 point-to-point 接口，显式优先级仍可选择隧道。现场稳定选择 Mac `en0 10.234.171.192` 与 Windows `以太网 10.234.232.205`，未选 `198.18.0.1` TUN。
+- 原实现串行等待两端完整 STUN gathering，小文件在 ICE checks 前约空等 8 秒，而真实 ICE 只需约 0.1–0.4 秒。现改为请求/响应立即发送、候选逐个签名 trickle、Pion checks 与 gathering 并行；验证到 `lan_direct` host path 后双方正常提前结束无关 STUN 等待。
+- 初版并行实现曾在高重复/race 中复现 QUIC code 0 提前关闭：Pion 初始从 peer-reflexive 切换为 host pair，被旧逻辑误判为运行中迁移。endpoint 现分 provisional/final 两阶段，初始收敛不关闭 socket，候选交换结束后才固定 pair 并开启后续路径监控。修复后关键连接套件连续 20 轮及 race 通过。
+- 响应端在已验证请求后若 endpoint、候选、ICE/QUIC 或期望 peer 检查失败，会返回绑定 sender/recipient/session/generation 且经 Ed25519 签名的受限 `status` 稳定码；发起端验证后立即结束，不再把确定的对端失败误报成 30 秒超时。消息不含系统 cause、路径、token 或 ICE credential。
+- Windows profile 启用了 EFS，历史 `trust.json` 的加密状态不同，成员同步时 `os.Rename` 返回无法移动到不同磁盘，造成 session 前间歇性 `DIRECT_FAILED`。连接热路径现优先使用本地 pin，仅缺 pin 时刷新服务端设备；名称变化不再重写 pin。信任保存增加 Windows `ReplaceFileW` 与带 `trust.json.previous` 校验/崩溃恢复的原位兜底。真实 EFS 目录上 `devices` 已退出 0、JSON 可解析且恢复日志清理；修复前备份为 `.artifacts/diagnostics-20260912-bind-fix/trust.json.before-efs-replace-fix`。
+- 物理 Windows→Mac 连续 10/10 PASS，每轮新建 WSS/session/UDP endpoint，耗时 3521–3749 ms，全部 host↔host、`lan_direct`、TLS 1.3、QUIC、`relay=false`。Mac 十份文件 SHA256 均为 `40548e1b1e13d54f38ef44be02a25fe6f1a82490f4d33f475043c1d965317955`，与 Windows 源一致。证据 `/tmp/codex-ssh/live-repeat-v5-20260911T205855Z`，复核 job `/tmp/codex-ssh/verify-mac-repeat-v5-20260911T210112Z`。自动接收覆盖连接到 `AwaitingAcceptance`，原生弹窗人工点击仍未冒充自动化 PASS。
+- Mac v5 源包 SHA256 `57b17507d6d8feeef708e4c4ecad4e2018e640f1c3d3939156a9c7e9ee8d1272`，arm64 DMG SHA256 `e4c115dd49576459289c75b628f5e482aca3324e5a8bee7f3649a524ddd42c80`；Mac 普通/race/desktop/原生构建通过并安装到 `/Applications/LinkSend.app`，运行二进制 SHA256 `907ebaa6a7f25158c959effd4eb50aec90afb3ff4ef122c0fcad69cd928b7519`。替换前备份为 `/Users/wen/Library/Application Support/LinkSend/app-backups/20260911T205524Z-connectivity-v5/LinkSend.app.copy`。
+- Windows 当前运行 `apps/desktop/bin/LinkSend.exe`，SHA256 `1650b6ad6ac690c9fd29e29d0b31a783b8a407c596d2c8845b3465e908f548b7`，版本 0.3.0；Windows 与 Mac 的保存 bind 均已改为自动，Windows 偏好备份为 `.artifacts/diagnostics-20260912-bind-fix/desktop-preferences.json.before-auto-bind-windows`。两端最终 GUI 均已恢复，Windows 2 条、Mac 2 条 TCP 连接 Established；Mac 最终复核 job `/tmp/codex-ssh/verify-mac-gui-v5-final-20260911T210933Z`。最终实际通过：根普通测试、完整 race、vet、`GOWORK=off`；桌面独立 test/vet/build；前端 typecheck/lint/8 tests/build；Wails Windows build。当前仍是未提交测试快照，未推送、未发布，跨 NAT/IPv6/睡眠唤醒未因本轮 LAN 结果改写。
+
+## 2026-09-12 Windows 在线但 `DIRECT_FAILED` 排查与绑定地址修复
+
+- 本机持久任务历史显示最近两次发送均在约 3 秒内结束于 `connecting` / `DIRECT_FAILED`，实际发送 0 B，且没有 `session_id`、ICE 候选、STUN 计数或路径证据；因此失败发生在本地 UDP/ICE endpoint 创建之前，不是文件内容、接收目录或已建立直连后的传输失败。
+- 当前 `%APPDATA%\LinkSend\desktop-preferences.json` 保存的 `bind_address` 为纯 IP `10.234.232.205`。该地址仍是物理以太网的有效地址，但旧 endpoint 构造直接传给 `net.ResolveUDPAddr`，要求 `IP:port`，从而在 presence 仍显示在线时提前失败；桌面任务层将该非协议底层错误归并成了笼统的 `DIRECT_FAILED`。
+- 当前配置已修正为 `10.234.232.205:0`，应用正常退出后重新启动；窗口创建成功，后台信令连接保持 Established。没有自动向对端发送测试文件，物理双机重试仍需用户在界面发起，不能用启动/信令检查冒充传输通过。
+- `internal/connectivity.New` 现兼容纯 IPv4/IPv6 字面量并自动补临时 UDP 端口 `:0`；新增 `TestIPOnlyBindUsesEphemeralPort`，避免用户再次因省略端口进入同一失败路径。协议、ICE、QUIC、TLS 和文件数据路径未改变。
+- 实际通过：`go test -count=1 ./internal/connectivity`、根模块 `go test -count=1 ./...`、`go vet ./...`、根 `GOWORK=off go test -count=1 ./...`；桌面 `GOWORK=off go test -count=1 ./...`、`go vet ./...`、`go build ./...`；Wails 3 Windows/amd64 production build。首次构建因独立 `task` 命令不存在退出 1，改用已固定的 `wails3 task` 后首次因 PATH 未包含 `wails3` 退出 1，显式加入 `.tools/bin` 后通过。
+- 修复构建 `apps/desktop/bin/LinkSend.exe` 为产品 `0.3.0`，SHA256 `EDFA11F57EEE4C477AC95346212F48BD0AEF30D9DAD99F37DF3A2AC92C7658C5`。直接覆盖 `C:\Program Files\LinkSend contributors\LinkSend\LinkSend.exe` 被 Windows 权限拒绝，未绕过权限；旧安装文件已备份到 ignored 本地诊断目录。已安装版当前依靠修正后的 `IP:0` 配置工作，源码兼容修复待下一次安装包更新。
 
 ## 2026-09-11 v0.3.0 局域网连接、配对码与自动接收简化（当前交付源码）
 

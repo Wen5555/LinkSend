@@ -56,16 +56,17 @@ type control struct {
 }
 
 const (
-	opOffer     = "offer"
-	opAccept    = "accept"
-	opReject    = "reject"
-	opChunk     = "chunk"
-	opAck       = "ack"
-	opReady     = "ready"
-	opFinish    = "finish"
-	opCompleted = "completed"
-	opConfirmed = "confirmed"
-	opError     = "error"
+	opOffer        = "offer"
+	opAccept       = "accept"
+	opReject       = "reject"
+	opChunk        = "chunk"
+	opAck          = "ack"
+	opReady        = "ready"
+	opFinish       = "finish"
+	opCompleted    = "completed"
+	opConfirmed    = "confirmed"
+	opConfirmedAck = "confirmed_ack"
+	opError        = "error"
 )
 
 const maxPeerError = 4 << 10
@@ -124,6 +125,17 @@ func peerErrorCode(err error) string {
 type streamAborter interface{ Abort() }
 type terminalFlusher interface {
 	FlushTerminal(context.Context) error
+}
+type terminalDeliveryObserver interface {
+	TerminalDeliveryObserved(error) bool
+}
+
+func terminalDeliveryObserved(rw io.ReadWriteCloser, err error) bool {
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+	observer, ok := rw.(terminalDeliveryObserver)
+	return ok && observer.TerminalDeliveryObserved(err)
 }
 
 func flushTerminal(ctx context.Context, rw io.ReadWriteCloser, c control) error {
@@ -313,7 +325,7 @@ func validateControl(c control) error {
 		if c.Manifest != nil || c.Digest != "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
 			return errors.New("INVALID_CONTROL")
 		}
-	case opFinish, opConfirmed:
+	case opFinish, opConfirmed, opConfirmedAck:
 		if c.Manifest != nil || c.Digest == "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
 			return errors.New("INVALID_CONTROL")
 		}
@@ -428,11 +440,19 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 			if done.Op != opCompleted || done.Digest != digest || done.Verified != m.TotalBytes() {
 				return Result{}, ErrIntegrity
 			}
-			// A successful sender does not return until the receiver has read the
-			// confirmation and gracefully closed its send direction. This closes
-			// the buffered-QUIC race near completed/confirmed without sleeping.
-			if err = flushTerminal(ctx, rw, control{Op: opConfirmed, Digest: digest}); err != nil {
+			// New peers explicitly acknowledge that they consumed confirmed. Older
+			// receivers close their send direction after consuming it, which remains
+			// equivalent delivery evidence and keeps this change wire-compatible.
+			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest}); err != nil {
 				return Result{}, err
+			}
+			confirmation, confirmationErr := readControl(rw)
+			if confirmationErr != nil {
+				if !terminalDeliveryObserved(rw, confirmationErr) {
+					return Result{}, confirmationErr
+				}
+			} else if confirmation.Op != opConfirmedAck || confirmation.Digest != digest {
+				return Result{}, ErrIntegrity
 			}
 			progress.State = "Completed"
 			progress.Verified = done.Verified
@@ -564,6 +584,12 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	}
 	if confirmed.Op != opConfirmed || confirmed.Digest != m.Digest() {
 		return Result{}, ErrIntegrity
+	}
+	// The explicit receipt removes the former fixed teardown wait. FlushTerminal
+	// keeps the acknowledgement safe if the sender is an older implementation:
+	// old senders ignore these bytes and have already half-closed their stream.
+	if err = flushTerminal(ctx, rw, control{Op: opConfirmedAck, Digest: m.Digest()}); err != nil {
+		return Result{}, err
 	}
 	emit("Completed")
 	complete()

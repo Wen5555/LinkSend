@@ -19,8 +19,10 @@ type completedReadGate struct {
 	*QUICStream
 	completed chan struct{}
 	release   chan struct{}
+	flushed   chan struct{}
 	blocked   atomic.Bool
 	once      sync.Once
+	flushOnce sync.Once
 }
 
 func (s *completedReadGate) Write(p []byte) (int, error) {
@@ -43,14 +45,8 @@ func (s *completedReadGate) Read(p []byte) (int, error) {
 	return s.QUICStream.Read(p)
 }
 
-type observedTerminalFlush struct {
-	*QUICStream
-	called chan struct{}
-	once   sync.Once
-}
-
-func (s *observedTerminalFlush) FlushTerminal(ctx context.Context) error {
-	s.once.Do(func() { close(s.called) })
+func (s *completedReadGate) FlushTerminal(ctx context.Context) error {
+	s.flushOnce.Do(func() { close(s.flushed) })
 	return s.QUICStream.FlushTerminal(ctx)
 }
 
@@ -118,11 +114,12 @@ func TestTransferCompletionWaitsForReceiverConfirmationOverQUIC(t *testing.T) {
 
 	completed := make(chan struct{})
 	release := make(chan struct{})
+	flushed := make(chan struct{})
 	receiverDone := make(chan error, 1)
 	go func() {
 		stream, acceptErr := server.AcceptStream(ctx)
 		if acceptErr == nil {
-			gated := &completedReadGate{QUICStream: WrapStream(stream), completed: completed, release: release}
+			gated := &completedReadGate{QUICStream: WrapStream(stream), completed: completed, release: release, flushed: flushed}
 			_, acceptErr = transfer.Receive(ctx, gated, t.TempDir(), "pinned-peer", func(transfer.Manifest) bool { return true }, nil)
 		}
 		receiverDone <- acceptErr
@@ -132,10 +129,9 @@ func TestTransferCompletionWaitsForReceiverConfirmationOverQUIC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	flushCalled := make(chan struct{})
 	senderDone := make(chan error, 1)
 	go func() {
-		_, sendErr := transfer.Send(ctx, &observedTerminalFlush{QUICStream: WrapStream(stream), called: flushCalled}, prepared, nil)
+		_, sendErr := transfer.Send(ctx, WrapStream(stream), prepared, nil)
 		senderDone <- sendErr
 	}()
 
@@ -145,16 +141,16 @@ func TestTransferCompletionWaitsForReceiverConfirmationOverQUIC(t *testing.T) {
 		t.Fatal("receiver never wrote completed")
 	}
 	select {
-	case <-flushCalled:
-	case <-ctx.Done():
-		t.Fatal("sender did not flush confirmed over QUIC")
-	}
-	select {
 	case err = <-senderDone:
 		t.Fatalf("sender returned before receiver read confirmed: %v", err)
 	default:
 	}
 	close(release)
+	select {
+	case <-flushed:
+	case <-ctx.Done():
+		t.Fatal("receiver did not flush confirmed_ack over QUIC")
+	}
 	if err = <-senderDone; err != nil {
 		t.Fatalf("sender completion failed: %v", err)
 	}

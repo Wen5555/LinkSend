@@ -1,28 +1,34 @@
 # LinkSend
 
-LinkSend（Osend）是由 Go 网络内核、Wails 3 桌面端和自托管信令服务组成的点对点文件传输工具。当前源码版本为 **0.3.0**，文件/控制协议保持 **V1**；产品 SemVer 与协议版本独立演进。已公开的最新测试预发布仍为 `v0.2.0`。
+LinkSend 是一个面向 Windows 和 macOS 的开源点对点文件传输工具。它由 Go 网络内核、Wails 3 桌面端和可自托管的信令服务组成，优先在局域网内直接发现设备，也支持通过信令服务协调跨网络 P2P 连接。
 
-服务器只负责配对设备登记、在线状态、会话和 ICE 候选交换；内部兼容隔离范围不会出现在桌面操作流程中。文件正文始终通过经身份认证的 QUIC 直连传输，不经过 HTTP、WSS、JavaScript IPC 或第三方中继。当前没有 Relay/TURN 文件中继，能力固定为 `relay=false`。
+当前版本为 **v0.4.0 测试预发布**，文件与控制协议保持 **V1**。可从 [GitHub Releases](https://github.com/Wen5555/LinkSend/releases/tag/v0.4.0) 获取 Windows 便携包、Windows 安装程序以及 macOS arm64/amd64 DMG。
 
-源码仓库：[github.com/Wen5555/LinkSend](https://github.com/Wen5555/LinkSend)。`v0.2.0` 已作为 [GitHub 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 发布，tag/源码为 `426d58b6ab62ab7213475007305c0a403955c00f`，三平台构建来自 [main run 34600609161](https://github.com/Wen5555/LinkSend/actions/runs/34600609161)，实现审阅见已合并的 [PR #6](https://github.com/Wen5555/LinkSend/pull/6)。该 Pre-release 不是 Latest，不代表生产可用或跨平台完整验收。
+## 设计特点
 
-版本从 `0.1.0` 提升到 `0.2.0`，因为 1.0 前新增了 schema 2 持久化、暂停/重启恢复、验证后缺块续传、多网卡诊断和连接生命周期能力；协议 wire format 仍为 V1。由于 MASQUERADE-only NAT、完整原生交互、签名/公证等门槛未完成，不提升到 `1.0.0`。`v0.2.0` 已发布，后续兼容修复必须从 `0.2.1` 起提升 patch，不能替换现有 tag 资产或改写来源。
+- 同一局域网内使用签名组播、定向广播和受限单播发现；发现设备不等于自动信任。
+- 跨网络使用自托管 HTTPS/WSS 信令交换在线状态和 ICE 候选。
+- 文件正文只在设备之间通过 Pion ICE + QUIC 直连传输，不经过信令服务、HTTP 上传、JavaScript IPC 或第三方存储。
+- QUIC 使用 TLS 1.3 和固定的 Ed25519 设备身份进行双向认证，文件块与完整内容使用 BLAKE3 校验。
+- 支持文件、多个文件、目录和空目录，以及暂停、取消、应用重启恢复和验证后的缺块续传。
+- 接收端先写入隔离 staging，完整校验后再提交；默认不会覆盖同名文件。
+- 桌面应用启动后自动保持接收能力，首次传输需要接收方确认，也可为可信设备启用自动接收。
 
-当前实现包括：
+## v0.4.0 主要变化
 
-- `ABCD-EFGH` 单次短码配对，成功后自动固定 Ed25519 设备公钥。
-- 应用打开即自动接收请求，接收端确认后开始正文传输，并支持按设备免确认。
-- SQLite 信令控制面、HTTP/WSS 认证、内部隔离和限流。
-- Pion ICE 与 quic-go 的同一 UDP socket 分流，TLS 1.3 双向身份认证。
-- manifest、BLAKE3 分块校验、安全 staging、不可覆盖提交与提交记录。
-- `task_id`、`attempt_id`、`session_id`、ICE generation 和单调 `revision` 分层状态模型。
-- schema 2 任务历史、损坏记录隔离、显式暂停/恢复、重启恢复与验证后缺块续传。
-- 自动接口发现、接口优先/排除、IPv6 link-local 排除和脱敏结构化诊断。
-- CLI 与 Wails 3 共用 `internal/app` 服务；React 按 revision 丢弃旧快照。
+- 配对码采用 `ABCD-EFGH` 短码、10 分钟有效期和单次使用语义；相同设备在响应丢失或重复提交时可幂等完成，其他设备复用会被拒绝。
+- 配对错误区分无效、过期、已使用和身份冲突，客户端使用服务端相对 TTL 显示倒计时，避免本地时钟偏差造成假过期。
+- 新增安全 LAN 发现和 TLS 1.3 临时控制通道；附近新设备只有在双方确认且传输完整完成后才会保存信任。
+- 增加已知局域网地址定向探测和手动单地址兜底，不扫描整个子网；校园网或访客网络过滤组播时仍可使用服务端信令路径。
+- 信令连接改为后台读泵复用，ICE 候选使用 trickle 交换，响应端提前注册 QUIC listener，并用显式完成确认减少小文件发送延迟。
+- 修复 DHCP 旧绑定地址、Windows EFS 原子替换、LAN 信令缺失签名及传输终态过早关闭等问题。
+- 接收端已验证字节统计改为 O(1)，恢复位图按批次 checkpoint；崩溃恢复仍会重新哈希 staging 数据。
 
-三项能力必须分开理解：`history_persisted` 只说明历史库当前可可靠写入，`restart_recovery_supported` 说明具备重启恢复所需身份和元数据，`byte_resume_supported` 只说明缺块校验、协商、请求和实际字节计数均已通过实现级验证。
+## 当前限制
 
-截至 2026-09-11，物理 Windows↔macOS 双向 QUIC 传输与摘要、Mac 拒绝/冲突/权限/独立磁盘镜像空间不足均 PASS；Linux 独立双 NAT 的固定 UDP 映射正向场景 PASS，MASQUERADE-only 场景仍为 `CHECK_TIMEOUT` FAIL。Release Windows 包的原生窗口创建与空闲 `WM_CLOSE` PASS；Mac 原生窗口 PASS 仍来自较早 dirty r2 快照，Release DMG 仅完成 runner 包级验证、物理启动 NOT_RUN，其余原生交互仍是 NOT_RUN。四类 Release 资产、真实 SHA256 和签名边界见 [v0.2.0 发布记录](docs/RELEASE-v0.2.0-TEST-CANDIDATE.md)，完整状态见 [验收矩阵](docs/ACCEPTANCE.md) 与 [实机报告](docs/MAC-WINDOWS-VALIDATION-20260911.md)。
+本项目仍处于测试预发布阶段。当前没有文件中继或 TURN allocation，能力固定为 `relay=false`；在 UDP 被阻断或 NAT 映射/过滤不允许打洞时，直连会明确失败。macOS 包仅为 ad-hoc 签名且未公证，Windows 包未进行代码签名。公共 IPv6、网络切换、睡眠唤醒、更多真实 NAT 类型以及完整安装/卸载矩阵仍需继续验证。
+
+详细证据和未完成项见 [验收矩阵](docs/ACCEPTANCE.md)、[实现进度](docs/PROGRESS.md) 和 [v0.4.0 发布说明](docs/RELEASE-v0.4.0-TEST-CANDIDATE.md)。
 
 ## 快速开始
 

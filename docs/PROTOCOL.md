@@ -1,18 +1,30 @@
 # Protocol
 
-当前源码产品版本为 `0.3.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
+当前源码产品版本为 `0.4.0`，控制/文件协议版本仍为 `1`。`internal/protocol.ProductVersion`、`Capabilities.product_version` 和 `/healthz.version` 用于产品部署识别；`protocol_version` 继续决定 wire compatibility。升级产品小版本不会自动改变协议版本，旧服务缺少 `product_version` 时客户端可按 V1 能力兼容，但诊断必须明确显示版本未知。
 
 控制面使用有界 JSON `Envelope`，签名输入是明确的长度前缀二进制编码，不直接签任意 JSON map。字段包括协议版本、消息 ID、会话、发送方、接收方、generation、有效时间、payload 和 Ed25519 签名。
 
 消息类型为 `connect_request`、`connect_response`、`candidate`、`end_of_candidates` 和 `status`。服务端只转发已认证设备组内、会话归属和 generation 正确的消息。未知关键类型、版本错误、重放、过期和超限消息明确拒绝。
 
+候选使用真实 trickle 语义：端点开始 gathering 后立即发送连接请求/响应，host/srflx 候选通过回调逐个签名发送，Pion ICE checks 与尚未结束的候选收集并行；不再等待两端各自完整 STUN 超时后串行开始检查。双方已验证同一 on-link 前缀的 host path 为 `lan_direct` 时，可主动发送 `end_of_candidates` 并停止向该会话补充无关公网候选；非 LAN 路径继续等待受限 STUN gathering。`end_of_candidates` 仍表示本 generation 不再发送新候选，候选和检查均受原有数量、时间与 session/generation 约束。服务端成功转发双方的 `end_of_candidates` 后释放该协商记录，使同一认证 WSS 可立即承载下一 session；不会关闭已建立且独立于信令的 QUIC。
+
+响应端在已验证 `connect_request` 后若无法创建本地 UDP endpoint、收集候选、完成 ICE/QUIC 建连或请求设备不符合本次接收限制，会发送同 session/generation 的签名 `status`：payload 固定为 `{"state":"failed","code":"<stable connection code>"}`。允许的 code 仅限候选交换、无候选、ICE 检查、QUIC 握手、认证限制和通用直连失败；不得携带本地路径、原始系统错误、ICE credential 或其他私密 cause。发起端必须验证发送者、接收者、session、generation、Ed25519 签名和 code 允许列表，才能提前结束等待；篡改或未知 code 按 `INVALID_MESSAGE` 处理。旧客户端不识别该状态时仍可能回落为超时，因此产品包需两端同步升级。
+
 桌面配对使用 40 位随机量的单次短码，规范显示为 `ABCD-EFGH`，服务端比较规范化后的摘要；输入时忽略大小写、连字符和空格。旧版 43 字符邀请在兼容期仍可加入。配对成功即由客户端固定认证成员列表中的 Ed25519 公钥，不再发送额外的人工指纹确认消息；已固定密钥不允许静默更换。
 
-文件控制帧使用长度前缀和独立的 QUIC stream，控制 metadata 上限为 8 MiB，文件内容不 Base64 化。传输顺序为 offer、用户 accept、块请求/数据、ack、finish、completed、confirmed。4 MiB 是默认分块，演示使用 64 KiB 以缩短测试时间。
+配对邀请响应新增 `server_time` 和 `ttl_seconds`，客户端倒计时以服务端相对 TTL 为准，不因两台设备的本地时钟偏差把有效码判为过期。服务端明确区分 `PAIRING_CODE_INVALID`、`PAIRING_CODE_EXPIRED`、`PAIRING_CODE_USED` 与 `PAIRING_IDENTITY_CONFLICT`；同一 Ed25519 身份在成功响应丢失后重复提交同一码属于幂等成功，其他身份仍不能二次消费。控制库 schema 2 只增加 `used_by/used_at` 摘要关联，不保存明文邀请码；超过 24 小时的失效摘要在生成新码时清理。
 
-控制帧必须满足对应操作的语义：offer 的 manifest digest 必须匹配；accept 的已验证字节数必须在 `[0,total]`；ack 必须对应刚发送的块、单调且不超过初始恢复字节加实际发送字节；finish/completed/confirmed 必须绑定 manifest digest。空帧、未知关键操作、负索引和不可能的字段组合均会被拒绝。对端 error detail 限制为 4 KiB、有合法 UTF-8 且移除控制字符；未知 JSON 字段暂不作为 V1 兼容性错误。
+LAN discovery V1 使用 UDP/53318，默认发送管理域组播 `239.255.76.83`、每接口定向广播，并支持用户指定一个经过 on-link 校验的 IPv4 单播地址。公告包含协议版本、announce/response、设备 ID、显示名、Ed25519 公钥、临时 TLS 控制端口、128 位 nonce 与签发时间，整体不超过 2048 bytes；签名输入复用规范长度前缀编码。TTL 固定为 1，来源必须属于接收接口的直连前缀，公告 15 秒失效，nonce 防重放，响应限频。已发现路由每 4 秒单播续租；一次成功传输后只记住该已验证设备最近的 IPv4 地址，下一次启动仅定向探测该地址，不执行网段扫描。
+
+LAN 控制通道为 TLS 1.3 双向 Ed25519 证书验证，允许的客户端必须刚刚通过签名公告出现。它复用现有 `connect_request/connect_response/candidate/end_of_candidates/status` envelope 与 Pion ICE、QUIC 数据面；文件正文不进入 UDP discovery 或 TCP control。陌生 LAN 设备被发现不建立长期信任；仅在发送方主动选择、接收方确认、文件完整性校验及双方终态确认全部成功后固定公钥。拒绝、超时、失败或只看到公告均不落盘信任。
+
+文件控制帧使用长度前缀和独立的 QUIC stream，控制 metadata 上限为 8 MiB，文件内容不 Base64 化。传输顺序为 offer、用户 accept、块请求/数据、ack、finish、completed、confirmed，以及新版接收端返回的 `confirmed_ack`。4 MiB 是默认分块，演示使用 64 KiB 以缩短测试时间。
+
+控制帧必须满足对应操作的语义：offer 的 manifest digest 必须匹配；accept 的已验证字节数必须在 `[0,total]`；ack 必须对应刚发送的块、单调且不超过初始恢复字节加实际发送字节；finish/completed/confirmed/confirmed_ack 必须绑定 manifest digest。空帧、未知关键操作、负索引和不可能的字段组合均会被拒绝。对端 error detail 限制为 4 KiB、有合法 UTF-8 且移除控制字符；未知 JSON 字段暂不作为 V1 兼容性错误。
 
 恢复身份由 `TransferID + manifest digest + chunk policy + peer identity` 共同绑定。接收端重新哈希 staging 块后才继续，完成后通过 `os.Root` 约束路径并以不可覆盖方式提交。
+
+接收端对已验证字节使用单调 O(1) 计数，不再在每个 ACK 前遍历全部块。每个正文块仍先 `file.Sync`；恢复位图最多每 8 块或 500ms 批量 checkpoint。崩溃后的 checkpoint 可以落后于文件数据，恢复时必须重新哈希 staging，不能把未记录或损坏块视为完成。
 
 2026-09-11 错误诊断兼容补丁：V1 `error.error` 字符串保留原帧结构，只发送允许列表中的稳定码，不再发送本地文件系统路径。新增明确的 `FILE_CONFLICT`、`PERMISSION_DENIED`，并保留 `DISK_FULL`。接收方仅对完全匹配的已知码恢复错误类别；旧版本任意文本或未来未知码仍可解析，但仅按通用传输失败处理。身份验证、块帧和 completed/confirmed 语义未改变。
 
@@ -20,7 +32,7 @@
 
 QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送后，transport 先关闭发送方向，再有界等待对端结束读取，防止随后的 reset/连接关闭丢弃终态响应。该等待至多 2 秒且不延长调用者 deadline；原始错误仍作为任务结果。V1 帧结构和 completed/confirmed 语义保持不变，net.Pipe 兼容测试与真实 QUIC 负向回归分别覆盖同步和缓冲发送。
 
-`completed`/`confirmed` 成功边界还有一个 quic-go 可观察时序：接收端读到 `confirmed` 后按产品约定以 application code 0 正常关闭单次传输连接，发送端可能先收到 connection close、后收到 stream FIN。发送端仅在已经收到匹配 `completed`、已经写出匹配 `confirmed` 且正处于有界 terminal flush 时，把“远端 code 0 正常关闭”视为等价的已读终态证据；非零 application close、stream reset、timeout 和其他连接错误仍原样失败。此规则不增加帧、不改变 V1 wire compatibility，也不把任意 `net.ErrClosed` 当作成功。
+`completed`/`confirmed` 成功边界增加向后兼容的 `confirmed_ack`：新版发送端收到匹配回执即可证明接收端已读 `confirmed`；旧接收端在读到 `confirmed` 后关闭发送方向，EOF 或远端 application code 0 仍是兼容证据。新版接收端向旧发送端写出的 `confirmed_ack` 会被旧 terminal flush 当作普通终态字节读取，不改变旧成功语义。非零 application close、stream reset、timeout 和其他连接错误仍失败。双方确认后 QUIC 正常关闭的 draining 在后台完成，不延迟任务完成。
 
 信令协商状态绑定当前认证连接。断开或被同设备的新认证连接替换时清理该设备参与的协商；旧连接的迟到帧不能写入新连接状态。已建立的 QUIC 数据连接不因此被关闭。此修复需要升级信令服务源码；客户端升级无法修复仍运行旧版本的服务。
 

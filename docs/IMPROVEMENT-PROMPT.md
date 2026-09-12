@@ -1,6 +1,6 @@
 # LinkSend 全面改进提示词（历史记录）
 
-> 历史提示词，仅用于追溯 2026-09-09 当时的约束，不再作为当前实现规范。当前产品为 `0.2.0`、协议 V1、Wails 3 `v3.0.0-beta.18`；有效边界以仓库内 `SPEC.md`、`PROGRESS.md`、`PROTOCOL.md`、`TESTING.md` 和 `ACCEPTANCE.md` 为准。下文的 Wails 2、固定码和当时 NOT_RUN 描述不得覆盖后续实测与安全策略。
+> 历史提示词，仅用于追溯 2026-09-09 当时的约束，不再作为当前实现规范。当前产品为 `0.4.0`、协议 V1、Wails 3 `v3.0.0-beta.18`；有效边界以仓库内 `SPEC.md`、`PROGRESS.md`、`PROTOCOL.md`、`TESTING.md` 和 `ACCEPTANCE.md` 为准。下文的 Wails 2、固定码和当时 NOT_RUN 描述不得覆盖后续实测与安全策略。
 
 你是一名资深 Go P2P 网络工程师、桌面应用产品设计师和安全审查员。请在当前 LinkSend/Osend 仓库中完成一次可审计、可回滚的产品改进，不要只做静态审计，也不要凭空声称未运行的网络验证已经通过。
 

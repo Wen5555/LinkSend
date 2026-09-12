@@ -13,6 +13,24 @@ import (
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
+func TestTaskPhaseTimelineRecordsOnlyTransitions(t *testing.T) {
+	manager := newTaskManager()
+	record, err := manager.create(TaskSnapshot{Direction: "send"}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := record.snapshot()
+	if initial.Phase != "preparing" || len(initial.PhaseTimeline) != 1 || initial.PhaseTimeline[0].Phase != "preparing" {
+		t.Fatalf("missing initial phase event: %+v", initial)
+	}
+	record.update(func(v *TaskSnapshot) { v.Phase = "signaling_connect" })
+	record.update(func(v *TaskSnapshot) { v.Phase = "signaling_connect" })
+	snapshot := record.snapshot()
+	if len(snapshot.PhaseTimeline) != 2 || snapshot.PhaseTimeline[1].Phase != "signaling_connect" || snapshot.PhaseTimeline[1].At == "" {
+		t.Fatalf("unexpected phase timeline: %+v", snapshot.PhaseTimeline)
+	}
+}
+
 func TestTaskManagerTerminalAndCancelRace(t *testing.T) {
 	svc, err := New(Config{DataDir: t.TempDir()})
 	if err != nil {

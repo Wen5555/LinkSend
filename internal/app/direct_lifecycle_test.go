@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -191,5 +192,91 @@ func TestExchangeCandidatesRejectsStaleGeneration(t *testing.T) {
 	err = exchangeCandidatesWithBudget(context.Background(), session, nil, nil, local, peer, sessionID, firstGeneration, time.Second)
 	if protocol.ErrorCode(err) != protocol.InvalidMessage {
 		t.Fatalf("stale generation error = %v, want invalid message", err)
+	}
+}
+
+func TestPeerSessionFailureRequiresSignedSessionBinding(t *testing.T) {
+	local, peer := lifecycleFixture(t)
+	peerIdentity, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer = signaling.Device{ID: peerIdentity.ID(), PublicKey: peerIdentity.PublicKey(), Name: "peer"}
+	sessionID := protocol.RandomID()
+	env, err := protocol.NewEnvelope("status", peer.ID, local.ID(), sessionID, firstGeneration, sessionStatus{State: "failed", Code: protocol.NoCandidates})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Signature = peerIdentity.Sign(env.SigningBytes())
+	if got := peerSessionFailure(&env, peer, local.ID(), sessionID, firstGeneration); protocol.ErrorCode(got) != protocol.NoCandidates {
+		t.Fatalf("signed peer failure = %v, want %s", got, protocol.NoCandidates)
+	}
+
+	tampered := env
+	tampered.SessionID = protocol.RandomID()
+	if got := peerSessionFailure(&tampered, peer, local.ID(), sessionID, firstGeneration); protocol.ErrorCode(got) != protocol.InvalidMessage {
+		t.Fatalf("tampered peer failure = %v, want %s", got, protocol.InvalidMessage)
+	}
+
+	unknown, err := protocol.NewEnvelope("status", peer.ID, local.ID(), sessionID, firstGeneration, sessionStatus{State: "failed", Code: protocol.PermissionDenied})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknown.Signature = peerIdentity.Sign(unknown.SigningBytes())
+	if got := peerSessionFailure(&unknown, peer, local.ID(), sessionID, firstGeneration); protocol.ErrorCode(got) != protocol.InvalidMessage {
+		t.Fatalf("unsupported peer failure = %v, want %s", got, protocol.InvalidMessage)
+	}
+}
+
+func TestCandidateStreamCanFinishLANBeforeGatherCompletes(t *testing.T) {
+	local, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerIdentity, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := signaling.Device{ID: peerIdentity.ID(), PublicKey: peerIdentity.PublicKey(), Name: "peer"}
+	sessionID := protocol.RandomID()
+	remoteEnd, err := protocol.NewEnvelope("end_of_candidates", peer.ID, local.ID(), sessionID, firstGeneration, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteEnd.Signature = peerIdentity.Sign(remoteEnd.SigningBytes())
+
+	localCandidates := make(chan connectivity.Candidate, 1)
+	localCandidates <- connectivity.Candidate{Value: "candidate", Generation: firstGeneration}
+	firstCandidate := make(chan struct{})
+	stop := make(chan struct{})
+	var once sync.Once
+	session := candidateSessionStub{
+		send: func(_ context.Context, env protocol.Envelope) error {
+			if env.Type == "candidate" {
+				once.Do(func() { close(firstCandidate) })
+			}
+			return nil
+		},
+		read: func(context.Context) (signaling.Wire, error) {
+			return signaling.Wire{Type: "signal", Message: &remoteEnd}, nil
+		},
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- exchangeCandidateStreamWithBudget(context.Background(), session, nil, localCandidates, local, peer, sessionID, firstGeneration, stop, time.Second)
+	}()
+	select {
+	case <-firstCandidate:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("first host candidate waited for gathering completion")
+	}
+	select {
+	case err = <-done:
+		t.Fatalf("candidate exchange ended before gathering completed: %v", err)
+	default:
+	}
+	close(stop)
+	if err = <-done; err != nil {
+		t.Fatal(err)
 	}
 }

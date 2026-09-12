@@ -2,7 +2,7 @@
 
 ## 当前实现
 
-- 产品版本 `0.2.0`；Wails CLI/Go 依赖固定为 `v3.0.0-beta.18`，属于预发布依赖。
+- 产品版本 `0.4.0`；Wails CLI/Go 依赖固定为 `v3.0.0-beta.18`，属于预发布依赖。
 - `apps/desktop/main.go` 使用 Wails 3 `application.New`、`application.NewService`、`Window.NewWithOptions` 和 `BundledAssetFileServer`。
 - `apps/desktop/app.go` 通过 `ServiceStartup`/`ServiceShutdown` 管理共享核心；`ShouldQuit` 空闲时返回 true，活跃任务时异步显示保护对话框。
 - 文件/目录选择使用 Wails 3 原生 dialog，打开目录通过受控后端方法完成；文件正文不经过 binding。

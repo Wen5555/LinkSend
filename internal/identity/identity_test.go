@@ -8,11 +8,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/json"
 	"errors"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -53,6 +55,120 @@ func TestPersistentIdentityAndTrust(t *testing.T) {
 	}
 	if _, err = LoadOrCreate(dir); err == nil {
 		t.Fatal("corrupt key replaced")
+	}
+}
+
+func TestRememberedLANAddressUpdatesWithoutReplacingTrust(t *testing.T) {
+	dir := t.TempDir()
+	peer, err := Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := TrustedPeer{ID: peer.ID(), PublicKey: peer.PublicKey(), Name: "peer"}
+	if err = TrustPairedPeer(dir, pinned); err != nil {
+		t.Fatal(err)
+	}
+	if err = SetAutoAccept(dir, peer.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+	pinned.LastLANAddress = "10.234.171.192"
+	if err = TrustPairedPeer(dir, pinned); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadTrust(dir)
+	if err != nil || len(loaded) != 1 {
+		t.Fatalf("load trust: %#v %v", loaded, err)
+	}
+	if loaded[0].LastLANAddress != pinned.LastLANAddress || !loaded[0].AutoAccept {
+		t.Fatalf("remembered peer=%+v", loaded[0])
+	}
+	pinned.LastLANAddress = "203.0.113.7:443"
+	if err = TrustPairedPeer(dir, pinned); err == nil {
+		t.Fatal("accepted a non-address LAN hint")
+	}
+}
+
+func TestReplaceFileFallsBackAndRestoresSafely(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "trust.json")
+	temp := filepath.Join(dir, "trust-new.tmp")
+	if err := os.WriteFile(target, []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(temp, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first := true
+	rename := func(old, new string) error {
+		if first && old == temp && new == target {
+			first = false
+			return syscall.EXDEV
+		}
+		return os.Rename(old, new)
+	}
+	noPlatformReplace := func(string, string) (bool, error) { return false, nil }
+	noInPlace := func(_, _ string, cause error) error { return cause }
+	if err := replaceFileWith(temp, target, rename, noPlatformReplace, noInPlace); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Fatalf("fallback replacement = %q, %v", got, err)
+	}
+
+	broken := filepath.Join(dir, "trust-broken.tmp")
+	if err := os.WriteFile(broken, []byte("broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	installAttempts := 0
+	failingRename := func(old, new string) error {
+		if old == broken && new == target {
+			installAttempts++
+			return syscall.EXDEV
+		}
+		return os.Rename(old, new)
+	}
+	if err := replaceFileWith(broken, target, failingRename, noPlatformReplace, noInPlace); err == nil || installAttempts != 2 {
+		t.Fatalf("expected failed install and rollback, attempts=%d err=%v", installAttempts, err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Fatalf("rollback did not restore previous trust file = %q, %v", got, err)
+	}
+}
+
+func TestInPlaceTrustReplacementAndCrashRecovery(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "trust.json")
+	source := filepath.Join(dir, "trust-new.tmp")
+	oldIdentity, _ := Generate()
+	newIdentity, _ := Generate()
+	oldData, _ := json.Marshal(TrustFile{Peers: []TrustedPeer{{ID: oldIdentity.ID(), PublicKey: oldIdentity.PublicKey(), Name: "old"}}})
+	newData, _ := json.Marshal(TrustFile{Peers: []TrustedPeer{{ID: newIdentity.ID(), PublicKey: newIdentity.PublicKey(), Name: "new"}}})
+	if err := os.WriteFile(target, oldData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, newData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceFileInPlace(source, target, syscall.EXDEV); err != nil {
+		t.Fatal(err)
+	}
+	peers, err := LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].ID != newIdentity.ID() {
+		t.Fatalf("in-place replacement was not readable: %+v %v", peers, err)
+	}
+
+	if err = os.WriteFile(target, []byte("truncated"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(target+".previous", oldData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	peers, err = LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].ID != oldIdentity.ID() {
+		t.Fatalf("previous trust file was not recovered: %+v %v", peers, err)
+	}
+	if _, err = os.Stat(target + ".previous"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("recovery journal was not removed: %v", err)
 	}
 }
 

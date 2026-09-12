@@ -58,8 +58,11 @@ func (d Device) Validate() error {
 }
 
 type Invitation struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token      string        `json:"token"`
+	ExpiresAt  time.Time     `json:"expires_at"`
+	ServerTime time.Time     `json:"server_time"`
+	TTLSeconds int64         `json:"ttl_seconds"`
+	Remaining  time.Duration `json:"-"`
 }
 
 // Wire is the versioned websocket envelope shared with the server. It has no
@@ -274,8 +277,22 @@ func (c *Client) CreateInvitation(ctx context.Context) (Invitation, error) {
 	if err = decodeSuccess(resp, &invitation); err != nil {
 		return Invitation{}, err
 	}
-	if !validPairingCode(invitation.Token) || invitation.ExpiresAt.Before(time.Now()) {
+	if !validPairingCode(invitation.Token) || invitation.ExpiresAt.IsZero() {
 		return Invitation{}, protocol.Fail(protocol.InvalidMessage, "invalid invitation response")
+	}
+	// The rendezvous server is authoritative for invitation expiry. Using the
+	// client wall clock here caused valid codes to be discarded on machines
+	// with clock skew. New servers provide a relative TTL; old servers retain
+	// compatibility through the absolute timestamp fallback.
+	if invitation.TTLSeconds > 0 && invitation.TTLSeconds <= int64((15*time.Minute)/time.Second) {
+		invitation.Remaining = time.Duration(invitation.TTLSeconds) * time.Second
+	} else if !invitation.ServerTime.IsZero() {
+		invitation.Remaining = invitation.ExpiresAt.Sub(invitation.ServerTime)
+	} else {
+		invitation.Remaining = time.Until(invitation.ExpiresAt)
+	}
+	if invitation.Remaining <= 0 || invitation.Remaining > 15*time.Minute {
+		return Invitation{}, protocol.Fail(protocol.InvalidMessage, "invalid invitation lifetime")
 	}
 	return invitation, nil
 }
@@ -403,11 +420,19 @@ func (c *Client) Connect(ctx context.Context) (*Session, error) {
 	if accepted.Type != "authenticated" || accepted.DeviceID != c.identity.ID() || accepted.Capabilities == nil || !supported(*accepted.Capabilities) {
 		return closeOnError(protocol.Fail(protocol.AuthenticationFailed, "WSS device authentication rejected"))
 	}
-	return &Session{conn: conn, identity: c.identity, capabilities: *accepted.Capabilities}, nil
+	session := &Session{conn: conn, identity: c.identity, capabilities: *accepted.Capabilities, reads: make(chan sessionRead, 64), done: make(chan struct{})}
+	go session.readLoop()
+	return session, nil
 }
 
-// Session has one reader at a time. Writes are serialized to preserve control
-// message order even though coder/websocket permits concurrent Write calls.
+type sessionRead struct {
+	wire Wire
+	err  error
+}
+
+// Session has one application reader at a time. A single background read pump
+// owns coder/websocket so cancelling an inbox wait does not destroy the WSS;
+// writes remain serialized to preserve control-message order.
 type Session struct {
 	conn          *websocket.Conn
 	identity      *identity.Identity
@@ -416,6 +441,8 @@ type Session struct {
 	closeOnce     sync.Once
 	bytesSent     atomic.Uint64
 	bytesReceived atomic.Uint64
+	reads         chan sessionRead
+	done          chan struct{}
 }
 
 type SessionStats struct {
@@ -462,33 +489,74 @@ func (s *Session) SendHeartbeat(ctx context.Context) error {
 }
 
 func (s *Session) Read(ctx context.Context) (Wire, error) {
-	var wire Wire
-	if err := wsjson.Read(ctx, s.conn, &wire); err != nil {
-		return wire, protocol.Wrap(protocol.SignalingUnreachable, "WSS signal read failed", err)
+	select {
+	case result, ok := <-s.reads:
+		if !ok {
+			return Wire{}, protocol.Fail(protocol.SignalingUnreachable, "WSS signal reader closed")
+		}
+		return result.wire, result.err
+	case <-ctx.Done():
+		return Wire{}, ctx.Err()
 	}
-	if encoded, err := json.Marshal(wire); err == nil {
-		s.bytesReceived.Add(uint64(len(encoded)))
+}
+
+func (s *Session) readLoop() {
+	defer close(s.reads)
+	for {
+		var wire Wire
+		if err := wsjson.Read(context.Background(), s.conn, &wire); err != nil {
+			select {
+			case s.reads <- sessionRead{err: protocol.Wrap(protocol.SignalingUnreachable, "WSS signal read failed", err)}:
+			case <-s.done:
+			}
+			return
+		}
+		if encoded, err := json.Marshal(wire); err == nil {
+			s.bytesReceived.Add(uint64(len(encoded)))
+		}
+		// Heartbeat replies carry no session state. Consuming them here prevents
+		// long transfers from accumulating control frames while no caller reads.
+		if wire.Type == "heartbeat" {
+			continue
+		}
+		err := validateInboundWire(wire)
+		select {
+		case s.reads <- sessionRead{wire: wire, err: err}:
+		case <-s.done:
+			return
+		}
+		if err != nil {
+			return
+		}
 	}
+}
+
+func validateInboundWire(wire Wire) error {
 	switch wire.Type {
-	case "heartbeat":
-		return wire, nil
 	case "signal":
 		if wire.Message == nil {
-			return wire, protocol.Fail(protocol.InvalidMessage, "missing WSS signal envelope")
+			return protocol.Fail(protocol.InvalidMessage, "missing WSS signal envelope")
 		}
-		return wire, nil
+		return nil
 	case "error":
 		if wire.Error == nil {
-			return wire, protocol.Fail(protocol.InvalidMessage, "missing WSS error")
+			return protocol.Fail(protocol.InvalidMessage, "missing WSS error")
 		}
-		return wire, wire.Error
+		return wire.Error
 	default:
-		return wire, protocol.Fail(protocol.InvalidMessage, "unknown WSS message type")
+		return protocol.Fail(protocol.InvalidMessage, "unknown WSS message type")
 	}
 }
 
 func (s *Session) Close() error {
 	var err error
-	s.closeOnce.Do(func() { err = s.conn.Close(websocket.StatusNormalClosure, "closed") })
+	// Signaling has no terminal application payload: every envelope write is
+	// already complete before Close. Avoid coder/websocket's two-sided close
+	// handshake (up to five seconds) on the latency-sensitive transfer return
+	// path; the server's connection-owned cleanup runs on TCP close.
+	s.closeOnce.Do(func() {
+		close(s.done)
+		err = s.conn.CloseNow()
+	})
 	return err
 }

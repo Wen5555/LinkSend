@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/signaling"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 	"github.com/Wen5555/LinkSend/internal/transport"
 )
@@ -17,22 +18,33 @@ import (
 // InboxStatus describes the persistent receiver without creating a visible
 // transfer task merely because the application is idle.
 type InboxStatus struct {
-	Enabled   bool   `json:"enabled"`
-	Listening bool   `json:"listening"`
-	Directory string `json:"directory,omitempty"`
-	LastError string `json:"last_error,omitempty"`
+	Enabled            bool   `json:"enabled"`
+	SignalingConnected bool   `json:"signaling_connected"`
+	Listening          bool   `json:"listening"`
+	Directory          string `json:"directory,omitempty"`
+	ConnectedAt        string `json:"connected_at,omitempty"`
+	ConnectionCount    uint64 `json:"connection_count"`
+	LastError          string `json:"last_error,omitempty"`
+	LANAvailable       bool   `json:"lan_available"`
+	LANPeerCount       int    `json:"lan_peer_count"`
+	LANLastError       string `json:"lan_last_error,omitempty"`
 }
 
 type inboxManager struct {
-	mu        sync.Mutex
-	enabled   bool
-	listening bool
-	directory string
-	cfg       DirectConfig
-	cancel    context.CancelFunc
-	done      chan struct{}
-	shutdown  bool
-	lastError string
+	mu              sync.Mutex
+	enabled         bool
+	connected       bool
+	listening       bool
+	directory       string
+	connectedAt     string
+	connectionCount uint64
+	cfg             DirectConfig
+	cancel          context.CancelFunc
+	done            chan struct{}
+	preserve        bool
+	spare           *signaling.Session
+	shutdown        bool
+	lastError       string
 }
 
 // StartInbox keeps this device reachable while the app is open. It replaces
@@ -54,27 +66,40 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	s.inbox.cfg = cfg
 	s.inbox.lastError = ""
 	s.inbox.mu.Unlock()
+	s.prewarmNetwork(cfg)
+	s.startLANDiscovery(directory, cfg)
 	s.ensureInbox()
 	return nil
 }
 
-func (s *Service) StopInbox() error { return s.stopInbox(true) }
+func (s *Service) StopInbox() error { return errors.Join(s.stopInbox(true), s.stopLANDiscovery()) }
 
 func (s *Service) InboxStatus() InboxStatus {
 	s.inbox.mu.Lock()
-	defer s.inbox.mu.Unlock()
-	return InboxStatus{Enabled: s.inbox.enabled, Listening: s.inbox.listening, Directory: s.inbox.directory, LastError: s.inbox.lastError}
+	status := InboxStatus{Enabled: s.inbox.enabled, SignalingConnected: s.inbox.connected, Listening: s.inbox.listening, Directory: s.inbox.directory, ConnectedAt: s.inbox.connectedAt, ConnectionCount: s.inbox.connectionCount, LastError: s.inbox.lastError}
+	s.inbox.mu.Unlock()
+	status.LANAvailable, status.LANPeerCount, status.LANLastError = s.lanStatus()
+	return status
 }
 
 func (s *Service) stopInbox(disable bool) error {
 	s.inbox.mu.Lock()
+	var spare *signaling.Session
 	if disable {
 		s.inbox.enabled = false
+		s.inbox.preserve = false
+		spare, s.inbox.spare = s.inbox.spare, nil
+	} else {
+		s.inbox.preserve = true
 	}
 	cancel, done := s.inbox.cancel, s.inbox.done
 	if cancel == nil || done == nil {
+		s.inbox.connected = false
 		s.inbox.listening = false
 		s.inbox.mu.Unlock()
+		if spare != nil {
+			_ = spare.Close()
+		}
 		return nil
 	}
 	cancel()
@@ -82,16 +107,41 @@ func (s *Service) stopInbox(disable bool) error {
 
 	select {
 	case <-done:
+		if spare != nil {
+			_ = spare.Close()
+		}
 		return nil
 	case <-time.After(5 * time.Second):
 		return errors.New("INBOX_STOP_TIMEOUT: background receiver did not stop")
 	}
 }
 
+func (s *Service) takeSpareSignal() *signaling.Session {
+	s.inbox.mu.Lock()
+	defer s.inbox.mu.Unlock()
+	session := s.inbox.spare
+	s.inbox.spare = nil
+	return session
+}
+
+func (s *Service) keepSpareSignal(session *signaling.Session) bool {
+	if session == nil {
+		return false
+	}
+	s.inbox.mu.Lock()
+	defer s.inbox.mu.Unlock()
+	if !s.inbox.enabled || s.inbox.shutdown || s.inbox.spare != nil {
+		return false
+	}
+	s.inbox.spare = session
+	return true
+}
+
 func (s *Service) ensureInbox() {
 	if s.tasks.hasActive() {
 		return
 	}
+	s.ensureLANDiscovery()
 	s.inbox.mu.Lock()
 	defer s.inbox.mu.Unlock()
 	if !s.inbox.enabled || s.inbox.shutdown || s.inbox.cancel != nil || strings.TrimSpace(s.inbox.directory) == "" {
@@ -111,41 +161,94 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 		if s.inbox.done == done {
 			s.inbox.cancel = nil
 			s.inbox.done = nil
+			s.inbox.connected = false
 			s.inbox.listening = false
 		}
 		s.inbox.mu.Unlock()
 		close(done)
 	}()
 
+	listenerCfg := cfg
+	listenerCfg.WaitTimeout = 30 * time.Minute
+	listenerCfg.onSession = nil
+	listenerCfg.onEvidence = nil
+	listenerCfg.onChunkSent = nil
+	listenerCfg.onPhase = func(phase string) {
+		s.inbox.mu.Lock()
+		if s.inbox.done == done {
+			s.inbox.listening = phase == "waiting"
+			if s.inbox.listening {
+				s.inbox.lastError = ""
+			}
+		}
+		s.inbox.mu.Unlock()
+	}
+
 	backoff := 500 * time.Millisecond
 	for ctx.Err() == nil {
-		listenerCfg := cfg
-		listenerCfg.WaitTimeout = 30 * time.Minute
-		listenerCfg.onSession = nil
-		listenerCfg.onEvidence = nil
-		listenerCfg.onChunkSent = nil
-		listenerCfg.onPhase = func(phase string) {
-			s.inbox.mu.Lock()
-			if s.inbox.done == done {
-				s.inbox.listening = phase == "waiting"
-				if s.inbox.listening {
+		phaseBudget := listenerCfg.CheckTimeout
+		if phaseBudget <= 0 {
+			phaseBudget = 20 * time.Second
+		}
+		client, err := s.client()
+		if err == nil {
+			signalSession := s.takeSpareSignal()
+			if signalSession == nil {
+				connectCtx, cancelConnect := context.WithTimeout(ctx, phaseBudget)
+				signalSession, err = client.Connect(connectCtx)
+				cancelConnect()
+			}
+			if err == nil {
+				stopHeartbeat := startHeartbeat(ctx, signalSession)
+				backoff = 500 * time.Millisecond
+				s.inbox.mu.Lock()
+				if s.inbox.done == done {
+					s.inbox.connected = true
+					s.inbox.connectedAt = time.Now().UTC().Format(time.RFC3339Nano)
+					s.inbox.connectionCount++
 					s.inbox.lastError = ""
 				}
+				s.inbox.mu.Unlock()
+				for ctx.Err() == nil {
+					var peer *PeerSession
+					peer, err = s.acceptDirectOnSession(ctx, "", listenerCfg, signalSession)
+					if err != nil {
+						break
+					}
+					s.inbox.mu.Lock()
+					s.inbox.listening = false
+					s.inbox.mu.Unlock()
+					if s.receiveIncoming(ctx, peer, directory) {
+						_ = s.closePeerAfterTransfer(peer)
+					} else {
+						_ = peer.Close()
+					}
+				}
+				stopHeartbeat()
+				parked := false
+				s.inbox.mu.Lock()
+				if ctx.Err() != nil && s.inbox.done == done && s.inbox.preserve && s.inbox.spare == nil {
+					s.inbox.spare = signalSession
+					s.inbox.preserve = false
+					parked = true
+				}
+				s.inbox.mu.Unlock()
+				if !parked {
+					_ = signalSession.Close()
+				}
+				s.inbox.mu.Lock()
+				if s.inbox.done == done {
+					s.inbox.connected = false
+					s.inbox.listening = false
+				}
+				s.inbox.mu.Unlock()
 			}
-			s.inbox.mu.Unlock()
-		}
-		peer, err := s.AcceptDirect(ctx, "", listenerCfg)
-		if err == nil {
-			backoff = 500 * time.Millisecond
-			s.inbox.mu.Lock()
-			s.inbox.listening = false
-			s.inbox.mu.Unlock()
-			s.receiveIncoming(ctx, peer, directory)
-			_ = peer.Close()
-			continue
 		}
 		if ctx.Err() != nil {
 			return
+		}
+		if err == nil {
+			err = protocol.Fail(protocol.SignalingUnreachable, "persistent inbox signaling ended")
 		}
 		s.inbox.mu.Lock()
 		s.inbox.listening = false
@@ -164,12 +267,12 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 	}
 }
 
-func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, directory string) {
+func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, directory string) bool {
 	ctx, cancel := context.WithCancel(inboxCtx)
 	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory}, cancel)
 	if err != nil {
 		cancel()
-		return
+		return false
 	}
 	t.cfg = s.inbox.cfg
 	t.decision = make(chan bool, 1)
@@ -185,7 +288,7 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	if err != nil {
 		handleTaskRunError(t, attemptID, ctx, err)
 		cancel()
-		return
+		return false
 	}
 	var lastReceived int64
 	result, runErr := transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, func(m transfer.Manifest) bool {
@@ -232,7 +335,7 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	if runErr != nil {
 		handleTaskRunError(t, attemptID, ctx, runErr)
 		cancel()
-		return
+		return false
 	}
 	t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, saved *taskRecovery) {
 		v.TransferID = result.TransferID
@@ -250,4 +353,5 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	})
 	t.finishAttempt(attemptID, "completed", nil)
 	cancel()
+	return true
 }

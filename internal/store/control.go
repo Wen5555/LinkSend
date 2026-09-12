@@ -2,6 +2,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -20,7 +21,16 @@ import (
 )
 
 var ErrUnauthorized = errors.New("unauthorized or revoked device")
-var ErrInvitation = errors.New("invalid, expired or used invitation")
+
+// Pairing errors remain deliberately coarse enough not to disclose membership
+// details, while still letting a legitimate user recover from an expired or
+// already-consumed code. All specific errors wrap ErrInvitation for callers
+// that only need the legacy classification.
+var ErrInvitation = errors.New("pairing invitation rejected")
+var ErrInvitationInvalid = fmt.Errorf("invalid pairing invitation: %w", ErrInvitation)
+var ErrInvitationExpired = fmt.Errorf("expired pairing invitation: %w", ErrInvitation)
+var ErrInvitationUsed = fmt.Errorf("used pairing invitation: %w", ErrInvitation)
+var ErrInvitationConflict = fmt.Errorf("pairing identity conflict: %w", ErrInvitation)
 
 type Device struct {
 	ID        string `json:"id"`
@@ -56,9 +66,8 @@ func OpenControl(path string) (*Control, error) {
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,group_id TEXT NOT NULL,name TEXT NOT NULL,public_key BLOB NOT NULL,admin INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS invitations(hash BLOB PRIMARY KEY,group_id TEXT NOT NULL,inviter TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);
-INSERT OR IGNORE INTO schema_version(version) VALUES(1);`)
+CREATE TABLE IF NOT EXISTS invitations(hash BLOB PRIMARY KEY,group_id TEXT NOT NULL,inviter TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0,used_by TEXT NOT NULL DEFAULT '',used_at INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);`)
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -83,14 +92,43 @@ INSERT OR IGNORE INTO schema_version(version) VALUES(1);`)
 		db.Close()
 		return nil, err
 	}
-	if err = rows.Close(); err != nil || len(versions) != 1 || versions[0] != 1 {
+	if err = rows.Close(); err != nil {
 		db.Close()
-		if err != nil {
+		return nil, err
+	}
+	if len(versions) == 0 {
+		if _, err = db.Exec("INSERT INTO schema_version(version) VALUES(2)"); err != nil {
+			db.Close()
 			return nil, err
 		}
+	} else if len(versions) == 1 && versions[0] == 1 {
+		if err = migrateControlV1ToV2(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	} else if len(versions) != 1 || versions[0] != 2 {
+		db.Close()
 		return nil, errors.New("unsupported control database schema version")
 	}
 	return &Control{db: db}, nil
+}
+
+func migrateControlV1ToV2(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("ALTER TABLE invitations ADD COLUMN used_by TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("add invitation consumer: %w", err)
+	}
+	if _, err = tx.Exec("ALTER TABLE invitations ADD COLUMN used_at INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("add invitation consumption time: %w", err)
+	}
+	if _, err = tx.Exec("UPDATE schema_version SET version=2 WHERE version=1"); err != nil {
+		return fmt.Errorf("update control schema version: %w", err)
+	}
+	return tx.Commit()
 }
 func (s *Control) Close() error { return s.db.Close() }
 
@@ -146,49 +184,121 @@ func (s *Control) Invitation(ctx context.Context, member Device) (string, time.T
 	if err != nil || current.Revoked {
 		return "", time.Time{}, ErrUnauthorized
 	}
-	var raw [5]byte
-	if _, err = rand.Read(raw[:]); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
 		return "", time.Time{}, err
 	}
-	compact := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
-	token := compact[:4] + "-" + compact[4:]
-	sum := sha256.Sum256([]byte(compact))
-	expires := time.Now().Add(10 * time.Minute)
-	_, err = s.db.ExecContext(ctx, "INSERT INTO invitations(hash,group_id,inviter,expires) VALUES(?,?,?,?)", sum[:], current.GroupID, current.ID, expires.Unix())
-	return token, expires, err
+	defer tx.Rollback()
+	now := time.Now()
+	// Retain a short diagnostic window without allowing one-time invitations to
+	// grow the database forever. No token or plaintext secret is stored.
+	if _, err = tx.ExecContext(ctx, "DELETE FROM invitations WHERE expires<?", now.Add(-24*time.Hour).Unix()); err != nil {
+		return "", time.Time{}, err
+	}
+	expires := now.Add(10 * time.Minute)
+	for attempt := 0; attempt < 4; attempt++ {
+		var raw [5]byte
+		if _, err = rand.Read(raw[:]); err != nil {
+			return "", time.Time{}, err
+		}
+		compact := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
+		token := compact[:4] + "-" + compact[4:]
+		sum := sha256.Sum256([]byte(compact))
+		result, insertErr := tx.ExecContext(ctx, "INSERT OR IGNORE INTO invitations(hash,group_id,inviter,expires) VALUES(?,?,?,?)", sum[:], current.GroupID, current.ID, expires.Unix())
+		if insertErr != nil {
+			return "", time.Time{}, insertErr
+		}
+		inserted, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return "", time.Time{}, rowsErr
+		}
+		if inserted == 1 {
+			if err = tx.Commit(); err != nil {
+				return "", time.Time{}, err
+			}
+			return token, expires, nil
+		}
+	}
+	return "", time.Time{}, errors.New("pairing code collision retry exhausted")
 }
 func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Device, error) {
 	normalized, ok := normalizePairingCode(token)
-	if !ok || len(key) != 32 || len(name) == 0 || len(name) > 128 {
-		return Device{}, ErrInvitation
+	if !ok {
+		return Device{}, ErrInvitationInvalid
+	}
+	if len(key) != 32 || len(name) == 0 || len(name) > 128 {
+		return Device{}, ErrInvitationConflict
 	}
 	sum := sha256.Sum256([]byte(normalized))
+	deviceID := identity.DeviceID(key)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Device{}, err
 	}
 	defer tx.Rollback()
-	var group string
-	err = tx.QueryRowContext(ctx, "SELECT i.group_id FROM invitations i JOIN devices d ON d.id=i.inviter WHERE i.hash=? AND i.used=0 AND i.expires>? AND d.revoked=0", sum[:], time.Now().Unix()).Scan(&group)
+	var group, usedBy string
+	var expires int64
+	var used, inviterRevoked int
+	err = tx.QueryRowContext(ctx, "SELECT i.group_id,i.expires,i.used,i.used_by,d.revoked FROM invitations i JOIN devices d ON d.id=i.inviter WHERE i.hash=?", sum[:]).Scan(&group, &expires, &used, &usedBy, &inviterRevoked)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Device{}, ErrInvitation
+		return Device{}, ErrInvitationInvalid
 	}
 	if err != nil {
 		return Device{}, err
 	}
-	res, err := tx.ExecContext(ctx, "UPDATE invitations SET used=1 WHERE hash=? AND used=0", sum[:])
+	if used != 0 {
+		if usedBy == deviceID {
+			if existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key); existingErr == nil {
+				return existing, nil
+			}
+		}
+		return Device{}, ErrInvitationUsed
+	}
+	if inviterRevoked != 0 {
+		return Device{}, ErrInvitationInvalid
+	}
+	if expires <= time.Now().Unix() {
+		return Device{}, ErrInvitationExpired
+	}
+
+	// An already-enrolled, non-revoked identity is a successful idempotent
+	// pairing result. The fresh invitation is still consumed exactly once.
+	existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key)
+	if existingErr != nil && !errors.Is(existingErr, sql.ErrNoRows) {
+		return Device{}, ErrInvitationConflict
+	}
+
+	res, err := tx.ExecContext(ctx, "UPDATE invitations SET used=1,used_by=?,used_at=? WHERE hash=? AND used=0", deviceID, time.Now().Unix(), sum[:])
 	if err != nil {
 		return Device{}, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil || n != 1 {
-		return Device{}, ErrInvitation
+		return Device{}, ErrInvitationUsed
 	}
-	d := Device{ID: identity.DeviceID(key), GroupID: group, Name: name, PublicKey: key}
+	if existingErr == nil {
+		if err = tx.Commit(); err != nil {
+			return Device{}, err
+		}
+		return existing, nil
+	}
+	d := Device{ID: deviceID, GroupID: group, Name: name, PublicKey: key}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key) VALUES(?,?,?,?)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
-		return Device{}, fmt.Errorf("register device: %w", err)
+		return Device{}, fmt.Errorf("register pairing identity: %w", err)
 	}
 	return d, tx.Commit()
+}
+
+func joinedDevice(ctx context.Context, tx *sql.Tx, deviceID, group string, key []byte) (Device, error) {
+	var d Device
+	err := tx.QueryRowContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE id=?", deviceID).Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked)
+	if err != nil {
+		return Device{}, err
+	}
+	if d.Revoked || d.GroupID != group || !bytes.Equal(d.PublicKey, key) {
+		return Device{}, ErrInvitationConflict
+	}
+	return d, nil
 }
 
 // normalizePairingCode accepts the current human-readable ABCD-EFGH code and

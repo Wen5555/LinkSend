@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,11 +17,12 @@ import (
 )
 
 type directFixtureServices struct {
-	a, b   *Service
-	aID    *identity.Identity
-	bID    *identity.Identity
-	server *server.Server
-	http   *httptest.Server
+	a, b          *Service
+	aID           *identity.Identity
+	bID           *identity.Identity
+	server        *server.Server
+	http          *httptest.Server
+	wsConnections *atomic.Int64
 }
 
 func newDirectFixtureServices(t *testing.T) directFixtureServices {
@@ -30,7 +33,14 @@ func newDirectFixtureServices(t *testing.T) directFixtureServices {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := httptest.NewServer(srv.Handler())
+	var wsConnections atomic.Int64
+	handler := srv.Handler()
+	h := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/ws" {
+			wsConnections.Add(1)
+		}
+		handler.ServeHTTP(w, r)
+	}))
 	t.Cleanup(func() {
 		h.Close()
 		_ = srv.Close()
@@ -63,7 +73,7 @@ func newDirectFixtureServices(t *testing.T) directFixtureServices {
 	if _, err = b.Join(ctx, inv.Token, "b"); err != nil {
 		t.Fatal(err)
 	}
-	return directFixtureServices{a: a, b: b, aID: aID, bID: bID, server: srv, http: h}
+	return directFixtureServices{a: a, b: b, aID: aID, bID: bID, server: srv, http: h, wsConnections: &wsConnections}
 }
 
 func connectDirectPair(t *testing.T, f directFixtureServices, ctx context.Context) (*PeerSession, *PeerSession) {
@@ -178,5 +188,46 @@ func TestUnresponsivePeerTimesOutAndFreshAttemptConnects(t *testing.T) {
 	defer receiver.Close()
 	if sender.SessionID == "" || sender.SessionID != receiver.SessionID {
 		t.Fatalf("fresh attempt did not converge on one session: %q != %q", sender.SessionID, receiver.SessionID)
+	}
+}
+
+func TestExpectedPeerMismatchReturnsSignedFailureWithoutTimeout(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	waiting := make(chan struct{})
+	receiverErr := make(chan error, 1)
+	go func() {
+		_, acceptErr := f.b.AcceptDirect(ctx, "different-trusted-device", DirectConfig{
+			AllowLoopback: true,
+			CheckTimeout:  4 * time.Second,
+			WaitTimeout:   4 * time.Second,
+			onPhase: func(phase string) {
+				if phase == "waiting" {
+					select {
+					case <-waiting:
+					default:
+						close(waiting)
+					}
+				}
+			},
+		})
+		receiverErr <- acceptErr
+	}()
+	select {
+	case <-waiting:
+	case <-ctx.Done():
+		t.Fatal("receiver did not start")
+	}
+	started := time.Now()
+	_, err := f.a.ConnectDirect(ctx, f.bID.ID(), DirectConfig{AllowLoopback: true, CheckTimeout: 4 * time.Second})
+	if protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("sender error = %v, want %s", err, protocol.AuthenticationFailed)
+	}
+	if time.Since(started) >= 4*time.Second {
+		t.Fatalf("sender waited for timeout instead of signed rejection: %v", time.Since(started))
+	}
+	if err = <-receiverErr; protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("receiver error = %v, want %s", err, protocol.AuthenticationFailed)
 	}
 }

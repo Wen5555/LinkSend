@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -270,7 +272,8 @@ func (a *App) directConfig() linksendapp.DirectConfig {
 		}
 	}
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
-	return linksendapp.DirectConfig{BindAddress: firstNonEmpty(os.Getenv("LINKSEND_BIND"), a.prefs.BindAddress), InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
+	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), a.prefs.BindAddress)
+	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: append([]string(nil), a.prefs.InterfacePriority...), ExcludedInterfaces: append([]string(nil), a.prefs.ExcludedInterfaces...), STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -295,6 +298,52 @@ func normalizedList(values []string) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+func resolvedDesktopBind(environment, saved string) (string, string) {
+	if value := strings.TrimSpace(environment); value != "" {
+		return value, "环境变量 LINKSEND_BIND"
+	}
+	value := strings.TrimSpace(saved)
+	if value == "" {
+		return "", "自动选择"
+	}
+	addresses, err := connectivity.DiscoverInterfaceAddresses(true)
+	if err != nil {
+		return value, "已保存偏好"
+	}
+	if resolved, fallback := savedBindOrAutomatic(value, addresses); fallback {
+		return resolved, "已保存地址当前不可用，已自动选择"
+	}
+	return value, "已保存偏好"
+}
+
+func savedBindOrAutomatic(value string, addresses []connectivity.InterfaceAddress) (string, bool) {
+	value = strings.TrimSpace(value)
+	ip, ok := configuredBindIP(value)
+	if !ok {
+		return value, false
+	}
+	for _, address := range addresses {
+		candidate, err := netip.ParseAddr(address.Address)
+		if err == nil && candidate.Unmap() == ip.Unmap() {
+			return value, false
+		}
+	}
+	return "", true
+}
+
+func configuredBindIP(value string) (netip.Addr, bool) {
+	value = strings.TrimSpace(value)
+	if ip, err := netip.ParseAddr(strings.Trim(value, "[]")); err == nil {
+		return ip, true
+	}
+	host, _, err := net.SplitHostPort(value)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	ip, err := netip.ParseAddr(strings.Trim(host, "[]"))
+	return ip, err == nil
 }
 
 func loadPreferences(dataDir string) DesktopPreferences {
@@ -333,10 +382,7 @@ func (a *App) EffectiveConfig() EffectiveConfig {
 	if strings.TrimSpace(server) == "" {
 		server, serverSource = "https://linksend.oooai.de", "默认值"
 	}
-	bind, bindSource := a.prefs.BindAddress, "已保存偏好"
-	if strings.TrimSpace(envBind) != "" {
-		bind, bindSource = strings.TrimSpace(envBind), "环境变量 LINKSEND_BIND"
-	}
+	bind, bindSource := resolvedDesktopBind(envBind, a.prefs.BindAddress)
 	stun := append([]string(nil), a.prefs.STUNURLs...)
 	stunSource := "已保存偏好"
 	if strings.TrimSpace(envSTUN) != "" {
@@ -598,6 +644,20 @@ func (a *App) InboxStatus() linksendapp.InboxStatus {
 		return linksendapp.InboxStatus{}
 	}
 	return a.core.InboxStatus()
+}
+
+func (a *App) RefreshLANDiscovery() error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.RefreshLANDiscovery()
+}
+
+func (a *App) ProbeLANAddress(address string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.ProbeLANAddress(address)
 }
 
 func (a *App) OpenTaskDirectory(taskID string) error {

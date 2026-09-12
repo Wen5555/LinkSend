@@ -106,6 +106,14 @@ export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStat
     return $Call.ByID(2639668847);
 }
 
+export function ProbeLANAddress(address: string): $CancellablePromise<void> {
+    return $Call.ByID(4182654780, address);
+}
+
+export function RefreshLANDiscovery(): $CancellablePromise<void> {
+    return $Call.ByID(850507783);
+}
+
 export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
 }

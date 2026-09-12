@@ -150,7 +150,7 @@ Release 资产来自 GitHub Actions main run `34600609161` 的真实 workflow/he
 6. 接收端选择全新空目录并点击等待接收。发送端依次测试空文件、中文文件、长文件名、多个文件、含空目录的目录和大于两个 chunk 的文件。先不接受，验证未写正文；再明确接受。完成后比较两端 SHA256 与协议结果，然后交换方向。
 7. 新建测试目标文件重复发送，验证 FILE_CONFLICT 且原摘要不变；拒绝、取消、超时应分别验证。Mac 权限和磁盘不足可复用本轮 `mac-permission-v3.sh`、`mac-disk-full-v4.sh`，先查看脚本中的范围、命令与 rollback，改用新的测试路径后执行，避免覆盖现有证据。
 8. 核对候选/base socket/TLS/ALPN/peer/session/generation；候选类型和在线状态都不能代替路径证据。核对界面稳定码、任务终态、逻辑完成量和能力声明与 CLI/后端一致。
-9. 香港测试主站当前应报告产品 `0.2.0`、协议 V1；重复完成→立即完成、拒绝→立即完成。若回归失败直接记录产品 FAIL，并按 [DEPLOY-HK](DEPLOY-HK.md) 的备份回滚，不能靠等待两分钟、延长超时或修改网络配置掩盖。
+9. 香港测试主站当前应报告产品 `0.4.0`、协议 V1；重复完成→立即完成、拒绝→立即完成。若回归失败直接记录产品 FAIL，并按 [DEPLOY-HK](DEPLOY-HK.md) 的备份回滚，不能靠等待两分钟、延长超时或修改网络配置掩盖。
 10. 有原生交互条件后逐项检查文件选择器、打开目录、焦点键盘、深色/高 DPI、红点/Cmd+Q/Windows 关闭和活动任务保护；保存真实原生窗口证据。历史持久化、重启恢复和字节级缺块续传分别验收，不以窗口创建或历史列表替代正文恢复。
 11. 执行根模块 test/race/vet/独立模块、前端 frozen install/typecheck/lint/test/build，再执行桌面独立 test/vet/build。前端构建与桌面编译不要并行，因为 Vite 会重建 dist。运行 Wails bindings 生成并核对差异，然后构建 Windows 与两种 Mac DMG。
 12. 将全部可运行 FAIL 修复并复测后，再按发布流程从真实提交构建、等待 required checks、核对合并后 SHA 和 Release 实际 digest。未具备的拓扑/签名/公证/原生证据继续明示，不复用本轮快照的提交来源声明。

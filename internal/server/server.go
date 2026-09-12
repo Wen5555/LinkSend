@@ -96,8 +96,10 @@ type JoinRequest struct {
 	Signature []byte `json:"signature"`
 }
 type Invitation struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token      string    `json:"token"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	ServerTime time.Time `json:"server_time"`
+	TTLSeconds int64     `json:"ttl_seconds"`
 }
 type Wire struct {
 	Type         string                 `json:"type"`
@@ -126,6 +128,7 @@ type negotiation struct {
 	expires    time.Time
 	accepted   bool
 	counts     map[string]int
+	ended      map[string]bool
 }
 type bucket struct {
 	tokens float64
@@ -330,7 +333,18 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 		d, err = s.store.Join(r.Context(), req.Token, req.Name, req.PublicKey)
 	}
 	if err != nil {
-		reject(w, 403, protocol.AuthenticationFailed, "invitation invalid, expired or used")
+		switch {
+		case errors.Is(err, store.ErrInvitationExpired):
+			reject(w, http.StatusGone, protocol.PairingCodeExpired, "pairing code expired")
+		case errors.Is(err, store.ErrInvitationUsed):
+			reject(w, http.StatusConflict, protocol.PairingCodeUsed, "pairing code already used")
+		case errors.Is(err, store.ErrInvitationConflict):
+			reject(w, http.StatusConflict, protocol.PairingIdentityConflict, "pairing identity conflicts with existing membership")
+		case errors.Is(err, store.ErrInvitation):
+			reject(w, http.StatusBadRequest, protocol.PairingCodeInvalid, "pairing code invalid")
+		default:
+			reject(w, http.StatusInternalServerError, protocol.InvalidMessage, "pairing database unavailable")
+		}
 		return
 	}
 	respond(w, 201, d)
@@ -371,7 +385,12 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 		reject(w, 403, protocol.AuthenticationFailed, "paired member required")
 		return
 	}
-	respond(w, 201, Invitation{token, expires})
+	now := time.Now().UTC()
+	ttl := int64((time.Until(expires) + time.Second - 1) / time.Second)
+	if ttl < 1 {
+		ttl = 1
+	}
+	respond(w, 201, Invitation{Token: token, ExpiresAt: expires, ServerTime: now, TTLSeconds: ttl})
 }
 func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	d, ok := s.authenticate(w, r, nil)
@@ -641,7 +660,7 @@ func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) e
 		if recipientCount >= protocol.MaxSessionsPerDevice {
 			return protocol.Fail(protocol.RateLimited, "recipient session limit")
 		}
-		n = &negotiation{from: e.Sender, to: e.Recipient, generation: e.Generation, expires: now.Add(2 * time.Minute), counts: map[string]int{}}
+		n = &negotiation{from: e.Sender, to: e.Recipient, generation: e.Generation, expires: now.Add(2 * time.Minute), counts: map[string]int{}, ended: map[string]bool{}}
 		s.sessions[e.SessionID] = n
 	} else {
 		if n == nil || n.generation != e.Generation || !((n.from == e.Sender && n.to == e.Recipient) || (n.from == e.Recipient && n.to == e.Sender)) {
@@ -659,6 +678,9 @@ func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) e
 				return protocol.Fail(protocol.RateLimited, "candidate limit")
 			}
 		}
+		if e.Type == "end_of_candidates" {
+			n.ended[e.Sender] = true
+		}
 	}
 	copyEnvelope := e
 	select {
@@ -666,6 +688,9 @@ func (s *Server) forward(ctx context.Context, from *peer, e protocol.Envelope) e
 		encoded, _ := json.Marshal(e)
 		s.forwardedMessages.Add(1)
 		s.forwardedBytes.Add(uint64(len(encoded)))
+		if e.Type == "end_of_candidates" && n.ended[n.from] && n.ended[n.to] {
+			delete(s.sessions, e.SessionID)
+		}
 	default:
 		return protocol.Fail(protocol.RateLimited, "recipient queue full")
 	}

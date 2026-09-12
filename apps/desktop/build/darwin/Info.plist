@@ -15,13 +15,20 @@
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
-		<string>0.3.0</string>
+		<string>0.4.0</string>
 		<key>CFBundleVersion</key>
-		<string>0.3.0</string>
+		<string>0.4.0</string>
 		<key>LSMinimumSystemVersion</key>
 		<string>12.0.0</string>
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>LinkSend 使用本地网络发现附近设备并建立端到端加密直连。</string>
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsLocalNetworking</key>
+			<true/>
+		</dict>
 		<key>NSHumanReadableCopyright</key>
 		<string>© 2026 LinkSend contributors</string>
 	</dict>

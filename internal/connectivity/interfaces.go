@@ -11,12 +11,13 @@ import (
 // labels for explicit user policy only; LinkSend never infers network nature
 // from a name, private prefix, or candidate type.
 type InterfaceAddress struct {
-	Interface string `json:"interface"`
-	Address   string `json:"address"`
-	Family    string `json:"family"`
-	Index     int    `json:"index"`
-	MTU       int    `json:"mtu"`
-	Loopback  bool   `json:"loopback"`
+	Interface    string `json:"interface"`
+	Address      string `json:"address"`
+	Family       string `json:"family"`
+	Index        int    `json:"index"`
+	MTU          int    `json:"mtu"`
+	Loopback     bool   `json:"loopback"`
+	PointToPoint bool   `json:"point_to_point"`
 }
 
 func DiscoverInterfaceAddresses(allowLoopback bool) ([]InterfaceAddress, error) {
@@ -43,10 +44,25 @@ func DiscoverInterfaceAddresses(allowLoopback bool) ([]InterfaceAddress, error) 
 				family = "ipv4"
 				ip = ip.To4()
 			}
-			result = append(result, InterfaceAddress{Interface: iface.Name, Address: ip.String(), Family: family, Index: iface.Index, MTU: iface.MTU, Loopback: ip.IsLoopback()})
+			result = append(result, InterfaceAddress{Interface: iface.Name, Address: ip.String(), Family: family, Index: iface.Index, MTU: iface.MTU, Loopback: ip.IsLoopback(), PointToPoint: iface.Flags&net.FlagPointToPoint != 0})
 		}
 	}
 	return result, nil
+}
+
+// ResolveInterfaceAddress applies the same deterministic safety policy used by
+// Endpoint automatic binding. Callers may cache the result only while
+// InterfaceAddressPresent continues to confirm the exact interface and IP.
+func ResolveInterfaceAddress(allowLoopback bool, priority, excluded []string) (InterfaceAddress, error) {
+	addresses, err := DiscoverInterfaceAddresses(allowLoopback)
+	if err != nil {
+		return InterfaceAddress{}, err
+	}
+	return selectInterfaceAddress(addresses, priority, excluded)
+}
+
+func InterfaceAddressPresent(interfaceName, address string) bool {
+	return localAddressPresent(interfaceName, net.ParseIP(address))
 }
 
 func interfaceListed(name string, values []string) bool {
@@ -89,6 +105,9 @@ func selectInterfaceAddress(addresses []InterfaceAddress, priority, excluded []s
 		// user priority above still permits any adapter.
 		if a, b := ordinaryLinkMTU(left.MTU), ordinaryLinkMTU(right.MTU); a != b {
 			return a
+		}
+		if left.PointToPoint != right.PointToPoint {
+			return !left.PointToPoint
 		}
 		if left.Family != right.Family {
 			return left.Family == "ipv4"

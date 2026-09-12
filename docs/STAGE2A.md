@@ -1,6 +1,6 @@
 # Stage 2A 实机验收
 
-> 历史执行单：下方“当前域名检查”记录的是 2026-09-08 当时状态，525 阻塞随后已修复。当前 `0.2.0` 测试主站、物理双机与未验收项以 [PROGRESS](PROGRESS.md)、[ACCEPTANCE](ACCEPTANCE.md) 和 [2026-09-11 实机报告](MAC-WINDOWS-VALIDATION-20260911.md) 为准；不要把历史 BLOCKED 倒写成当前结论。
+> 历史执行单：下方“当前域名检查”记录的是 2026-09-08 当时状态，525 阻塞随后已修复。当前 `0.4.0` 测试主站、物理双机与未验收项以 [PROGRESS](PROGRESS.md)、[ACCEPTANCE](ACCEPTANCE.md) 和 [2026-09-11 实机报告](MAC-WINDOWS-VALIDATION-20260911.md) 为准；不要把历史 BLOCKED 倒写成当前结论。
 
 2A 只接受两台真实设备的证据：Windows 与 macOS 在同一局域网完成一次直连传输。loopback、单机 demo 和模拟 NAT 不计入通过。macOS 端使用仓库中的 `scripts/stage2a.sh`，无需预先安装项目到固定目录。
 

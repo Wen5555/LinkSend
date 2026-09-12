@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/discovery"
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/signaling"
@@ -31,13 +33,23 @@ type Config struct {
 }
 
 type Service struct {
-	cfg      Config
-	identity *identity.Identity
-	signal   *signaling.Client
-	mu       sync.RWMutex
-	trustMu  sync.Mutex
-	tasks    *taskManager
-	inbox    inboxManager
+	cfg       Config
+	identity  *identity.Identity
+	signal    *signaling.Client
+	mu        sync.RWMutex
+	trustMu   sync.Mutex
+	tasks     *taskManager
+	inbox     inboxManager
+	networkMu sync.Mutex
+	network   cachedNetworkSelection
+	lanMu     sync.RWMutex
+	lan       *lanRuntime
+	lanError  string
+}
+
+type cachedNetworkSelection struct {
+	key     string
+	address connectivity.InterfaceAddress
 }
 
 type IdentityInfo struct {
@@ -62,11 +74,13 @@ type DeviceInfo struct {
 	Online       bool   `json:"online"`
 	Trusted      bool   `json:"trusted"`
 	AlwaysAccept bool   `json:"always_accept"`
+	Nearby       bool   `json:"nearby"`
 }
 
 type InvitationInfo struct {
-	Token     string `json:"token"`
-	ExpiresAt string `json:"expires_at"`
+	Token            string `json:"token"`
+	ExpiresAt        string `json:"expires_at"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds"`
 }
 
 type MembershipStatus struct {
@@ -167,20 +181,24 @@ func (s *Service) CreateInvitation(ctx context.Context) (InvitationInfo, error) 
 		return InvitationInfo{}, err
 	}
 	i, err := c.CreateInvitation(ctx)
-	return InvitationInfo{Token: i.Token, ExpiresAt: i.ExpiresAt.UTC().Format(time.RFC3339)}, err
+	if err != nil {
+		return InvitationInfo{}, err
+	}
+	remaining := int64((i.Remaining + time.Second - 1) / time.Second)
+	return InvitationInfo{Token: i.Token, ExpiresAt: i.ExpiresAt.UTC().Format(time.RFC3339), ExpiresInSeconds: remaining}, nil
 }
 
 func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	c, err := s.client()
-	if err != nil {
-		return nil, err
-	}
-	devices, err := c.Devices(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err = s.syncPairedDevices(devices); err != nil {
-		return nil, err
+	var devices []signaling.Device
+	serverErr := err
+	if err == nil {
+		devices, serverErr = c.Devices(ctx)
+		if serverErr == nil {
+			if err = s.syncPairedDevices(devices); err != nil {
+				return nil, err
+			}
+		}
 	}
 	peers, err := identity.LoadTrust(s.cfg.DataDir)
 	if err != nil {
@@ -190,13 +208,40 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	for _, p := range peers {
 		trusted[p.ID] = p
 	}
-	out := make([]DeviceInfo, 0, len(devices))
+	nearby := s.lanPeers()
+	nearbyByID := make(map[string]discovery.Device, len(nearby))
+	for _, peer := range nearby {
+		nearbyByID[peer.ID] = peer
+	}
+	out := make([]DeviceInfo, 0, len(devices)+len(peers)+len(nearby))
+	seen := make(map[string]bool, cap(out))
 	for _, d := range devices {
 		item := s.device(d)
 		peer, ok := trusted[d.ID]
 		item.Trusted = ok || d.ID == s.identity.ID()
 		item.AlwaysAccept = ok && peer.AutoAccept
+		_, item.Nearby = nearbyByID[d.ID]
+		item.Online = item.Online || item.Nearby
 		out = append(out, item)
+		seen[d.ID] = true
+	}
+	for _, peer := range peers {
+		if seen[peer.ID] || peer.ID == s.identity.ID() {
+			continue
+		}
+		_, isNearby := nearbyByID[peer.ID]
+		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: isNearby, Trusted: true, AlwaysAccept: peer.AutoAccept, Nearby: isNearby})
+		seen[peer.ID] = true
+	}
+	for _, peer := range nearby {
+		if seen[peer.ID] || peer.ID == s.identity.ID() {
+			continue
+		}
+		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: true, Nearby: true})
+		seen[peer.ID] = true
+	}
+	if len(out) == 0 && serverErr != nil {
+		return nil, serverErr
 	}
 	return out, nil
 }

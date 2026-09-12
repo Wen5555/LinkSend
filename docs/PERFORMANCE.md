@@ -1,8 +1,12 @@
 # Performance
 
-当前数据适用于产品 `0.2.0` 的实现级回归边界；协议为 V1，Pion ICE v4.4.2，quic-go v0.62.0。没有新物理跨平台吞吐基准时，不得把恢复正确性测试的字节计数解释为性能结论。
+2026-09-12 接收端消除了 `VerifiedBytes()` 在每个 ACK 上扫描完整位图的平方级热点，改为写入成功后单调 O(1) 累加。每个块仍先执行文件 `Sync`；恢复 JSON 位图以 8 块或 500ms 为上限批量 checkpoint，进程崩溃后通过重新哈希 staging 恢复落后位图。该改动优先改善大文件高块数和海量小文件，不把少量 loopback 数字外推为物理网络吞吐承诺。
+
+当前数据适用于产品 `0.4.0` 的实现级回归边界；协议为 V1，Pion ICE v4.4.2，quic-go v0.62.0。没有新物理跨平台吞吐基准时，不得把恢复正确性测试的字节计数解释为性能结论。
 
 `BenchmarkTransport` 比较同版本原生 quic-go UDP 与 Pion ICE 集成路径。Windows amd64 loopback 探索结果约为 native 96.88 MB/s、ICE 97.05 MB/s，均是应用有效吞吐，只证明本机 loopback 基线，不代表千兆网、2.5GbE、macOS、Linux、跨 NAT 或网络切换性能。
+
+2026-09-12 物理 Windows `10.234.232.205` → Mac `10.234.171.192` 小文件连续发送对照：修复前每轮新建 WSS 为 3,521–3,749 ms；WSS 读泵复用、网卡预热、响应端预注册 QUIC listener、显式 `confirmed_ack` 与后台 draining 后，10/10 为 1,296–1,604 ms，平均 1,452 ms。发送端 WSS 借用为 0–0.7 ms，endpoint 约 81–90 ms，QUIC 握手多数 11–15 ms；Mac `connection_count=1`。全部是 host↔host `lan_direct`、TLS 1.3/QUIC、`relay=false`，只表示该现场的小文件及时性，不是跨 NAT 或吞吐承诺。
 
 ```powershell
 go run ./cmd/devtool bench-transport

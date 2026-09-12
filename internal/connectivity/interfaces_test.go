@@ -40,6 +40,21 @@ func TestInterfaceSelectionPrefersOrdinaryLinkMTUWithoutNameGuessing(t *testing.
 	}
 }
 
+func TestInterfaceSelectionPrefersNonPointToPointAtEqualMTU(t *testing.T) {
+	addresses := []InterfaceAddress{
+		{Interface: "Tunnel", Address: "198.18.0.1", Family: "ipv4", Index: 1, MTU: 1500, PointToPoint: true},
+		{Interface: "Physical", Address: "10.20.30.40", Family: "ipv4", Index: 2, MTU: 1500},
+	}
+	selected, err := selectInterfaceAddress(addresses, nil, nil)
+	if err != nil || selected.Interface != "Physical" {
+		t.Fatalf("non-point-to-point link was not preferred: %+v %v", selected, err)
+	}
+	selected, err = selectInterfaceAddress(addresses, []string{"Tunnel"}, nil)
+	if err != nil || selected.Interface != "Tunnel" {
+		t.Fatalf("explicit point-to-point priority was ignored: %+v %v", selected, err)
+	}
+}
+
 func TestAddressChangeInvalidatesSelectedEndpoint(t *testing.T) {
 	e := &Endpoint{
 		done:            make(chan struct{}),

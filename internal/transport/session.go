@@ -33,6 +33,17 @@ func (s *QUICStream) Abort() {
 	s.CancelWrite(streamAbortErrorCode)
 }
 
+// TerminalDeliveryObserved lets transfer remain independent from quic-go
+// while accepting a normal code-0 connection close as legacy confirmation
+// delivery evidence. Non-zero closes and other failures remain errors.
+func (s *QUICStream) TerminalDeliveryObserved(err error) bool {
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+	var applicationErr *quic.ApplicationError
+	return errors.As(err, &applicationErr) && applicationErr.Remote && applicationErr.ErrorCode == 0
+}
+
 // FlushTerminal half-closes the terminal response and waits for peer teardown.
 // Close alone only queues FIN; immediately resetting the stream or connection
 // can discard the buffered rejection/error. The peer normally aborts after
@@ -77,11 +88,23 @@ func QUICConfig() *quic.Config {
 	return &quic.Config{HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, KeepAlivePeriod: 5 * time.Second, MaxIncomingStreams: 8, MaxIncomingUniStreams: -1, Allow0RTT: false, InitialStreamReceiveWindow: 2 << 20, MaxStreamReceiveWindow: 8 << 20, InitialConnectionReceiveWindow: 4 << 20, MaxConnectionReceiveWindow: 32 << 20}
 }
 
+func validateTLSConfig(tlsConfig *tls.Config, responder bool) error {
+	if tlsConfig == nil || tlsConfig.MinVersion < tls.VersionTLS13 || tlsConfig.VerifyConnection == nil || len(tlsConfig.Certificates) == 0 {
+		return errors.New("E_AUTHENTICATION: pinned TLS 1.3 identity config required")
+	}
+	if responder && tlsConfig.ClientAuth != tls.RequireAnyClientCert && tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
+		return errors.New("E_AUTHENTICATION: client certificate required")
+	}
+	return nil
+}
+
 type Session struct {
-	Conn     *quic.Conn
-	Path     connectivity.Path
-	endpoint *connectivity.Endpoint
-	once     sync.Once
+	Conn      *quic.Conn
+	Path      connectivity.Path
+	endpoint  *connectivity.Endpoint
+	once      sync.Once
+	closeDone chan struct{}
+	closeErr  error
 }
 
 func (s *Session) Evidence() (connectivity.Stats, uint16, string) {
@@ -95,11 +118,8 @@ func (s *Session) Evidence() (connectivity.Stats, uint16, string) {
 // Establish uses the ICE controlling role as QUIC client. Both TLS configs must
 // be identity-pinned. It never calls DialEarly / ListenEarly or sends 0-RTT data.
 func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.Path, tlsConfig *tls.Config, controlling bool) (*Session, error) {
-	if tlsConfig == nil || tlsConfig.MinVersion < tls.VersionTLS13 || tlsConfig.VerifyConnection == nil || len(tlsConfig.Certificates) == 0 {
-		return nil, errors.New("E_AUTHENTICATION: pinned TLS 1.3 identity config required")
-	}
-	if !controlling && tlsConfig.ClientAuth != tls.RequireAnyClientCert && tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
-		return nil, errors.New("E_AUTHENTICATION: client certificate required")
+	if err := validateTLSConfig(tlsConfig, !controlling); err != nil {
+		return nil, err
 	}
 	addr, err := net.ResolveUDPAddr("udp", path.RemoteAddress)
 	if err != nil {
@@ -110,12 +130,39 @@ func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.
 		conn, err = e.QUIC().Dial(ctx, addr, tlsConfig, QUICConfig())
 	} else {
 		var listener *quic.Listener
-		listener, err = e.QUIC().Listen(tlsConfig, QUICConfig())
+		listener, err = PrepareListener(e, tlsConfig)
 		if err == nil {
-			conn, err = listener.Accept(ctx)
-			_ = listener.Close()
+			return AcceptPrepared(ctx, e, path, listener)
 		}
 	}
+	return finishEstablish(ctx, e, path, addr, conn, err)
+}
+
+// PrepareListener registers the responder with quic.Transport before the
+// connect_response is sent. This prevents the initiator's first QUIC Initial
+// from arriving in the short gap between completed ICE checks and Listen.
+func PrepareListener(e *connectivity.Endpoint, tlsConfig *tls.Config) (*quic.Listener, error) {
+	if err := validateTLSConfig(tlsConfig, true); err != nil {
+		return nil, err
+	}
+	return e.QUIC().Listen(tlsConfig, QUICConfig())
+}
+
+func AcceptPrepared(ctx context.Context, e *connectivity.Endpoint, path connectivity.Path, listener *quic.Listener) (*Session, error) {
+	if listener == nil {
+		return nil, errors.New("E_DIRECT_FAILED: QUIC listener is required")
+	}
+	addr, err := net.ResolveUDPAddr("udp", path.RemoteAddress)
+	if err != nil {
+		_ = listener.Close()
+		return nil, err
+	}
+	conn, acceptErr := listener.Accept(ctx)
+	_ = listener.Close()
+	return finishEstablish(ctx, e, path, addr, conn, acceptErr)
+}
+
+func finishEstablish(ctx context.Context, e *connectivity.Endpoint, path connectivity.Path, addr *net.UDPAddr, conn *quic.Conn, err error) (*Session, error) {
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return nil, protocol.Fail(protocol.Cancelled, "QUIC handshake cancelled")
@@ -132,7 +179,7 @@ func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.
 		_ = conn.CloseWithError(1, "nominated path mismatch")
 		return nil, errors.New("E_DIRECT_FAILED: QUIC remote differs from nominated path")
 	}
-	s := &Session{Conn: conn, Path: path, endpoint: e}
+	s := &Session{Conn: conn, Path: path, endpoint: e, closeDone: make(chan struct{})}
 	go func() {
 		select {
 		case <-e.PathChanged():
@@ -146,7 +193,28 @@ func Establish(ctx context.Context, e *connectivity.Endpoint, path connectivity.
 }
 
 func (s *Session) Close() error {
-	var err error
-	s.once.Do(func() { err = s.Conn.CloseWithError(0, "closed"); _ = s.endpoint.Close() })
-	return err
+	started := false
+	s.once.Do(func() {
+		started = true
+		s.close()
+	})
+	if !started && s.closeDone != nil {
+		<-s.closeDone
+	}
+	return s.closeErr
+}
+
+// CloseAfterTerminal sends the normal QUIC close but moves quic-go's draining
+// wait off the user-visible completion path. Callers may use it only after the
+// completed/confirmed/confirmed_ack exchange proved both peers consumed the
+// terminal state.
+func (s *Session) CloseAfterTerminal() {
+	s.once.Do(func() { go s.close() })
+}
+
+func (s *Session) close() {
+	if s.closeDone != nil {
+		defer close(s.closeDone)
+	}
+	s.closeErr = errors.Join(s.Conn.CloseWithError(0, "closed"), s.endpoint.Close())
 }

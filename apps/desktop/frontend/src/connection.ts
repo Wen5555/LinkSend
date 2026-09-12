@@ -9,12 +9,38 @@ export function connectionMethodLabel(method: string): string {
   }
 }
 
+export function formatPairingCodeInput(value: string): string {
+  const trimmed = value.trimStart();
+  // Legacy protocol-v1 invitations are base64url and must retain case.
+  if (trimmed.length > 12) return trimmed.slice(0, 43);
+  const compact = trimmed.toUpperCase().replace(/[\s\-‐‑‒–—―]/g, '');
+  if (!/^[A-Z2-7]*$/.test(compact)) return trimmed.slice(0, 12);
+  return compact.length > 4 ? `${compact.slice(0, 4)}-${compact.slice(4, 8)}` : compact;
+}
+
+export function shouldClearPairingCode(raw: unknown): boolean {
+  const text = String(raw ?? '');
+  return text.includes('PAIRING_CODE_EXPIRED') || text.includes('PAIRING_CODE_USED');
+}
+
 /** Stable task phases are intentionally mapped here instead of exposing the
  * internal enum names returned by the Go coordinator. Unknown future phases
  * remain readable and are kept visible for diagnostics. */
 export function taskPhaseLabel(phase: string): string {
   const labels: Record<string, string> = {
     preparing: '准备中',
+	peer_lookup: '核对已配对设备',
+	signaling_connect: '连接信令服务',
+	endpoint_setup: '自动选择本机网络',
+	lan_control_connect: '连接局域网设备',
+	interface_resolve: '核验当前网卡地址',
+	endpoint_construct: '创建直连端点',
+	candidate_gathering: '收集本机候选地址',
+	session_prepare: '准备连接请求',
+	requesting_peer: '通知接收端',
+	ice_checking: '检查最快直连路径',
+	quic_handshake: '建立加密传输通道',
+	opening_stream: '打开传输通道',
     gathering: '发现网络地址',
     signaling: '交换连接信息',
     checking: '检查直连路径',
@@ -78,6 +104,10 @@ export function humanizeBackendError(raw: unknown): string {
     SIGNALING_UNREACHABLE: '无法连接信令服务，请检查服务地址和网络后重试。',
     SIGNALING_TIMEOUT: '信令服务响应超时，请检查网络后重试。',
     UNPAIRED: '设备尚未完成配对，请在设备页输入配对码。',
+    PAIRING_CODE_INVALID: '配对码格式不正确或不存在，请核对后重试。',
+    PAIRING_CODE_EXPIRED: '这个配对码已过期，请在另一台设备上重新生成。',
+    PAIRING_CODE_USED: '这个配对码已被其他设备使用，请重新生成；同一设备可直接重试。',
+    PAIRING_IDENTITY_CONFLICT: '当前设备身份与已有配对记录冲突。请勿复制其他设备的身份目录，并重新配对。',
     AUTHENTICATION_FAILED: '设备认证失败，请重新生成配对码完成配对。',
     INVALID_CONFIG: '设置无效，请检查地址格式后重试。',
     CONFIG_BLOCKED: '本地偏好文件异常，请在设置页保存修复后的配置。',
@@ -102,6 +132,9 @@ export function humanizeBackendError(raw: unknown): string {
     FILE_CONFLICT: '目标文件已存在且不会覆盖，请选择空目录后重试。',
     TASK_INTERRUPTED: '上次任务因应用退出而中断，请核对源文件和接收目录后重新发起。',
     PEER_OFFLINE: '对端当前离线，请让对端保持 LinkSend 运行。',
+    LAN_DISCOVERY_UNAVAILABLE: '局域网发现暂不可用，请检查系统局域网权限、UDP 53318 和网络类型。',
+    LAN_CONTROL_UNREACHABLE: '已发现设备，但无法建立局域网控制连接；请检查本机防火墙或访客网络隔离。',
+    LAN_PROBE_INVALID: '请输入与本机处于同一局域网的有效 IPv4 地址。',
     VERSION_INCOMPATIBLE: '双方版本或传输能力不兼容，请升级到兼容版本。',
     DIRECT_FAILED: '直连或传输未完成，请检查设备在线、网络和接收目录后重试。',
     UNSAFE_PATH: '目标路径不安全，请选择其他接收目录。',

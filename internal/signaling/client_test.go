@@ -54,6 +54,9 @@ func TestClientRegistrationAndSignedHTTP(t *testing.T) {
 	if err != nil || len(invit.Token) != 9 || invit.Token[4] != '-' {
 		t.Fatalf("invitation: %v %+v", err, invit)
 	}
+	if invit.Remaining <= 0 || invit.Remaining > 10*time.Minute {
+		t.Fatalf("unexpected server-relative lifetime: %v", invit.Remaining)
+	}
 	b, err := identity.Generate()
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +78,40 @@ func TestClientRegistrationAndSignedHTTP(t *testing.T) {
 	devices, err := c.Devices(ctx)
 	if err != nil || len(devices) != 2 {
 		t.Fatalf("devices: %v %#v", err, devices)
+	}
+}
+
+func TestJoinRetryAndPairingErrorsAreStable(t *testing.T) {
+	_, h := testServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	admin, _ := identity.Generate()
+	ca := testClient(t, h.URL, admin)
+	if _, err := ca.Bootstrap(ctx, "01234567890123456789012345678901", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	invitation, err := ca.CreateInvitation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer, _ := identity.Generate()
+	cp := testClient(t, h.URL, peer)
+	first, err := cp.Join(ctx, invitation.Token, "peer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry, err := cp.Join(ctx, invitation.Token, "peer retry")
+	if err != nil || retry.ID != first.ID {
+		t.Fatalf("idempotent retry: %+v %v", retry, err)
+	}
+	other, _ := identity.Generate()
+	_, err = testClient(t, h.URL, other).Join(ctx, invitation.Token, "other")
+	if protocol.ErrorCode(err) != protocol.PairingCodeUsed {
+		t.Fatalf("used code error=%v code=%s", err, protocol.ErrorCode(err))
+	}
+	_, err = testClient(t, h.URL, other).Join(ctx, "NOPE-NOPE", "other")
+	if protocol.ErrorCode(err) != protocol.PairingCodeInvalid {
+		t.Fatalf("invalid code error=%v code=%s", err, protocol.ErrorCode(err))
 	}
 }
 

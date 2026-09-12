@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -155,6 +156,39 @@ func (i *Identity) TLSConfig(expected ed25519.PublicKey, server bool) (*tls.Conf
 	return cfg, nil
 }
 
+// TLSServerConfig verifies a self-signed LinkSend client certificate against a
+// caller-maintained allowlist. It is used by LAN discovery where the expected
+// peer becomes known from a recent signed announcement rather than before the
+// listener accepts the TCP connection.
+func (i *Identity) TLSServerConfig(allowed func(string, ed25519.PublicKey) bool) (*tls.Config, error) {
+	if allowed == nil {
+		return nil, authenticationError("LAN peer verifier required")
+	}
+	cert, err := i.certificate(time.Now())
+	if err != nil {
+		return nil, err
+	}
+	cfg := &tls.Config{
+		MinVersion:             tls.VersionTLS13,
+		MaxVersion:             tls.VersionTLS13,
+		Certificates:           []tls.Certificate{cert},
+		NextProtos:             []string{ALPN},
+		SessionTicketsDisabled: true,
+		ClientAuth:             tls.RequireAnyClientCert,
+	}
+	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
+		if cs.Version != tls.VersionTLS13 || cs.NegotiatedProtocol != ALPN || len(cs.PeerCertificates) != 1 {
+			return authenticationError("TLS version, ALPN, or client certificate")
+		}
+		key, ok := cs.PeerCertificates[0].PublicKey.(ed25519.PublicKey)
+		if !ok || !allowed(DeviceID(key), key) {
+			return authenticationError("client is not a recently discovered LAN peer")
+		}
+		return VerifyPeer(cs.PeerCertificates, key, true, time.Now())
+	}
+	return cfg, nil
+}
+
 // VerifyPeer is shared by TLS and negative policy tests. A pinned key alone is
 // insufficient: all certificate policy checks still apply.
 func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsClient bool, now time.Time) error {
@@ -203,38 +237,65 @@ func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsCli
 }
 
 type TrustedPeer struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	PublicKey  []byte `json:"public_key"`
-	AutoAccept bool   `json:"auto_accept,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	PublicKey      []byte `json:"public_key"`
+	AutoAccept     bool   `json:"auto_accept,omitempty"`
+	LastLANAddress string `json:"last_lan_address,omitempty"`
 }
 type TrustFile struct {
 	Peers []TrustedPeer `json:"peers"`
 }
 
 func LoadTrust(dir string) ([]TrustedPeer, error) {
-	fh, err := os.Open(filepath.Join(dir, "trust.json"))
+	path := filepath.Join(dir, "trust.json")
+	data, err := readTrustFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
+	if err == nil {
+		if peers, parseErr := parseTrustFile(data); parseErr == nil {
+			_ = os.Remove(path + ".previous")
+			return peers, nil
+		} else {
+			err = parseErr
+		}
+	}
+	backupPath := path + ".previous"
+	backup, backupErr := readTrustFile(backupPath)
+	if backupErr != nil {
+		return nil, err
+	}
+	peers, backupErr := parseTrustFile(backup)
+	if backupErr != nil {
+		return nil, errors.Join(err, backupErr)
+	}
+	if restoreErr := overwriteFile(path, backup); restoreErr == nil {
+		_ = os.Remove(backupPath)
+	}
+	return peers, nil
+}
+
+func readTrustFile(path string) ([]byte, error) {
+	fh, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer fh.Close()
-	data, err := io.ReadAll(io.LimitReader(fh, maxTrustFileBytes+1))
-	if err != nil {
-		return nil, err
-	}
+	return io.ReadAll(io.LimitReader(fh, maxTrustFileBytes+1))
+}
+
+func parseTrustFile(data []byte) ([]TrustedPeer, error) {
 	if len(data) > maxTrustFileBytes {
 		return nil, errors.New("trust file too large")
 	}
 	var f TrustFile
-	if err = json.Unmarshal(data, &f); err != nil {
+	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
 	for _, p := range f.Peers {
-		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] {
+		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) {
 			return nil, errors.New("invalid trust file")
 		}
 		seen[p.ID] = true
@@ -263,25 +324,38 @@ func TrustPairedPeer(dir string, peer TrustedPeer) error {
 }
 
 func trustPeer(dir string, peer TrustedPeer) error {
+	if !validLANAddress(peer.LastLANAddress) {
+		return errors.New("invalid remembered LAN address")
+	}
 	peers, err := LoadTrust(dir)
 	if err != nil {
 		return err
 	}
-	for i, p := range peers {
-		if p.ID == peer.ID {
-			if !bytes.Equal(p.PublicKey, peer.PublicKey) {
+	for index, existing := range peers {
+		if existing.ID == peer.ID {
+			if !bytes.Equal(existing.PublicKey, peer.PublicKey) {
 				return authenticationError("peer key changed")
 			}
-			changed := peer.Name != "" && peer.Name != p.Name
-			if changed {
-				peers[i].Name = peer.Name
+			if peer.LastLANAddress != "" && existing.LastLANAddress != peer.LastLANAddress {
+				peers[index].LastLANAddress = peer.LastLANAddress
 				return saveTrust(dir, peers)
 			}
+			// The authenticated service remains the live source of display names.
+			// A cosmetic rename must not rewrite the local key pin or make every
+			// connection depend on filesystem replacement support.
 			return nil
 		}
 	}
 	peers = append(peers, peer)
 	return saveTrust(dir, peers)
+}
+
+func validLANAddress(value string) bool {
+	if value == "" {
+		return true
+	}
+	address, err := netip.ParseAddr(value)
+	return err == nil && address.Is4() && !address.IsUnspecified() && !address.IsMulticast() && !address.IsLoopback()
 }
 
 // SetAutoAccept persists receiver consent for one already paired device.
@@ -330,5 +404,120 @@ func saveTrust(dir string, peers []TrustedPeer) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Rename(name, filepath.Join(dir, "trust.json"))
+	return replaceFile(name, filepath.Join(dir, "trust.json"), os.Rename)
+}
+
+// replaceFile keeps the common atomic rename path. Windows EFS rejects direct
+// replacement when an older target and the new temp file have different
+// encryption states (ERROR_NOT_SAME_DEVICE), even inside one directory. The
+// fallback first gives the verified old file a unique backup name, installs
+// the new file, and restores the old name if installation fails.
+func replaceFile(name, target string, rename func(string, string) error) error {
+	return replaceFileWith(name, target, rename, replaceAtomicFile, replaceFileInPlace)
+}
+
+func replaceFileWith(name, target string, rename func(string, string) error, platformReplace func(string, string) (bool, error), inPlace func(string, string, error) error) error {
+	directErr := rename(name, target)
+	if directErr == nil {
+		return nil
+	}
+	if attempted, replaceErr := platformReplace(name, target); attempted {
+		if replaceErr == nil {
+			return nil
+		}
+		directErr = errors.Join(directErr, replaceErr)
+	}
+	if aligned, alignErr := alignAtomicReplaceSource(name, target); aligned {
+		if alignErr == nil {
+			if attempted, replaceErr := platformReplace(name, target); attempted {
+				if replaceErr == nil {
+					return nil
+				}
+				directErr = errors.Join(directErr, replaceErr)
+			}
+			if retryErr := rename(name, target); retryErr == nil {
+				return nil
+			} else {
+				directErr = errors.Join(directErr, retryErr)
+			}
+		} else {
+			directErr = errors.Join(directErr, alignErr)
+		}
+	}
+	if _, err := os.Stat(target); err != nil {
+		return directErr
+	}
+	placeholder, err := os.CreateTemp(filepath.Dir(target), "trust-previous-*.tmp")
+	if err != nil {
+		return errors.Join(directErr, err)
+	}
+	backup := placeholder.Name()
+	if closeErr := placeholder.Close(); closeErr != nil {
+		_ = os.Remove(backup)
+		return errors.Join(directErr, closeErr)
+	}
+	if err = os.Remove(backup); err != nil {
+		return errors.Join(directErr, err)
+	}
+	if err = rename(target, backup); err != nil {
+		return inPlace(name, target, errors.Join(directErr, err))
+	}
+	if err = rename(name, target); err != nil {
+		restoreErr := rename(backup, target)
+		return errors.Join(directErr, err, restoreErr)
+	}
+	_ = os.Remove(backup)
+	return nil
+}
+
+func replaceFileInPlace(source, target string, cause error) error {
+	newData, err := readTrustFile(source)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	oldData, err := readTrustFile(target)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	backup := target + ".previous"
+	_ = os.Remove(backup)
+	if err = writeNewFile(backup, oldData); err != nil {
+		return errors.Join(cause, err)
+	}
+	if err = overwriteFile(target, newData); err != nil {
+		restoreErr := overwriteFile(target, oldData)
+		return errors.Join(cause, err, restoreErr)
+	}
+	verified, err := readTrustFile(target)
+	if err != nil || !bytes.Equal(verified, newData) {
+		restoreErr := overwriteFile(target, oldData)
+		return errors.Join(cause, err, errors.New("trust replacement verification failed"), restoreErr)
+	}
+	_ = os.Remove(backup)
+	return nil
+}
+
+func writeNewFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	return writeAndSync(f, data)
+}
+
+func overwriteFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	return writeAndSync(f, data)
+}
+
+func writeAndSync(f *os.File, data []byte) error {
+	_, writeErr := f.Write(data)
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
+	closeErr := f.Close()
+	return errors.Join(writeErr, closeErr)
 }

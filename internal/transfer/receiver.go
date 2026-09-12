@@ -17,6 +17,9 @@ import (
 
 const maxResumeStateBytes = 2 * MaxMetadata
 
+const checkpointChunkBatch = 8
+const checkpointMaxDelay = 500 * time.Millisecond
+
 // ResumeState is atomically checkpointed only after file.Sync. Recovery rehashes
 // every purportedly completed chunk and thus tolerates lost checkpoints and damage.
 type ResumeState struct {
@@ -37,9 +40,12 @@ type CommitRecord struct {
 }
 
 type Receiver struct {
-	root, stage *os.Root
-	State       ResumeState
-	files       map[uint32]*os.File
+	root, stage           *os.Root
+	State                 ResumeState
+	files                 map[uint32]*os.File
+	verifiedBytes         int64
+	chunksSinceCheckpoint int
+	lastCheckpoint        time.Time
 }
 
 func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *Receiver, err error) {
@@ -159,6 +165,7 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 						return nil, err
 					}
 					bits[i] = true
+					r.verifiedBytes += n
 				}
 			}
 			_ = old.Close()
@@ -228,7 +235,16 @@ func (r *Receiver) checkpoint() error {
 		return err
 	}
 	committed = true
+	r.chunksSinceCheckpoint = 0
+	r.lastCheckpoint = time.Now()
 	return nil
+}
+
+func (r *Receiver) checkpointIfDue() error {
+	if r.chunksSinceCheckpoint < checkpointChunkBatch && !r.lastCheckpoint.IsZero() && time.Since(r.lastCheckpoint) < checkpointMaxDelay {
+		return nil
+	}
+	return r.checkpoint()
 }
 
 func (r *Receiver) WriteChunk(ctx context.Context, id uint32, index int, data []byte) error {
@@ -257,20 +273,16 @@ func (r *Receiver) WriteChunk(ctx context.Context, id uint32, index int, data []
 	if err := f.Sync(); err != nil {
 		return err
 	}
-	r.State.Verified[id][index] = true
-	return r.checkpoint()
+	if !r.State.Verified[id][index] {
+		r.State.Verified[id][index] = true
+		r.verifiedBytes += want
+		r.chunksSinceCheckpoint++
+	}
+	return r.checkpointIfDue()
 }
 
 func (r *Receiver) VerifiedBytes() int64 {
-	var n int64
-	for _, e := range r.State.Manifest.Files {
-		for i, ok := range r.State.Verified[e.ID] {
-			if ok {
-				n += min(int64(r.State.Manifest.ChunkSize), e.Size-int64(i)*int64(r.State.Manifest.ChunkSize))
-			}
-		}
-	}
-	return n
+	return r.verifiedBytes
 }
 
 func (r *Receiver) verifyParents(p string) error {

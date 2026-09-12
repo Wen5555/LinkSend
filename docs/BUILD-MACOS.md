@@ -1,6 +1,6 @@
 # macOS 测试 DMG 构建
 
-当前产品版本为 `0.2.0`，文件协议为 V1，Wails 3 固定为 `v3.0.0-beta.18`。测试包在没有 Developer ID/公证凭据时只能标记为 ad-hoc、NOT_NOTARIZED，不得描述为正式发行。
+当前产品版本为 `0.4.0`，文件协议为 V1，Wails 3 固定为 `v3.0.0-beta.18`。测试包在没有 Developer ID/公证凭据时只能标记为 ad-hoc、NOT_NOTARIZED，不得描述为正式发行。
 
 ## 获取可追溯源码
 
