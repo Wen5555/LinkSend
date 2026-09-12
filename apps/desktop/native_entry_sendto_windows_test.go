@@ -31,6 +31,8 @@ func TestSendToNativeShortcutRoundTripInIsolatedDirectory(t *testing.T) {
 	if err := installSendToAt(executable, directory); err != nil {
 		t.Fatal(err)
 	}
+	observed, observedErr := readSendToShortcut(filepath.Join(directory, sendToName))
+	t.Logf("isolated shortcut fixture: expected_target=%q observed_target=%q expected_arguments=%q observed_arguments=%q expected_description=%q observed_description=%q expected_working_directory=%q observed_working_directory=%q read_error=%v", executable, observed.target, sendToArgs, observed.arguments, sendToMarker, observed.description, filepath.Dir(executable), observed.workingDir, observedErr)
 	if err := installSendToAt(executable, directory); err != nil {
 		t.Fatalf("idempotent registration failed: %v", err)
 	}
