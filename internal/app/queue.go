@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/Wen5555/LinkSend/internal/content"
 	"math/rand/v2"
 	"path/filepath"
 	"strings"
@@ -17,19 +18,20 @@ import (
 )
 
 type QueueItem struct {
-	ID            string `json:"id"`
-	RequestID     string `json:"request_id"`
-	PeerID        string `json:"peer_id"`
-	SourceSummary string `json:"source_summary"`
-	State         string `json:"state"`
-	Position      int64  `json:"position"`
-	TaskID        string `json:"task_id"`
-	ExpiresAt     string `json:"expires_at"`
-	Revision      uint64 `json:"revision"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
-	LastError     string `json:"last_error"`
-	WaitForPeer   bool   `json:"wait_for_peer"`
+	ID            string            `json:"id"`
+	RequestID     string            `json:"request_id"`
+	PeerID        string            `json:"peer_id"`
+	SourceSummary string            `json:"source_summary"`
+	State         string            `json:"state"`
+	Position      int64             `json:"position"`
+	TaskID        string            `json:"task_id"`
+	ExpiresAt     string            `json:"expires_at"`
+	Revision      uint64            `json:"revision"`
+	CreatedAt     string            `json:"created_at"`
+	UpdatedAt     string            `json:"updated_at"`
+	LastError     string            `json:"last_error"`
+	WaitForPeer   bool              `json:"wait_for_peer"`
+	Content       *content.Snapshot `json:"content,omitempty"`
 }
 
 type EnqueueRequest struct {
@@ -39,6 +41,7 @@ type EnqueueRequest struct {
 	WaitForPeer          bool     `json:"wait_for_peer"`
 	ExpiresAt            string   `json:"expires_at"`
 	ExpectedSourceDigest string   `json:"-"` // internal resend preflight; never trusted from JS
+	content              *contentQueueIntent
 }
 
 type queueRecord struct {
@@ -83,7 +86,14 @@ func (s *Service) queueItems() ([]QueueItem, error) {
 		}
 		items = append(items, item.QueueItem)
 	}
-	return items, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	_ = rows.Close()
+	if err = s.decorateContentQueue(items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func queueSourceDigest(m transfer.Manifest) string {
@@ -137,6 +147,13 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	if err == nil {
 		saved, _ := json.Marshal(existing.paths)
 		if existing.PeerID != request.PeerID || string(saved) != string(encoded) || existing.WaitForPeer != request.WaitForPeer {
+			return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
+		}
+		var contentCount int
+		if err = s.store.db.QueryRow(`SELECT count(*) FROM content_queue WHERE queue_id=?`, existing.ID).Scan(&contentCount); err != nil {
+			return QueueItem{}, err
+		}
+		if (contentCount != 0) != (request.content != nil) {
 			return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
 		}
 		return existing.QueueItem, nil
@@ -217,6 +234,9 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	saved, _ := json.Marshal(item.paths)
 	if item.PeerID != request.PeerID || string(saved) != string(encoded) || item.WaitForPeer != request.WaitForPeer {
 		return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
+	}
+	if err = persistContentQueue(tx, item.QueueItem, request.content); err != nil {
+		return QueueItem{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return QueueItem{}, err
@@ -323,7 +343,11 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 		case "failed", "rejected":
 			_ = s.setQueueState(item.ID, "needs_attention", task.ErrorCode)
 		case "paused", "recovering":
-			_ = s.setQueueState(item.ID, "needs_attention", "TASK_REQUIRES_RESUME")
+			// A newly started ResumeTask is actively recovering with CanResume
+			// false. Only a stopped attempt should return to the user-action gate.
+			if task.CanResume {
+				_ = s.setQueueState(item.ID, "needs_attention", "TASK_REQUIRES_RESUME")
+			}
 		}
 	}
 	if s.queue.paused || s.tasks.hasActive() {
@@ -390,6 +414,13 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 			return
 		}
 		cfg := s.queue.cfg
+		contentSnapshot, allowFallback, contentErr := s.loadQueueContent(ctx, record.ID)
+		if contentErr != nil {
+			_ = s.setQueueState(record.ID, "needs_attention", "CONTENT_SNAPSHOT_UNAVAILABLE")
+			return
+		}
+		cfg.contentSnapshot = contentSnapshot
+		cfg.contentAllowFallback = allowFallback
 		cfg.expectedSourceDigest = record.digest
 		cfg.beforeDispatch = func(task TaskSnapshot) error {
 			if !task.HistoryPersisted {
@@ -496,6 +527,9 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 			_, err = s.ResumeTask(task.ID, cfg)
 			return err
 		}
+	}
+	if _, _, err = s.loadQueueContent(s.workCtx, item.ID); err != nil {
+		return err
 	}
 	prepared, err := transfer.Prepare(s.workCtx, item.paths, 0)
 	if err != nil {

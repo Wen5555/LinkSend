@@ -5,9 +5,14 @@ package nativeclipboard
 import (
 	"context"
 	"errors"
+	"image"
 
 	"github.com/Wen5555/LinkSend/internal/content"
 )
+
+// CaptureImage is a Go-only adapter for the application's idempotent content
+// draft transaction. It must never be exposed as a Wails bound return value.
+func CaptureImage(ctx context.Context) (image.Image, error) { return captureImage(ctx) }
 
 var (
 	ErrUnavailable = errors.New("CLIPBOARD_UNAVAILABLE")

@@ -68,6 +68,11 @@ func (s *Service) shutdownOwners() {
 	_ = s.stopLANDiscovery()
 	s.listenerWorkers.Wait()
 	s.tasks.workers.Wait()
+	s.content.mu.Lock()
+	if s.content.store != nil {
+		_ = s.content.store.Close()
+	}
+	s.content.mu.Unlock()
 	if s.store != nil {
 		_ = s.store.Close()
 	}

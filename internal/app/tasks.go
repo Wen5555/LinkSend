@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/content"
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
@@ -110,6 +111,9 @@ type taskRecord struct {
 }
 
 type taskRecovery struct {
+	ContentSnapshotID string            `json:"content_snapshot_id,omitempty"`
+	ContentMode       string            `json:"content_mode,omitempty"`
+	ContentBinding    string            `json:"content_binding,omitempty"`
 	ReceivePlanDigest string            `json:"receive_plan_digest,omitempty"`
 	SelectionDigest   string            `json:"selection_digest,omitempty"`
 	Version           int               `json:"version"`
@@ -555,10 +559,16 @@ func classifyTaskError(err error) error {
 		return protocol.Wrap(protocol.Cancelled, "传输已取消", err)
 	case errors.Is(err, transfer.ErrRejected):
 		return protocol.Wrap(protocol.ReceiveRejected, "接收方拒绝了本次传输，请确认对方已准备接收。", err)
-	case errors.Is(err, transfer.ErrChanged):
+	case errors.Is(err, transfer.ErrChanged), errors.Is(err, content.ErrChanged):
 		return protocol.Wrap(protocol.SourceChanged, "源文件在传输过程中发生变化，请重新选择文件后重试。", err)
 	case errors.Is(err, transfer.ErrPlanUnsupported):
 		return protocol.Wrap(protocol.ReceivePlanUnsupported, userErrorForCode(protocol.ReceivePlanUnsupported), err)
+	case errors.Is(err, transfer.ErrContentUnsupported):
+		return protocol.Wrap(protocol.ContentUnsupported, "对方暂不支持此内容类型；请升级对方，或明确选择作为普通文件发送。", err)
+	case errors.Is(err, transfer.ErrContentInvalid):
+		return protocol.Wrap(protocol.ContentInvalid, "内容类型或格式不符合限制，请重新创建内容。", err)
+	case errors.Is(err, transfer.ErrContentMismatch):
+		return protocol.Wrap(protocol.ContentMismatch, "内容摘要或恢复类型不一致，已在继续发送前停止。", err)
 	case errors.Is(err, transfer.ErrPlanMismatch):
 		return protocol.Wrap(protocol.ReceivePlanMismatch, userErrorForCode(protocol.ReceivePlanMismatch), err)
 	case errors.Is(err, transfer.ErrPlanInvalid):
@@ -679,6 +689,16 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
+	if cfg.contentSnapshot != nil {
+		cfg.contentTaskID = t.snapshot().ID
+		cfg.contentAttemptID = t.snapshot().AttemptID
+		if err = s.registerOutgoingContentTask(ctx, cfg.contentTaskID, cfg.contentSnapshot, cfg.contentAllowFallback); err != nil {
+			cancel()
+			t.finish("failed", err)
+			s.ensureInbox()
+			return TaskSnapshot{}, err
+		}
+	}
 	t.peerID, t.paths, t.cfg = peerID, base, cfg
 	if cfg.beforeDispatch != nil {
 		if err = cfg.beforeDispatch(t.snapshot()); err != nil {
@@ -693,6 +713,9 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		recovery.SourcePaths = append([]string(nil), base...)
 		recovery.PeerID = peerID
 		recovery.PeerFingerprint = peerID
+		if cfg.contentSnapshot != nil {
+			recovery.ContentSnapshotID = cfg.contentSnapshot.ID
+		}
 	})
 	cfg.onPhase = func(phase string) {
 		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
@@ -1045,6 +1068,11 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
+	if err := s.configureContentResume(s.workCtx, id, t.recovery, &cfg); err != nil {
+		t.mu.Unlock()
+		s.ensureInbox()
+		return TaskSnapshot{}, err
+	}
 	if t.recovery.Direction == "receive" {
 		if err := validateReceiveDirectory(t.recovery.TargetDirectory); err != nil {
 			attemptID := t.snap.AttemptID
@@ -1056,6 +1084,9 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	attemptID := protocol.RandomID()
+	if cfg.contentSnapshot != nil {
+		cfg.contentAttemptID = attemptID
+	}
 	t.snap.AttemptID = attemptID
 	t.snap.SessionID = ""
 	t.snap.ICEGeneration = 0

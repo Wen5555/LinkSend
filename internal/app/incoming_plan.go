@@ -23,6 +23,8 @@ type incomingOffer struct {
 	resume          bool
 	preview         *transfer.ReceivePlan
 	decided         bool
+	content         *transfer.ContentDescriptor
+	fileFallback    bool
 }
 
 type IncomingFilesRequest struct {
@@ -39,14 +41,16 @@ type IncomingFile struct {
 	TargetPath string `json:"target_path,omitempty"`
 }
 type IncomingFilesPage struct {
-	Revision        uint64         `json:"revision"`
-	Files           []IncomingFile `json:"files"`
-	Offset          int            `json:"offset"`
-	TotalEntries    int            `json:"total_entries"`
-	OriginalTotal   int64          `json:"original_total"`
-	Directory       string         `json:"directory"`
-	SubsetSupported bool           `json:"subset_supported"`
-	Resume          bool           `json:"resume"`
+	Content         *transfer.ContentDescriptor `json:"content,omitempty"`
+	FileFallback    bool                        `json:"file_fallback,omitempty"`
+	Revision        uint64                      `json:"revision"`
+	Files           []IncomingFile              `json:"files"`
+	Offset          int                         `json:"offset"`
+	TotalEntries    int                         `json:"total_entries"`
+	OriginalTotal   int64                       `json:"original_total"`
+	Directory       string                      `json:"directory"`
+	SubsetSupported bool                        `json:"subset_supported"`
+	Resume          bool                        `json:"resume"`
 }
 type IncomingPlanRequest struct {
 	ExpectedRevision uint64                             `json:"expected_revision"`
@@ -113,6 +117,8 @@ func (s *Service) IncomingFiles(id string, req IncomingFilesRequest) (IncomingFi
 	}
 	in := t.incoming
 	page := IncomingFilesPage{Revision: t.snap.Revision, Files: make([]IncomingFile, 0, req.Limit), Offset: req.Offset, TotalEntries: len(in.manifest.Files), OriginalTotal: in.manifest.TotalBytes(), Directory: t.snap.TargetDirectory, SubsetSupported: in.subsetSupported, Resume: in.resume}
+	page.Content = copyContentDescriptor(in.content)
+	page.FileFallback = in.fileFallback
 	selected := make(map[uint32]string)
 	if in.preview != nil {
 		page.Directory = in.preview.Directory
@@ -305,13 +311,15 @@ func applySelectionSummary(snap *TaskSnapshot, summary transfer.PlanSummary) {
 func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attemptID, directory string, resume *taskRecovery, autoAccept bool) transfer.ReceiveOptions {
 	var manifest transfer.Manifest
 	var lastReceived int64
-	return transfer.ReceiveOptions{Directory: directory, Plan: func(planCtx context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
+	return transfer.ReceiveOptions{Directory: directory, AcceptNativeContent: s.content.enabled.Load(), Plan: func(planCtx context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
 		manifest = offer.Manifest
 		m := manifest
 		if resume != nil && (m.TransferID != resume.TransferID || m.Digest() != resume.ManifestDigest || m.ChunkSize != resume.ChunkSize || m.TotalBytes() != resume.TotalBytes || len(m.Files) != resume.FileCount) {
 			return transfer.ReceivePlan{}, transfer.ErrResumeMismatch
 		}
 		in := &incomingOffer{ctx: planCtx, manifest: m, resume: resume != nil}
+		in.content = copyContentDescriptor(offer.Content)
+		in.fileFallback = offer.FileFallback
 		in.decided = resume != nil // ResumeTask already provided explicit consent.
 		for _, capability := range offer.Capabilities {
 			if capability == transfer.CapabilityReceivePlan {
@@ -355,6 +363,9 @@ func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attempt
 		}
 		if err := s.IndexInboxManifest(planCtx, t.snapshot().ID, m); err != nil {
 			return transfer.ReceivePlan{}, errors.Join(transfer.ErrPlanPersistence, err)
+		}
+		if err := s.registerIncomingContent(planCtx, t, attemptID, offer); err != nil {
+			return transfer.ReceivePlan{}, err
 		}
 		if resume != nil {
 			info, err := os.Stat(directory)

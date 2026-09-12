@@ -60,6 +60,7 @@ type Service struct {
 	epoch           string
 	workCtx         context.Context
 	workCancel      context.CancelFunc
+	content         contentManager
 }
 
 type cachedNetworkSelection struct {

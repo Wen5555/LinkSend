@@ -51,3 +51,5 @@ LAN discovery 对每个可组播 IPv4 接口加入同一受限组，Windows 无�
 连接请求/响应不等待完整候选收集；双方开始 gathering 后立即交换 ICE credentials，候选回调、签名转发和 Pion checks 并行。响应端前置建连失败通过受限、签名且绑定 session/generation 的 `status` 返回稳定错误码，避免发起端把明确的本地绑定失败误报为 30 秒信令超时。
 
 真实网络证据见 [ADR 0001](adr/0001-ice-quic-integration.md)，任务/恢复决策见 [ADR 0002](adr/0002-task-recovery-and-history-schema.md)。独立双 NAT 固定映射场景已 PASS；MASQUERADE-only 仍 FAIL，因此不能宣称所有 NAT 类型均可直连。
+
+M5 内容生命周期见 [ADR 0006](adr/0006-owned-content-lifecycle.md)：schema5 将内容草稿、队列引用与实际内容协商映射分离；Go 拥有不可变快照、重启恢复及按 task ID 的原生内容动作。短文字输入可经有界表单进入 Go，已读取正文与 PNG 不从 Go 返回 JavaScript。

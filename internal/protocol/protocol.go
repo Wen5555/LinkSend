@@ -72,6 +72,9 @@ const (
 	ReceivePlanInvalid          Code = "INVALID_RECEIVE_PLAN"
 	ReceivePlanPersistence      Code = "RECEIVE_PLAN_PERSIST_FAILED"
 	ReceiveDirectoryUnavailable Code = "RECEIVE_DIRECTORY_UNAVAILABLE"
+	ContentUnsupported          Code = "CONTENT_UNSUPPORTED"
+	ContentInvalid              Code = "INVALID_CONTENT_DESCRIPTOR"
+	ContentMismatch             Code = "CONTENT_MISMATCH"
 )
 
 type Error struct {

@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 4
+const taskStoreSchema = 5
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -124,6 +124,11 @@ func historyDB(path string) (*sql.DB, error) {
 	}
 	if schema < 4 {
 		if err = migrateInboxMetadata(tx); err != nil {
+			return rollback(err)
+		}
+	}
+	if schema < 5 {
+		if err = migrateContentMetadata(tx); err != nil {
 			return rollback(err)
 		}
 	}

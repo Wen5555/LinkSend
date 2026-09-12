@@ -51,3 +51,5 @@ diagnostics 采用允许列表，仅记录实际 base socket、接口、地址�
 原先“目标同 hash 即可视作恢复提交”的宽松路径已收紧。文件必须有匹配的持久 commit record，或在已持久 commit intent 后证明目标与 staging 为同一真实 inode/file ID，才可恢复提交；外国同名同内容文件不计入本任务。目录单独保存真实目录身份（Windows volume/file index，Unix dev/ino），重启不以 CommitStarted 推断 ownership。mkdir意图与目录identity记录之间的窄崩溃窗口若无法证明归属，明确报冲突并保留用户文件与原计划，不合并、不另起名称重复创建。
 
 计划 checkpoint 与 App PlanChanged 持久化回调都必须成功后才能接收正文或按新名称提交。恢复保持已接受集合与已持久名称；已提交文件/目录不允许重新命名，目录失效或身份变化需用户处理。实际 App/UI 和平台验收仍以证据表为准。
+
+M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、内容绑定和实际文件摘要，不能由前端路径或历史标签授权读取。未知 URL scheme 仅显示/复制为文字，打开动作每次限定 http/https；图片另存不覆盖。快照清理保护活动/恢复/队列/草稿及普通文件路径重叠引用，只释放本应用的引用命名空间，受控 Store 再检查持久 OS 文件身份与摘要，不删除接收用户文件。详情见 [ADR 0006](adr/0006-owned-content-lifecycle.md)。

@@ -519,7 +519,7 @@ func TestInboxResendCreatesNewIdempotentLogicalQueue(t *testing.T) {
 	}
 }
 
-func TestInboxSchema4MigrationKeepsVerifiedSchema3Backup(t *testing.T) {
+func TestInboxMigrationKeepsVerifiedSchema3Backup(t *testing.T) {
 	// Build a real v3 database by running the established v2->v3 migration,
 	// then let historyDB perform the new migration with its verified backup.
 	filename := filepath.Join(t.TempDir(), "history.sqlite")
@@ -548,7 +548,7 @@ func TestInboxSchema4MigrationKeepsVerifiedSchema3Backup(t *testing.T) {
 	}
 	defer db.Close()
 	var schema int
-	if err = db.QueryRow(`PRAGMA user_version`).Scan(&schema); err != nil || schema != 4 {
+	if err = db.QueryRow(`PRAGMA user_version`).Scan(&schema); err != nil || schema != taskStoreSchema {
 		t.Fatal(schema, err)
 	}
 	backups, err := filepath.Glob(filename + ".schema-v3-*.bak")

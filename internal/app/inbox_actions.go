@@ -58,6 +58,16 @@ func (s *Service) ResendInbox(ctx context.Context, request ResendInboxRequest) (
 	if err = s.checkPeerAllowed(recovery.PeerID); err != nil {
 		return QueueItem{}, err
 	}
+	contentRecord, contentErr := s.loadContentTask(ctx, request.TaskID)
+	if contentErr == nil {
+		return s.resendContentInbox(ctx, request, requestID, contentRecord, recovery.PeerID)
+	}
+	if !errors.Is(contentErr, sql.ErrNoRows) {
+		return QueueItem{}, contentErr
+	}
+	if recovery.ContentMode != "" || recovery.ContentSnapshotID != "" {
+		return QueueItem{}, errors.New("CONTENT_SNAPSHOT_UNAVAILABLE")
+	}
 	prepared, err := transfer.PrepareForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID)
 	if err != nil {
 		return QueueItem{}, classifyTaskError(err)

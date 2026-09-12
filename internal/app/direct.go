@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/content"
 	"github.com/Wen5555/LinkSend/internal/discovery"
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -38,6 +39,11 @@ type DirectConfig struct {
 	knownInterface       string
 	expectedSourceDigest string
 	beforeDispatch       func(TaskSnapshot) error
+	contentSnapshot      *content.Snapshot
+	contentAllowFallback bool
+	contentForceFile     bool
+	contentTaskID        string
+	contentAttemptID     string
 }
 
 func (c DirectConfig) phase(value string) {
@@ -659,12 +665,19 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
+	options, err := s.sendContentOptions(ctx, prepared, cfg, hooks)
+	if err != nil {
+		return DirectTransferResult{Evidence: peer.Evidence()}, err
+	}
 	cfg.phase("opening_stream")
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence()}, err
 	}
-	result, err := transfer.SendWithHooks(ctx, transport.WrapStream(stream), prepared, hooks)
+	result, err := transfer.SendWithOptions(ctx, transport.WrapStream(stream), prepared, options)
+	if cfg.contentForceFile {
+		result.FileFallback = true
+	}
 	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
 }
 
