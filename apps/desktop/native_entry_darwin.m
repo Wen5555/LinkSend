@@ -8,6 +8,22 @@
 
 extern int linksendReceiveFinderPaths(char *encoded);
 
+int linksendShowNativeEntryFailure(const char *message) {
+    if (![NSThread isMainThread]) return 1;
+    @autoreleasepool {
+        [NSApplication sharedApplication];
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        [NSApp activateIgnoringOtherApps:YES];
+        NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+        alert.alertStyle = NSAlertStyleCritical;
+        alert.messageText = @"LinkSend";
+        alert.informativeText = [NSString stringWithUTF8String:message] ?: @"无法添加所选内容，请打开 LinkSend 后重试。";
+        [alert addButtonWithTitle:@"知道了"];
+        [alert runModal];
+    }
+    return 0;
+}
+
 char *linksendCanonicalProfileDirectory(const char *path) {
     int fd = open(path, O_EVTONLY | O_CLOEXEC);
     if (fd < 0) return NULL;

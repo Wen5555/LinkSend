@@ -7,6 +7,8 @@
 - `profileSingleInstanceOptions(dataDir,onSecond) (*application.SingleInstanceOptions,error)`：先解析绝对路径和现有目录别名，按规范路径 SHA256 派生 UniqueID，失败明确返回；不提前创建 profile 或打开数据库。Windows case folding 和 extended UNC 形式统一；Darwin `F_GETPATH` 取得真实目录路径，防止 APFS 大小写别名拆成两个 instance ID。UniqueID 的摘要段以字母 p 开头，也满足 Linux D-Bus 名称要求。
 - 二次启动回调收到 **不含 argv[0]** 的参数副本和启动进程的 WorkingDir；首次启动应给 `parseNativeFileArguments(os.Args[1:],cwd)`。Wails beta.18 的 EncryptionKey 保持双方一致的默认零值；固定源码明确零值传原 JSON，不生成不同随机密钥。
 - `parseNativeFileArguments` 支持普通文件参数、`--send-files --`；未知 option 明确拒绝，`--` 后可接以短横线开头的真实文件名。相对路径使用所给 WorkingDir，Windows 不猜测另一 drive 的当前目录。每次最多 1024 条路径、1 MiB 路径字节；超限/空值/NUL/无效 UTF-8 整批失败，没有部分接受或截断。
+- 已识别 Windows go-toast 原生 COM 的 `-Embedding` 以及可选登录启动参数 `--background`；它们只表达激活模式，不变成文件草稿。主应用仍需决定是否显示窗口，不能从这些参数自动发送。
+- `showNativeEntryFailure(message)` 提供启动阶段同步错误提示：Windows MessageBoxW、Mac 主线程 NSAlert，可在 `application.New` 前调用。只接程序内部固定中文消息，不接私有路径或原始 `err.Error()`。实现编译检查通过，没有为测试人为弹出模态对话框。
 - `attachFileDrop(window,onPaths)` 接真实 `events.Common.WindowFilesDropped` / `DroppedFiles()`，返回取消订阅函数。main 必须设置 `EnableFileDrop=true`，前端目标需 `data-file-drop-target`。全部数据都是原生路径元数据，不读取 WebView 文件正文。
 - 所有回调只准备可见草稿，不选择目标、不发送、不自动恢复旧任务。无文件二次激活仍应由 main/app 唤醒现有窗口；重复路径由 Go 草稿服务去重。
 
@@ -22,7 +24,7 @@
 
 Darwin Go/CGo/Objective-C provider 使用真实 AppKit `NSApplication.servicesProvider`，Info.plist / Info.dev.plist 的 NSServices 发送类型为 `public.file-url`，消息 `linksendSendFiles`，菜单为“使用 LinkSend 发送”。这不是 Share Extension。当前工作树声明须与 provider 接入一起进入 M2，不提前作为 M1 功能展示。
 
-`registerFinderServices(onPaths)` 必须在 AppKit 主循环已运行、草稿回调就绪后调用；Finder 可以在注册后立即发出请求。注册和 cleanup 通过 Wails `InvokeSync` 在 UI 主线程执行；不替换 application delegate，不覆盖其他现存 services provider，cleanup 幂等。主循环停止前须完成 cleanup。
+`registerFinderServices(onPaths func([]string,string) error)` 必须在 AppKit 主循环已运行、草稿回调就绪后调用；Finder 可以在注册后立即发出请求。回调应先把激活路径元数据写入持久入口日志，成功才返回 nil；任何 ENOSPC/未就绪等错误通过 Go C export 的非 0 返回传回原生 NSString 错误，不能告诉 Finder“保存成功”。注册和 cleanup 通过 Wails `InvokeSync` 在 UI 主线程执行；不替换 application delegate，不覆盖其他现存 services provider，cleanup 幂等。主循环停止前须完成 cleanup。
 
 provider 用 `NSPasteboard readObjectsForClasses:[NSURL class]` 读文件 URL，保留 Unicode/多文件/目录，检查文件可达性，只将 JSON 路径数组交给 Go。根本没有读取或传递文件正文。现代文件 URL 路径已足够，移除了 macOS 10.14 起废弃的 NSFilenamesPboardType fallback。
 

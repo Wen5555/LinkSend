@@ -104,10 +104,15 @@ func parseNativeFileArguments(args []string, workingDir string) ([]string, error
 	for _, arg := range args {
 		if !pathsOnly {
 			switch arg {
-			case "--send-files":
+			case "--send-files", "--background":
 				continue
 			case "--":
 				pathsOnly = true
+				continue
+			}
+			// Windows COM starts toast activation servers with -Embedding;
+			// this is an activation, not a file selected for the draft.
+			if runtime.GOOS == "windows" && strings.EqualFold(arg, "-Embedding") {
 				continue
 			}
 			if strings.HasPrefix(arg, "-") {

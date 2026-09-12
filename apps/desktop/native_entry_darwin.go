@@ -9,18 +9,30 @@ package main
 int linksendRegisterFinderServices(void);
 void linksendUnregisterFinderServices(void);
 char *linksendCanonicalProfileDirectory(const char *path);
+int linksendShowNativeEntryFailure(const char *message);
 */
 import "C"
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// Before application.New, main is still on Wails' locked AppKit main thread.
+// Only fixed public UI text may be passed; do not include err.Error() or paths.
+func showNativeEntryFailure(message string) {
+	text := C.CString(message)
+	defer C.free(unsafe.Pointer(text))
+	if C.linksendShowNativeEntryFailure(text) != 0 {
+		fmt.Fprintln(os.Stderr, "LinkSend:", message)
+	}
+}
 
 func nativeExistingDirectoryPath(path string) (string, error) {
 	input := C.CString(path)
@@ -35,14 +47,14 @@ func nativeExistingDirectoryPath(path string) (string, error) {
 
 var finderServicesState struct {
 	sync.Mutex
-	onPaths func([]string, string)
+	onPaths func([]string, string) error
 }
 
 // Register after the Wails application has a live AppKit main loop and the
 // draft callback is ready. Finder can invoke a service immediately on register.
 // The current desktop package is unsandboxed. URLs that need security scope or
 // point into temporary storage are refused, not treated as durable queue sources.
-func registerFinderServices(onPaths func([]string, string)) (func(), error) {
+func registerFinderServices(onPaths func([]string, string) error) (func(), error) {
 	if onPaths == nil {
 		return func() {}, errors.New("FINDER_SERVICE_CALLBACK_REQUIRED")
 	}
@@ -73,25 +85,32 @@ func registerFinderServices(onPaths func([]string, string)) (func(), error) {
 
 //export linksendReceiveFinderPaths
 func linksendReceiveFinderPaths(encoded *C.char) C.int {
-	data := C.GoString(encoded)
-	if len(data) > maxNativeEntryBytes {
+	if err := deliverNativeFinderPaths(C.GoString(encoded)); err != nil {
 		return 1
+	}
+	return 0
+}
+
+func deliverNativeFinderPaths(data string) error {
+	if len(data) > maxNativeEntryBytes {
+		return errors.New("FINDER_SERVICE_TOO_LARGE")
 	}
 	var paths []string
 	if err := json.Unmarshal([]byte(data), &paths); err != nil {
-		return 1
+		return err
 	}
 	workingDir, _ := os.Getwd()
 	normalized, err := normalizeNativePaths(paths, workingDir)
 	if err != nil || len(normalized) == 0 {
-		return 1
+		return errors.New("FINDER_SERVICE_PATHS_INVALID")
 	}
 	finderServicesState.Lock()
 	callback := finderServicesState.onPaths
 	finderServicesState.Unlock()
 	if callback == nil {
-		return 1
+		return errors.New("FINDER_SERVICE_NOT_READY")
 	}
-	callback(normalized, workingDir)
-	return 0
+	// The caller must persist activation metadata before acknowledging the OS.
+	// ENOSPC or any other intake error must remain a failed Finder service call.
+	return callback(normalized, workingDir)
 }
