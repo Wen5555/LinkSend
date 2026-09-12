@@ -45,6 +45,14 @@ runner 的输入目录为 `C:\Users\RUNNER~1\...`，`IShellLinkW.GetPath` 返回
 `go build ./...`，以及根模块 `go test ./...`。隔离 worktree 的 desktop Go 编译使用最小
 嵌入 HTML 测试夹具；这不是生产前端或打包验收，修复后的精确 CI 结果需另行核验。
 
+修复源码提交 `fedb5e1299c4464d48e8bee367af6b9990408284` 随后的
+[Windows desktop run 34685171391](https://github.com/Wen5555/LinkSend/actions/runs/34685171391)
+已全部 `success`，包含真实 Windows SendTo 测试、独立 desktop `go test/vet/build`、
+重新生成绑定、完整前端检查和 Wails production build；同提交 core run `34685171387`
+也为 `success`。本地保存官方日志 `sendto-ci-repair-fedb5e1.log` 和包含精确 head SHA
+的 `sendto-ci-repair-fedb5e1.json`，均位于 `.artifacts/desktop-six-features/`。
+这是修复分支的 CI 证据；最终 M5 合并源码仍需要自己的精确 CI 与发布验收。
+
 ## macOS Finder Services
 
 Darwin Go/CGo/Objective-C provider 使用真实 AppKit `NSApplication.servicesProvider`，Info.plist / Info.dev.plist 的 NSServices 发送类型为 `public.file-url`，消息 `linksendSendFiles`，菜单为“使用 LinkSend 发送”。这不是 Share Extension。当前工作树声明须与 provider 接入一起进入 M2，不提前作为 M1 功能展示。
