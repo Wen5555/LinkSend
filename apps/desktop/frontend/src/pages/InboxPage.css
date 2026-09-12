@@ -1,0 +1,57 @@
+.inbox-page { display: grid; gap: 22px; }
+.inbox-page .page-intro { margin-bottom: 0; }
+.inbox-page h3 { margin: 0; font-size: 15px; }
+.inbox-filters { display: grid; grid-template-columns: minmax(190px, 2fr) repeat(3, minmax(115px, 1fr)); gap: 13px 16px; align-items: end; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.inbox-filters .field-label { min-width: 0; margin: 0; }
+.inbox-filters input, .inbox-filters select { width: 100%; min-width: 0; }
+.inbox-filter-actions { display: flex; align-items: center; gap: 10px; grid-column: span 2; }
+.inbox-notice, .inbox-error { margin: 0; padding: 12px 15px; border-radius: 8px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.inbox-notice { color: #245b43; background: #edf6f0; }
+.inbox-error { color: #963e37; background: #fbefed; }
+.inbox-confirm { border-left: 3px solid var(--blue); background: var(--surface); padding: 18px 20px; display: flex; align-items: center; gap: 24px; }
+.inbox-confirm > div:first-child { flex: 1; min-width: 0; }
+.inbox-confirm p { margin: 7px 0 0; font-size: 13px; line-height: 1.7; color: #697589; overflow-wrap: anywhere; }
+.inbox-confirm-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.inbox-history, .inbox-files { min-width: 0; }
+.inbox-history > .section-heading .muted { display: block; margin-top: 6px; font-size: 12px; }
+.inbox-rows { border-top: 1px solid var(--line); }
+.inbox-row { display: flex; align-items: center; gap: 14px; padding: 19px 10px 19px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.inbox-row.is-selected { background: #eef3fb; }
+.inbox-record-check { flex: 0 0 auto; width: 15px; height: 15px; margin: 0 0 0 4px; accent-color: var(--blue); }
+.inbox-row .task-symbol { flex-shrink: 0; width: 32px; height: 32px; margin: 0; }
+.inbox-row-main { flex: 1; min-width: 0; }
+.inbox-item-title { display: block; max-width: 100%; border: 0; padding: 0; background: transparent; color: var(--text); text-align: left; line-height: 1.55; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.inbox-item-title:hover { color: var(--blue); }
+.inbox-item-meta { display: flex; flex-wrap: wrap; gap: 5px 13px; margin: 5px 0; font-size: 12px; color: #718096; }
+.inbox-row-main > small { display: block; font-size: 11px; color: #8591a2; line-height: 1.6; }
+.inbox-row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 245px; }
+.inbox-row-actions .state-badge { white-space: nowrap; }
+.inbox-row-actions button { font-size: 12px; }
+.inbox-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding-top: 17px; }
+.inbox-pagination > span { font-size: 11px; color: #8591a2; }
+.inbox-placeholder { padding: 30px 0; font-size: 13px; color: #718096; }
+.inbox-files { padding: 22px 24px; background: var(--surface); border-top: 2px solid var(--blue); }
+.inbox-files h3 { max-width: 100%; overflow-wrap: anywhere; line-height: 1.5; }
+.inbox-file-rows { margin-top: 4px; }
+.inbox-file-row { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #edf0f4; }
+.inbox-file-row > div { flex: 1; min-width: 0; }
+.inbox-file-row strong, .inbox-file-row small { display: block; overflow-wrap: anywhere; }
+.inbox-file-row strong { font-weight: 500; font-size: 13px; line-height: 1.5; }
+.inbox-file-row small { margin-top: 3px; color: #8591a2; font-size: 11px; }
+.inbox-file-row > button { flex-shrink: 0; font-size: 12px; }
+@media (max-width: 1080px) {
+  .inbox-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .inbox-search { grid-column: span 2; }
+  .inbox-filter-actions { grid-column: span 3; }
+  .inbox-row { flex-wrap: wrap; }
+  .inbox-row-actions { padding-left: 77px; max-width: none; width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 700px) {
+  .inbox-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inbox-search, .inbox-filter-actions { grid-column: span 2; }
+  .inbox-confirm { flex-direction: column; align-items: stretch; gap: 14px; }
+  .inbox-confirm-actions { justify-content: flex-end; }
+  .inbox-history > .section-heading { flex-wrap: wrap; gap: 12px; }
+  .inbox-files { padding: 18px 14px; }
+  .inbox-pagination { justify-content: space-between; gap: 8px; }
+}
