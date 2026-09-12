@@ -12,21 +12,28 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
 type Progress struct {
-	TransferID     string  `json:"transfer_id"`
-	State          string  `json:"state"`
-	Total          int64   `json:"total"`
-	Read           int64   `json:"read"`
-	Sent           int64   `json:"sent"`
-	Received       int64   `json:"received"`
-	Retransmitted  int64   `json:"retransmitted"`
-	Verified       int64   `json:"verified"`
-	Committed      int64   `json:"committed"`
-	CommittedFiles int     `json:"committed_files"`
-	BytesPerSecond float64 `json:"bytes_per_second"`
+	TransferID      string  `json:"transfer_id"`
+	State           string  `json:"state"`
+	Total           int64   `json:"total"`
+	Read            int64   `json:"read"`
+	Sent            int64   `json:"sent"`
+	Received        int64   `json:"received"`
+	Retransmitted   int64   `json:"retransmitted"`
+	Verified        int64   `json:"verified"`
+	Committed       int64   `json:"committed"`
+	CommittedFiles  int     `json:"committed_files"`
+	BytesPerSecond  float64 `json:"bytes_per_second"`
+	OriginalTotal   int64   `json:"original_total"`
+	SelectedFiles   int     `json:"selected_files"`
+	SelectedEntries int     `json:"selected_entries"`
+	SkippedFiles    int     `json:"skipped_files"`
+	SkippedEntries  int     `json:"skipped_entries"`
+	SkippedBytes    int64   `json:"skipped_bytes"`
 }
 type ChunkTransmission struct {
 	FileID        uint32 `json:"file_id"`
@@ -40,19 +47,29 @@ type SendHooks struct {
 	ChunkSent      func(ChunkTransmission)
 }
 type Result struct {
-	TransferID string `json:"transfer_id"`
-	Digest     string `json:"digest"`
-	Bytes      int64  `json:"bytes"`
-	State      string `json:"state"`
+	TransferID      string `json:"transfer_id"`
+	Digest          string `json:"digest"`
+	Bytes           int64  `json:"bytes"`
+	State           string `json:"state"`
+	OriginalTotal   int64  `json:"original_total"`
+	SelectedFiles   int    `json:"selected_files"`
+	SelectedEntries int    `json:"selected_entries"`
+	SkippedFiles    int    `json:"skipped_files"`
+	SkippedEntries  int    `json:"skipped_entries"`
+	SkippedBytes    int64  `json:"skipped_bytes"`
+	SelectionDigest string `json:"selection_digest,omitempty"`
 }
 type control struct {
-	Op       string    `json:"op"`
-	Manifest *Manifest `json:"manifest,omitempty"`
-	Digest   string    `json:"digest,omitempty"`
-	File     uint32    `json:"file,omitempty"`
-	Index    int       `json:"index,omitempty"`
-	Verified int64     `json:"verified,omitempty"`
-	Error    string    `json:"error,omitempty"`
+	Op              string     `json:"op"`
+	Manifest        *Manifest  `json:"manifest,omitempty"`
+	Digest          string     `json:"digest,omitempty"`
+	File            uint32     `json:"file,omitempty"`
+	Index           int        `json:"index,omitempty"`
+	Verified        int64      `json:"verified,omitempty"`
+	Error           string     `json:"error,omitempty"`
+	Capabilities    []string   `json:"capabilities,omitempty"`
+	Selection       *Selection `json:"selection,omitempty"`
+	SelectionDigest string     `json:"selection_digest,omitempty"`
 }
 
 const (
@@ -99,6 +116,16 @@ func (e *PeerError) Is(target error) bool {
 		return target == ErrPath
 	case "CANCELLED":
 		return target == ErrCancelled
+	case "RECEIVE_PLAN_UNSUPPORTED":
+		return target == ErrPlanUnsupported
+	case "RECEIVE_PLAN_MISMATCH":
+		return target == ErrPlanMismatch
+	case "INVALID_RECEIVE_PLAN":
+		return target == ErrPlanInvalid
+	case "RECEIVE_PLAN_PERSIST_FAILED":
+		return target == ErrPlanPersistence
+	case "RESUME_IDENTITY_MISMATCH":
+		return target == ErrResumeMismatch
 	default:
 		return false
 	}
@@ -114,6 +141,9 @@ func peerErrorCode(err error) string {
 		{syscall.ENOSPC, "DISK_FULL"}, {ErrChanged, "SOURCE_CHANGED"},
 		{ErrIntegrity, "CHECKSUM_FAILED"}, {ErrPath, "DANGEROUS_PATH"},
 		{context.Canceled, "CANCELLED"}, {ErrCancelled, "CANCELLED"},
+		{ErrPlanUnsupported, "RECEIVE_PLAN_UNSUPPORTED"}, {ErrPlanMismatch, "RECEIVE_PLAN_MISMATCH"},
+		{ErrPlanInvalid, "INVALID_RECEIVE_PLAN"}, {ErrPlanPersistence, "RECEIVE_PLAN_PERSIST_FAILED"},
+		{ErrResumeMismatch, "RESUME_IDENTITY_MISMATCH"},
 	} {
 		if errors.Is(err, candidate.err) {
 			return candidate.code
@@ -301,6 +331,34 @@ func safePeerError(s string) string {
 }
 
 func validateControl(c control) error {
+	if len(c.Capabilities) > 16 || (len(c.Capabilities) > 0 && c.Op != opOffer) {
+		return errors.New("INVALID_CAPABILITIES")
+	}
+	for _, capability := range c.Capabilities {
+		if len(capability) == 0 || len(capability) > 64 || !utf8.ValidString(capability) || strings.ContainsAny(capability, "\x00\r\n\t ") {
+			return errors.New("INVALID_CAPABILITIES")
+		}
+		for _, r := range capability {
+			if unicode.IsControl(r) {
+				return errors.New("INVALID_CAPABILITIES")
+			}
+		}
+	}
+	if c.Selection != nil {
+		if c.Op != opAccept || c.Selection.Version != 1 || c.Selection.IDs == nil || len(c.Selection.IDs) > MaxEntries || !validHex(c.Selection.Digest, 32) {
+			return ErrPlanInvalid
+		}
+	}
+	if c.SelectionDigest != "" {
+		if !validHex(c.SelectionDigest, 32) {
+			return ErrPlanInvalid
+		}
+		switch c.Op {
+		case opFinish, opCompleted, opConfirmed, opConfirmedAck:
+		default:
+			return ErrPlanInvalid
+		}
+	}
 	switch c.Op {
 	case opOffer:
 		if c.Manifest == nil || c.Digest == "" || c.Digest != c.Manifest.Digest() {
@@ -360,14 +418,21 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 	m := p.Manifest
 	digest := m.Digest()
 	start := time.Now()
-	progress := Progress{TransferID: m.TransferID, State: "AwaitingAcceptance", Total: m.TotalBytes()}
+	plan := FullReceivePlan(m)
+	summary := plan.Summary(m)
+	selected := make(map[uint32]bool, len(m.Files))
+	for _, e := range m.Files {
+		selected[e.ID] = true
+	}
+	selectionDigest := ""
+	progress := Progress{TransferID: m.TransferID, State: "AwaitingAcceptance", Total: m.TotalBytes(), OriginalTotal: m.TotalBytes(), SelectedFiles: summary.SelectedFiles, SelectedEntries: summary.SelectedEntries}
 	emit := func() {
 		if hooks.Progress != nil {
 			hooks.Progress(progress)
 		}
 	}
 	emit()
-	if err := writeControl(rw, control{Op: opOffer, Manifest: &m, Digest: digest}); err != nil {
+	if err := writeControl(rw, control{Op: opOffer, Manifest: &m, Digest: digest, Capabilities: []string{CapabilityReceivePlan}}); err != nil {
 		return Result{}, err
 	}
 	c, err := readControl(rw)
@@ -377,7 +442,29 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 	if c.Op == opReject {
 		return Result{}, ErrRejected
 	}
-	if c.Op != opAccept || c.Digest != digest || c.Verified < 0 || c.Verified > progress.Total {
+	if c.Op != opAccept || c.Digest != digest {
+		return Result{}, errors.New("INVALID_ACCEPTANCE")
+	}
+	if c.Selection != nil {
+		if err = c.Selection.Validate(m); err != nil {
+			return Result{}, err
+		}
+		selectionDigest = c.Selection.Digest
+		selected = make(map[uint32]bool, len(c.Selection.IDs))
+		plan.Entries = make([]PlannedEntry, 0, len(c.Selection.IDs))
+		for _, id := range c.Selection.IDs {
+			selected[id] = true
+			plan.Entries = append(plan.Entries, PlannedEntry{FileID: id, Path: m.Files[id].Path, Policy: ConflictError})
+		}
+		summary = plan.Summary(m)
+	}
+	progress.Total = summary.SelectedTotal
+	progress.SelectedFiles = summary.SelectedFiles
+	progress.SelectedEntries = summary.SelectedEntries
+	progress.SkippedFiles = summary.SkippedFiles
+	progress.SkippedEntries = summary.SkippedEntries
+	progress.SkippedBytes = summary.SkippedBytes
+	if c.Verified < 0 || c.Verified > progress.Total {
 		return Result{}, errors.New("INVALID_ACCEPTANCE")
 	}
 	progress.State = "Transferring"
@@ -395,6 +482,10 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 		}
 		switch c.Op {
 		case opChunk:
+			if !selected[c.File] {
+				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrPlanMismatch)})
+				return Result{}, ErrPlanMismatch
+			}
 			retransmitted := hooks.PreviouslySent != nil && hooks.PreviouslySent(c.File, c.Index)
 			data, e := p.ReadChunk(ctx, c.File, c.Index, buf)
 			if e != nil {
@@ -426,39 +517,47 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 		case opReady:
 			progress.State = "Verifying"
 			emit()
-			if err = p.Revalidate(ctx); err != nil {
+			if selectionDigest != "" {
+				err = p.RevalidateSelected(ctx, plan.Selection().IDs)
+			} else {
+				err = p.Revalidate(ctx)
+			}
+			if err != nil {
 				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 				return Result{}, err
 			}
-			if err = writeControl(rw, control{Op: opFinish, Digest: digest}); err != nil {
+			if err = writeControl(rw, control{Op: opFinish, Digest: digest, SelectionDigest: selectionDigest}); err != nil {
 				return Result{}, err
 			}
 			done, e := readControl(rw)
 			if e != nil {
 				return Result{}, e
 			}
-			if done.Op != opCompleted || done.Digest != digest || done.Verified != m.TotalBytes() {
+			if done.Op != opCompleted || done.Digest != digest || done.Verified != progress.Total || done.SelectionDigest != selectionDigest {
 				return Result{}, ErrIntegrity
 			}
 			// New peers explicitly acknowledge that they consumed confirmed. Older
 			// receivers close their send direction after consuming it, which remains
 			// equivalent delivery evidence and keeps this change wire-compatible.
-			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest}); err != nil {
+			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest, SelectionDigest: selectionDigest}); err != nil {
 				return Result{}, err
 			}
 			confirmation, confirmationErr := readControl(rw)
 			if confirmationErr != nil {
-				if !terminalDeliveryObserved(rw, confirmationErr) {
+				if selectionDigest != "" || !terminalDeliveryObserved(rw, confirmationErr) {
 					return Result{}, confirmationErr
 				}
-			} else if confirmation.Op != opConfirmedAck || confirmation.Digest != digest {
+			} else if confirmation.Op != opConfirmedAck || confirmation.Digest != digest || confirmation.SelectionDigest != selectionDigest {
 				return Result{}, ErrIntegrity
 			}
 			progress.State = "Completed"
+			if len(selected) == 0 {
+				progress.State = "NoContent"
+			}
 			progress.Verified = done.Verified
 			emit()
 			complete()
-			return Result{m.TransferID, digest, done.Verified, "Completed"}, nil
+			return resultForPlan(m, summary, done.Verified, progress.State, selectionDigest), nil
 		default:
 			return Result{}, errors.New("UNKNOWN_CRITICAL_MESSAGE")
 		}
@@ -477,6 +576,10 @@ func safeRate(bytes int64, elapsed time.Duration) float64 {
 }
 
 func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string, accept func(Manifest) bool, onProgress func(Progress)) (result Result, err error) {
+	return ReceiveWithOptions(ctx, rw, ReceiveOptions{Directory: directory, Peer: peer, Accept: accept, Progress: onProgress})
+}
+
+func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options ReceiveOptions) (result Result, err error) {
 	complete, abort := streamLifecycle(ctx, rw)
 	defer func() {
 		if ctx.Err() != nil && err != nil {
@@ -491,23 +594,64 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	if offer.Op != opOffer || offer.Manifest == nil {
 		return Result{}, errors.New("INVALID_OFFER")
 	}
-	m := *offer.Manifest
+	m := cloneManifest(*offer.Manifest)
 	if err = m.Validate(); err != nil {
 		return Result{}, err
 	}
 	if offer.Digest != m.Digest() {
 		return Result{}, ErrIntegrity
 	}
-	if accept == nil || !accept(m) {
+	plan := FullReceivePlan(m)
+	var requested *ReceivePlan
+	if options.Plan != nil {
+		resumePlan, loadErr := LoadReceivePlan(ctx, options.Directory, options.Peer, m)
+		if loadErr != nil {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(loadErr)})
+			return Result{}, loadErr
+		}
+		plan, err = options.Plan(ctx, Offer{Manifest: cloneManifest(m), Capabilities: append([]string(nil), offer.Capabilities...), ResumePlan: resumePlan})
+		if err != nil {
+			if errors.Is(err, ErrRejected) {
+				writeTerminal(ctx, rw, control{Op: opReject})
+			} else {
+				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+			}
+			return Result{}, err
+		}
+		if err = plan.Validate(m); err != nil {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+			return Result{}, err
+		}
+		requested = &plan
+	} else if options.Accept == nil || !options.Accept(cloneManifest(m)) {
 		writeTerminal(ctx, rw, control{Op: opReject})
 		return Result{}, ErrRejected
 	}
-	r, err := OpenReceiver(ctx, directory, peer, m)
+	planSupported := false
+	for _, capability := range offer.Capabilities {
+		if capability == CapabilityReceivePlan {
+			planSupported = true
+		}
+	}
+	if !planSupported && plan.Selection().Digest != FullReceivePlan(m).Selection().Digest {
+		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrPlanUnsupported)})
+		return Result{}, ErrPlanUnsupported
+	}
+	r, err := openReceiver(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged)
 	if err != nil {
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return Result{}, err
 	}
 	defer r.Close()
+	plan = r.Plan()
+	summary := r.Summary()
+	var selection *Selection
+	selectionDigest := ""
+	if planSupported {
+		chosen := plan.Selection()
+		selection = &chosen
+		selectionDigest = chosen.Digest
+	}
 	fail := func(e error) (Result, error) {
 		state := "Failed"
 		if errors.Is(e, context.Canceled) {
@@ -516,7 +660,7 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		_ = r.Mark(state)
 		return Result{}, e
 	}
-	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
+	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes(), Selection: selection}); err != nil {
 		return fail(err)
 	}
 	start := time.Now()
@@ -525,11 +669,14 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	var committed int64
 	var committedFiles int
 	emit := func(state string) {
-		if onProgress != nil {
-			onProgress(Progress{TransferID: m.TransferID, State: state, Total: m.TotalBytes(), Received: received, Verified: r.VerifiedBytes(), Committed: committed, CommittedFiles: committedFiles, BytesPerSecond: safeRate(r.VerifiedBytes()-initial, time.Since(start))})
+		if options.Progress != nil {
+			options.Progress(Progress{TransferID: m.TransferID, State: state, Total: summary.SelectedTotal, OriginalTotal: summary.OriginalTotal, SelectedFiles: summary.SelectedFiles, SelectedEntries: summary.SelectedEntries, SkippedFiles: summary.SkippedFiles, SkippedEntries: summary.SkippedEntries, SkippedBytes: summary.SkippedBytes, Received: received, Verified: r.VerifiedBytes(), Committed: committed, CommittedFiles: committedFiles, BytesPerSecond: safeRate(r.VerifiedBytes()-initial, time.Since(start))})
 		}
 	}
 	for _, e := range m.Files {
+		if _, selected := r.selected[e.ID]; !selected {
+			continue
+		}
 		for i, ok := range r.State.Verified[e.ID] {
 			if ok {
 				continue
@@ -563,7 +710,7 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 	if err != nil {
 		return fail(err)
 	}
-	if finish.Op != opFinish || finish.Digest != m.Digest() {
+	if finish.Op != opFinish || finish.Digest != m.Digest() || finish.SelectionDigest != selectionDigest {
 		return fail(ErrIntegrity)
 	}
 	emit("Verifying")
@@ -575,23 +722,31 @@ func Receive(ctx context.Context, rw io.ReadWriteCloser, directory, peer string,
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return fail(err)
 	}
-	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes()}); err != nil {
+	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes(), SelectionDigest: selectionDigest}); err != nil {
 		return fail(err)
 	}
 	confirmed, err := readControl(rw)
 	if err != nil {
 		return Result{}, err
 	}
-	if confirmed.Op != opConfirmed || confirmed.Digest != m.Digest() {
+	if confirmed.Op != opConfirmed || confirmed.Digest != m.Digest() || confirmed.SelectionDigest != selectionDigest {
 		return Result{}, ErrIntegrity
 	}
 	// The explicit receipt removes the former fixed teardown wait. FlushTerminal
 	// keeps the acknowledgement safe if the sender is an older implementation:
 	// old senders ignore these bytes and have already half-closed their stream.
-	if err = flushTerminal(ctx, rw, control{Op: opConfirmedAck, Digest: m.Digest()}); err != nil {
+	if err = flushTerminal(ctx, rw, control{Op: opConfirmedAck, Digest: m.Digest(), SelectionDigest: selectionDigest}); err != nil {
 		return Result{}, err
 	}
-	emit("Completed")
+	state := "Completed"
+	if len(plan.Entries) == 0 {
+		state = "NoContent"
+	}
+	emit(state)
 	complete()
-	return Result{m.TransferID, m.Digest(), r.VerifiedBytes(), "Completed"}, nil
+	return resultForPlan(m, summary, r.VerifiedBytes(), state, selectionDigest), nil
+}
+
+func resultForPlan(m Manifest, summary PlanSummary, bytes int64, state, digest string) Result {
+	return Result{TransferID: m.TransferID, Digest: m.Digest(), Bytes: bytes, State: state, OriginalTotal: summary.OriginalTotal, SelectedFiles: summary.SelectedFiles, SelectedEntries: summary.SelectedEntries, SkippedFiles: summary.SkippedFiles, SkippedEntries: summary.SkippedEntries, SkippedBytes: summary.SkippedBytes, SelectionDigest: digest}
 }

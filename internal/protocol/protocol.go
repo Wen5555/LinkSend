@@ -67,6 +67,10 @@ const (
 	SessionConflict         Code = "SESSION_CONFLICT"
 	ConnectionInterrupted   Code = "CONNECTION_INTERRUPTED"
 	ResumeMismatch          Code = "RESUME_IDENTITY_MISMATCH"
+	ReceivePlanUnsupported  Code = "RECEIVE_PLAN_UNSUPPORTED"
+	ReceivePlanMismatch     Code = "RECEIVE_PLAN_MISMATCH"
+	ReceivePlanInvalid      Code = "INVALID_RECEIVE_PLAN"
+	ReceivePlanPersistence  Code = "RECEIVE_PLAN_PERSIST_FAILED"
 )
 
 type Error struct {
@@ -289,7 +293,7 @@ func (s *StateMachine) Transition(next string) error {
 	if s.kind == "connection" {
 		allowed = map[string][]string{"Idle": {"Gathering", "Closed"}, "Gathering": {"Signaling", "Checking", "Failed", "Closed"}, "Signaling": {"Gathering", "Checking", "Failed", "Closed"}, "Checking": {"Nominating", "Failed", "Closed"}, "Nominating": {"Authenticating", "Failed", "Closed"}, "Authenticating": {"Connected", "Failed", "Closed"}, "Connected": {"Reconnecting", "Failed", "Closed"}, "Reconnecting": {"Gathering", "Failed", "Closed"}, "Failed": {"Reconnecting", "Closed"}}
 	} else {
-		allowed = map[string][]string{"Preparing": {"AwaitingAcceptance", "Failed", "Cancelled"}, "AwaitingAcceptance": {"Transferring", "Rejected", "Failed", "Cancelled", "Paused"}, "Transferring": {"Verifying", "Paused", "Recovering", "Cancelled", "Failed"}, "Verifying": {"Completed", "Failed", "Cancelled"}, "Paused": {"Recovering", "Cancelled"}, "Recovering": {"AwaitingAcceptance", "Transferring", "Paused", "Failed", "Cancelled"}, "Failed": {"Recovering", "Cancelled"}}
+		allowed = map[string][]string{"Preparing": {"AwaitingAcceptance", "Failed", "Cancelled"}, "AwaitingAcceptance": {"Transferring", "Rejected", "Failed", "Cancelled", "Paused"}, "Transferring": {"Verifying", "Paused", "Recovering", "Cancelled", "Failed"}, "Verifying": {"Completed", "NoContent", "Failed", "Cancelled"}, "Paused": {"Recovering", "Cancelled"}, "Recovering": {"AwaitingAcceptance", "Transferring", "Paused", "Failed", "Cancelled"}, "Failed": {"Recovering", "Cancelled"}}
 	}
 	for _, n := range allowed[s.state] {
 		if n == next {

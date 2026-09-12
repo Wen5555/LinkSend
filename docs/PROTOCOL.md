@@ -61,3 +61,17 @@ QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送�
 结构化连接证据仅包含实际 base socket、接口、地址族、脱敏候选描述/类型、ICE 状态时间线、TLS version/ALPN、连接方法、relay 实际值、STUN 请求/响应计数和信令 JSON 字节计数。邀请、令牌、私钥、ICE ufrag/password、候选扩展和文件正文禁止进入诊断。没有独立路由证据时 `connection_method=direct_unknown`。
 
 2026-09-11 独立 Linux 双 NAT 的现场结果不改变协议：固定 UDP 映射的正向场景仍使用同一 V1 ICE/QUIC/文件帧，完成 8,388,608 bytes 且双方 session、摘要一致；`relay=false`、`connection_method=direct_unknown`。MASQUERADE-only 场景在 ICE checks 阶段返回稳定 `CHECK_TIMEOUT`，没有降级到 HTTP/WSS/JavaScript IPC 或正文中继。固定映射 PASS 只证明该 NAT 行为可用，不能外推为所有家庭 NAT 或公网分类已通过。
+
+## M4 可选接收计划与子集能力
+
+M4 传输层实现见 [ADR 0005](adr/0005-receive-plans.md)。V1、TLS ALPN、原始 Manifest/TransferID/digest 与正文路径不变；新 sender 仅在原 offer 增加可选 `capabilities:["receive_plan_v1"]`，不插入新 hello。旧 receiver 可忽略该字段；新 sender 读到无 selection 的旧 accept 时继续全量。新 receiver 不向未声明能力的旧 sender 协商子集，返回稳定 `RECEIVE_PLAN_UNSUPPORTED`。
+
+新 accept 可包含 `selection:{version:1,ids:[...],digest:...}`。ID 必须严格递增、不重复、属于原 manifest 并包含所需目录祖先；摘要为固定字段顺序 JSON `{version:1,original_digest:<原摘要>,ids:<ID数组>}` 的 BLAKE3。原 control.digest 始终是 original manifest digest；本地接收目录与目标路径映射不发给对端。
+
+随后 finish/completed/confirmed/confirmed_ack 必须携同一 `selection_digest`。新 sender 限制 chunk 请求为选中 ID，拒绝伪造进度或错误选择摘要，并在重新校验已选源内容后核对 completed.Verified 等于所选总字节；未选源文件变化不妨碍所选子集完成。使用新能力时必须收到显式 matching confirmed_ack，旧全量会话保留既有 EOF/交付观察兼容。
+
+`Result.Bytes` 与 Total/Verified/Committed 只表示已接受内容；OriginalTotal、SelectedFiles/SelectedEntries、SkippedFiles/SkippedEntries/SkippedBytes 分别保留原 offer 与跳过事实。全部跳过仍完成一致终态握手并返回 `NoContent`/0 B，不进入正文请求循环；选中空目录是非空条目集合，实际创建后可零字节 Completed。
+
+新增稳定错误：`RECEIVE_PLAN_UNSUPPORTED`、`RECEIVE_PLAN_MISMATCH`、`INVALID_RECEIVE_PLAN`、`RECEIVE_PLAN_PERSIST_FAILED`；`RESUME_IDENTITY_MISMATCH` 也在 V1 error envelope 中按精确代码传递。未知 peer 文本不能获得这些类型语义。
+
+计划 checkpoint 保留原 manifest、接收决定和相对映射摘要；带计划的落盘状态使用 `ReceivePlanV1/` 前缀使旧 binary 明确拒绝不支持的本地恢复语义。新 reader 继续读取无计划的旧 checkpoint。App 接线必须显示持久 ResumePlan 并保持恢复选择；这些传输层能力不意味着接收清单 UI 已自动验收。

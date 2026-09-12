@@ -37,3 +37,13 @@ diagnostics 采用允许列表，仅记录实际 base socket、接口、地址�
 信令和 STUN 仍可能观察在线时间与网络地址；项目不宣称服务器完全不知道元数据。`relay=false`，直连失败不会改走文件中继。
 
 固定配对码 `orion123` 仅用于明确配置的测试实例和内部隔离范围，通用配置默认关闭。香港入口属于测试主站，不是生产安全边界；固定码仍具共享管理员入口风险，应保留限流、隔离、审计与一键关闭说明。正式配对应使用动态单次短码。
+
+## M4 接收计划与提交归属
+
+[ADR 0005](adr/0005-receive-plans.md) 将子集与原 manifest 摘要绑定，并在 acceptance 和终态核对 selection digest。未经对端明确声明能力不能减少正文请求后假报全量成功；跳过不计入验证/提交字节。接收目录仅留在本机，文件正文与截图仍不得走信令、HTTP上传/下载、JavaScript IPC 或中继。
+
+所有目标相对路径继续使用便携 NFC/大小写、Windows 保留名/ADS、路径长度/深度检查以及 os.Root 约束。保留两份最多尝试100个后缀名称；每次最终提交前重查父目录中的 Unicode/大小写等价名称，真正 file commit 使用原子 no-replace hard link，没有覆盖式 fallback。目录枚举可取消且有40,000项扫描上限；空间预估不是落盘成功保证。
+
+原先“目标同 hash 即可视作恢复提交”的宽松路径已收紧。文件必须有匹配的持久 commit record，或在已持久 commit intent 后证明目标与 staging 为同一真实 inode/file ID，才可恢复提交；外国同名同内容文件不计入本任务。目录单独保存真实目录身份（Windows volume/file index，Unix dev/ino），重启不以 CommitStarted 推断 ownership。mkdir意图与目录identity记录之间的窄崩溃窗口若无法证明归属，明确报冲突并保留用户文件与原计划，不合并、不另起名称重复创建。
+
+计划 checkpoint 与 App PlanChanged 持久化回调都必须成功后才能接收正文或按新名称提交。恢复保持已接受集合与已持久名称；已提交文件/目录不允许重新命名，目录失效或身份变化需用户处理。实际 App/UI 和平台验收仍以证据表为准。

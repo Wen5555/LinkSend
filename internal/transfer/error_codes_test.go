@@ -9,7 +9,7 @@ import (
 )
 
 func TestPeerErrorCodeRoundTrip(t *testing.T) {
-	for _, cause := range []error{ErrConflict, fs.ErrPermission, syscall.ENOSPC, ErrChanged, ErrIntegrity, ErrPath, ErrCancelled} {
+	for _, cause := range []error{ErrConflict, fs.ErrPermission, syscall.ENOSPC, ErrChanged, ErrIntegrity, ErrPath, ErrCancelled, ErrPlanUnsupported, ErrPlanMismatch, ErrPlanInvalid, ErrPlanPersistence, ErrResumeMismatch} {
 		var wire bytes.Buffer
 		wrapped := &fs.PathError{Op: "write", Path: "/private/receiver/file", Err: cause}
 		if err := writeControl(&wire, control{Op: opError, Error: peerErrorCode(wrapped)}); err != nil {

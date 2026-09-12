@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,12 +24,18 @@ const checkpointMaxDelay = 500 * time.Millisecond
 // ResumeState is atomically checkpointed only after file.Sync. Recovery rehashes
 // every purportedly completed chunk and thus tolerates lost checkpoints and damage.
 type ResumeState struct {
-	Peer      string                  `json:"peer"`
-	Manifest  Manifest                `json:"manifest"`
-	Digest    string                  `json:"digest"`
-	State     string                  `json:"state"`
-	Verified  map[uint32][]bool       `json:"verified"`
-	Committed map[uint32]CommitRecord `json:"committed,omitempty"`
+	Peer             string                     `json:"peer"`
+	Manifest         Manifest                   `json:"manifest"`
+	Digest           string                     `json:"digest"`
+	State            string                     `json:"state"`
+	Verified         map[uint32][]bool          `json:"verified"`
+	Committed        map[uint32]CommitRecord    `json:"committed,omitempty"`
+	Plan             *ReceivePlan               `json:"receive_plan,omitempty"`
+	PlanDigest       string                     `json:"receive_plan_digest,omitempty"`
+	Intents          map[uint32]CommitRecord    `json:"commit_intents,omitempty"`
+	CommitStarted    bool                       `json:"commit_started,omitempty"`
+	Directories      map[uint32]DirectoryRecord `json:"directories,omitempty"`
+	DirectoryIntents map[uint32]string          `json:"directory_intents,omitempty"`
 }
 
 type CommitRecord struct {
@@ -46,23 +53,54 @@ type Receiver struct {
 	verifiedBytes         int64
 	chunksSinceCheckpoint int
 	lastCheckpoint        time.Time
+	plan                  ReceivePlan
+	selected              map[uint32]PlannedEntry
+	planChanged           func(ReceivePlan) error
+	resumedCommit         bool
+	inventory             *portableInventory
 }
 
 func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *Receiver, err error) {
+	return openReceiver(ctx, directory, peer, m, nil, nil)
+}
+
+func OpenReceiverWithPlan(ctx context.Context, directory, peer string, m Manifest, plan ReceivePlan) (*Receiver, error) {
+	return openReceiver(ctx, directory, peer, m, &plan, nil)
+}
+
+func openReceiver(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error) (_ *Receiver, err error) {
 	if err = m.Validate(); err != nil {
 		return nil, err
 	}
 	if peer == "" {
 		return nil, errors.New("AUTH_FAILED")
 	}
-	if err = os.MkdirAll(directory, 0700); err != nil {
-		return nil, err
+	m = cloneManifest(m)
+	plan := FullReceivePlan(m)
+	if requested != nil {
+		plan = clonePlan(*requested)
+		if err = plan.Validate(m); err != nil {
+			return nil, err
+		}
+		if plan.Directory != "" {
+			directory = plan.Directory
+		}
+	}
+	plan.Directory = directory
+	if requested == nil {
+		if err = os.MkdirAll(directory, 0700); err != nil {
+			return nil, err
+		}
 	}
 	root, err := os.OpenRoot(directory)
 	if err != nil {
 		return nil, err
 	}
-	r := &Receiver{root: root, files: make(map[uint32]*os.File), State: ResumeState{Peer: peer, Manifest: m, Digest: m.Digest(), State: "Recovering", Verified: make(map[uint32][]bool), Committed: make(map[uint32]CommitRecord)}}
+	r := &Receiver{root: root, files: make(map[uint32]*os.File), plan: plan, planChanged: planChanged, State: ResumeState{Peer: peer, Manifest: m, Digest: m.Digest(), State: "Recovering", Verified: make(map[uint32][]bool), Committed: make(map[uint32]CommitRecord), Intents: make(map[uint32]CommitRecord), Directories: make(map[uint32]DirectoryRecord), DirectoryIntents: make(map[uint32]string)}}
+	if requested != nil {
+		savedPlan := clonePlan(plan)
+		r.State.Plan = &savedPlan
+	}
 	defer func() {
 		if err != nil {
 			_ = r.Close()
@@ -96,34 +134,97 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 			return nil, err
 		}
 		if saved.Peer != peer || saved.Digest != m.Digest() || saved.Manifest.Digest() != m.Digest() || saved.Manifest.TransferID != m.TransferID || saved.Manifest.ChunkSize != m.ChunkSize {
-			return nil, errors.New("RESUME_IDENTITY_MISMATCH")
+			return nil, ErrResumeMismatch
 		}
+		if strings.HasPrefix(saved.State, "ReceivePlanV1/") {
+			if saved.Plan == nil {
+				return nil, ErrPlanInvalid
+			}
+			saved.State = strings.TrimPrefix(saved.State, "ReceivePlanV1/")
+		}
+		if saved.Plan != nil {
+			if saved.PlanDigest != saved.Plan.Digest() {
+				return nil, ErrPlanMismatch
+			}
+			if err = saved.Plan.Validate(m); err != nil {
+				return nil, err
+			}
+			if requested == nil && saved.Plan.Selection().Digest != FullReceivePlan(m).Selection().Digest {
+				return nil, ErrPlanUnsupported
+			}
+			if saved.Plan.Selection().Digest != plan.Selection().Digest {
+				return nil, ErrPlanMismatch
+			}
+			// The persisted mapping is authoritative even if preview encountered
+			// files committed by the previous attempt and proposed another name.
+			r.plan = clonePlan(*saved.Plan)
+			r.plan.Directory = directory
+			savedPlan := clonePlan(r.plan)
+			r.State.Plan = &savedPlan
+		} else if plan.Selection().Digest != FullReceivePlan(m).Selection().Digest {
+			return nil, ErrPlanMismatch
+		}
+		r.rebuildSelection()
 		if saved.State != "Recovering" && saved.State != "Transferring" && saved.State != "Verifying" && saved.State != "Completed" && saved.State != "Paused" && saved.State != "Cancelled" && saved.State != "Failed" {
 			return nil, errors.New("INVALID_RESUME_STATE")
 		}
 		for id := range saved.Verified {
-			if int(id) >= len(m.Files) || m.Files[id].Type != "file" || len(saved.Verified[id]) != len(m.Files[id].Chunks) {
+			if uint64(id) >= uint64(len(m.Files)) || m.Files[id].Type != "file" || len(saved.Verified[id]) != len(m.Files[id].Chunks) {
+				return nil, errors.New("INVALID_RESUME_STATE")
+			}
+			if _, selected := r.selected[id]; !selected {
 				return nil, errors.New("INVALID_RESUME_STATE")
 			}
 		}
 		for id, committed := range saved.Committed {
-			if int(id) >= len(m.Files) || m.Files[id].Type != "file" || committed.FileID != id || committed.Path != m.Files[id].Path || committed.Digest != m.Files[id].Hash || committed.Size != m.Files[id].Size {
+			if !r.validCommitRecord(id, committed) {
 				return nil, errors.New("INVALID_COMMIT_RECORD")
 			}
 			r.State.Committed[id] = committed
 		}
+		for id, intent := range saved.Intents {
+			if !r.validCommitRecord(id, intent) {
+				return nil, errors.New("INVALID_COMMIT_INTENT")
+			}
+			r.State.Intents[id] = intent
+		}
+		for id, record := range saved.Directories {
+			entry, ok := r.selected[id]
+			if !ok || m.Files[id].Type != "directory" || record.FileID != id || record.Path != entry.Path {
+				return nil, errors.New("INVALID_DIRECTORY_RECORD")
+			}
+			if err = r.verifyDirectoryRecord(record); err != nil {
+				return nil, err
+			}
+			r.State.Directories[id] = record
+		}
+		for id, target := range saved.DirectoryIntents {
+			entry, ok := r.selected[id]
+			if !ok || m.Files[id].Type != "directory" || entry.Path != target {
+				return nil, errors.New("INVALID_DIRECTORY_INTENT")
+			}
+			r.State.DirectoryIntents[id] = target
+		}
+		r.resumedCommit = saved.CommitStarted || saved.State == "Verifying" || saved.State == "Completed" || len(saved.Committed) != 0
+		r.State.CommitStarted = saved.CommitStarted
 	} else if !errors.Is(e, fs.ErrNotExist) {
 		return nil, e
 	}
+	r.rebuildSelection()
 	buf := make([]byte, m.ChunkSize)
 	for _, e := range m.Files {
-		if e.Type != "file" {
+		if _, selected := r.selected[e.ID]; !selected || e.Type != "file" {
 			continue
 		}
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
 		name := strconv.FormatUint(uint64(e.ID), 10) + ".part"
+		if restored, restoreErr := r.restoreCommitted(ctx, e, name); restoreErr != nil {
+			return nil, restoreErr
+		} else if restored {
+			continue
+		}
 		// Never reopen a preexisting inode for writing: it may be a hard link.
 		// Copy valid blocks into a fresh O_EXCL inode, then atomically replace only staging.
 		token := make([]byte, 12)
@@ -196,13 +297,26 @@ func OpenReceiver(ctx context.Context, directory, peer string, m Manifest) (_ *R
 	if err = r.checkpoint(); err != nil {
 		return nil, err
 	}
+	if r.planChanged != nil {
+		if err = r.planChanged(clonePlan(r.plan)); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrPlanPersistence, err)
+		}
+	}
 	return r, nil
 }
 
 func (r *Receiver) checkpoint() error {
-	b, err := json.Marshal(r.State)
+	snapshot := r.State
+	if snapshot.Plan != nil {
+		snapshot.State = "ReceivePlanV1/" + snapshot.State
+		snapshot.PlanDigest = snapshot.Plan.Digest()
+	}
+	b, err := json.Marshal(snapshot)
 	if err != nil {
 		return err
+	}
+	if len(b) > maxResumeStateBytes {
+		return fmt.Errorf("%w: checkpoint too large", ErrPlanPersistence)
 	}
 	f, err := r.stage.OpenFile("checkpoint.tmp", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if errors.Is(err, fs.ErrExist) {
@@ -235,6 +349,7 @@ func (r *Receiver) checkpoint() error {
 		return err
 	}
 	committed = true
+	r.State.PlanDigest = snapshot.PlanDigest
 	r.chunksSinceCheckpoint = 0
 	r.lastCheckpoint = time.Now()
 	return nil
@@ -251,8 +366,11 @@ func (r *Receiver) WriteChunk(ctx context.Context, id uint32, index int, data []
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if int(id) >= len(r.State.Manifest.Files) {
+	if uint64(id) >= uint64(len(r.State.Manifest.Files)) {
 		return errors.New("INVALID_CHUNK")
+	}
+	if _, selected := r.selected[id]; !selected {
+		return ErrPlanMismatch
 	}
 	e := r.State.Manifest.Files[id]
 	if index < 0 || index >= len(e.Chunks) {
@@ -310,17 +428,32 @@ func (r *Receiver) Finish(ctx context.Context) error {
 }
 
 func (r *Receiver) FinishWithCommit(ctx context.Context, onCommit func(CommitRecord)) error {
+	r.inventory = newPortableInventory(ctx, r.root)
 	r.State.State = "Verifying"
+	r.State.CommitStarted = true
 	if err := r.checkpoint(); err != nil {
 		return err
 	}
+	if err := r.commitDirectories(ctx); err != nil {
+		return err
+	}
 	for _, e := range r.State.Manifest.Files {
+		planned, selected := r.selected[e.ID]
+		if !selected {
+			continue
+		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if e.Type == "directory" {
-			if err := r.verifyParents(e.Path); err != nil {
+			continue
+		}
+		if record, already := r.State.Committed[e.ID]; already {
+			if err := r.verifyCommittedFile(ctx, e, record.Path); err != nil {
 				return err
+			}
+			if onCommit != nil {
+				onCommit(record)
 			}
 			continue
 		}
@@ -340,37 +473,16 @@ func (r *Receiver) FinishWithCommit(ctx context.Context, onCommit func(CommitRec
 		if hash != e.Hash {
 			return ErrIntegrity
 		}
-		if err = r.verifyParents(path.Dir(e.Path)); err != nil {
+		if err = r.verifyParents(path.Dir(planned.Path)); err != nil {
 			return err
 		}
 		stageName := ".linksend-" + r.State.Manifest.TransferID + "/" + strconv.FormatUint(uint64(e.ID), 10) + ".part"
-		// Hard-link creation is atomic and cannot replace an existing target.
-		// Unsupported filesystems fail explicitly, never fall back to overwrite.
-		if err = r.root.Link(stageName, e.Path); err != nil {
-			if errors.Is(err, fs.ErrExist) {
-				st, statErr := r.root.Lstat(e.Path)
-				if statErr != nil || !st.Mode().IsRegular() {
-					return ErrConflict
-				}
-				// Resume after a crash may find an already committed, identical file.
-				dest, openErr := r.root.Open(e.Path)
-				if openErr != nil {
-					return openErr
-				}
-				actual, _, hashErr := hashFile(ctx, dest, r.State.Manifest.ChunkSize)
-				_ = dest.Close()
-				if hashErr != nil || actual != e.Hash {
-					return ErrConflict
-				}
-			} else {
-				return fmt.Errorf("COMMIT_FAILED: %w", err)
-			}
+		if err = r.commitFile(ctx, e, stageName); err != nil {
+			return err
 		}
-		record := r.State.Committed[e.ID]
-		if record.Digest == "" {
-			record = CommitRecord{FileID: e.ID, Path: e.Path, Digest: e.Hash, Size: e.Size, CommittedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-		}
+		record := CommitRecord{FileID: e.ID, Path: r.selected[e.ID].Path, Digest: e.Hash, Size: e.Size, CommittedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		r.State.Committed[e.ID] = record
+		delete(r.State.Intents, e.ID)
 		if err = r.checkpoint(); err != nil {
 			return err
 		}

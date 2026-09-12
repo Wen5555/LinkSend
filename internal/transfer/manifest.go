@@ -372,8 +372,29 @@ func (p *Prepared) ReadChunk(ctx context.Context, file uint32, index int, buf []
 }
 
 func (p *Prepared) Revalidate(ctx context.Context) error {
+	return p.revalidate(ctx, nil)
+}
+
+func (p *Prepared) RevalidateSelected(ctx context.Context, ids []uint32) error {
+	selected := make(map[uint32]bool, len(ids))
+	for _, id := range ids {
+		if uint64(id) >= uint64(len(p.Manifest.Files)) {
+			return ErrPlanMismatch
+		}
+		selected[id] = true
+	}
+	return p.revalidate(ctx, selected)
+}
+
+func (p *Prepared) revalidate(ctx context.Context, selected map[uint32]bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	buf := make([]byte, p.Manifest.ChunkSize)
 	for _, e := range p.Manifest.Files {
+		if selected != nil && !selected[e.ID] {
+			continue
+		}
 		if e.Type != "file" {
 			continue
 		}

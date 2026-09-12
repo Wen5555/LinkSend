@@ -125,3 +125,20 @@ Release macOS DMG 由 main run `34600609161` 在对应架构 runner 构建并完
 历史资产均使用 `-r2` 文件名；资产和源包的本地 SHA256 位于 `.artifacts/final-20260911/SHA256SUMS.txt`，详细来源/工具/签名状态位于 `ASSET-MANIFEST.json`。`mac-native-r2-result.txt` 记录原生退出结果，SHA256 `eebc76579da4b7a0176e3362e01f9f79eb723f31fcaec3482e2f99629a9a1ee6`。这些资产是未提交 dirty snapshot，不对应 GitHub workflow SHA；同目录无 `-r2` 旧文件不属于该历史修复后资产集合。
 
 历史最终重验还必须记录工具路径失败本身：直接运行强制 `common:generate:bindings` 时，Taskfile 子进程若 PATH 不含锁定 CLI 会以 `wails3: executable file not found` 退出 1；将仓库 `.wails-bin` 仅加入本次进程 PATH 后重跑才算 PASS。2026-09-11T09:24Z 的重跑处理 1 service / 27 methods / 14 models，随后 typecheck/lint 和 `wails3 task build ARCH=amd64 -f` 均退出 0。该 dirty r2 `apps/desktop/bin/LinkSend.exe` SHA256 为 `c808e31a54c8d4819373902f460ef2d5ffbe28b6603f9ab5353465e908f548b7`，与 r2 staging EXE 一致；二进制可检索到当时 dist 的 `index-Dz-ecqi4.js` 和 `index-CQOAaBGW.css`。
+
+## M4 传输层接收计划回归
+
+新增 `internal/transfer/plan*_test.go` 覆盖部分接收、全部跳过/NoContent、空目录、祖先闭包、原摘要不变、未知/未协商能力、选中范围之外的块请求、错误终态selection digest，以及冻结旧control结构的双向兼容。net.Pipe只作为帧流兼容测试；`TestReceivePlanRealQUIC*` 使用真实双UDP socket、生产身份 pin 校验与TLS1.3 QUIC，覆盖真实文件与零正文结果以及等待接收方消费confirmed，明确只证明loopback。
+
+故障覆盖包括：预览后同名到达、提交间隔NFD等价名到达、初始/更名后的PlanChanged写失败、同一skip请求重启后不扩大集合、未选源变化、目录真实identity变化、没有mkdir归属证据、partial commit restart不换名、Link成功但commit checkpoint未写入的精确文件系统窗口、同hash外来文件负例、持久plan映射损坏以及旧checkpoint恢复。对 mkdir后尚无identity记录的模糊窗口，应观察明确冲突/需处理，不能伪称可自动证明目录归属。
+
+可复现检查（分别检查退出码）：
+
+```text
+GOWORK=off go test ./internal/transfer ./internal/transport ./internal/protocol -count=1
+GOWORK=off go test -race ./...
+GOWORK=off go vet ./...
+GOWORK=off go build ./...
+```
+
+另在桌面module独立执行 verify/test/vet/build，不能用根测试替代。平台编译检查与真实平台运行分列；Windows上的Darwin/Linux交叉编译不算原生运行。App接收决策界面、空间预检、物理LAN/跨NAT和原生包验收是后续单列项目。实际结果见 [M4传输证据](evidence/DESKTOP-M4-TRANSFER.md)。
