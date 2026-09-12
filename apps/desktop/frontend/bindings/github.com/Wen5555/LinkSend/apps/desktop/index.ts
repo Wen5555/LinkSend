@@ -7,6 +7,8 @@ export {
 };
 
 export type {
+    BackgroundOptions,
+    BackgroundStatus,
     DesktopEntryStatus,
     DesktopPreferences,
     DesktopStatus,

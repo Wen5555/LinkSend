@@ -12,13 +12,18 @@
 
 | 阶段 | 状态 | 当前内容 / 下一步 |
 |---|---|---|
-| M0 | IMPLEMENTED / RELEASE_PENDING | 官方依赖、拒绝/profile锁/保存退出已验；与M1合并发布 |
-| M1 | IMPLEMENTED / RELEASE_PENDING | schema3设备/草稿/队列、事件与真实调度；CI四包及Windows精确payload原生通过，香港已部署 |
+| M0 | IMPLEMENTED / RELEASED | 官方依赖、拒绝/profile锁/保存退出已验；与M1合并发布 |
+| M1 | IMPLEMENTED / RELEASED | schema3设备/草稿/队列、事件与真实调度；CI四包与Windows/Mac精确payload原生检查通过，香港已部署 |
 | M2 | INTEGRATED / NATIVE_PARTIAL | 单实例与持久入口已接Go草稿；Windows并发/隐藏/冷启动/重启通过，完整系统菜单/拖放联调继续 |
-| M3 | IN_PROGRESS | 原生托盘、通知、防睡眠adapter已通过平台定向检查；主生命周期待接线 |
+| M3 | INTEGRATED / NATIVE_PARTIAL | 已接后台/通知/防睡眠；Windows隐藏唤回、真实4MiB传输中的继续/保存退出通过，Mac最终主应用待测 |
 | M4 | IN_PROGRESS | ReceivePlan与子集协议在独立分支；安全审查发现的恢复/晚冲突问题已修复待合并 |
 | M5 | IN_PROGRESS | 独立内容快照与平台图片剪贴板adapter；协议和应用路径待整合 |
-| M6 | PENDING | 分页收件箱、调度完善、跨功能/原生/包级验证 |
+| M6 | IN_PROGRESS | schema4/后端分页搜索/安全清理已在独立分支通过，UI接线和跨功能联调进行中 |
+
+M0/M1 已于 `2026-09-12T06:21:30Z` 发布为
+[v0.5.0-m1 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m1)，不是 Latest。
+精确 tag/source 为 `2f2656d940c96e142d5639b2bc3012ab0ce5fb6e`；发布前逐项核对 GitHub 返回的 6 个资产 digest，
+包括4个平台包、SHA256SUMS 和 RELEASE-MANIFEST。Mac精确CI资产证据见 DESKTOP-M1-CI-MAC.md。
 
 M0 依赖与原生源码核查分别见 [依赖](DESKTOP-M0-DEPENDENCIES.md)、
 [原生](DESKTOP-M0-NATIVE.md)，所有权和迁移见 [ADR 0003](../adr/0003-desktop-ownership-and-local-denial.md)。

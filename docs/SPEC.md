@@ -5,8 +5,8 @@
 push/deploy/publish authorization overrides this document's default local-only
 rule for this task. Wails 3 beta.18 remains the desktop shell. Profile ownership,
 local denial, trust migration and saved shutdown are defined in
-[ADR 0003](adr/0003-desktop-ownership-and-local-denial.md); M1–M6 features remain
-pending until individually verified in the [execution record](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md).
+[ADR 0003](adr/0003-desktop-ownership-and-local-denial.md). M0/M1 have a combined test prerelease;
+later stages and each native acceptance boundary are recorded individually in the [execution record](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md).
 
 M1 source uses task schema3 for local device preferences, drafts and the single-owner
 persistent queue (ADR0004). Go holds all scheduling and source validation; UI commands

@@ -127,6 +127,7 @@ Section "uninstall"
 
     # Unregister only our marker and executable target before deleting binaries.
     ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --uninstall-sendto' $0
+    ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --uninstall-autostart' $0
 
     # Preserve profile, received files and WebView data on uninstall.
 

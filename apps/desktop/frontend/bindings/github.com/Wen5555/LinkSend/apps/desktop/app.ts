@@ -26,6 +26,10 @@ export function AcceptTaskAlways(id: string): $CancellablePromise<void> {
     return $Call.ByID(805976429, id);
 }
 
+export function Background(): $CancellablePromise<$models.BackgroundStatus> {
+    return $Call.ByID(474171957);
+}
+
 export function BlockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(1661110154, id);
 }
@@ -36,6 +40,10 @@ export function CancelQueue(id: string, revision: number): $CancellablePromise<v
 
 export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
+}
+
+export function ConfigureAutostart(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2264165876, enabled);
 }
 
 export function ConfigureSendTo(enabled: boolean): $CancellablePromise<void> {
@@ -138,6 +146,10 @@ export function ProbeLANAddress(address: string): $CancellablePromise<void> {
     return $Call.ByID(4182654780, address);
 }
 
+export function QuitApplication(): $CancellablePromise<void> {
+    return $Call.ByID(4185989124);
+}
+
 export function RefreshLANDiscovery(): $CancellablePromise<void> {
     return $Call.ByID(850507783);
 }
@@ -148,6 +160,10 @@ export function RejectTask(id: string): $CancellablePromise<void> {
 
 export function ReorderQueue(ids: string[] | null): $CancellablePromise<void> {
     return $Call.ByID(1496578879, ids);
+}
+
+export function RequestNotificationPermission(): $CancellablePromise<$models.BackgroundStatus> {
+    return $Call.ByID(3109134518);
 }
 
 export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -172,6 +188,10 @@ export function SavePreferences(next: $models.DesktopPreferences): $CancellableP
 
 export function SetAlwaysAccept(deviceID: string, enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(3711226762, deviceID, enabled);
+}
+
+export function SetBackgroundOptions(options: $models.BackgroundOptions): $CancellablePromise<void> {
+    return $Call.ByID(3323717395, options);
 }
 
 export function SetQueuePaused(paused: boolean): $CancellablePromise<void> {

@@ -79,7 +79,13 @@ func (a *App) SetQueuePaused(paused bool) error {
 	if err := a.workspaceAvailable(); err != nil {
 		return err
 	}
-	return a.core.SetQueuePaused(paused)
+	if err := a.core.SetQueuePaused(paused); err != nil {
+		return err
+	}
+	if a.background != nil && a.background.tray != nil {
+		a.background.tray.SetQueuePaused(paused)
+	}
+	return nil
 }
 func (a *App) BlockPeer(id string) error {
 	if err := a.workspaceAvailable(); err != nil {

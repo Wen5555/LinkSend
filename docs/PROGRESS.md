@@ -17,9 +17,16 @@ M0/M1 精确提交 `2f2656d` 的三平台 CI、四个包哈希/来源校验及 W
 香港 M1 事务部署与独立复核 PASS；[部署和备份](evidence/DESKTOP-M1-DEPLOYMENT.md)。
 M2 已接入单实例、有界持久入口日志、窗口拖放、SendTo/Finder provider、数量大小预览；
 Windows 同时入口/相对路径/隐藏/双 profile/冷启动/重启原生检查 PASS，完整菜单/拖放验收继续。
-M3 平台 adapter、M4 接收协议和 M5 内容快照在各自 worktree 并行实现，按依赖串行接入。
+M0/M1 已正式发布为 [v0.5.0-m1 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m1)，
+包含精确 CI Windows/两种 Mac 包，非 Latest；Mac ARM 原生启动/退出也已通过。
+发布后深测发现 M1 Windows 自定义退出按钮兼容问题，Release 已追加已知问题；当前 M3 源码改用原生 TaskDialog。
+M3 已接托盘/后台/通知/防睡眠，Windows 原生隐藏唤回、实际4MiB接收中的继续和保存退出均 PASS。
+还修正后台偏好误取消接收、shutdown 状态发布早于实际取消及 M2 CI 测试上下文问题。
+具体失败、修复和哈希见 [M3 执行记录](evidence/DESKTOP-M3-EXECUTION.md)。
+M4 接收应用层、M5 完整内容链路及 M6 收件箱 UI 继续在隔离分支并行，按依赖串行接入。
 
-Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol version: V1. This is not an accepted production release.
+Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m1`; protocol: V1.
+The following `v0.4.0` sections preserve earlier evidence. No prerelease is an accepted production release.
 
 ## 2026-09-12 v0.4.0 文档、主分支与测试预发布
 

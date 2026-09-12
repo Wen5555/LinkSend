@@ -4,6 +4,10 @@
 新阶段证据与 S01–S06 完成边界单列在 [执行记录](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)。
 M0 依赖、授权和生命周期通过不等于六项 UI、原生入口或物理网络验收完成。
 
+M0/M1 已发布 v0.5.0-m1；M2/M3 Windows原生系统入口、后台和保存退出进展见各阶段记录。
+M1发布后发现的Windows退出按钮兼容问题保留在Release已知问题中，修复后的TaskDialog证据归M3，
+不反填成M1当时已验证。物理Mac、通知点击与完整系统菜单等仍分别标记。
+
 Current test prerelease: `v0.4.0`, protocol V1, Wails 3 `v3.0.0-beta.18`. This matrix separates source implementation, automated evidence, package verification and real-network validation. A loopback result is never counted as LAN or NAT acceptance, and a Pre-release is not a production-readiness claim. Historical evidence remains labeled with the version and source state that actually produced it.
 
 | Area | Implemented source | Automated/current evidence | Target validation |

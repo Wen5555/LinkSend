@@ -15,8 +15,8 @@ export function TaskList({ tasks, devices, run, op }: { tasks: TaskSnapshot[]; d
 
 function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: DeviceInfo; run: CommandRunner; op: string }) {
   const pct = t.total_bytes && t.total_bytes > 0 ? Math.min(100, Math.round(t.processed_bytes / t.total_bytes * 100)) : 0;
-  const terminal = ['completed', 'failed', 'cancelled', 'rejected'].includes(t.state);
-  return <article className="task-row">
+  const terminal = ['completed', 'failed', 'cancelled', 'rejected', 'no_content'].includes(t.state);
+  return <article className="task-row" id={`task-${t.id}`} tabIndex={-1}>
     <div className={`task-symbol ${t.direction}`} aria-hidden="true">{t.direction === 'send' ? '↑' : '↓'}</div>
     <div className="task-main">
       <div className="task-title"><strong>{t.direction === 'send' ? '发送' : '接收'} · {t.source_summary || t.manifest_summary || '文件传输'}</strong><span className={`state-badge ${t.state}`}>{taskLabels[t.state] || t.state}</span></div>

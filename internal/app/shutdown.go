@@ -56,9 +56,12 @@ func (s *Service) shutdownOwners() {
 			task.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
 		snap, recovery := task.snap, task.recovery
+		// Publish the control intent and cancellation as one observable step.
+		// Persisting first leaves a window where observers see shutdown_requested
+		// but a slow SQLite commit has not yet cancelled the transfer context.
+		cancel()
 		task.mu.Unlock()
 		task.save(snap, recovery)
-		cancel()
 	}
 	s.tasks.mu.RUnlock()
 	_ = s.stopInbox(true)

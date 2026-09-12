@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log/slog"
 	"os"
+	"slices"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -11,6 +12,9 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed build/appicon.png
+var trayIcon []byte
 
 func main() {
 	if handled, err := runDesktopSetup(os.Args[1:]); handled {
@@ -86,9 +90,13 @@ func main() {
 	})
 	desktop.attachRuntime(host, window)
 	desktop.registerNativeEntries(window)
+	desktop.attachBackground(host, window, trayIcon)
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
 		slog.Info("desktop runtime ready")
 		desktop.runtimeEntriesReady()
+		if slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && desktop.Preferences().Background.CloseMode == "background" && desktop.background.tray != nil {
+			window.Hide()
+		}
 	})
 
 	if err := host.Run(); err != nil {

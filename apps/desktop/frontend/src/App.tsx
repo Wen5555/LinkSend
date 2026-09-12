@@ -8,13 +8,14 @@ import { TransferPage } from './pages/TransferPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { IncomingConfirm } from './components/Tasks';
+import { BackgroundSettings } from './components/BackgroundSettings';
 import './App.css';
 
 type Tab = 'transfer' | 'devices' | 'settings';
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'transfer', label: '传输', icon: '⇄' }, { id: 'devices', label: '设备', icon: '◉' }, { id: 'settings', label: '设置与诊断', icon: '⚙' },
 ];
-const emptyPreferences: DesktopPreferences = { format_version: 1, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', device_name: '' };
+const emptyPreferences: DesktopPreferences = { format_version: 1, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', device_name: '', background: { close_mode: '', notifications: false, prevent_sleep: false } };
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('transfer');
@@ -38,6 +39,20 @@ export default function App() {
       void desktop.refresh();
     }
   }, [shell?.entries.draft_revision, desktop.refresh]);
+  const navigationRevision = useRef(0);
+  useEffect(() => {
+    const revision = shell?.background.navigation_revision ?? 0;
+    if (revision <= navigationRevision.current) return;
+    navigationRevision.current = revision;
+    setTab('transfer');
+    const taskID = shell?.background.task_id;
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(taskID ? `task-${taskID}` : 'tasks-title');
+      target?.scrollIntoView({ block: 'center' });
+      target?.focus({ preventScroll: true });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [shell?.background.navigation_revision, shell?.background.task_id]);
   const config = desktop.configuration.data;
   const prefs = desktop.preferences.data ?? emptyPreferences;
   const inbox = shell?.inbox;
@@ -60,7 +75,7 @@ export default function App() {
       {control.notice && <div className="banner notice-banner" role="status"><p>{control.notice}</p><button onClick={control.clearNotice} aria-label="关闭传输控制提示">×</button></div>}
       {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} inbox={inbox} preferences={desktop.preferences.data} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} /> :
         tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
-          <SettingsPage sendToSupported={shell?.entries.send_to_supported} key={JSON.stringify(prefs)} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} />}
+          <><BackgroundSettings status={shell?.background} run={control.run} op={control.op} available={desktop.enabled} /><SettingsPage sendToSupported={shell?.entries.send_to_supported} key={JSON.stringify({ ...prefs, background: undefined })} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} /></>}
     </section>
     {incoming && <IncomingConfirm key={incoming.id} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
   </div>;

@@ -1,5 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from './workspace-cache';
 import { describe, expect, it, vi } from 'vitest';
 import type { DeviceInfo, QueueItem, TaskSnapshot, WorkspaceSnapshot } from '../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from './hooks/useDesktop';
@@ -25,13 +27,13 @@ const queueItem = (id: string, state: string): QueueItem => ({ id, state, reques
 
 describe('workspace operation surfaces', () => {
   it('keeps pause and cancel enabled while a different enqueue command is preparing', () => {
-    const markup = renderToStaticMarkup(createElement(TransferPage, { workspace, devices: [device], run, op: 'enqueue', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') }));
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [device], run, op: 'enqueue', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).toContain('正在核对内容并加入');
     expect(markup).toMatch(/<button class="secondary">暂停传输<\/button>/);
     expect(markup).toMatch(/<button class="ghost">取消<\/button>/);
   });
   it('requires an explicit waiting choice for an offline destination', () => {
-    const markup = renderToStaticMarkup(createElement(TransferPage, { workspace, devices: [{ ...device, online: false }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') }));
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [{ ...device, online: false }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).toContain('勾选等待后可加入队列');
     expect(markup).toMatch(/<button class="primary full send-button" disabled="">加入发送队列<\/button>/);
   });

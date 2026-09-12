@@ -12,6 +12,10 @@ M1 精确 CI 包的 Windows 真窗口、M2 单实例并发/冷启动/隐藏/重�
 再用 `scripts/verify-milestone-packages.ps1` 核对包哈希、BUILD-INFO 和 Windows 内部 payload；
 Mac 的挂载、架构、最低系统与原生启动仍须在 Mac 上执行。
 
+M3 新增 Windows 原生 TaskDialog 三选项及实际 4MiB 已验证 QUIC 块后的继续/保存退出验证，
+测试不把 SQLite 的节流热进度当实时 UI；最终持久化则在正常退出后独立读库核对。
+参见 [M3 失败修复与证据](evidence/DESKTOP-M3-EXECUTION.md)。
+
 本页适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
 
 ## v0.4.0 发布门槛

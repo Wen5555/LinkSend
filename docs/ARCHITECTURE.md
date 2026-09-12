@@ -15,6 +15,10 @@ M2 把原生文件入口接入同一 Go 草稿：Wails New 前持久化有界路
 第二进程不打开身份和数据库。通知失败由定时消费补偿；入队与发送仍需用户命令。
 细节和原生证据见 [M2 执行记录](evidence/DESKTOP-M2-EXECUTION.md)。
 
+M3 的桌面 owner 管理托盘、可选通知、防睡眠与原生关闭选择；Wails仍只注册App一个service。
+后台选项不重启接收连接；真正退出先停止原生入口，再释放系统资源并有序关闭core。
+Windows自定义确认使用经实际窗口验证的TaskDialog，而非beta.18仅支持Yes/No的Question实现。
+
 当前产品版本为 LinkSend `0.4.0`，协议为 V1。根 module `github.com/Wen5555/LinkSend` 包含协议、身份、LAN 发现、信令客户端、Pion/quic-go 集成、文件传输、存储、应用服务、服务端和 CLI；`apps/desktop` 是唯一嵌套 Go module，使用 Wails 3 `v3.0.0-beta.18`。
 
 ```text

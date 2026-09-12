@@ -124,7 +124,6 @@ func (a *App) startNativeEntries() {
 			}
 		}
 	}()
-	a.wakeEntries()
 }
 
 func (a *App) showEntryWindow() {
@@ -195,7 +194,7 @@ func runDesktopSetup(args []string) (bool, error) {
 	if len(args) != 1 {
 		return false, nil
 	}
-	if args[0] != "--install-sendto" && args[0] != "--uninstall-sendto" {
+	if args[0] != "--install-sendto" && args[0] != "--uninstall-sendto" && args[0] != "--uninstall-autostart" {
 		return false, nil
 	}
 	exe, err := os.Executable()
@@ -204,6 +203,9 @@ func runDesktopSetup(args []string) (bool, error) {
 	}
 	if args[0] == "--install-sendto" {
 		return true, installSendTo(exe)
+	}
+	if args[0] == "--uninstall-autostart" {
+		return true, uninstallNativeAutostart(exe)
 	}
 	return true, uninstallSendTo(exe)
 }

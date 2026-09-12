@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -42,17 +43,19 @@ type App struct {
 	window        application.Window
 	eventsDone    chan struct{}
 	entries       *desktopEntries
+	background    *desktopBackground
 }
 
 type DesktopPreferences struct {
-	FormatVersion      int      `json:"format_version"`
-	ServerURL          string   `json:"server_url"`
-	BindAddress        string   `json:"bind_address"`
-	InterfacePriority  []string `json:"interface_priority"`
-	ExcludedInterfaces []string `json:"excluded_interfaces"`
-	STUNURLs           []string `json:"stun_urls"`
-	ReceiveDirectory   string   `json:"receive_directory"`
-	DeviceName         string   `json:"device_name"`
+	FormatVersion      int               `json:"format_version"`
+	ServerURL          string            `json:"server_url"`
+	BindAddress        string            `json:"bind_address"`
+	InterfacePriority  []string          `json:"interface_priority"`
+	ExcludedInterfaces []string          `json:"excluded_interfaces"`
+	STUNURLs           []string          `json:"stun_urls"`
+	ReceiveDirectory   string            `json:"receive_directory"`
+	DeviceName         string            `json:"device_name"`
+	Background         BackgroundOptions `json:"background"`
 }
 
 type PreferencesStatus struct {
@@ -93,7 +96,7 @@ type DesktopStatus struct {
 var errBackendUnavailable = errors.New("BACKEND_UNAVAILABLE: desktop core is not initialized")
 
 func NewApp() *App {
-	return &App{entries: &desktopEntries{wake: make(chan struct{}, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}}
+	return &App{entries: &desktopEntries{wake: make(chan struct{}, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}, background: &desktopBackground{}}
 }
 
 // attachRuntime is called by the Wails 3 host before Run. Keeping the host
@@ -118,6 +121,7 @@ func (a *App) startup(ctx context.Context) {
 	name := firstNonEmpty(a.prefs.DeviceName, "LinkSend desktop")
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
+	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
 			if explicitDataDir {
@@ -149,6 +153,7 @@ func (a *App) shutdown() {
 	if a.eventsDone != nil {
 		<-a.eventsDone
 	}
+	a.closeBackground()
 	if a.entries != nil && a.entries.done != nil {
 		<-a.entries.done
 	}
@@ -182,10 +187,15 @@ func (a *App) shouldQuit() bool {
 	a.closeMu.Unlock()
 	if ready {
 		a.closeNativeEntries()
+		a.closeBackground()
 		return true
 	}
 	if a.core == nil {
 		a.closeNativeEntries()
+		a.closeMu.Lock()
+		a.quitReady = true
+		a.closeMu.Unlock()
+		a.closeBackground()
 		return true
 	}
 	active := make([]linksendapp.TaskSnapshot, 0)
@@ -196,6 +206,10 @@ func (a *App) shouldQuit() bool {
 	}
 	if len(active) == 0 {
 		a.closeNativeEntries()
+		a.closeMu.Lock()
+		a.quitReady = true
+		a.closeMu.Unlock()
+		a.closeBackground()
 		return true
 	}
 	if a.runtimeApp == nil {
@@ -208,27 +222,28 @@ func (a *App) shouldQuit() bool {
 	}
 	a.closeDialog = true
 	a.closeMu.Unlock()
-	dialog := a.runtimeApp.Dialog.Question().
-		SetTitle("LinkSend 仍有任务运行").
-		SetMessage(fmt.Sprintf("当前有 %d 个未结束任务。保存并退出会保留已验证数据，下次启动需确认恢复。尚未准备完成的内容需重新发送。", len(active)))
-	keep := dialog.AddButton("继续任务").OnClick(func() { a.setCloseDialog(false) })
-	dialog.AddButton("保存并退出").OnClick(func() { go a.saveTasksAndQuit() })
-	dialog.AddButton("取消任务并退出").OnClick(func() { go a.cancelTasksAndQuit(active) })
-	dialog.SetDefaultButton(keep).SetCancelButton(keep)
-	if a.window != nil {
-		dialog.AttachToWindow(a.window)
-	}
-	dialog.Show()
-	// Wails 3 message dialogs dispatch button callbacks asynchronously. The
-	// original quit request must be cancelled while the native sheet is open;
-	// the destructive choice explicitly calls App.Quit after cancellation has
-	// reached a terminal task state.
+	showNativeChoice(a.window, "LinkSend 仍有任务运行", fmt.Sprintf("当前有 %d 个未结束任务。保存并退出会保留已验证数据，下次启动需确认恢复。尚未准备完成的内容需重新发送。", len(active)), []string{"继续任务", "保存并退出", "取消任务并退出"}, 0, 0, func(choice int, err error) {
+		if err != nil {
+			a.setCloseDialog(false)
+			a.showQuitWarning("退出确认窗口暂不可用，任务继续运行。")
+			return
+		}
+		switch choice {
+		case 1:
+			a.saveTasksAndQuit()
+		case 2:
+			a.cancelTasksAndQuit(active)
+		default:
+			a.setCloseDialog(false)
+		}
+	})
+	// Keep the original quit cancelled until the native choice is resolved.
 	return false
 }
 
 func terminalTaskState(state string) bool {
 	switch state {
-	case "completed", "rejected", "cancelled", "failed":
+	case "completed", "rejected", "cancelled", "failed", "no_content":
 		return true
 	default:
 		return false
@@ -459,6 +474,14 @@ func (a *App) EffectiveConfig() EffectiveConfig {
 func (a *App) SavePreferences(next DesktopPreferences) error {
 	a.prefsWriteMu.Lock()
 	defer a.prefsWriteMu.Unlock()
+	// Background controls have their own explicit command. A settings form
+	// opened before that command must not undo the newer lifecycle preference.
+	next.Background = a.Preferences().Background
+	return a.savePreferencesLocked(next, true)
+}
+
+func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool) error {
+	previous := a.Preferences()
 	if a.dataDir == "" {
 		return errBackendUnavailable
 	}
@@ -506,7 +529,8 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
 	a.prefsMu.Unlock()
-	if a.core != nil && next.ReceiveDirectory != "" {
+	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
+	if updateReceiver && receiverChanged && a.core != nil && next.ReceiveDirectory != "" {
 		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {
 			return err
 		}

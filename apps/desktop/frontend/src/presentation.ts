@@ -7,6 +7,7 @@ export const taskLabels: Record<string, string> = {
   preparing: '准备中', awaiting_acceptance: '等待确认', transferring: '传输中', verifying: '校验中',
   recovering: '待恢复', paused: '已暂停', pause_requested: '正在暂停', rejected: '已拒绝', completed: '已完成',
   failed: '失败', cancelled: '已取消', cancel_requested: '正在取消', shutdown_requested: '正在保存',
+  no_content: '未接收内容',
 };
 export const queueLabels: Record<string, string> = {
   queued: '等待发送', waiting_peer: '等待设备上线', needs_attention: '需要确认', running: '正在执行',
