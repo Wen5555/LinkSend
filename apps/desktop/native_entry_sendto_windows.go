@@ -7,11 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 
-	"github.com/go-ole/go-ole"
-	"github.com/go-ole/go-ole/oleutil"
 	"golang.org/x/sys/windows"
 )
 
@@ -121,90 +118,4 @@ func uninstallSendToAt(executable, directory string) error {
 func ownsSendTo(value sendToShortcut, executable string) bool {
 	return value.description == sendToMarker && value.arguments == sendToArgs &&
 		canonicalNativePathKey(value.target) == canonicalNativePathKey(executable)
-}
-
-// Windows Script Host is used only as the documented Shell Link COM adapter.
-// No Run/Exec method or shell command is called; paths remain property values.
-func withSendToShortcut(path string, fn func(*ole.IDispatch) error) error {
-	done := make(chan error, 1)
-	go func() {
-		result := func() error {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			if err := ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED); err != nil {
-				var oleErr *ole.OleError
-				if !errors.As(err, &oleErr) || oleErr.Code() != 1 { // S_FALSE is already initialised.
-					return err
-				}
-			}
-			defer ole.CoUninitialize()
-			unknown, err := oleutil.CreateObject("WScript.Shell")
-			if err != nil {
-				return err
-			}
-			defer unknown.Release()
-			shell, err := unknown.QueryInterface(ole.IID_IDispatch)
-			if err != nil {
-				return err
-			}
-			defer shell.Release()
-			variant, err := oleutil.CallMethod(shell, "CreateShortcut", path)
-			if err != nil {
-				return fmt.Errorf("CreateShortcut: %w", err)
-			}
-			defer variant.Clear()
-			shortcut := variant.ToIDispatch()
-			if shortcut == nil {
-				return errors.New("shell did not return a shortcut object")
-			}
-			return fn(shortcut)
-		}()
-		// All COM objects and the apartment are released before the caller can
-		// link/remove the file or immediately open another shortcut.
-		done <- result
-	}()
-	return <-done
-}
-
-func readSendToShortcut(path string) (sendToShortcut, error) {
-	var result sendToShortcut
-	err := withSendToShortcut(path, func(shortcut *ole.IDispatch) error {
-		for _, property := range []struct {
-			name string
-			to   *string
-		}{{"TargetPath", &result.target}, {"Arguments", &result.arguments}, {"Description", &result.description}, {"WorkingDirectory", &result.workingDir}} {
-			value, err := oleutil.GetProperty(shortcut, property.name)
-			if err != nil {
-				return err
-			}
-			*property.to = value.ToString()
-			_ = value.Clear()
-		}
-		return nil
-	})
-	return result, err
-}
-
-func writeSendToShortcut(path string, value sendToShortcut) error {
-	return withSendToShortcut(path, func(shortcut *ole.IDispatch) error {
-		for _, property := range []struct{ name, value string }{
-			{"TargetPath", value.target}, {"Arguments", value.arguments}, {"Description", value.description}, {"WorkingDirectory", value.workingDir},
-		} {
-			result, err := oleutil.PutProperty(shortcut, property.name, property.value)
-			if err != nil {
-				return fmt.Errorf("set %s: %w", property.name, err)
-			}
-			if result != nil {
-				_ = result.Clear()
-			}
-		}
-		result, err := oleutil.CallMethod(shortcut, "Save")
-		if result != nil {
-			_ = result.Clear()
-		}
-		if err != nil {
-			return fmt.Errorf("save shortcut: %w", err)
-		}
-		return nil
-	})
 }

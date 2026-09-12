@@ -24,7 +24,7 @@ func TestNativeWindowsDriveRelativeArguments(t *testing.T) {
 
 func TestSendToNativeShortcutRoundTripInIsolatedDirectory(t *testing.T) {
 	directory := t.TempDir()
-	executable := filepath.Join(t.TempDir(), "LinkSend 中文 空格.exe")
+	executable := filepath.Join(t.TempDir(), "LinkSend 中文 空格 🛰.exe")
 	if err := os.WriteFile(executable, []byte("test target; never executed"), 0600); err != nil {
 		t.Fatal(err)
 	}
