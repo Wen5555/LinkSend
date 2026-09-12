@@ -36,6 +36,23 @@ func TestIPOnlyBindUsesEphemeralPort(t *testing.T) {
 	}
 }
 
+func TestInitialPairChangesSettleBeforeRuntimeMonitoring(t *testing.T) {
+	base := time.Unix(100, 0)
+	e := &Endpoint{selected: "pair-a", pathArmed: true, pathArmedAt: base}
+	if e.observeSelectedPair("pair-b", base.Add(initialPathStabilityWindow/2)) {
+		t.Fatal("initial ICE pair improvement was treated as runtime migration")
+	}
+	if e.selected != "pair-b" || e.pathArmedAt != base.Add(initialPathStabilityWindow/2) {
+		t.Fatalf("initial pair baseline was not updated: selected=%q armed=%v", e.selected, e.pathArmedAt)
+	}
+	if e.observeSelectedPair("pair-b", base.Add(initialPathStabilityWindow*2)) {
+		t.Fatal("unchanged pair was treated as migration")
+	}
+	if !e.observeSelectedPair("pair-c", e.pathArmedAt.Add(initialPathStabilityWindow)) {
+		t.Fatal("post-stability pair change was not reported")
+	}
+}
+
 func TestCandidatePolicy(t *testing.T) {
 	for _, addr := range []string{"0.0.0.0:0", "[::]:0", "255.255.255.255:0", "[fe80::1]:0", "127.0.0.1:0"} {
 		if e, err := New(Config{BindAddress: addr}); err == nil {

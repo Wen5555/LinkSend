@@ -10,6 +10,7 @@
 - 网络：真实 loopback ICE/TLS 1.3/QUIC 摘要一致；物理 Windows→Mac 受限单播发现、mTLS 控制与精确并行准备/ICE/QUIC 路径通过。新版原生确认弹窗完整人工点击仍为 NOT_RUN。
 - 香港：干净提交构建的 `0.4.0` 服务部署、公网 health、schema 2、数据库完整性、短码幂等、systemd 管理和 Origin 证书真实续期全部通过。
 - GitHub Release 资产必须由最终 tag 对应 Actions run 生成；本地 package 只作为提交前验证，不能直接上传冒充 committed artifact。
+- `e17e0cb` 的 core run `34667737461` 因 Linux selected-pair 初始化尾声关闭首个 QUIC 流而 FAIL；该失败保留为修复依据，不能用本机通过或单纯 rerun 覆盖。稳定窗口补丁必须同时通过 selected-pair 状态测试、simultaneous QUIC 100 次、persistent inbox 50 次和新的 GitHub core run。
 
 根模块的单元测试覆盖身份、公钥替换、候选策略、分帧、BLAKE3、危险路径、恢复状态、取消和异常关闭。`tests/integration` 的 `TestLocalDirectDemo` 启动临时 SQLite/WSS 服务，使用两个独立身份执行真实 ICE、TLS 1.3、QUIC 和文件哈希校验。
 

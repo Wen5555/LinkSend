@@ -6,7 +6,7 @@
 
 消息类型为 `connect_request`、`connect_response`、`candidate`、`end_of_candidates` 和 `status`。服务端只转发已认证设备组内、会话归属和 generation 正确的消息。未知关键类型、版本错误、重放、过期和超限消息明确拒绝。
 
-候选使用真实 trickle 语义：端点开始 gathering 后立即发送连接请求/响应，host/srflx 候选通过回调逐个签名发送，Pion ICE checks 与尚未结束的候选收集并行；不再等待两端各自完整 STUN 超时后串行开始检查。双方已验证同一 on-link 前缀的 host path 为 `lan_direct` 时，可主动发送 `end_of_candidates` 并停止向该会话补充无关公网候选；非 LAN 路径继续等待受限 STUN gathering。`end_of_candidates` 仍表示本 generation 不再发送新候选，候选和检查均受原有数量、时间与 session/generation 约束。服务端成功转发双方的 `end_of_candidates` 后释放该协商记录，使同一认证 WSS 可立即承载下一 session；不会关闭已建立且独立于信令的 QUIC。
+候选使用真实 trickle 语义：端点开始 gathering 后立即发送连接请求/响应，host/srflx 候选通过回调逐个签名发送，Pion ICE checks 与尚未结束的候选收集并行；不再等待两端各自完整 STUN 超时后串行开始检查。双方已验证同一 on-link 前缀的 host path 为 `lan_direct` 时，可主动发送 `end_of_candidates` 并停止向该会话补充无关公网候选；非 LAN 路径继续等待受限 STUN gathering。`end_of_candidates` 仍表示本 generation 不再发送新候选，候选和检查均受原有数量、时间与 session/generation 约束。服务端成功转发双方的 `end_of_candidates` 后释放该协商记录，使同一认证 WSS 可立即承载下一 session；不会关闭已建立且独立于信令的 QUIC。Pion 在 `Connect` 返回后仍可能报告初始化阶段最后一次 pair 优化；endpoint 在 1 秒稳定窗口内更新基准但不关闭 QUIC，窗口后不同 nominated pair 才被视为运行期路径变化并进入显式恢复。
 
 响应端在已验证 `connect_request` 后若无法创建本地 UDP endpoint、收集候选、完成 ICE/QUIC 建连或请求设备不符合本次接收限制，会发送同 session/generation 的签名 `status`：payload 固定为 `{"state":"failed","code":"<stable connection code>"}`。允许的 code 仅限候选交换、无候选、ICE 检查、QUIC 握手、认证限制和通用直连失败；不得携带本地路径、原始系统错误、ICE credential 或其他私密 cause。发起端必须验证发送者、接收者、session、generation、Ed25519 签名和 code 允许列表，才能提前结束等待；篡改或未知 code 按 `INVALID_MESSAGE` 处理。旧客户端不识别该状态时仍可能回落为超时，因此产品包需两端同步升级。
 

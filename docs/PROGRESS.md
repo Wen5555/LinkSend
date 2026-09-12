@@ -11,6 +11,8 @@ Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol vers
 - 实现与第一版公开文档已直接合入并推送 `main`，提交 `7303f34260c09b8ad71c117ee2d6837fac4dfe46`；推送前 `origin/main` 与本地没有分叉。提交前 Windows 根普通/race/vet/`GOWORK=off`、桌面独立 verify/test/vet/build、前端 typecheck/lint/11 tests/build、真实 loopback ICE/TLS 1.3/QUIC 摘要校验和 Wails/NSIS `0.4.0` 版本资源检查全部 PASS。
 - 香港测试主站从该提交的独立干净 clone 构建并事务部署：`vcs.modified=false`，服务端 SHA256 `227e2ec9fb029fcc8a568637376318e4eae4099f1cc2ce79bc7224557f07fa45`，最终 systemd MainPID `393922`，schema 2、数据库完整性、443、公网 health、产品/协议版本、QUIC、`relay=false` 与 recent fatal=0 均 PASS。公网配对再次确认 TTL=600 秒、同身份幂等与其他身份 `PAIRING_CODE_USED`。
 - 部署审计同时修复了即将到期的 Origin 证书续期链路：移除缺失的 `jq` 依赖、规避 Cloudflare HTTP/2 `PROTOCOL_ERROR`、将 rendezvous 迁移为独立 systemd service，并让续期任务只执行证书事务和 service restart。真实续期、定时器和独立复核 PASS，失败单元为 0；备份与回滚见 `DEPLOY-HK.md`。
+- 最终文档提交 `e17e0cb793a2f69162394d3d53e5cda8b13912fa` 的首轮 GitHub core run `34667737461` 真实 FAIL：Linux runner 分别出现 simultaneous session 首个 QUIC payload 为空和 persistent inbox 未创建确认任务；desktop/package job 继续独立运行，但该提交不允许打 tag。两项在 Windows 各重复 100/20 次未复现，失败共同发生于 trickle 收敛后的首个数据流附近。
+- 根因是 Pion 可能在 `Connect` 返回后报告初始化阶段最后一次 selected-pair 优化；旧代码已立即武装运行期路径监控，会把这次初始化尾声误判成网络迁移并关闭刚建立的 QUIC。endpoint 现在使用 1 秒初始稳定窗口：窗口内只更新 pair 基准并重新计时，不增加建连等待；窗口后不同 pair 仍触发关闭与显式恢复。新增纯状态回归测试后 simultaneous QUIC 重复 100 次、persistent inbox 重复 50 次、完整普通/race/vet/`GOWORK=off` 再次 PASS。
 
 ## 2026-09-12 配对幂等、LAN 直接发现与接收热路径优化（v0.4.0）
 

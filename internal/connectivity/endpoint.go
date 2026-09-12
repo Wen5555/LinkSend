@@ -19,6 +19,8 @@ import (
 
 const MaxCandidates = 32
 
+const initialPathStabilityWindow = time.Second
+
 var (
 	ErrCheckTimeout      = errors.New("ICE_CHECK_TIMEOUT")
 	ErrNoViableCandidate = errors.New("NO_VIABLE_CANDIDATE")
@@ -96,6 +98,7 @@ type Endpoint struct {
 	remote                         map[string]bool
 	selected                       string
 	pathArmed                      bool
+	pathArmedAt                    time.Time
 	connecting                     bool
 	interfaceName                  string
 	addressFamily                  string
@@ -227,11 +230,7 @@ func New(cfg Config) (*Endpoint, error) {
 	}
 	err = e.agent.OnSelectedCandidatePairChange(func(local, remote ice.Candidate) {
 		key := local.Marshal() + "|" + remote.Marshal()
-		e.mu.Lock()
-		changed := e.pathArmed && e.selected != "" && e.selected != key
-		e.selected = key
-		e.mu.Unlock()
-		if changed {
+		if e.observeSelectedPair(key, time.Now()) {
 			e.pathOnce.Do(func() { close(e.pathChanged) })
 		}
 	})
@@ -275,8 +274,29 @@ func (e *Endpoint) Candidates() <-chan Candidate { return e.candidates }
 func (e *Endpoint) Gather() error                { return e.agent.GatherCandidates() }
 func (e *Endpoint) QUIC() *quic.Transport        { return e.tr }
 func (e *Endpoint) PathChanged() <-chan struct{} { return e.pathChanged }
-func (e *Endpoint) Done() <-chan struct{}        { return e.done }
-func (e *Endpoint) BaseAddress() string          { return e.udp.LocalAddr().String() }
+
+// observeSelectedPair separates the tail of initial ICE nomination from a
+// later runtime path change. Pion may report one final pair improvement after
+// Connect returns while trickled checks settle. Closing QUIC for that event
+// races the first application stream on slower runners. During the bounded
+// stability window we update the baseline and restart the window; after it,
+// a different nominated pair remains a real reconnect signal.
+func (e *Endpoint) observeSelectedPair(key string, now time.Time) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	changed := false
+	if e.pathArmed && e.selected != "" && e.selected != key {
+		if e.pathArmedAt.IsZero() || now.Sub(e.pathArmedAt) >= initialPathStabilityWindow {
+			changed = true
+		} else {
+			e.pathArmedAt = now
+		}
+	}
+	e.selected = key
+	return changed
+}
+func (e *Endpoint) Done() <-chan struct{} { return e.done }
+func (e *Endpoint) BaseAddress() string   { return e.udp.LocalAddr().String() }
 func (e *Endpoint) Stats() Stats {
 	return Stats{STUNBytesSent: e.packets.sent.Load(), STUNBytesReceived: e.packets.received.Load(), STUNRequestsSent: e.packets.requestsSent.Load(), STUNResponsesReceived: e.packets.responsesReceived.Load(), RejectedPackets: e.packets.rejected.Load()}
 }
@@ -402,6 +422,7 @@ func (e *Endpoint) selectedPath(arm bool) (Path, error) {
 	if arm {
 		e.selected = p.Local.Marshal() + "|" + p.Remote.Marshal()
 		e.pathArmed = true
+		e.pathArmedAt = time.Now()
 	}
 	timeline := append([]ICEStateEvent(nil), e.iceTimeline...)
 	e.mu.Unlock()
