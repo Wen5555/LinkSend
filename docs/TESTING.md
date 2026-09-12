@@ -16,7 +16,7 @@ M3 新增 Windows 原生 TaskDialog 三选项及实际 4MiB 已验证 QUIC 块�
 测试不把 SQLite 的节流热进度当实时 UI；最终持久化则在正常退出后独立读库核对。
 参见 [M3 失败修复与证据](evidence/DESKTOP-M3-EXECUTION.md)。
 
-本页适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
+以下历史基线适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
 
 ## v0.4.0 发布门槛
 
@@ -149,3 +149,5 @@ GOWORK=off go build ./...
 
 
 M4 App新增 `incoming_plan_test.go` / `selection_hook_test.go`：真实QUIC覆盖子集、全跳过、空目录、分页隐私、CAS过期/重复接受、双端持久失败时零正文、丢失目录不重建、恢复不扩大选择，以及4MiB传输后修改inbox设置保持当前计划并让下一任务使用新目录。新新协商 `acceptance_commit_v1` 时，持久失败必须发生在首个chunk请求前；正文恰好等于error JSON也必须真实落盘。完整命令与SQLITE_BUSY、帧歧义修复记录见 [M4 App](evidence/DESKTOP-M4-APP.md)。
+
+M5最终原生步骤与失败保留见 [M5验收](evidence/DESKTOP-M5-EXECUTION.md)。Windows可复用入口位于 scripts/desktop-native；clipboard动作测试仅允许已清空的专用测试剪贴板，默认拒绝非空内容，不自动清空用户剪贴板。physical contentprobe是指定地址的pin/QUIC协议探针，不执行ICE或桌面发现。用户本轮指定M5发布后停止，不继续完整M6矩阵。

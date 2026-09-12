@@ -4,6 +4,7 @@ import type { DeviceInfo, TaskSnapshot } from '../../bindings/github.com/Wen5555
 import type { CommandRunner } from '../hooks/useDesktop';
 import { connectionMethodLabel, taskPhaseLabel } from '../connection';
 import { deviceName, formatBytes, taskLabels } from '../presentation';
+import { ReceivedContentActions } from './ContentActions';
 
 export function TaskList({ tasks, devices, run, op }: { tasks: TaskSnapshot[]; devices: DeviceInfo[]; run: CommandRunner; op: string }) {
   return <section className="tasks-section" aria-labelledby="tasks-title">
@@ -27,7 +28,7 @@ function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: De
       <div className="task-accounting"><span>实际{t.direction === 'send' ? '发送' : '接收'} {formatBytes(t.direction === 'send' ? t.sent_bytes : t.received_bytes)}</span>{t.retransmitted_bytes > 0 && <span>其中重传 {formatBytes(t.retransmitted_bytes)}</span>}<span>已验证 {formatBytes(t.verified_bytes)}</span><span>已提交 {formatBytes(t.committed_bytes)}</span><span>{t.bilateral_confirmed ? '双方已确认' : '尚未完成双方确认'}</span></div>
       <div className="task-foot"><span>逻辑完成 {formatBytes(t.processed_bytes)} / {formatBytes(t.total_bytes)}</span>{t.error_message && <span className="task-error">{t.error_code} · {t.error_message}</span>}</div>
     </div>
-    <div className="task-actions">
+    <div className="task-actions">{t.direction === 'receive' && t.state === 'completed' && t.bilateral_confirmed && <ReceivedContentActions taskID={t.id} revision={t.revision} run={run} op={op} available={true} />}
       {t.can_pause && <button className="secondary" disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}
       {t.can_resume && <button className="primary" disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
       {t.can_cancel && t.state !== 'awaiting_acceptance' && <button className="ghost" disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}

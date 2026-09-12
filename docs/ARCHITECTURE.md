@@ -4,7 +4,7 @@
 `internal/app.New` 在身份/SQLite 前取得 profile 内核排他锁，退出待所有 owner 结束后释放。
 授权拒绝由唯一 identity trust schema 1 所有者持久化；应用的所有新连接、确认和恢复路径共用检查。
 保存退出建立派发屏障并保留可恢复任务，迟到事件不覆盖控制意图。
-后续设备/草稿/队列及接收计划尚按 M1–M6 推进，详见 [ADR 0003](adr/0003-desktop-ownership-and-local-denial.md)。
+设备/草稿/队列、接收计划与原生内容已整合至M5；用户后续要求在M5合并发布后停止，详见 [ADR 0003](adr/0003-desktop-ownership-and-local-denial.md)。
 
 M1元数据现为task schema3：DeviceProfile、SendDraft及send_queue共用任务库，身份授权仍在trust。
 队列先持久关联task再启动worker，准备时与派发时比较源摘要；重启需要确认，离线项不阻塞其他在线设备。

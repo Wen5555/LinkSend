@@ -335,6 +335,19 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 			_ = s.setQueueState(item.ID, "needs_attention", "TASK_NOT_FOUND")
 			continue
 		}
+		if isTerminal(task.State) || task.CanResume {
+			// Task callbacks publish memory before their SQLite save returns.
+			// Do not commit a terminal queue receipt until the same task revision
+			// is durable; history actions and cleanup must observe that receipt.
+			if !task.HistoryPersisted {
+				_ = s.setQueueState(item.ID, "needs_attention", "TASK_PERSISTENCE_FAILED")
+				continue
+			}
+			persisted, _, persistErr := s.loadInboxTask(ctx, task.ID)
+			if persistErr != nil || persisted.Revision < task.Revision || persisted.State != task.State {
+				continue
+			}
+		}
 		switch task.State {
 		case "no_content":
 			_ = s.setQueueState(item.ID, "completed", "")

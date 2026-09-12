@@ -289,6 +289,15 @@ func TestContentQueueRestartResumeRetainsExactSnapshot(t *testing.T) {
 	}
 	defer reopened.Shutdown()
 	restarted := waitQueue(t, reopened, item.ID, func(item QueueItem) bool { return item.State == "needs_attention" })
+	history, err := reopened.Inbox(t.Context(), InboxQuery{Limit: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range history.Items {
+		if entry.TaskID == restarted.TaskID && entry.CanResume {
+			t.Fatal("queue-owned restart must use the queue confirmation, not direct resume")
+		}
+	}
 	cfg.onChunkSent = nil
 	if err = reopened.StartQueue(cfg); err != nil {
 		t.Fatal(err)

@@ -9,6 +9,7 @@ import { EnqueueIdentity } from '../workspace-cache';
 import { deviceName, fileName } from '../presentation';
 import { Queue } from '../components/Queue';
 import { TaskList } from '../components/Tasks';
+import { ContentComposer } from '../components/ContentComposer';
 
 type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; inbox?: InboxStatus; preferences?: DesktopPreferences; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean };
 
@@ -57,6 +58,7 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
         <label className="field-label">默认保存到<input value={preferences?.receive_directory ?? ''} readOnly placeholder="请选择接收目录" /></label><button className="secondary full" disabled={disabled || !preferences} onClick={() => void run('receive-directory', async () => { const path = await Backend.PickDirectory(); if (path && preferences) await Backend.SavePreferences({ ...preferences, receive_directory: path }); }, '默认接收目录已更新')}>更改默认目录</button><p className="field-help">单台设备的专属目录可在设备页设置。</p>
       </section>
     </div>
+    <ContentComposer devices={devices} identityID={identityID} initialPeerID={draft?.peer_id} run={run} op={op} available={available && !!workspace?.persistence_available} />
     <Queue items={workspace?.queue ?? []} devices={devices} paused={workspace?.queue_paused ?? false} run={controlRun} op={controlOp} available={available && !!workspace?.persistence_available} />
     <TaskList tasks={workspace?.tasks ?? []} devices={devices} run={controlRun} op={controlOp} />
   </div>;

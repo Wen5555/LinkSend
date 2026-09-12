@@ -123,6 +123,12 @@ func (a *App) startup(ctx context.Context) {
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
 	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
+		if a.runtimeApp != nil {
+			if err := a.initializeContentActions(); err != nil {
+				a.initErr = err
+				return
+			}
+		}
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
 			if explicitDataDir {
 				a.prefs.ReceiveDirectory = filepath.Join(dataDir, "received")

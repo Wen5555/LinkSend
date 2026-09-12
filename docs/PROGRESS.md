@@ -1,12 +1,13 @@
 # LinkSend implementation progress
 
-## 2026-09-12 六项桌面能力（分阶段执行中）
+## 2026-09-12 桌面能力（用户指定M5收尾）
 
 基线 `fbfc250`，工作分支 `codex/desktop-six-features`；用户明确授权逐目标推送、部署和发布。
 依赖官方核实与安装完成：Go1.27.1、Node24.21.0、pnpm12.4.1、React19.3、TS6.0.3、Vite8.3、Vitest5、Query5.102.8，Wails保留beta.18。
 已实现本机拒绝与trust schema1迁移、profile内核锁、保存退出及调度/迟到事件屏障；真实QUIC保存退出与针对性race通过。
+用户最新要求完成M5后合并、测试、改文档并上传GitHub/Release，然后停止。M6已有代码与局部证据保留，不再继续其完整验收。M5最终实现、原生动作及真实限制见 [M5执行记录](evidence/DESKTOP-M5-EXECUTION.md)。
 完整命令/失败修复/各阶段状态见 [六项执行记录](evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)。
-Mac地址按用户最新信息更新为10.234.184.6，SSH已通过，隔离工具链安装已完成。
+Mac地址按用户最新信息更新为10.234.14.15，SSH已通过，隔离工具链安装已完成。
 
 用户后续明确最低macOS13、取消12支持，并允许M0/M1合并发布；M2/M3平台层和M4接收协议在隔离分支并行推进。
 M1已增加task schema3、设备偏好、持久草稿、幂等队列、离线旁路、源变化确认及200ms合并的epoch/revision事件；
@@ -23,13 +24,13 @@ M0/M1 已正式发布为 [v0.5.0-m1 测试预发布](https://github.com/Wen5555/
 M3 已接托盘/后台/通知/防睡眠，Windows 原生隐藏唤回、实际4MiB接收中的继续和保存退出均 PASS。
 还修正后台偏好误取消接收、shutdown 状态发布早于实际取消及 M2 CI 测试上下文问题。
 具体失败、修复和哈希见 [M3 执行记录](evidence/DESKTOP-M3-EXECUTION.md)。
-M4 接收应用层、M5 完整内容链路及 M6 收件箱 UI 继续在隔离分支并行，按依赖串行接入。
+M4接收应用层、M5完整内容链路与已完成的收件箱UI已串行合入；后续不再扩展M6。
 
 M4 传输与 App 后端已接入不可变清单、分页选收、冲突策略、目录/计划持久化、实际空间预检、NoContent、发送选择摘要恢复绑定以及M6完整索引登记。真实QUIC同时修复SQLite并发写锁和接受后error/body帧歧义，并验证活跃接收时改全局目录不会取消任务；完整根普通/race、双模块检查通过。UI/物理双机原生验收与里程碑发布另行记录，不因后端测试而标为完成；见 [M4 App证据](evidence/DESKTOP-M4-APP.md)。
 
 M4/M5 wire整合保留三个可选能力；发送端选择和实际内容解释的持久化回调都成功后才发accepted，并同时验证manifest/selection/content摘要。联合真实QUIC及旧端兼容验证见 [整合证据](evidence/DESKTOP-M4-M5-ACCEPTANCE-INTEGRATION.md)。
 
-M4/M6 已完成 Windows 真窗口选收、原生目录选择、保留两份、空目录、全跳过、真实 QUIC 双方确认及收件箱检索、Explorer 定位、仅清记录和孤立暂存清理；证据见 [原生验收](evidence/DESKTOP-M4-WINDOWS-UI.md)。Mac M3 --background 启动退出缺陷正在修复，通知真实含点任务 ID 已修复；未将源码通过等同已发布。
+M4/M6 已完成 Windows 真窗口选收、原生目录选择、保留两份、空目录、全跳过、真实 QUIC 双方确认及收件箱检索、Explorer 定位、仅清记录和孤立暂存清理；证据见 [原生验收](evidence/DESKTOP-M4-WINDOWS-UI.md)。Mac M3 --background 启动退出缺陷已通过实机修复验证，通知真实含点任务 ID 已修复；未将源码通过等同已发布。
 
 Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m1`; protocol: V1.
 The following `v0.4.0` sections preserve earlier evidence. No prerelease is an accepted production release.

@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ReceivePlanDialog } from './components/ReceivePlanDialog';
 import { BackgroundSettings } from './components/BackgroundSettings';
 import { InboxPage } from './pages/InboxPage';
+import { ContentSettings } from './components/ContentSettings';
 import './App.css';
 
 type Tab = 'transfer' | 'inbox' | 'devices' | 'settings';
@@ -72,7 +73,7 @@ export default function App() {
       {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} inbox={inbox} preferences={desktop.preferences.data} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} /> :
         tab === 'inbox' ? <InboxPage devices={devices} run={control.run} op={control.op} available={available} focusTaskID={focusTaskID} navigationRevision={shell?.background.navigation_revision} /> :
         tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
-          <><BackgroundSettings status={shell?.background} run={control.run} op={control.op} available={desktop.enabled} /><SettingsPage sendToSupported={shell?.entries.send_to_supported} key={JSON.stringify({ ...prefs, background: undefined })} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} /></>}
+          <><ContentSettings run={control.run} op={control.op} available={desktop.enabled} /><BackgroundSettings status={shell?.background} run={control.run} op={control.op} available={desktop.enabled} /><SettingsPage sendToSupported={shell?.entries.send_to_supported} key={JSON.stringify({ ...prefs, background: undefined })} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} run={command.run} op={command.op} available={desktop.enabled} /></>}
     </section>
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
   </div>;

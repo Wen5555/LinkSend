@@ -46,6 +46,14 @@ export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
 }
 
+export function CaptureClipboardImage(requestID: string): $CancellablePromise<app$0.ContentDraft> {
+    return $Call.ByID(1938429354, requestID);
+}
+
+export function CleanupContentSnapshots(): $CancellablePromise<app$0.ContentCleanupResult> {
+    return $Call.ByID(3863600321);
+}
+
 export function CleanupInboxStaging(limit: number): $CancellablePromise<app$0.InboxCleanupResult> {
     return $Call.ByID(1036648570, limit);
 }
@@ -60,6 +68,26 @@ export function ConfigureSendTo(enabled: boolean): $CancellablePromise<void> {
 
 export function ConfirmQueue(id: string, revision: number): $CancellablePromise<void> {
     return $Call.ByID(3080801262, id, revision);
+}
+
+export function ContentDrafts(): $CancellablePromise<app$0.ContentDraft[] | null> {
+    return $Call.ByID(1795683294);
+}
+
+export function ContentSettings(): $CancellablePromise<app$0.ContentSettings> {
+    return $Call.ByID(2387679119);
+}
+
+export function ContentTask(taskID: string): $CancellablePromise<app$0.ContentTaskInfo> {
+    return $Call.ByID(2173688711, taskID);
+}
+
+export function CopyReceivedText(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
+    return $Call.ByID(2054701800, taskID);
+}
+
+export function CreateContentText(request: app$0.ContentTextRequest): $CancellablePromise<app$0.ContentDraft> {
+    return $Call.ByID(2519138601, request);
 }
 
 export function CreateInvitation(): $CancellablePromise<app$0.InvitationInfo> {
@@ -78,12 +106,20 @@ export function Diagnostics(): $CancellablePromise<app$0.Diagnostics> {
     return $Call.ByID(4058123183);
 }
 
+export function DiscardContentDraft(id: string, revision: number): $CancellablePromise<void> {
+    return $Call.ByID(2495801629, id, revision);
+}
+
 export function EffectiveConfig(): $CancellablePromise<$models.EffectiveConfig> {
     return $Call.ByID(329529236);
 }
 
 export function Enqueue(request: app$0.EnqueueRequest): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(2200678053, request);
+}
+
+export function EnqueueContent(request: app$0.EnqueueContentRequest): $CancellablePromise<app$0.QueueItem> {
+    return $Call.ByID(3042055810, request);
 }
 
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
@@ -130,6 +166,10 @@ export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfac
     return $Call.ByID(1900295361);
 }
 
+export function OpenReceivedURL(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
+    return $Call.ByID(240213127, taskID);
+}
+
 export function OpenTaskDirectory(taskID: string): $CancellablePromise<void> {
     return $Call.ByID(3141333411, taskID);
 }
@@ -168,6 +208,10 @@ export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStat
 
 export function PreviewDraft(): $CancellablePromise<app$0.DraftPreview> {
     return $Call.ByID(887061994);
+}
+
+export function PreviewReceivedText(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
+    return $Call.ByID(2712906535, taskID);
 }
 
 export function ProbeLANAddress(address: string): $CancellablePromise<void> {
@@ -226,12 +270,20 @@ export function SavePreferences(next: $models.DesktopPreferences): $CancellableP
     return $Call.ByID(3232231562, next);
 }
 
+export function SaveReceivedImage(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
+    return $Call.ByID(1721016080, taskID);
+}
+
 export function SetAlwaysAccept(deviceID: string, enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(3711226762, deviceID, enabled);
 }
 
 export function SetBackgroundOptions(options: $models.BackgroundOptions): $CancellablePromise<void> {
     return $Call.ByID(3323717395, options);
+}
+
+export function SetContentSettings(settings: app$0.ContentSettings): $CancellablePromise<void> {
+    return $Call.ByID(2413203937, settings);
 }
 
 export function SetQueuePaused(paused: boolean): $CancellablePromise<void> {

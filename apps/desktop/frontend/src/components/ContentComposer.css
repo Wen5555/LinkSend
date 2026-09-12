@@ -1,0 +1,30 @@
+.content-composer { min-width: 0; }
+.content-kind-switch { display: flex; gap: 6px; margin: 0 0 18px; }
+.content-kind-switch .selected { color: var(--blue); background: var(--blue-soft); border-color: var(--blue); }
+.content-composer textarea { min-height: 90px; line-height: 1.7; overflow-wrap: anywhere; }
+.content-input-size { display: block; margin-top: 6px; color: var(--muted); text-align: right; font-size: 11px; font-weight: 400; }
+.content-image-input { padding: 18px 0 20px; color: var(--text); }
+.content-image-input strong { font-size: 13px; }
+.content-image-input p, .content-image-input small, .content-note { color: var(--muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.content-image-input p { margin: 7px 0; }
+.content-draft-list, .content-confirm, .content-pending, .content-settings { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+.content-confirm h3, .content-pending h3, .content-settings h3 { font-size: 14px; margin: 0 0 15px; }
+.content-metadata { display: flex; flex-wrap: wrap; gap: 16px 24px; margin: 0 0 20px; font-size: 12px; }
+.content-metadata dt { color: var(--muted); margin-bottom: 5px; }
+.content-metadata dd { margin: 0; color: var(--text); }
+.content-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.content-composer .queue-wait, .content-settings .queue-wait { align-items: flex-start; line-height: 1.7; }
+.content-composer .queue-wait input, .content-settings .queue-wait input { flex: 0 0 16px; margin-top: 2px; }
+.content-discard { padding: 12px 0; border-top: 1px solid var(--line); margin-top: 14px; font-size: 12px; line-height: 1.7; }
+.content-discard p { margin-top: 0; }
+.content-discard button { margin-right: 8px; }
+.content-pending > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 12px; }
+.content-pending > div span { min-width: 0; overflow-wrap: anywhere; }
+.content-pending > div button { flex-shrink: 0; }
+.content-error, .content-notice { padding: 10px 0; margin: 8px 0 0; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.content-error { color: #b14a40; }
+.content-notice { color: #21855e; }
+.content-actions { width: 100%; margin-top: 8px; }
+.content-actions-detail { border-left: 2px solid var(--line); padding: 0 0 0 13px; margin: 8px 0; }
+@media (max-width: 720px) { .content-pending > div { align-items: flex-start; flex-direction: column; } .content-buttons { align-items: stretch; } .content-buttons .primary { width: 100%; } }
+@media (prefers-color-scheme: dark) { .content-error { color: #ff9c90; } .content-notice { color: #75cba5; } }

@@ -8,7 +8,7 @@ M0/M1 已发布 v0.5.0-m1；M2/M3 Windows原生系统入口、后台和保存退
 M1发布后发现的Windows退出按钮兼容问题保留在Release已知问题中，修复后的TaskDialog证据归M3，
 不反填成M1当时已验证。物理Mac、通知点击与完整系统菜单等仍分别标记。
 
-Current test prerelease: `v0.4.0`, protocol V1, Wails 3 `v3.0.0-beta.18`. This matrix separates source implementation, automated evidence, package verification and real-network validation. A loopback result is never counted as LAN or NAT acceptance, and a Pre-release is not a production-readiness claim. Historical evidence remains labeled with the version and source state that actually produced it.
+Historical baseline prerelease: `v0.4.0`, protocol V1, Wails 3 `v3.0.0-beta.18`. This matrix separates source implementation, automated evidence, package verification and real-network validation. A loopback result is never counted as LAN or NAT acceptance, and a Pre-release is not a production-readiness claim. Historical evidence remains labeled with the version and source state that actually produced it.
 
 | Area | Implemented source | Automated/current evidence | Target validation |
 |---|---|---|---|
@@ -24,3 +24,5 @@ Current test prerelease: `v0.4.0`, protocol V1, Wails 3 `v3.0.0-beta.18`. This m
 | Race and static checks | No race-specific code bypass | `0.4.0` local full test/vet/build/race and independent-module checks pass; frontend 11 tests and Windows Wails/NSIS version resources pass | Tagged GitHub Actions package jobs and real-network recovery on physical target OSes |
 
 Current validation gaps are public IPv6, physical network switching/sleep, NAT types that need endpoint-independent mapping or relay, installer install/uninstall, signing/notarization, minimum-macOS runtime, and the native Windows/macOS interaction matrix beyond window creation/basic Windows close. Controlled independent dual NAT is now PASS only for the explicitly mapped positive case; MASQUERADE-only remains a product FAIL (`CHECK_TIMEOUT`, relay not implemented). Pause, restart recovery and verified missing-block byte resume are implemented and locally validated; this does not retroactively make earlier packages capable. Hong Kong test main runs the schema 2 pairing service; production-use claims remain out of scope.
+
+M5当前增量：文字/URL/PNG Go快照与schema5、三类型队列和原生预览/复制/URL请求/PNG另存已实现；Windows真实UI/ICE/QUIC双向三类型与PNG不变性通过。物理Win→Mac协议通过；反向路由失败、剪贴板验收工具最后恢复失败、Mac部分系统权限缺项均保留，详见DESKTOP-M5-EXECUTION.md。M6只保留局部收件箱证据，本轮不继续宣称全量通过。

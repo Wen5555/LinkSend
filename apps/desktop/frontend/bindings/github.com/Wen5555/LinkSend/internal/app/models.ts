@@ -6,10 +6,56 @@
 import * as connectivity$0 from "../connectivity/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as content$0 from "../content/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as protocol$0 from "../protocol/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as transfer$0 from "../transfer/models.js";
+
+export interface ContentActionResult {
+    "task_id": string;
+    "action": string;
+    "state": string;
+}
+
+export interface ContentCleanupResult {
+    "removed": number;
+    "protected": number;
+}
+
+export interface ContentDraft {
+    "id": string;
+    "snapshot": content$0.Snapshot;
+    "revision": number;
+    "state": string;
+    "created_at": string;
+}
+
+export interface ContentSettings {
+    "retain_sent_snapshots": boolean;
+}
+
+export interface ContentTaskInfo {
+    "task_id": string;
+    "kind": content$0.Kind;
+    "size": number;
+    "width"?: number;
+    "height"?: number;
+    "mode": string;
+    "available": boolean;
+    "can_preview": boolean;
+    "can_copy": boolean;
+    "can_open": boolean;
+    "can_save": boolean;
+}
+
+export interface ContentTextRequest {
+    "request_id": string;
+    "kind": content$0.Kind;
+    "text": string;
+}
 
 export interface DeviceInfo {
     "id": string;
@@ -85,6 +131,16 @@ export interface DraftPreview {
     "problem"?: string;
 }
 
+export interface EnqueueContentRequest {
+    "request_id": string;
+    "draft_id": string;
+    "draft_revision": number;
+    "peer_id": string;
+    "allow_file_fallback": boolean;
+    "wait_for_peer": boolean;
+    "expires_at": string;
+}
+
 export interface EnqueueRequest {
     "request_id": string;
     "peer_id": string;
@@ -142,6 +198,7 @@ export interface InboxItem {
     "ended_at": string;
     "revision": number;
     "can_resend": boolean;
+    "can_resume": boolean;
     "can_forget": boolean;
 }
 
@@ -193,6 +250,8 @@ export interface IncomingFile {
 }
 
 export interface IncomingFilesPage {
+    "content"?: transfer$0.ContentDescriptor | null;
+    "file_fallback"?: boolean;
     "revision": number;
     "files": IncomingFile[] | null;
     "offset": number;
@@ -262,6 +321,7 @@ export interface QueueItem {
     "updated_at": string;
     "last_error": string;
     "wait_for_peer": boolean;
+    "content"?: content$0.Snapshot | null;
 }
 
 export interface ResendInboxRequest {

@@ -65,6 +65,8 @@ export function ReceivePlanDialog({ task, device, run, op }: Props) {
   }}>
     <p className="eyebrow">接收确认</p><h2 id="receive-plan-title">{device ? deviceName(device) : '对方设备'} 发来的内容</h2>
     <p className="field-help">原始请求 {page?.total_entries ?? task.file_count ?? 0} 项 · {formatBytes(page?.original_total ?? task.total_bytes)}。确认前不会接收正文。</p>
+    {page?.content && <p className="field-help">{page.content.kind === 'image' ? `剪贴板图片 · ${page.content.width} × ${page.content.height} 像素` : page.content.kind === 'url' ? '链接 · 收到后由你手动打开' : '文字 · 收到后可预览或复制'}。内容保存到所选目录，不会自动打开或写入剪贴板。</p>}
+    {page?.file_fallback && <p className="field-help">发送端已明确允许按普通文件接收；本次不提供原生内容动作。</p>}
     {files.isError && <div className="banner error-banner" role="alert"><p>{humanizeBackendError(files.error)}</p><button onClick={() => void files.refetch()}>重试读取</button></div>}
     <div className="receive-plan-toolbar"><label className="field-label">保存到<input value={currentDirectory} readOnly /></label><button className="secondary" disabled={disabled || page?.resume} onClick={() => void run('plan-directory', async () => { const value = await Backend.PickDirectory(); if (value) { setDirectory(value); setPreview(undefined); } })}>更换目录</button></div>
     <label className="field-label">遇到同名文件<select value={policy} disabled={disabled || page?.resume} onChange={event => { setPolicy(event.target.value as ConflictPolicy); setPreview(undefined); }}><option value={ConflictPolicy.ConflictKeepBoth}>保留两份，生成新名称</option><option value={ConflictPolicy.ConflictSkip} disabled={!selectionAvailable}>跳过冲突项</option><option value={ConflictPolicy.ConflictError}>停止确认，由我处理</option></select></label>

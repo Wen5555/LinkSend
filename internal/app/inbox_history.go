@@ -59,6 +59,7 @@ type InboxItem struct {
 	EndedAt            string `json:"ended_at"`
 	Revision           uint64 `json:"revision"`
 	CanResend          bool   `json:"can_resend"`
+	CanResume          bool   `json:"can_resume"`
 	CanForget          bool   `json:"can_forget"`
 }
 
@@ -294,7 +295,13 @@ func (s *Service) Inbox(ctx context.Context, query InboxQuery) (InboxPage, error
 		if summary == "" {
 			summary = snap.SourceSummary
 		}
-		page.Items = append(page.Items, InboxItem{TaskID: snap.ID, PeerID: snap.PeerID, Direction: snap.Direction, State: snap.State, Summary: inboxText(summary, 240), FileCount: snap.FileCount, VerifiedBytes: snap.VerifiedBytes, CommittedBytes: snap.CommittedBytes, BilateralConfirmed: snap.BilateralConfirmed, StartedAt: snap.StartedAt, EndedAt: snap.EndedAt, Revision: snap.Revision, CanResend: snap.Direction == "send" && isTerminal(snap.State) && recoveryUsable(recovery), CanForget: !inboxTaskProtected(snap, recovery) && !queueReferenced})
+		// Use the live capability: persisted history may precede a pause/resume.
+		// Queue-owned sends must be continued through the queue's confirmation.
+		canResume := false
+		if current, ok := s.Task(snap.ID); ok && !queueReferenced {
+			canResume = current.CanResume
+		}
+		page.Items = append(page.Items, InboxItem{TaskID: snap.ID, PeerID: snap.PeerID, Direction: snap.Direction, State: snap.State, Summary: inboxText(summary, 240), FileCount: snap.FileCount, VerifiedBytes: snap.VerifiedBytes, CommittedBytes: snap.CommittedBytes, BilateralConfirmed: snap.BilateralConfirmed, StartedAt: snap.StartedAt, EndedAt: snap.EndedAt, Revision: snap.Revision, CanResend: snap.Direction == "send" && isTerminal(snap.State) && recoveryUsable(recovery), CanResume: canResume, CanForget: !inboxTaskProtected(snap, recovery) && !queueReferenced})
 		last = inboxCursor{Version: 1, Filter: filterHash, Started: started, ID: snap.ID}
 	}
 	return page, rows.Err()

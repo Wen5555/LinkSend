@@ -45,6 +45,15 @@ describe('connection evidence labels', () => {
     expect(humanizeBackendError('TASK_NOT_RETRYABLE')).toContain('无法重试');
     expect(humanizeBackendError('RELAY_NOT_IMPLEMENTED')).toContain('暂未实现中继');
   });
+  it('localizes content failures in the shared command error banner', () => {
+    const unavailable = new Error('CLIPBOARD_IMAGE_NOT_AVAILABLE');
+    unavailable.name = 'RuntimeError';
+    expect(humanizeBackendError(unavailable)).toBe('剪贴板中没有可用图片，请先复制图片再读取。');
+    expect(humanizeBackendError('RuntimeError: CLIPBOARD_WRITE_FAILED')).toContain('未能写入剪贴板');
+    expect(humanizeBackendError('RuntimeError: CONTENT_LIMIT_EXCEEDED')).toContain('尺寸限制');
+    expect(humanizeBackendError('RuntimeError: CONTENT_CAPABILITY_REQUIRED')).toContain('按文件发送');
+    expect(humanizeBackendError('RuntimeError: CONTENT_SNAPSHOT_CHANGED: private snapshot path')).not.toContain('private');
+  });
   it('provides actionable LAN discovery diagnostics', () => {
     expect(humanizeBackendError('LAN_CONTROL_UNREACHABLE')).toContain('防火墙');
     expect(humanizeBackendError('LAN_DISCOVERY_UNAVAILABLE')).toContain('UDP 53318');

@@ -10,7 +10,7 @@ vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => bac
 
 const filters = { search: '', peer: '', direction: '', state: '', after: '', before: '' };
 const item: InboxItem = { task_id: 'opaque-task', peer_id: 'peer', direction: 'receive', state: 'completed', summary: '中文 报告.txt', file_count: 1,
-  verified_bytes: 42, committed_bytes: 42, bilateral_confirmed: true, started_at: '2026-09-12T05:00:00Z', ended_at: '2026-09-12T05:00:01Z', revision: 4, can_resend: false, can_forget: true };
+  verified_bytes: 42, committed_bytes: 42, bilateral_confirmed: true, started_at: '2026-09-12T05:00:00Z', ended_at: '2026-09-12T05:00:01Z', revision: 4, can_resend: false, can_resume: false, can_forget: true };
 
 function markup(data?: PageData, options: { available?: boolean; focused?: boolean; filesAvailable?: boolean; skipped?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });

@@ -7,18 +7,19 @@
 用户本轮明确授权每阶段推送、部署和发布，覆盖总提示词中的默认禁止条款。
 随后用户明确允许 M0 与 M1 合并发布；最低系统为 macOS13，取消macOS12支持并保留Go1.27.1。
 详情见 [工具链平台兼容性纠正](DESKTOP-M0-COMPATIBILITY-CORRECTION.md)。
+后续用户明确本轮截止M5：合并、测试、更新文档、上传GitHub和Release后停止；M6已合入成果保留但不再扩展其验收。
 阶段产物发布为测试预发布，只有通过的实际结果列为 PASS。2026-09-12 又授权通过 SSH
-在 Mac 安装软件并测试，当前给定地址为 `10.234.184.6`；连接沿用管理器现有 alias。
+在 Mac 安装软件并测试，当前给定地址为 `10.234.14.15`；连接沿用管理器现有 alias。
 
 | 阶段 | 状态 | 当前内容 / 下一步 |
 |---|---|---|
 | M0 | IMPLEMENTED / RELEASED | 官方依赖、拒绝/profile锁/保存退出已验；与M1合并发布 |
 | M1 | IMPLEMENTED / RELEASED | schema3设备/草稿/队列、事件与真实调度；CI四包与Windows/Mac精确payload原生检查通过，香港已部署 |
 | M2 | INTEGRATED / NATIVE_PARTIAL | 单实例与持久入口已接Go草稿；Windows并发/隐藏/冷启动/重启通过，完整系统菜单/拖放联调继续 |
-| M3 | INTEGRATED / NATIVE_PARTIAL | 已接后台/通知/防睡眠；Windows隐藏唤回、真实4MiB传输中的继续/保存退出通过，Mac后台启动退出缺陷修复中 |
+| M3 | INTEGRATED / NATIVE_PARTIAL | 已接后台/通知/防睡眠；Windows隐藏唤回、真实4MiB传输中的继续/保存退出通过，Mac后台隐藏/唤回/退出实机通过 |
 | M4 | INTEGRATED / WINDOWS_NATIVE_PASS | ReceivePlan/子集/冲突/恢复和UI已整合；Windows真窗口/QUIC/落盘通过，Mac及发行包继续 |
-| M5 | IN_PROGRESS | 独立内容快照与平台图片剪贴板adapter；协议和应用路径待整合 |
-| M6 | INTEGRATED / NATIVE_PARTIAL | schema4/分页收件箱/安全清理与导航已接；Windows检索、实际Explorer选中、删记录保文件通过，最终联调和包级继续 |
+| M5 | INTEGRATED / WINDOWS_NATIVE_PASS | 三种真实内容队列与原生动作已接；Windows六向UI/QUIC及PNG快照验证通过，物理Win→Mac通过、反向路由失败；发布包单列来源 |
+| M6 | PARTIAL / STOP_AT_M5 | schema4/分页收件箱/安全清理与导航已接；Windows检索、实际Explorer选中、删记录保文件通过，用户要求本轮不继续完整M6联调 |
 
 M0/M1 已于 `2026-09-12T06:21:30Z` 发布为
 [v0.5.0-m1 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m1)，不是 Latest。

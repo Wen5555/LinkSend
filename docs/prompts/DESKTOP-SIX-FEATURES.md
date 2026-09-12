@@ -1,5 +1,8 @@
 # LinkSend 六项桌面能力开发提示词
 
+2026-09-12 后续执行范围：用户指定完成M5后合并、测试、更新文档并上传GitHub/Release，然后停止。下文保留M0–M6完整设计；M6已合入的局部成果保留，不视为本轮必须继续完成的里程碑。
+
+
 日期：2026-09-12。用途：复制到后续开发任务执行；本提示词已于 2026-09-12 开始执行，状态见 [执行记录](../evidence/DESKTOP-SIX-FEATURES-EXECUTION.md)；仅以实际验收报告判断完成。
 对应详细规划：[DESKTOP-SIX-FEATURES-PLAN.md](../DESKTOP-SIX-FEATURES-PLAN.md)。
 
