@@ -47,29 +47,35 @@ type SendHooks struct {
 	ChunkSent      func(ChunkTransmission)
 }
 type Result struct {
-	TransferID      string `json:"transfer_id"`
-	Digest          string `json:"digest"`
-	Bytes           int64  `json:"bytes"`
-	State           string `json:"state"`
-	OriginalTotal   int64  `json:"original_total"`
-	SelectedFiles   int    `json:"selected_files"`
-	SelectedEntries int    `json:"selected_entries"`
-	SkippedFiles    int    `json:"skipped_files"`
-	SkippedEntries  int    `json:"skipped_entries"`
-	SkippedBytes    int64  `json:"skipped_bytes"`
-	SelectionDigest string `json:"selection_digest,omitempty"`
+	TransferID      string             `json:"transfer_id"`
+	Digest          string             `json:"digest"`
+	Bytes           int64              `json:"bytes"`
+	State           string             `json:"state"`
+	OriginalTotal   int64              `json:"original_total"`
+	SelectedFiles   int                `json:"selected_files"`
+	SelectedEntries int                `json:"selected_entries"`
+	SkippedFiles    int                `json:"skipped_files"`
+	SkippedEntries  int                `json:"skipped_entries"`
+	SkippedBytes    int64              `json:"skipped_bytes"`
+	SelectionDigest string             `json:"selection_digest,omitempty"`
+	Content         *ContentDescriptor `json:"content,omitempty"`
+	ContentDigest   string             `json:"content_digest,omitempty"`
+	FileFallback    bool               `json:"file_fallback,omitempty"`
 }
 type control struct {
-	Op              string     `json:"op"`
-	Manifest        *Manifest  `json:"manifest,omitempty"`
-	Digest          string     `json:"digest,omitempty"`
-	File            uint32     `json:"file,omitempty"`
-	Index           int        `json:"index,omitempty"`
-	Verified        int64      `json:"verified,omitempty"`
-	Error           string     `json:"error,omitempty"`
-	Capabilities    []string   `json:"capabilities,omitempty"`
-	Selection       *Selection `json:"selection,omitempty"`
-	SelectionDigest string     `json:"selection_digest,omitempty"`
+	Op                string             `json:"op"`
+	Manifest          *Manifest          `json:"manifest,omitempty"`
+	Digest            string             `json:"digest,omitempty"`
+	File              uint32             `json:"file,omitempty"`
+	Index             int                `json:"index,omitempty"`
+	Verified          int64              `json:"verified,omitempty"`
+	Error             string             `json:"error,omitempty"`
+	Capabilities      []string           `json:"capabilities,omitempty"`
+	Selection         *Selection         `json:"selection,omitempty"`
+	SelectionDigest   string             `json:"selection_digest,omitempty"`
+	Content           *ContentDescriptor `json:"content,omitempty"`
+	ContentDigest     string             `json:"content_digest,omitempty"`
+	AllowFileFallback bool               `json:"allow_file_fallback,omitempty"`
 }
 
 const (
@@ -126,6 +132,12 @@ func (e *PeerError) Is(target error) bool {
 		return target == ErrPlanPersistence
 	case "RESUME_IDENTITY_MISMATCH":
 		return target == ErrResumeMismatch
+	case "CONTENT_UNSUPPORTED":
+		return target == ErrContentUnsupported
+	case "INVALID_CONTENT_DESCRIPTOR":
+		return target == ErrContentInvalid
+	case "CONTENT_MISMATCH":
+		return target == ErrContentMismatch
 	default:
 		return false
 	}
@@ -144,6 +156,8 @@ func peerErrorCode(err error) string {
 		{ErrPlanUnsupported, "RECEIVE_PLAN_UNSUPPORTED"}, {ErrPlanMismatch, "RECEIVE_PLAN_MISMATCH"},
 		{ErrPlanInvalid, "INVALID_RECEIVE_PLAN"}, {ErrPlanPersistence, "RECEIVE_PLAN_PERSIST_FAILED"},
 		{ErrResumeMismatch, "RESUME_IDENTITY_MISMATCH"},
+		{ErrContentUnsupported, "CONTENT_UNSUPPORTED"}, {ErrContentInvalid, "INVALID_CONTENT_DESCRIPTOR"},
+		{ErrContentMismatch, "CONTENT_MISMATCH"},
 	} {
 		if errors.Is(err, candidate.err) {
 			return candidate.code
@@ -331,7 +345,10 @@ func safePeerError(s string) string {
 }
 
 func validateControl(c control) error {
-	if len(c.Capabilities) > 16 || (len(c.Capabilities) > 0 && c.Op != opOffer) {
+	if err := validateContentControl(c); err != nil {
+		return err
+	}
+	if len(c.Capabilities) > 16 || (len(c.Capabilities) > 0 && c.Op != opOffer && c.Op != opAccept) {
 		return errors.New("INVALID_CAPABILITIES")
 	}
 	for _, capability := range c.Capabilities {
@@ -408,6 +425,10 @@ func Send(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, onProgress fu
 }
 
 func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hooks SendHooks) (result Result, err error) {
+	return SendWithOptions(ctx, rw, p, SendOptions{Hooks: hooks})
+}
+
+func SendWithOptions(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, options SendOptions) (result Result, err error) {
 	complete, abort := streamLifecycle(ctx, rw)
 	defer func() {
 		if ctx.Err() != nil && err != nil {
@@ -415,8 +436,23 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 		}
 		abort()
 	}()
+	hooks := options.Hooks
+	descriptor := cloneContent(options.Content)
+	if p == nil {
+		return Result{}, errors.New("INVALID_MANIFEST")
+	}
+	if err = p.validateContent(ctx, descriptor); err != nil {
+		return Result{}, err
+	}
 	m := p.Manifest
 	digest := m.Digest()
+	contentDigest := ""
+	fallback := false
+	capabilities := []string{CapabilityReceivePlan}
+	if descriptor != nil {
+		contentDigest = descriptor.BindingDigest(m)
+		capabilities = append(capabilities, CapabilityContent)
+	}
 	start := time.Now()
 	plan := FullReceivePlan(m)
 	summary := plan.Summary(m)
@@ -432,7 +468,7 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 		}
 	}
 	emit()
-	if err := writeControl(rw, control{Op: opOffer, Manifest: &m, Digest: digest, Capabilities: []string{CapabilityReceivePlan}}); err != nil {
+	if err := writeControl(rw, control{Op: opOffer, Manifest: &m, Digest: digest, Capabilities: capabilities, Content: descriptor, ContentDigest: contentDigest, AllowFileFallback: descriptor != nil && options.AllowFileFallback}); err != nil {
 		return Result{}, err
 	}
 	c, err := readControl(rw)
@@ -444,6 +480,17 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 	}
 	if c.Op != opAccept || c.Digest != digest {
 		return Result{}, errors.New("INVALID_ACCEPTANCE")
+	}
+	if descriptor != nil && !hasCapability(c.Capabilities, CapabilityContent) {
+		if !options.AllowFileFallback {
+			// Closing before consuming a chunk request also works with synchronous
+			// legacy streams; sending an error here could deadlock against its write.
+			return Result{}, ErrContentUnsupported
+		}
+		descriptor, contentDigest, fallback = nil, "", true
+	}
+	if c.ContentDigest != contentDigest {
+		return Result{}, ErrContentMismatch
 	}
 	if c.Selection != nil {
 		if err = c.Selection.Validate(m); err != nil {
@@ -526,12 +573,15 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 				writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 				return Result{}, err
 			}
-			if err = writeControl(rw, control{Op: opFinish, Digest: digest, SelectionDigest: selectionDigest}); err != nil {
+			if err = writeControl(rw, control{Op: opFinish, Digest: digest, SelectionDigest: selectionDigest, ContentDigest: contentDigest}); err != nil {
 				return Result{}, err
 			}
 			done, e := readControl(rw)
 			if e != nil {
 				return Result{}, e
+			}
+			if done.ContentDigest != contentDigest {
+				return Result{}, ErrContentMismatch
 			}
 			if done.Op != opCompleted || done.Digest != digest || done.Verified != progress.Total || done.SelectionDigest != selectionDigest {
 				return Result{}, ErrIntegrity
@@ -539,14 +589,16 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 			// New peers explicitly acknowledge that they consumed confirmed. Older
 			// receivers close their send direction after consuming it, which remains
 			// equivalent delivery evidence and keeps this change wire-compatible.
-			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest, SelectionDigest: selectionDigest}); err != nil {
+			if err = writeControl(rw, control{Op: opConfirmed, Digest: digest, SelectionDigest: selectionDigest, ContentDigest: contentDigest}); err != nil {
 				return Result{}, err
 			}
 			confirmation, confirmationErr := readControl(rw)
 			if confirmationErr != nil {
-				if selectionDigest != "" || !terminalDeliveryObserved(rw, confirmationErr) {
+				if selectionDigest != "" || contentDigest != "" || !terminalDeliveryObserved(rw, confirmationErr) {
 					return Result{}, confirmationErr
 				}
+			} else if confirmation.ContentDigest != contentDigest {
+				return Result{}, ErrContentMismatch
 			} else if confirmation.Op != opConfirmedAck || confirmation.Digest != digest || confirmation.SelectionDigest != selectionDigest {
 				return Result{}, ErrIntegrity
 			}
@@ -557,7 +609,7 @@ func SendWithHooks(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, hook
 			progress.Verified = done.Verified
 			emit()
 			complete()
-			return resultForPlan(m, summary, done.Verified, progress.State, selectionDigest), nil
+			return contentResult(resultForPlan(m, summary, done.Verified, progress.State, selectionDigest), descriptor, contentDigest, fallback), nil
 		default:
 			return Result{}, errors.New("UNKNOWN_CRITICAL_MESSAGE")
 		}
@@ -589,6 +641,9 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	}()
 	offer, err := readControl(rw)
 	if err != nil {
+		if errors.Is(err, ErrContentInvalid) || errors.Is(err, ErrContentMismatch) || errors.Is(err, ErrContentUnsupported) {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+		}
 		return Result{}, err
 	}
 	if offer.Op != opOffer || offer.Manifest == nil {
@@ -601,6 +656,16 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	if offer.Digest != m.Digest() {
 		return Result{}, ErrIntegrity
 	}
+	descriptor := cloneContent(offer.Content)
+	contentDigest := offer.ContentDigest
+	fallback := false
+	if descriptor != nil && (!options.AcceptNativeContent || options.Plan == nil) {
+		if !offer.AllowFileFallback {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrContentUnsupported)})
+			return Result{}, ErrContentUnsupported
+		}
+		descriptor, contentDigest, fallback = nil, "", true
+	}
 	plan := FullReceivePlan(m)
 	var requested *ReceivePlan
 	if options.Plan != nil {
@@ -609,7 +674,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(loadErr)})
 			return Result{}, loadErr
 		}
-		plan, err = options.Plan(ctx, Offer{Manifest: cloneManifest(m), Capabilities: append([]string(nil), offer.Capabilities...), ResumePlan: resumePlan})
+		plan, err = options.Plan(ctx, Offer{Manifest: cloneManifest(m), Capabilities: append([]string(nil), offer.Capabilities...), ResumePlan: resumePlan, Content: cloneContent(descriptor), ContentDigest: contentDigest})
 		if err != nil {
 			if errors.Is(err, ErrRejected) {
 				writeTerminal(ctx, rw, control{Op: opReject})
@@ -637,7 +702,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrPlanUnsupported)})
 		return Result{}, ErrPlanUnsupported
 	}
-	r, err := openReceiver(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged)
+	r, err := openReceiverContent(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged, descriptor)
 	if err != nil {
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return Result{}, err
@@ -660,7 +725,11 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		_ = r.Mark(state)
 		return Result{}, e
 	}
-	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes(), Selection: selection}); err != nil {
+	var acceptedCapabilities []string
+	if descriptor != nil {
+		acceptedCapabilities = []string{CapabilityContent}
+	}
+	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes(), Selection: selection, Capabilities: acceptedCapabilities, ContentDigest: contentDigest}); err != nil {
 		return fail(err)
 	}
 	start := time.Now()
@@ -713,6 +782,13 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	if finish.Op != opFinish || finish.Digest != m.Digest() || finish.SelectionDigest != selectionDigest {
 		return fail(ErrIntegrity)
 	}
+	if finish.ContentDigest != contentDigest {
+		return fail(ErrContentMismatch)
+	}
+	if err = r.validateContent(ctx, descriptor); err != nil {
+		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+		return fail(err)
+	}
 	emit("Verifying")
 	if err = r.FinishWithCommit(ctx, func(record CommitRecord) {
 		committed += record.Size
@@ -722,7 +798,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return fail(err)
 	}
-	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes(), SelectionDigest: selectionDigest}); err != nil {
+	if err = writeControl(rw, control{Op: opCompleted, Digest: m.Digest(), Verified: r.VerifiedBytes(), SelectionDigest: selectionDigest, ContentDigest: contentDigest}); err != nil {
 		return fail(err)
 	}
 	confirmed, err := readControl(rw)
@@ -732,10 +808,13 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	if confirmed.Op != opConfirmed || confirmed.Digest != m.Digest() || confirmed.SelectionDigest != selectionDigest {
 		return Result{}, ErrIntegrity
 	}
+	if confirmed.ContentDigest != contentDigest {
+		return Result{}, ErrContentMismatch
+	}
 	// The explicit receipt removes the former fixed teardown wait. FlushTerminal
 	// keeps the acknowledgement safe if the sender is an older implementation:
 	// old senders ignore these bytes and have already half-closed their stream.
-	if err = flushTerminal(ctx, rw, control{Op: opConfirmedAck, Digest: m.Digest(), SelectionDigest: selectionDigest}); err != nil {
+	if err = flushTerminal(ctx, rw, control{Op: opConfirmedAck, Digest: m.Digest(), SelectionDigest: selectionDigest, ContentDigest: contentDigest}); err != nil {
 		return Result{}, err
 	}
 	state := "Completed"
@@ -744,7 +823,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	}
 	emit(state)
 	complete()
-	return resultForPlan(m, summary, r.VerifiedBytes(), state, selectionDigest), nil
+	return contentResult(resultForPlan(m, summary, r.VerifiedBytes(), state, selectionDigest), descriptor, contentDigest, fallback), nil
 }
 
 func resultForPlan(m Manifest, summary PlanSummary, bytes int64, state, digest string) Result {

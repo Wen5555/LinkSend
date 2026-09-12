@@ -36,6 +36,7 @@ type ResumeState struct {
 	CommitStarted    bool                       `json:"commit_started,omitempty"`
 	Directories      map[uint32]DirectoryRecord `json:"directories,omitempty"`
 	DirectoryIntents map[uint32]string          `json:"directory_intents,omitempty"`
+	ContentDigest    string                     `json:"content_digest,omitempty"`
 }
 
 type CommitRecord struct {
@@ -69,8 +70,19 @@ func OpenReceiverWithPlan(ctx context.Context, directory, peer string, m Manifes
 }
 
 func openReceiver(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error) (_ *Receiver, err error) {
+	return openReceiverContent(ctx, directory, peer, m, requested, planChanged, nil)
+}
+
+func openReceiverContent(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error, descriptor *ContentDescriptor) (_ *Receiver, err error) {
 	if err = m.Validate(); err != nil {
 		return nil, err
+	}
+	contentDigest := ""
+	if descriptor != nil {
+		if err = descriptor.Validate(m); err != nil {
+			return nil, err
+		}
+		contentDigest = descriptor.BindingDigest(m)
 	}
 	if peer == "" {
 		return nil, errors.New("AUTH_FAILED")
@@ -97,6 +109,7 @@ func openReceiver(ctx context.Context, directory, peer string, m Manifest, reque
 		return nil, err
 	}
 	r := &Receiver{root: root, files: make(map[uint32]*os.File), plan: plan, planChanged: planChanged, State: ResumeState{Peer: peer, Manifest: m, Digest: m.Digest(), State: "Recovering", Verified: make(map[uint32][]bool), Committed: make(map[uint32]CommitRecord), Intents: make(map[uint32]CommitRecord), Directories: make(map[uint32]DirectoryRecord), DirectoryIntents: make(map[uint32]string)}}
+	r.State.ContentDigest = contentDigest
 	if requested != nil {
 		savedPlan := clonePlan(plan)
 		r.State.Plan = &savedPlan
@@ -135,6 +148,9 @@ func openReceiver(ctx context.Context, directory, peer string, m Manifest, reque
 		}
 		if saved.Peer != peer || saved.Digest != m.Digest() || saved.Manifest.Digest() != m.Digest() || saved.Manifest.TransferID != m.TransferID || saved.Manifest.ChunkSize != m.ChunkSize {
 			return nil, ErrResumeMismatch
+		}
+		if err = validateContentCheckpoint(&saved, contentDigest); err != nil {
+			return nil, err
 		}
 		if strings.HasPrefix(saved.State, "ReceivePlanV1/") {
 			if saved.Plan == nil {
@@ -310,6 +326,9 @@ func (r *Receiver) checkpoint() error {
 	if snapshot.Plan != nil {
 		snapshot.State = "ReceivePlanV1/" + snapshot.State
 		snapshot.PlanDigest = snapshot.Plan.Digest()
+	}
+	if snapshot.ContentDigest != "" {
+		snapshot.State = "ContentV1/" + snapshot.State
 	}
 	b, err := json.Marshal(snapshot)
 	if err != nil {

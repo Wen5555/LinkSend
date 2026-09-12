@@ -69,18 +69,23 @@ type Selection struct {
 }
 
 type Offer struct {
-	Manifest     Manifest     `json:"manifest"`
-	Capabilities []string     `json:"capabilities"`
-	ResumePlan   *ReceivePlan `json:"resume_plan,omitempty"`
+	Manifest      Manifest           `json:"manifest"`
+	Capabilities  []string           `json:"capabilities"`
+	ResumePlan    *ReceivePlan       `json:"resume_plan,omitempty"`
+	Content       *ContentDescriptor `json:"content,omitempty"`
+	ContentDigest string             `json:"content_digest,omitempty"`
 }
 
 type ReceiveOptions struct {
-	Directory   string
-	Peer        string
-	Accept      func(Manifest) bool
-	Plan        func(context.Context, Offer) (ReceivePlan, error)
-	PlanChanged func(ReceivePlan) error
-	Progress    func(Progress)
+	Directory string
+	Peer      string
+	Accept    func(Manifest) bool
+	// Explicitly opt in only after the caller handles Offer.Content and provides
+	// safe post-receive actions. A pre-content Plan callback alone is insufficient.
+	AcceptNativeContent bool
+	Plan                func(context.Context, Offer) (ReceivePlan, error)
+	PlanChanged         func(ReceivePlan) error
+	Progress            func(Progress)
 }
 
 type PlanSummary struct {
