@@ -1,5 +1,8 @@
 # 香港测试主站部署与回滚
 
+2026-09-12最新运行版本为M5源码d0c4a4b的0.5.0服务；部署、备份和独立复核见 [M5发布回执](evidence/DESKTOP-M5-RELEASE.md)。以下较早版本记录保留为历史，不代表当前运行文件。
+
+
 香港入口是长期测试主站，不承载生产身份或生产可用性承诺。目标 SSH alias 为 `hk-main`（Debian 12 amd64，SSH 端口由 manager inventory 管理），服务位于 `/opt/linksend-lan-test`。所有远程连接必须通过 `codex-ssh-manager` 执行 resolve → probe → audit-host；不得把密码、令牌、固定码、私钥或完整配置复制进提示词、脚本和证据。
 
 ## 当前基线（Desktop M1，v0.5.0）

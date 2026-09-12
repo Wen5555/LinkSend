@@ -2,6 +2,8 @@
 
 ## 2026-09-12 桌面能力（用户指定M5收尾）
 
+M5已合并main并于2026-09-12T10:13:32Z发布 [v0.5.0-m5](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m5)。三平台CI、精确Windows/Mac ARM payload、6个远端asset digest与香港最终部署验证通过；详见 [M5发布回执](evidence/DESKTOP-M5-RELEASE.md)。本轮按用户要求停止，不继续M6。
+
 基线 `fbfc250`，工作分支 `codex/desktop-six-features`；用户明确授权逐目标推送、部署和发布。
 依赖官方核实与安装完成：Go1.27.1、Node24.21.0、pnpm12.4.1、React19.3、TS6.0.3、Vite8.3、Vitest5、Query5.102.8，Wails保留beta.18。
 已实现本机拒绝与trust schema1迁移、profile内核锁、保存退出及调度/迟到事件屏障；真实QUIC保存退出与针对性race通过。
@@ -32,7 +34,7 @@ M4/M5 wire整合保留三个可选能力；发送端选择和实际内容解释�
 
 M4/M6 已完成 Windows 真窗口选收、原生目录选择、保留两份、空目录、全跳过、真实 QUIC 双方确认及收件箱检索、Explorer 定位、仅清记录和孤立暂存清理；证据见 [原生验收](evidence/DESKTOP-M4-WINDOWS-UI.md)。Mac M3 --background 启动退出缺陷已通过实机修复验证，通知真实含点任务 ID 已修复；未将源码通过等同已发布。
 
-Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m1`; protocol: V1.
+Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m5`; protocol: V1.
 The following `v0.4.0` sections preserve earlier evidence. No prerelease is an accepted production release.
 
 ## 2026-09-12 v0.4.0 文档、主分支与测试预发布

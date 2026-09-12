@@ -15,11 +15,13 @@
 |---|---|---|
 | M0 | IMPLEMENTED / RELEASED | 官方依赖、拒绝/profile锁/保存退出已验；与M1合并发布 |
 | M1 | IMPLEMENTED / RELEASED | schema3设备/草稿/队列、事件与真实调度；CI四包与Windows/Mac精确payload原生检查通过，香港已部署 |
-| M2 | INTEGRATED / NATIVE_PARTIAL | 单实例与持久入口已接Go草稿；Windows并发/隐藏/冷启动/重启通过，完整系统菜单/拖放联调继续 |
-| M3 | INTEGRATED / NATIVE_PARTIAL | 已接后台/通知/防睡眠；Windows隐藏唤回、真实4MiB传输中的继续/保存退出通过，Mac后台隐藏/唤回/退出实机通过 |
-| M4 | INTEGRATED / WINDOWS_NATIVE_PASS | ReceivePlan/子集/冲突/恢复和UI已整合；Windows真窗口/QUIC/落盘通过，Mac及发行包继续 |
-| M5 | INTEGRATED / WINDOWS_NATIVE_PASS | 三种真实内容队列与原生动作已接；Windows六向UI/QUIC及PNG快照验证通过，物理Win→Mac通过、反向路由失败；发布包单列来源 |
+| M2 | RELEASED_M5 / NATIVE_PARTIAL | 单实例与持久入口已接Go草稿；Windows并发/隐藏/冷启动/重启通过，完整系统菜单/拖放联调继续 |
+| M3 | RELEASED_M5 / NATIVE_PARTIAL | 已接后台/通知/防睡眠；Windows隐藏唤回、真实4MiB传输中的继续/保存退出通过，Mac后台隐藏/唤回/退出实机通过 |
+| M4 | RELEASED_M5 / WINDOWS_NATIVE_PASS | ReceivePlan/子集/冲突/恢复和UI已整合；Windows真窗口/QUIC/落盘通过，Mac及发行包继续 |
+| M5 | RELEASED / NATIVE_EVIDENCED | 三种真实内容队列与原生动作已接；Windows六向UI/QUIC及PNG快照验证通过，物理Win→Mac通过、反向路由失败；发布包单列来源 |
 | M6 | PARTIAL / STOP_AT_M5 | schema4/分页收件箱/安全清理与导航已接；Windows检索、实际Explorer选中、删记录保文件通过，用户要求本轮不继续完整M6联调 |
+
+M5已于2026-09-12T10:13:32Z发布 [v0.5.0-m5](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m5)，精确tag/main源码d0c4a4b；[发行包和部署证据](DESKTOP-M5-RELEASE.md)包含最终回执。本轮按后续用户要求到此停止。
 
 M0/M1 已于 `2026-09-12T06:21:30Z` 发布为
 [v0.5.0-m1 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m1)，不是 Latest。

@@ -2,7 +2,7 @@
 
 LinkSend 是一个面向 Windows 和 macOS 的开源点对点文件传输工具。它由 Go 网络内核、Wails 3 桌面端和可自托管的信令服务组成，优先在局域网内直接发现设备，也支持通过信令服务协调跨网络 P2P 连接。
 
-当前源码为 **0.5.0**，文件与控制协议保持 **V1**。本轮交付至 **M5 测试预发布**；从 [GitHub Releases](https://github.com/Wen5555/LinkSend/releases) 获取已发布的 Windows 便携包、安装程序和 macOS arm64/amd64 DMG。最低 macOS 13，最低系统版本不等于已完成该版本实机验收。
+当前源码为 **0.5.0**，文件与控制协议保持 **V1**。本轮已发布 **[v0.5.0-m5 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m5)**，包含 Windows 便携包、安装程序和 macOS arm64/amd64 DMG。最低 macOS 13，最低系统版本不等于已完成该版本实机验收。
 
 ## 设计特点
 

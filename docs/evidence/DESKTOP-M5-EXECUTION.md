@@ -31,7 +31,7 @@
 
 ## 剪贴板验收工具事件
 
-前几次测试在内存保存7种剪贴板格式并成功恢复；最后一次PNG快照后的恢复检查返回false，已明确告知用户原剪贴板不能保证恢复。该测试进程未保存原内容到日志/磁盘，原始报告保持`clipboard_restored=false`。不将此项写成PASS。
+前几次测试在内存保存7种剪贴板格式，恢复函数返回true；最后一次PNG快照后的恢复检查返回false，已明确告知用户原剪贴板不能保证恢复。该测试进程未保存原内容到日志/磁盘，原始报告保持`clipboard_restored=false`。不将此项写成PASS。
 
 检查发现Windows在关闭clipboard后可能合成TEXT/OEM/LOCALE格式；仅用打开期间的序号判断会把它当作外部更改。验收工具现要求用户已清空的专用测试剪贴板，非空即在任何EmptyClipboard前拒绝；清理还核对owner和已知测试payload。没有再次改写用户剪贴板验证这个工具修补，标为未重跑。产品CaptureImage始终只读，不包含测试工具的Empty/Set操作。
 
@@ -51,6 +51,6 @@ M5首次Mac Intel打包CI34681703733中，队列已completed但立即历史重�
 
 ## 发行边界
 
-本轮发行是M5测试预发布；Windows未代码签名，Mac仅ad-hoc签名，未Developer ID公证。Mac Finder完整菜单/AX红点点击/通知点击受现场权限限制；MASQUERADE-only双NAT原CHECK_TIMEOUT仍保留，公共IPv6、真实睡眠/网切、更多安装环境及完整M6验收不在本次已通过声明内。最终包来源和哈希以对应GitHub Release的RELEASE-MANIFEST与SHA256SUMS为准。
+本轮已发布 [v0.5.0-m5](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m5)，[最终包、CI及部署回执](DESKTOP-M5-RELEASE.md)单列精确来源。Windows未代码签名，Mac仅ad-hoc签名，未Developer ID公证。Mac Finder完整菜单/AX红点点击/通知点击受现场权限限制；MASQUERADE-only双NAT原CHECK_TIMEOUT仍保留，公共IPv6、真实睡眠/网切、更多安装环境及完整M6验收不在本次已通过声明内。最终包来源和哈希以对应GitHub Release的RELEASE-MANIFEST与SHA256SUMS为准。
 
 最终本机回归（2026-09-12）：根独立mod verify/test/vet/build、全量race（app57.073s）和workspace test全部退出0；桌面独立verify/race/vet/build、73方法绑定生成及Wails production构建退出0。后续加入的独立physical probe源码再做定向检查；最终CI资产仍须由同一提交构建。
