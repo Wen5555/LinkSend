@@ -67,7 +67,11 @@ go test ./internal/content -run 'TestSnapshotMaximumImageMemory|TestSnapshotImag
 
 Windows 原生剪贴板只读探测实际结果为 **SKIP：当前剪贴板无受支持图片**。没有为了测试覆写用户剪贴板，该结果不代表真实截图捕获通过。
 
-macOS 的真实 PNG/TIFF 验收使用 `scripts/test-content-clipboard-macos.swift` 创建 `com.linksend.native-test.*` 命名 pasteboard，并由 `TestDarwinNamedPasteboardSnapshot` 调用相同原生读取/存储路径。脚本从不操作用户 general clipboard，finally 清理命名板。实际执行结果待独立原生审计补充。
+macOS 的真实 PNG/TIFF 验收已 PASS。`mac-test-102342413`（macOS 26.5 / arm64 / Go 1.27.1 / `GOWORK=off` / minimum macOS 13）执行根 `go test -race -count=1 ./internal/content`，以及 desktop `go test -count=1 ./nativeclipboard`、`go vet ./nativeclipboard`，全部退出 0。
+
+`scripts/test-content-clipboard-macos.swift` 创建命名板 `com.linksend.native-test.1B50AAF7-E1AF-4E80-8D5F-16CF6E1F7125`；PNG 158 bytes 与 TIFF 226 bytes 分别由 `TestDarwinNamedPasteboardSnapshot` 调用相同 NSPasteboard/ImageIO 读取/存储路径。两次均验证 2×2、RGB 180/60/30、alpha 255、owned snapshot、Release 和 Cleanup，最后成功 clear 命名板。全过程未触碰用户 general clipboard；这证明原生格式读取路径，不代替完整 Wails UI 的截图按钮验收。
+
+源码归档 SHA256 `5f50b99f301dacdf408d6eb9e1054113168e7b9b0c7d6398e8c61374edf409be`；远程 job `/tmp/codex-ssh/desktop-m5-mac-content-native-20260912T062416Z` 退出 0。完整命令、stdout/stderr 与结果已下载至 `.artifacts/desktop-six-features/m5-mac-native/m5-native-content-evidence.tar.gz`，SHA256 `09762e5bdcef39760536111da1170d62d644ac95fc93094c394edf6d8d706750`，展开证据位于同目录 `evidence/`。
 
 ## 尚待集成与验收
 
