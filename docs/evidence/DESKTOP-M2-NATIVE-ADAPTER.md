@@ -14,11 +14,36 @@
 
 ## Windows SendTo
 
-`installSendTo(executable)` / `uninstallSendTo(executable)` 通过 `windows.KnownFolderPath(FOLDERID_SendTo)` 定位当前用户目录。真实 Shell Link 由 Windows 的 `WScript.Shell` COM adapter 写属性，未调用 Run/Exec 或执行用户路径字符串。COM 生命周期在独立锁定的 OS 线程上完成。
+`installSendTo(executable)` / `uninstallSendTo(executable)` 通过 `windows.KnownFolderPath(FOLDERID_SendTo)` 定位当前用户目录。当前真实 Shell Link 通过 Windows SDK 定义的 `IShellLinkW` / `IPersistFile` 写入和读回 UTF-16 属性，替代初稿的 `WScript.Shell` Automation adapter；不调用 `Resolve`，不执行目标或用户路径字符串。COM 生命周期在独立锁定的 OS 线程上完成，并在发布快捷方式前释放所有接口。
 
 快捷方式 `LinkSend.lnk` 的 TargetPath 是真实 exe，Arguments 固定 `--send-files --`，WorkingDirectory 是 exe 目录，Description 带 `com.linksend.desktop.sendto/v1` 所有权标记。临时快捷方式完成后，以硬链接创建最终名字，原子 no-replace；已有第三方条目、目录/符号链接、不同安装路径的条目都保留并明确报错，不覆盖。相同安装重复注册幂等。卸载仅删除标记、参数、目标 exe 全匹配且文件 identity 未变的条目，不删除接收文件或其他 SendTo 项。另一安装路径的旧项不会被本安装擅自移除。
 
 自动化只调用内部 `installSendToAt/uninstallSendToAt`，目录均为 `t.TempDir()`；创建的 exe 目标是无执行权限意义的测试内容，从未启动。实际验证包含 Unicode/空格路径的 COM 读回、重复注册/卸载、第三方 `.lnk` 内容保持、另一安装路径保持。Windows directory symlink 用例因缺少系统创建权限明确 SKIP；没有为测试开启开发者模式或绕过权限。
+
+### Windows CI 的 DOS 路径别名修复
+
+候选 `6e9cc7d` 的 desktop run `34681810221` 在第二次注册时真实失败，保留该结果。
+隔离诊断提交 `15a6def` 的 run `34684764481` 进一步记录了仅来自 `t.TempDir()` 的字段：
+runner 的输入目录为 `C:\Users\RUNNER~1\...`，`IShellLinkW.GetPath` 返回
+`C:\Users\runneradmin\...`；参数和所有权标记完全一致，中文与非 BMP 字符均完整。
+因此失败来自 DOS 8.3 别名，不是文本编码损坏。
+
+目标名不直接相等时，现在用 `GetLongPathNameW` 展开双方现有路径的 DOS 组件再比较；
+标记和参数仍必须精确匹配。该操作不解析 Shell Link，不按文件 ID 接受另一安装目录，
+展开失败仍拒绝所有权。新增真实短名注册/重复注册/卸载，以及另一安装目录对同一 EXE
+建立硬链接后仍不得覆盖或卸载的回归测试。所有测试只操作各自临时目录。
+
+另修复 COM 缓冲区的 Go 指针寿命问题：不得先把缓冲地址存入 `[]uintptr` 再经过 Go
+辅助函数调用 `SyscallN`。Go 1.27.1 编译器逃逸分析确认旧读取缓冲留在栈上；临时诊断
+在 `GetPath` 地址转换后强制栈增长，复现“读回目标为空且重复注册失败”。改成在
+`SyscallN` 参数表达式中直接转换指针后，相同诊断通过。临时强制栈增长代码未进入源码。
+前后结果保存在本地 `.artifacts/desktop-six-features/sendto-stack-probe-getpath-{before,after}.log`；
+该实验只证明原生 COM adapter 修复，不代替 Explorer 菜单到持久草稿的产品验收。
+
+本机 Go 1.27.1 / `GOWORK=off` 实际通过：desktop `go test -race -run TestSendTo -count=30 .`
+（4 项测试各 30 次，短名用例实际执行，没有 SKIP）、`go test ./...`、`go vet ./...`、
+`go build ./...`，以及根模块 `go test ./...`。隔离 worktree 的 desktop Go 编译使用最小
+嵌入 HTML 测试夹具；这不是生产前端或打包验收，修复后的精确 CI 结果需另行核验。
 
 ## macOS Finder Services
 
