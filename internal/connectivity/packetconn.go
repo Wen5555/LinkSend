@@ -145,6 +145,9 @@ func deadlineTimer(d time.Time) (<-chan time.Time, func()) {
 
 func (p *stunPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	for {
+		if p.ctx.Err() != nil {
+			return 0, nil, net.ErrClosed
+		}
 		d, changed := p.deadline(true)
 		if !d.IsZero() && !time.Now().Before(d) {
 			return 0, nil, os.ErrDeadlineExceeded
@@ -162,6 +165,9 @@ func (p *stunPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 			return 0, nil, os.ErrDeadlineExceeded
 		case q := <-p.reads:
 			stop()
+			if p.ctx.Err() != nil {
+				return 0, nil, net.ErrClosed
+			}
 			if q.err != nil {
 				return 0, nil, q.err
 			}
