@@ -23,6 +23,13 @@
 
 `v0.4.0` 仍为测试预发布。当前没有文件中继，UDP 被阻断或 NAT 映射/过滤不允许打洞时会失败；macOS 包仅 ad-hoc 签名且未公证，Windows 包未代码签名。公共 IPv6、物理网络切换/睡眠唤醒、更多 NAT 类型、完整安装卸载和全量原生交互仍未完成。发布不得把这些项目改写为 PASS。
 
+## Validation
+
+- Windows 根模块普通测试、race、vet、`GOWORK=off` 和真实 loopback ICE/TLS 1.3/QUIC 摘要校验通过。
+- Wails 桌面独立模块 verify/test/vet/build、前端 typecheck/lint/11 tests/build 和 Windows Wails/NSIS production package 通过；本地产物 FileVersion/ProductVersion 均为 `0.4.0`。
+- 物理 Windows→Mac 的受限单播发现、mTLS 控制通道和停止后台接收后的并行准备/ICE/QUIC 精确诊断路径通过；新版原生确认弹窗完整人工点击仍未标记 PASS。
+- 香港测试主站已部署 `0.4.0`，公网 health、schema 2、数据库完整性、短码 TTL、同身份幂等与其他身份复用拒绝通过。rendezvous 已迁移为独立 systemd service，Origin 证书真实续期、定时器和 443 复核通过。
+
 ## Release assets
 
 GitHub Actions 从发布 tag 的干净 checkout 生成并上传：

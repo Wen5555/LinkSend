@@ -8,6 +8,9 @@ Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol vers
 - 公开 README 按使用者视角说明功能、数据路径、快速开始和边界；架构、协议、安全、性能、测试、验收、路线图、部署及平台测试文档同步到 `0.4.0`。旧版本发布记录和当时的失败/未运行结论继续作为历史事实保留。
 - Release 只使用 GitHub Actions 从 tag 对应干净提交生成的 Windows amd64 ZIP、Windows NSIS 安装程序与 macOS arm64/amd64 DMG；本地 dirty snapshot 和实机临时包不作为 Release 资产。Windows 未代码签名，macOS 仅 ad-hoc 签名且未公证。
 - 仍保留真实限制：无 Relay/TURN 文件中继；MASQUERADE-only 双 NAT 曾返回 `CHECK_TIMEOUT`；公共 IPv6、更多 NAT 类型、网络切换/睡眠唤醒、完整安装卸载与全量原生交互没有因本次发布而自动变为 PASS。
+- 实现与第一版公开文档已直接合入并推送 `main`，提交 `7303f34260c09b8ad71c117ee2d6837fac4dfe46`；推送前 `origin/main` 与本地没有分叉。提交前 Windows 根普通/race/vet/`GOWORK=off`、桌面独立 verify/test/vet/build、前端 typecheck/lint/11 tests/build、真实 loopback ICE/TLS 1.3/QUIC 摘要校验和 Wails/NSIS `0.4.0` 版本资源检查全部 PASS。
+- 香港测试主站从该提交的独立干净 clone 构建并事务部署：`vcs.modified=false`，服务端 SHA256 `227e2ec9fb029fcc8a568637376318e4eae4099f1cc2ce79bc7224557f07fa45`，最终 systemd MainPID `393922`，schema 2、数据库完整性、443、公网 health、产品/协议版本、QUIC、`relay=false` 与 recent fatal=0 均 PASS。公网配对再次确认 TTL=600 秒、同身份幂等与其他身份 `PAIRING_CODE_USED`。
+- 部署审计同时修复了即将到期的 Origin 证书续期链路：移除缺失的 `jq` 依赖、规避 Cloudflare HTTP/2 `PROTOCOL_ERROR`、将 rendezvous 迁移为独立 systemd service，并让续期任务只执行证书事务和 service restart。真实续期、定时器和独立复核 PASS，失败单元为 0；备份与回滚见 `DEPLOY-HK.md`。
 
 ## 2026-09-12 配对幂等、LAN 直接发现与接收热路径优化（v0.4.0）
 
@@ -15,7 +18,7 @@ Updated: 2026-09-12. Current source and test prerelease: `v0.4.0`; protocol vers
 - 新增 `internal/discovery`：UDP/53318 签名组播、每接口定向广播、单播响应和受限手工 IP 探测；公告 2048-byte 上限、TTL=1、直连前缀校验、15 秒过期、nonce 重放窗、响应限频。发现后用临时 TLS 1.3 双向 Ed25519 控制通道交换现有签名 ICE envelope，文件仍只经 Pion ICE + QUIC。未配对 LAN 设备只有在发送方选择、接收方确认且双方完整完成后才 pin；失败/拒绝不留信任。成功地址随 pin 保存，重启后定向探测，不扫网段。
 - Windows 物理网卡为 `10.234.232.205/16`、Private，Mac 为 `en0=10.234.171.192/16`，双方另有 Mihomo/utun。校园混合有线/Wi-Fi过滤组播与定向广播；受限单播实测 Windows 正确选择“以太网”、Mac 正确选择 `en0`，互相发现签名身份，Windows→Mac TLS 控制心跳 PASS。Mac→Windows 被测试探针现有两条 Windows Private/Public 入站 Block 规则拒绝，未修改防火墙，正式应用仍需首次运行允许专用网络。证据 `/tmp/codex-ssh/linksend-lanprobe-unicast-v3-20260911T235205Z`。
 - 接收热路径把已验证字节统计从每 ACK 全量扫描改为 O(1) 单调计数；正文仍逐块 `file.Sync`，恢复位图最多每 8 块或 500ms 批量 checkpoint。checkpoint 落后不丢数据，因为重启仍逐块重算 staging 哈希。传输中保存设置不会取消 LAN 任务，发现配置在当前任务完成后再重启。
-- 已通过 Windows 根普通/race/vet/`GOWORK=off`、桌面独立 verify/test/vet/build、前端 typecheck/lint/11 tests/build、Wails 3 production（1 service / 33 methods / 17 models）。香港 schema 1 只读审计为 integrity=ok、24 个邀请中 6 used/18 expired-unused、NTP synchronized；新版服务和两端 GUI 尚待本节后续事务部署与物理文件传输，不在此提前标记完成。
+- 已通过 Windows 根普通/race/vet/`GOWORK=off`、桌面独立 verify/test/vet/build、前端 typecheck/lint/11 tests/build、Wails 3 production（1 service / 33 methods / 17 models）。香港主站已部署 `0.4.0` 与 schema 2 并完成公网配对复核；Mac 已安装包含 LAN envelope 签名修复的候选，受限单播发现、mTLS 控制心跳及停止后台接收后的并行文件准备/ICE/QUIC 精确路径 PASS。该精确诊断路径耗时约 0.36 秒，但新版原生确认弹窗的完整人工点击仍不提前标记 PASS。
 
 ## 2026-09-12 DHCP、trickle ICE 与双机连续发送修复
 

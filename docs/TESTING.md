@@ -2,6 +2,15 @@
 
 本页适用于产品 `0.4.0`、协议 V1 和 Wails 3 `v3.0.0-beta.18`。测试结果必须同时记录源码 commit、`vcs.modified`、产品/协议版本与实际退出码；旧版本或 dirty snapshot 结果只能作为历史证据，不能冒充新提交构建。
 
+## v0.4.0 发布门槛
+
+- Windows 根模块：`gofmt -l`、`git diff --check`、`go mod verify`、普通测试、race、vet、`GOWORK=off` test/build 全部通过。
+- 桌面独立模块：`GOWORK=off` mod verify/test/vet/build 通过；前端 frozen install、typecheck、lint、11 项 Vitest 和 production build 通过。
+- Wails/NSIS：本机 production package 通过，EXE 与安装器 FileVersion/ProductVersion 均为 `0.4.0`。
+- 网络：真实 loopback ICE/TLS 1.3/QUIC 摘要一致；物理 Windows→Mac 受限单播发现、mTLS 控制与精确并行准备/ICE/QUIC 路径通过。新版原生确认弹窗完整人工点击仍为 NOT_RUN。
+- 香港：干净提交构建的 `0.4.0` 服务部署、公网 health、schema 2、数据库完整性、短码幂等、systemd 管理和 Origin 证书真实续期全部通过。
+- GitHub Release 资产必须由最终 tag 对应 Actions run 生成；本地 package 只作为提交前验证，不能直接上传冒充 committed artifact。
+
 根模块的单元测试覆盖身份、公钥替换、候选策略、分帧、BLAKE3、危险路径、恢复状态、取消和异常关闭。`tests/integration` 的 `TestLocalDirectDemo` 启动临时 SQLite/WSS 服务，使用两个独立身份执行真实 ICE、TLS 1.3、QUIC 和文件哈希校验。
 
 ```powershell

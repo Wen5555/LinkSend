@@ -2,7 +2,9 @@
 
 本轮为真实 Windows/Mac 联调；没有把模拟、浏览器预览或私网地址替代原生双机验收。实现状态与验证状态分别记录。所有相对证据路径均相对于 `D:\apps\Osend\.artifacts\lan-live-20260911`；该目录含本机测试身份，**不得整体提交或对外导出**。对外分享仅选择脱敏日志及 `deliverables`，不包含 profile、邀请、私钥、测试磁盘镜像或文件正文。
 
-> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。当前 [v0.2.0 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 的 tag/源码为 `426d58b6ab62ab7213475007305c0a403955c00f`，PR [#6](https://github.com/Wen5555/LinkSend/pull/6) 已合并，三平台 Release 构建 run 为 [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161)。不得用旧 `deliverables`/r2/发布前候选包覆盖 Release 资产或本报告的验证边界。
+> 当前发布版本为 [`v0.4.0`](https://github.com/Wen5555/LinkSend/releases/tag/v0.4.0)。本页保存 2026-09-11 的历史实机证据；`v0.4.0` 后续增加的配对幂等、安全 LAN 发现和连接及时性改进以 [PROGRESS](PROGRESS.md)、[ACCEPTANCE](ACCEPTANCE.md) 与 [v0.4.0 发布说明](RELEASE-v0.4.0-TEST-CANDIDATE.md) 为准，不能倒填到旧包。
+
+> 后续实现补充：本报告主体保留物理双机联调当时 `0.1.0` dirty snapshot 的现场事实。其后产品版本提升为 `0.2.0`，实现 schema 2 任务持久化、桌面暂停/显式恢复、重启恢复和缺块字节续传，并通过本地真实 Pion ICE + quic-go 回归；协议仍为 V1。这些新能力尚未重新完成物理 Windows↔Mac 恢复矩阵。香港测试主站已经同步 `0.2.0`，部署后完成/拒绝的立即重试 PASS，因此正文中“旧服务 FAIL”仅是当时历史结果。当时的 [v0.2.0 测试预发布](https://github.com/Wen5555/LinkSend/releases/tag/v0.2.0) 的 tag/源码为 `426d58b6ab62ab7213475007305c0a403955c00f`，PR [#6](https://github.com/Wen5555/LinkSend/pull/6) 已合并，三平台 Release 构建 run 为 [`34600609161`](https://github.com/Wen5555/LinkSend/actions/runs/34600609161)。不得用旧 `deliverables`/r2/发布前候选包覆盖 Release 资产或本报告的验证边界。
 
 ## 一、环境与拓扑
 

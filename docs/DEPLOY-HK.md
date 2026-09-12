@@ -2,7 +2,23 @@
 
 香港入口是长期测试主站，不承载生产身份或生产可用性承诺。目标 SSH alias 为 `hk-main`（Debian 12 amd64，SSH 端口由 manager inventory 管理），服务位于 `/opt/linksend-lan-test`。所有远程连接必须通过 `codex-ssh-manager` 执行 resolve → probe → audit-host；不得把密码、令牌、固定码、私钥或完整配置复制进提示词、脚本和证据。
 
-## 当前基线（本轮部署前）
+## 当前基线（v0.4.0）
+
+- 公共入口 `https://linksend.oooai.de/healthz` 返回产品 `0.4.0`、协议 V1、`transport=quic`、`relay=false`。
+- `linksend-rendezvous.service` 管理 `/opt/linksend-lan-test/rendezvous`。当前二进制来自干净提交 `7303f34260c09b8ad71c117ee2d6837fac4dfe46`，`vcs.modified=false`，SHA256 为 `227e2ec9fb029fcc8a568637376318e4eae4099f1cc2ce79bc7224557f07fa45`。
+- 控制数据库为 schema 2、`PRAGMA integrity_check=ok`，邀请表包含 `used_by` 和 `used_at`；公网测试确认 TTL=600 秒、同身份重复加入幂等成功、其他身份复用返回 `PAIRING_CODE_USED`。
+- `linksend-origin-renew.timer` 保持启用。续期脚本使用 Python 解析 Cloudflare API JSON、强制 HTTP/1.1 并进行有界重试；更新证书后通过 `systemctl restart linksend-rendezvous.service` 重启，不再依赖缺失的 `jq`、模糊 `pkill` 或从 systemd oneshot 派生后台进程。
+
+## v0.4.0 实际事务（2026-09-12）
+
+- 版本部署前 PID `391298`、产品 `0.3.0`、schema 2、21 条邀请；备份 `/opt/linksend-lan-test/backups/20260912T015209Z-v0.4.0-7303f34` 包含旧二进制、配置和通过完整性检查的在线/停服数据库备份。
+- 部署后 PID `392632`；版本、二进制 SHA256、443 listener、公网 health、schema、邀请记录数、配置哈希和 recent fatal=0 全部通过。独立复核 job：`/tmp/codex-ssh/verify-linksend-v040-independent-20260912T015340Z`。
+- 公网配对行为复核：服务端相对 TTL=600 秒；同一 Ed25519 身份首次与重复消费均成功；其他身份复用同一码返回 `PAIRING_CODE_USED`。
+- 额外审计发现旧 `linksend-origin-renew.service` 因 `jq: not found` 连续失败，旧证书将在 2026-09-15 到期。首次修复运行遇到 Cloudflare HTTP/2 `PROTOCOL_ERROR`，未改动证书；第二次签发成功后又暴露 systemd oneshot 会清理其后台 rendezvous 子进程，主站随即使用已验证的 `0.4.0` 二进制恢复。
+- 最终将 rendezvous 迁移为独立 systemd service，并让续期任务只负责原子更新证书和重启该 service。迁移/续期前备份为 `/root/linksend-lan-test-backups/20260912T022048Z-systemd-renew-v3`；真实续期后 PID `393922`、证书有效至 2026-09-19、定时器 active、443 与公网 health PASS、失败单元数为 0。最终独立复核 job：`/tmp/codex-ssh/verify-hk-v040-after-systemd-20260912T022110Z`。
+- 当前回滚入口：停止并禁用 `linksend-rendezvous.service`，从上述迁移备份恢复续期脚本与证书；若只回滚应用版本，则保留 systemd 管理和 schema 2，替换为版本部署备份中的旧二进制后 `systemctl restart linksend-rendezvous.service`。只有明确需要撤销数据库写入且应用已停止时才恢复数据库备份。
+
+## 历史基线（2026-09-09）
 
 - 公共入口：`https://linksend.oooai.de/healthz`，旧服务返回 `status=ok`、协议 V1、`transport=quic`、`relay=false`，尚未报告产品版本。
 - 二进制：`/opt/linksend-lan-test/rendezvous`，部署前 SHA256 为 `53445be88943fbabdaa7aabfaf98e299ad9780b1084daa764cf8804e48e5a338`。
@@ -11,26 +27,26 @@
 
 ## 版本同步策略
 
-从 `0.2.0` 起，每次产品版本更新允许同步更新香港测试主站，但授权不取消事务安全门槛：
+从 `0.4.0` 起，每次产品版本更新允许同步更新香港测试主站，但授权不取消事务安全门槛：
 
 ```text
 inspect → backup → change → verify → rollback-ready
 ```
 
-只替换 LinkSend 测试服务二进制及确有需要的配置/schema；不得顺带修改防火墙、路由、DNS、代理、证书或用户正式身份数据。旧二进制可以从运行路径卸下，但必须保留在新的时间戳备份目录，直到新版本验证完成并可一条事务回滚。部署资产必须来自真实 commit，记录 `go version -m` revision、`vcs.modified=false`、产品版本、大小和 SHA256。
+只替换 LinkSend 测试服务二进制及确有需要的配置/schema；不得顺带修改防火墙、路由、DNS、代理或用户正式身份数据。证书生命周期应作为独立事务处理并单独验证回滚。旧二进制可以从运行路径卸下，但必须保留在新的时间戳备份目录，直到新版本验证完成并可一条事务回滚。部署资产必须来自真实 commit，记录 `go version -m` revision、`vcs.modified=false`、产品版本、大小和 SHA256。
 
 ## 每次部署步骤
 
 1. manager resolve/probe/audit-host；只读检查 systemd unit、PID、监听、health、磁盘、当前二进制 SHA256/构建信息和数据库 schema/integrity。
 2. 创建 `/opt/linksend-lan-test/backups/<UTC>-v<version>/`，权限最小化；复制当前二进制、unit 和脱敏配置，使用 SQLite 在线备份并执行 `PRAGMA integrity_check`。
 3. 上传到同目录受控临时文件，核对本地/远端 SHA256、ELF amd64、`--version` 和 Go build revision；不直接覆盖正在执行的 inode。
-4. 原子替换二进制，重启既有 unit；核对新 PID、端口、journal 无稳定错误，并检查 `/healthz.version=0.2.0`、`capabilities.product_version=0.2.0`、`protocol_version=1`、`relay=false`。
+4. 原子替换二进制，重启既有 unit；核对新 PID、端口、journal 无稳定错误，并检查 `/healthz.version=<目标版本>`、`capabilities.product_version=<目标版本>`、`protocol_version=1`、`relay=false`。
 5. 使用隔离测试身份验证动态邀请、WSS、完成/拒绝/失败/取消后的立即新连接；健康 QUIC 在信令短断时不应被服务端误杀。
 6. 若任何门槛失败，停止新服务、恢复同一备份目录中的二进制/配置（仅在迁移实际发生且验证需要时恢复数据库），重启并核对 PID/health/SHA256。不得用运行中的 WAL/SHM 覆盖数据库。
 
 ## 配置与数据边界
 
-测试固定码只有同时指定 `test_pairing_group` 才能启用；通用 `server.example.toml` 保持关闭。知道共享码的访问者可取得该测试组管理员权限，因此应保留限流、成员审计和移除两个配置项后的关闭方案。动态邀请仍为高熵、10 分钟、一次性。
+测试固定码只有同时指定 `test_pairing_group` 才能启用；通用 `server.example.toml` 保持关闭。知道共享码的访问者可取得该测试组管理员权限，因此应保留限流、成员审计和移除两个配置项后的关闭方案。动态邀请使用 40-bit 随机短码、10 分钟有效期、一次性消费与同身份幂等重试。
 
 schema 变化必须在部署记录中给出迁移前备份、前后 `user_version`、兼容范围和准确恢复步骤。通常回滚二进制不应回退已经产生新业务写入的数据库；只有 schema 不兼容且已确认数据边界时，才从部署前在线备份恢复。
 
