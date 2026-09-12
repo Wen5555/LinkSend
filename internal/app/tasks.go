@@ -691,6 +691,10 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 				recovery.FileCount = len(prepared.Manifest.Files)
 				recovery.SentChunks = sentChunks
 			})
+			if indexErr := s.IndexInboxManifest(ctx, t.snapshot().ID, prepared.Manifest); indexErr != nil {
+				handleTaskRunError(t, attemptID, ctx, errors.Join(indexErr, peer.Close()))
+				return
+			}
 			result, runErr = s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{
 				Progress:       func(p transfer.Progress) { t.progress(attemptID, p) },
 				PreviouslySent: t.wasChunkSent,
@@ -1119,6 +1123,10 @@ func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID st
 		v.ManifestDigest = recovery.ManifestDigest
 		v.ChunkSize = recovery.ChunkSize
 	})
+	if err = s.IndexInboxManifest(ctx, t.snapshot().ID, prepared.Manifest); err != nil {
+		handleTaskRunError(t, attemptID, ctx, err)
+		return
+	}
 	cfg = taskAttemptConfig(t, attemptID, cfg)
 	result, err := s.SendPreparedWithHooksDetailed(ctx, recovery.PeerID, prepared, cfg, transfer.SendHooks{
 		Progress:       func(p transfer.Progress) { t.progress(attemptID, p) },

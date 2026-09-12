@@ -33,11 +33,12 @@ type QueueItem struct {
 }
 
 type EnqueueRequest struct {
-	RequestID   string   `json:"request_id"`
-	PeerID      string   `json:"peer_id"`
-	Paths       []string `json:"paths"`
-	WaitForPeer bool     `json:"wait_for_peer"`
-	ExpiresAt   string   `json:"expires_at"`
+	RequestID            string   `json:"request_id"`
+	PeerID               string   `json:"peer_id"`
+	Paths                []string `json:"paths"`
+	WaitForPeer          bool     `json:"wait_for_peer"`
+	ExpiresAt            string   `json:"expires_at"`
+	ExpectedSourceDigest string   `json:"-"` // internal resend preflight; never trusted from JS
 }
 
 type queueRecord struct {
@@ -176,6 +177,9 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	}
 	digest := queueSourceDigest(prepared.Manifest)
 	_ = prepared.Close()
+	if request.ExpectedSourceDigest != "" && inboxSourceDigest(prepared.Manifest) != request.ExpectedSourceDigest {
+		return QueueItem{}, classifyTaskError(transfer.ErrChanged)
+	}
 	s.queue.mu.Lock()
 	defer s.queue.mu.Unlock()
 	if s.isClosing() {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -59,10 +60,10 @@ func TestDesktopStoreSchema2MigrationPreservesHistoryAndBackup(t *testing.T) {
 	defer store.Close()
 	var version int
 	var metadataVersion string
-	if err = store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err = store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != taskStoreSchema {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
-	if err = store.db.QueryRow("SELECT value FROM metadata WHERE key='schema_version'").Scan(&metadataVersion); err != nil || metadataVersion != "3" {
+	if err = store.db.QueryRow("SELECT value FROM metadata WHERE key='schema_version'").Scan(&metadataVersion); err != nil || metadataVersion != fmt.Sprint(taskStoreSchema) {
 		t.Fatalf("metadata version=%s err=%v", metadataVersion, err)
 	}
 	backups, err := filepath.Glob(path + ".schema-v2-*.bak")
@@ -164,7 +165,7 @@ func TestDesktopStoreRejectsFutureSchemaWithoutMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec("PRAGMA user_version=4"); err != nil {
+	if _, err = db.Exec(fmt.Sprintf("PRAGMA user_version=%d", taskStoreSchema+1)); err != nil {
 		t.Fatal(err)
 	}
 	_ = db.Close()

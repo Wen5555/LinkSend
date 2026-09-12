@@ -126,7 +126,7 @@ func (s *Service) Workspace() (WorkspaceSnapshot, error) {
 	paused := s.queue.paused
 	persistent := !s.queue.persistFailed && s.tasks.historyAvailable()
 	s.queue.mu.Unlock()
-	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Tasks: s.Tasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
+	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Tasks: s.workspaceTasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
 }
 
 func (s *Service) SaveDraft(draft SendDraft, workingDir string) (SendDraft, error) {

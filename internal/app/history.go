@@ -5,19 +5,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 3
+const taskStoreSchema = 4
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
 func historyDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	uriPath := filepath.ToSlash(absolute)
+	if filepath.VolumeName(absolute) != "" && !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	// Verified modernc/sqlite v1.58.0 conn.go/tx.go API. Acquire a write
+	// reservation at Begin, so read-then-write transactions do not hit the
+	// immediate SQLITE_BUSY lock-upgrade case that bypasses busy_timeout.
+	dsn := url.URL{Scheme: "file", Path: uriPath, RawQuery: "_txlock=immediate&_busy_timeout=5000"}
+	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +47,16 @@ func historyDB(path string) (*sql.DB, error) {
 	}
 	if schema < 0 || schema > taskStoreSchema {
 		return fail(errors.New("TASK_STORE_VERSION"))
+	}
+	if schema == taskStoreSchema {
+		var version string
+		if err = db.QueryRow(`SELECT value FROM metadata WHERE key='schema_version'`).Scan(&version); err != nil {
+			return fail(err)
+		}
+		if version != fmt.Sprint(taskStoreSchema) {
+			return fail(errors.New("TASK_STORE_VERSION"))
+		}
+		return db, nil
 	}
 	if schema > 0 && schema < taskStoreSchema {
 		backupPath := fmt.Sprintf("%s.schema-v%d-%s.bak", path, schema, time.Now().UTC().Format("20060102T150405.000000000Z"))
@@ -94,6 +119,11 @@ func historyDB(path string) (*sql.DB, error) {
 	}
 	if schema < 3 {
 		if err = migrateDesktopMetadata(tx); err != nil {
+			return rollback(err)
+		}
+	}
+	if schema < 4 {
+		if err = migrateInboxMetadata(tx); err != nil {
 			return rollback(err)
 		}
 	}
@@ -203,7 +233,7 @@ func (m *taskManager) configureHistory(path string) {
 		return
 	}
 	defer db.Close()
-	rows, err := db.Query("SELECT id,revision,snapshot,recovery FROM tasks ORDER BY id")
+	rows, err := db.Query(`SELECT id,revision,snapshot,recovery FROM tasks WHERE inbox_state NOT IN ('completed','rejected','failed','cancelled','no_content') OR id IN (SELECT id FROM tasks ORDER BY inbox_started DESC,id DESC LIMIT 200) ORDER BY id`)
 	if err != nil {
 		m.setHistoryError(err)
 		return
@@ -308,9 +338,10 @@ func upsertTask(db *sql.DB, snap TaskSnapshot, recovery taskRecovery) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(`INSERT INTO tasks(id,revision,snapshot,recovery) VALUES(?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,snapshot=excluded.snapshot,recovery=excluded.recovery
-		WHERE excluded.revision>tasks.revision`, snap.ID, snap.Revision, snapshotData, recoveryData)
+	_, err = db.Exec(`INSERT INTO tasks(id,revision,snapshot,recovery,inbox_peer,inbox_direction,inbox_state,inbox_started,inbox_summary)
+		SELECT ?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM inbox_tombstones WHERE task_id=?)
+		ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,snapshot=excluded.snapshot,recovery=excluded.recovery,inbox_peer=excluded.inbox_peer,inbox_direction=excluded.inbox_direction,inbox_state=excluded.inbox_state,inbox_started=excluded.inbox_started,inbox_summary=excluded.inbox_summary
+		WHERE excluded.revision>tasks.revision`, snap.ID, snap.Revision, snapshotData, recoveryData, snap.PeerID, snap.Direction, snap.State, inboxStarted(snap.StartedAt), inboxFold(snap.SourceSummary+" "+snap.ManifestSummary), snap.ID)
 	return err
 }
 
