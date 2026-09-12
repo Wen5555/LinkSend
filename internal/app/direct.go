@@ -762,6 +762,10 @@ func (s *Service) ReceiveOnce(ctx context.Context, expectedPeerID, directory str
 }
 
 func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, directory string, cfg DirectConfig, accept func(transfer.Manifest) bool, progress func(transfer.Progress)) (DirectTransferResult, error) {
+	return s.ReceiveOnceWithOptionsDetailed(ctx, expectedPeerID, cfg, transfer.ReceiveOptions{Directory: directory, Accept: accept, Progress: progress})
+}
+
+func (s *Service) ReceiveOnceWithOptionsDetailed(ctx context.Context, expectedPeerID string, cfg DirectConfig, options transfer.ReceiveOptions) (DirectTransferResult, error) {
 	cfg.phase("connecting")
 	peer, err := s.AcceptDirect(ctx, expectedPeerID, cfg)
 	if err != nil {
@@ -771,7 +775,8 @@ func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, direc
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence()}, errors.Join(err, peer.Close())
 	}
-	result, err := transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, accept, progress)
+	options.Peer = peer.PeerID
+	result, err := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
 	detailed := DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}
 	if err == nil {
 		return detailed, s.closePeerAfterTransfer(peer)

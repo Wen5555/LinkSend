@@ -25,6 +25,10 @@ M3 已接托盘/后台/通知/防睡眠，Windows 原生隐藏唤回、实际4Mi
 具体失败、修复和哈希见 [M3 执行记录](evidence/DESKTOP-M3-EXECUTION.md)。
 M4 接收应用层、M5 完整内容链路及 M6 收件箱 UI 继续在隔离分支并行，按依赖串行接入。
 
+M4 传输与 App 后端已接入不可变清单、分页选收、冲突策略、目录/计划持久化、实际空间预检、NoContent、发送选择摘要恢复绑定以及M6完整索引登记。真实QUIC同时修复SQLite并发写锁和接受后error/body帧歧义，并验证活跃接收时改全局目录不会取消任务；完整根普通/race、双模块检查通过。UI/物理双机原生验收与里程碑发布另行记录，不因后端测试而标为完成；见 [M4 App证据](evidence/DESKTOP-M4-APP.md)。
+
+M4/M5 wire整合保留三个可选能力；发送端选择和实际内容解释的持久化回调都成功后才发accepted，并同时验证manifest/selection/content摘要。联合真实QUIC及旧端兼容验证见 [整合证据](evidence/DESKTOP-M4-M5-ACCEPTANCE-INTEGRATION.md)。
+
 Updated: 2026-09-12. Current source: `0.5.0`; published milestone: `v0.5.0-m1`; protocol: V1.
 The following `v0.4.0` sections preserve earlier evidence. No prerelease is an accepted production release.
 

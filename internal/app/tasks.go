@@ -33,6 +33,14 @@ type TaskSnapshot struct {
 	PeerID                   string                       `json:"peer_id,omitempty"`
 	SourceSummary            string                       `json:"source_summary,omitempty"`
 	ManifestSummary          string                       `json:"manifest_summary,omitempty"`
+	OriginalTotal            int64                        `json:"original_total"`
+	SelectedFiles            int                          `json:"selected_files"`
+	SelectedEntries          int                          `json:"selected_entries"`
+	SkippedFiles             int                          `json:"skipped_files"`
+	SkippedEntries           int                          `json:"skipped_entries"`
+	SkippedBytes             int64                        `json:"skipped_bytes"`
+	ReceivePlanDigest        string                       `json:"receive_plan_digest,omitempty"`
+	SelectionDigest          string                       `json:"selection_digest,omitempty"`
 	FileCount                int                          `json:"file_count,omitempty"`
 	TargetDirectory          string                       `json:"target_directory,omitempty"`
 	State                    string                       `json:"state"`
@@ -87,35 +95,39 @@ type TaskSnapshot struct {
 }
 
 type taskRecord struct {
-	mu       sync.RWMutex
-	snap     TaskSnapshot
-	recovery taskRecovery
-	cancel   context.CancelFunc
-	decision chan bool
-	peerID   string
-	paths    []string
-	cfg      DirectConfig
-	persist  func(TaskSnapshot, taskRecovery) error
-	changed  func(TaskSnapshot)
+	mu          sync.RWMutex
+	snap        TaskSnapshot
+	recovery    taskRecovery
+	cancel      context.CancelFunc
+	decision    chan bool
+	decisionSet bool
+	incoming    *incomingOffer
+	peerID      string
+	paths       []string
+	cfg         DirectConfig
+	persist     func(TaskSnapshot, taskRecovery) error
+	changed     func(TaskSnapshot)
 }
 
 type taskRecovery struct {
-	Version          int               `json:"version"`
-	Direction        string            `json:"direction"`
-	PeerID           string            `json:"peer_id"`
-	PeerFingerprint  string            `json:"peer_fingerprint"`
-	SourcePaths      []string          `json:"source_paths,omitempty"`
-	TargetDirectory  string            `json:"target_directory,omitempty"`
-	TransferID       string            `json:"transfer_id,omitempty"`
-	ManifestDigest   string            `json:"manifest_digest,omitempty"`
-	ChunkSize        int               `json:"chunk_size,omitempty"`
-	TotalBytes       int64             `json:"total_bytes,omitempty"`
-	FileCount        int               `json:"file_count,omitempty"`
-	ActualSentBytes  int64             `json:"actual_sent_bytes,omitempty"`
-	ReceivedBytes    int64             `json:"received_bytes,omitempty"`
-	RetransmitBytes  int64             `json:"retransmit_bytes,omitempty"`
-	LogicalCompleted int64             `json:"logical_completed_bytes,omitempty"`
-	SentChunks       map[uint32][]bool `json:"sent_chunks,omitempty"`
+	ReceivePlanDigest string            `json:"receive_plan_digest,omitempty"`
+	SelectionDigest   string            `json:"selection_digest,omitempty"`
+	Version           int               `json:"version"`
+	Direction         string            `json:"direction"`
+	PeerID            string            `json:"peer_id"`
+	PeerFingerprint   string            `json:"peer_fingerprint"`
+	SourcePaths       []string          `json:"source_paths,omitempty"`
+	TargetDirectory   string            `json:"target_directory,omitempty"`
+	TransferID        string            `json:"transfer_id,omitempty"`
+	ManifestDigest    string            `json:"manifest_digest,omitempty"`
+	ChunkSize         int               `json:"chunk_size,omitempty"`
+	TotalBytes        int64             `json:"total_bytes,omitempty"`
+	FileCount         int               `json:"file_count,omitempty"`
+	ActualSentBytes   int64             `json:"actual_sent_bytes,omitempty"`
+	ReceivedBytes     int64             `json:"received_bytes,omitempty"`
+	RetransmitBytes   int64             `json:"retransmit_bytes,omitempty"`
+	LogicalCompleted  int64             `json:"logical_completed_bytes,omitempty"`
+	SentChunks        map[uint32][]bool `json:"sent_chunks,omitempty"`
 }
 
 type taskManager struct {
@@ -169,6 +181,9 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.Revision = 1
 	s.HistoryPersisted = m.historyAvailable()
 	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory}}
+	if s.Direction == "receive" {
+		t.decision = make(chan bool, 1)
+	}
 	t.persist = m.persistRecordTracked
 	t.changed = m.onChange
 	m.tasks[s.ID] = t
@@ -191,7 +206,7 @@ func formatSeq(n uint64) string {
 	return string(b)
 }
 func isTerminal(s string) bool {
-	return s == "completed" || s == "rejected" || s == "failed" || s == "cancelled"
+	return s == "completed" || s == "no_content" || s == "rejected" || s == "failed" || s == "cancelled"
 }
 
 func (t *taskRecord) snapshot() TaskSnapshot {
@@ -295,6 +310,9 @@ func (t *taskRecord) progress(attemptID string, p transfer.Progress) {
 		v.ReceivedBytes = recovery.ReceivedBytes
 		v.CommittedBytes = p.Committed
 		v.CommittedFiles = p.CommittedFiles
+		if p.State != "Preparing" {
+			applySelectionSummary(v, transfer.PlanSummary{OriginalTotal: p.OriginalTotal, SelectedTotal: p.Total, SelectedFiles: p.SelectedFiles, SelectedEntries: p.SelectedEntries, SkippedFiles: p.SkippedFiles, SkippedEntries: p.SkippedEntries, SkippedBytes: p.SkippedBytes})
+		}
 		if p.Total >= 0 {
 			n := p.Total
 			v.TotalBytes = &n
@@ -372,7 +390,21 @@ func (t *taskRecord) finishAttempt(attemptID, state string, err error) {
 		t.mu.Unlock()
 		return
 	}
-	if t.snap.State == "cancel_requested" && state == "completed" {
+	if state == "completed" || state == "no_content" {
+		if t.snap.State == "pause_requested" {
+			currentAttempt := t.snap.AttemptID
+			t.mu.Unlock()
+			t.pauseAttempt(currentAttempt)
+			return
+		}
+		if t.snap.State == "shutdown_requested" {
+			currentAttempt := t.snap.AttemptID
+			t.mu.Unlock()
+			shutdownTask(t, currentAttempt, err)
+			return
+		}
+	}
+	if t.snap.State == "cancel_requested" && (state == "completed" || state == "no_content") {
 		state = "cancelled"
 		err = protocol.Wrap(protocol.Cancelled, "task cancellation confirmed", err)
 	}
@@ -383,6 +415,7 @@ func (t *taskRecord) finishAttempt(attemptID, state string, err error) {
 	t.snap.CanResume = false
 	t.snap.CanRetry = (state == "failed" || state == "rejected") && t.snap.Direction == "send"
 	t.cancel = nil
+	t.incoming = nil
 	t.snap.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.snap.UpdatedAt = t.snap.EndedAt
 	if err != nil {
@@ -413,29 +446,35 @@ func (t *taskRecord) pauseAttempt(attemptID string) {
 	t.snap.ErrorMessage = ""
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.cancel = nil
+	t.incoming = nil
 	snap, recovery := t.snap, t.recovery
 	t.mu.Unlock()
 	t.save(snap, recovery)
 }
 
 func (t *taskRecord) recoverAttempt(attemptID string, err error) {
+	t.recoverWithCode(attemptID, protocol.ConnectionInterrupted, "connection_interrupted")
+}
+
+func (t *taskRecord) recoverWithCode(attemptID string, code protocol.Code, phase string) {
 	t.mu.Lock()
 	if isTerminal(t.snap.State) || t.snap.AttemptID != attemptID {
 		t.mu.Unlock()
 		return
 	}
 	t.snap.State = "recovering"
-	t.snap.Phase = "connection_interrupted"
+	t.snap.Phase = phase
 	t.snap.Revision++
 	t.snap.CanCancel = true
 	t.snap.CanPause = false
 	t.snap.CanResume = recoveryUsable(t.recovery)
 	t.snap.RestartRecoverySupported = t.snap.CanResume && t.snap.HistoryPersisted
 	t.snap.ByteResumeSupported = t.snap.CanResume
-	t.snap.ErrorCode = string(protocol.ConnectionInterrupted)
-	t.snap.ErrorMessage = userErrorForCode(protocol.ConnectionInterrupted)
+	t.snap.ErrorCode = string(code)
+	t.snap.ErrorMessage = userErrorForCode(code)
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.cancel = nil
+	t.incoming = nil
 	snap, recovery := t.snap, t.recovery
 	t.mu.Unlock()
 	t.save(snap, recovery)
@@ -518,6 +557,16 @@ func classifyTaskError(err error) error {
 		return protocol.Wrap(protocol.ReceiveRejected, "接收方拒绝了本次传输，请确认对方已准备接收。", err)
 	case errors.Is(err, transfer.ErrChanged):
 		return protocol.Wrap(protocol.SourceChanged, "源文件在传输过程中发生变化，请重新选择文件后重试。", err)
+	case errors.Is(err, transfer.ErrPlanUnsupported):
+		return protocol.Wrap(protocol.ReceivePlanUnsupported, userErrorForCode(protocol.ReceivePlanUnsupported), err)
+	case errors.Is(err, transfer.ErrPlanMismatch):
+		return protocol.Wrap(protocol.ReceivePlanMismatch, userErrorForCode(protocol.ReceivePlanMismatch), err)
+	case errors.Is(err, transfer.ErrPlanInvalid):
+		return protocol.Wrap(protocol.ReceivePlanInvalid, userErrorForCode(protocol.ReceivePlanInvalid), err)
+	case errors.Is(err, transfer.ErrPlanPersistence):
+		return protocol.Wrap(protocol.ReceivePlanPersistence, userErrorForCode(protocol.ReceivePlanPersistence), err)
+	case errors.Is(err, transfer.ErrResumeMismatch):
+		return protocol.Wrap(protocol.ResumeMismatch, userErrorForCode(protocol.ResumeMismatch), err)
 	case errors.Is(err, transfer.ErrIntegrity):
 		return protocol.Wrap(protocol.IntegrityFailed, "文件完整性校验失败，请重试并检查磁盘或网络。", err)
 	case errors.Is(err, transfer.ErrPath):
@@ -570,7 +619,17 @@ func userErrorForCode(code protocol.Code) string {
 	case protocol.PermissionDenied:
 		return "接收目录没有写入权限，请选择可写目录。"
 	case protocol.FileConflict:
-		return "目标文件已存在且不会覆盖，请选择空目录后重试。"
+		return "目标名称发生冲突且不会覆盖，请选择保留两份、跳过或其他接收目录。"
+	case protocol.ReceiveDirectoryUnavailable:
+		return "接收目录不可用，请恢复原目录或重新选择已存在的目录。"
+	case protocol.ReceivePlanUnsupported:
+		return "对端版本不支持选择性接收，请接收全部内容或升级对端。"
+	case protocol.ReceivePlanMismatch:
+		return "接收选择与已保存的计划不一致，请核对任务后重试。"
+	case protocol.ReceivePlanInvalid:
+		return "接收计划无效，请刷新清单后重新选择。"
+	case protocol.ReceivePlanPersistence:
+		return "无法保存接收决定，尚未允许继续传输，请检查本地任务数据库。"
 	case protocol.UnsafePath:
 		return "目标路径不安全或包含不支持的名称，请选择其他目录。"
 	case protocol.Cancelled:
@@ -698,6 +757,9 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 			result, runErr = s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{
 				Progress:       func(p transfer.Progress) { t.progress(attemptID, p) },
 				PreviouslySent: t.wasChunkSent,
+				SelectionAccepted: func(selection transfer.Selection, summary transfer.PlanSummary) error {
+					return t.recordSelectionAccepted(attemptID, selection, summary)
+				},
 				ChunkSent: func(sent transfer.ChunkTransmission) {
 					t.recordChunkSent(attemptID, sent)
 					if cfg.onChunkSent != nil {
@@ -715,18 +777,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 			handleTaskRunError(t, attemptID, ctx, runErr)
 			return
 		}
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
-			v.TransferID = result.Transfer.TransferID
-			v.SessionID = result.Evidence.SessionID
-			v.Phase = "completed"
-			v.ProcessedBytes = result.Transfer.Bytes
-			v.VerifiedBytes = result.Transfer.Bytes
-			v.CommittedBytes = result.Transfer.Bytes
-			v.BilateralConfirmed = true
-			n := result.Transfer.Bytes
-			v.TotalBytes = &n
-		})
-		t.finishAttempt(attemptID, "completed", nil)
+		t.completeTransfer(attemptID, result.Transfer, result.Evidence.SessionID)
 	}()
 	return t.snapshot(), nil
 }
@@ -754,7 +805,6 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 		return TaskSnapshot{}, err
 	}
 	t.cfg = cfg
-	t.decision = make(chan bool, 1)
 	attemptID := t.snapshot().AttemptID
 	cfg.onPhase = func(phase string) {
 		t.updateAttemptTransient(attemptID, func(v *TaskSnapshot) {
@@ -779,63 +829,13 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	go func() {
 		defer s.tasks.workers.Done()
 		defer s.ensureInbox()
-		var lastReceived int64
-		result, runErr := s.ReceiveOnceDetailed(ctx, expectedPeerID, directory, cfg, func(m transfer.Manifest) bool {
-			n := m.TotalBytes()
-			t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, recovery *taskRecovery) {
-				v.State = "awaiting_acceptance"
-				v.Phase = "awaiting_acceptance"
-				v.TotalBytes = &n
-				v.FileCount = len(m.Files)
-				v.ManifestSummary = manifestSummary(m)
-				v.TransferID = m.TransferID
-				v.ManifestDigest = m.Digest()
-				v.ChunkSize = m.ChunkSize
-				v.CanCancel = true
-				v.CanPause = false
-				v.RestartRecoverySupported = v.HistoryPersisted
-				v.ByteResumeSupported = true
-				recovery.Direction = "receive"
-				recovery.PeerID = v.PeerID
-				recovery.PeerFingerprint = v.PeerID
-				recovery.TargetDirectory = directory
-				recovery.TransferID = m.TransferID
-				recovery.ManifestDigest = m.Digest()
-				recovery.ChunkSize = m.ChunkSize
-				recovery.TotalBytes = n
-				recovery.FileCount = len(m.Files)
-			})
-			select {
-			case accepted := <-t.decision:
-				return accepted
-			case <-ctx.Done():
-				return false
-			}
-		}, func(p transfer.Progress) {
-			if p.Received >= lastReceived {
-				t.recordReceived(attemptID, p.Received-lastReceived)
-				lastReceived = p.Received
-			}
-			t.progress(attemptID, p)
-		})
+		options := s.taskReceiveOptions(ctx, t, attemptID, directory, nil, false)
+		result, runErr := s.ReceiveOnceWithOptionsDetailed(ctx, expectedPeerID, cfg, options)
 		if runErr != nil {
 			handleTaskRunError(t, attemptID, ctx, runErr)
 			return
 		}
-		t.updateAttempt(attemptID, func(v *TaskSnapshot) {
-			v.TransferID = result.Transfer.TransferID
-			v.SessionID = result.Evidence.SessionID
-			v.Phase = "completed"
-			v.ProcessedBytes = result.Transfer.Bytes
-			v.VerifiedBytes = result.Transfer.Bytes
-			v.ReceivedBytes = result.Transfer.Bytes
-			v.CommittedBytes = result.Transfer.Bytes
-			v.CommittedFiles = v.FileCount
-			v.BilateralConfirmed = true
-			n := result.Transfer.Bytes
-			v.TotalBytes = &n
-		})
-		t.finishAttempt(attemptID, "completed", nil)
+		t.completeTransfer(attemptID, result.Transfer, result.Evidence.SessionID)
 	}()
 	return t.snapshot(), nil
 }
@@ -860,6 +860,13 @@ func handleTaskRunError(t *taskRecord, attemptID string, ctx context.Context, ru
 		return
 	}
 	code := protocol.ErrorCode(runErr)
+	if recoveryUsable(t.recoverySnapshot()) {
+		switch code {
+		case protocol.ReceiveDirectoryUnavailable, protocol.FileConflict, protocol.DiskFull, protocol.PermissionDenied, protocol.ReceivePlanPersistence:
+			t.recoverWithCode(attemptID, code, "needs_attention")
+			return
+		}
+	}
 	if recoveryUsable(t.recoverySnapshot()) && (snap.State == "awaiting_acceptance" || snap.State == "transferring") {
 		switch code {
 		case protocol.SignalingUnreachable, protocol.SignalingTimeout, protocol.CandidateTimeout,
@@ -1038,6 +1045,15 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
+	if t.recovery.Direction == "receive" {
+		if err := validateReceiveDirectory(t.recovery.TargetDirectory); err != nil {
+			attemptID := t.snap.AttemptID
+			t.mu.Unlock()
+			t.recoverWithCode(attemptID, protocol.ReceiveDirectoryUnavailable, "needs_attention")
+			s.ensureInbox()
+			return TaskSnapshot{}, err
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	attemptID := protocol.RandomID()
 	t.snap.AttemptID = attemptID
@@ -1060,6 +1076,8 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	t.cfg = cfg
 	if t.recovery.Direction == "receive" {
 		t.decision = make(chan bool, 1)
+		t.decisionSet = false
+		t.incoming = nil
 	}
 	snap, recovery := t.snap, t.recovery
 	t.mu.Unlock()
@@ -1131,6 +1149,9 @@ func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID st
 	result, err := s.SendPreparedWithHooksDetailed(ctx, recovery.PeerID, prepared, cfg, transfer.SendHooks{
 		Progress:       func(p transfer.Progress) { t.progress(attemptID, p) },
 		PreviouslySent: t.wasChunkSent,
+		SelectionAccepted: func(selection transfer.Selection, summary transfer.PlanSummary) error {
+			return t.recordSelectionAccepted(attemptID, selection, summary)
+		},
 		ChunkSent: func(sent transfer.ChunkTransmission) {
 			t.recordChunkSent(attemptID, sent)
 			if cfg.onChunkSent != nil {
@@ -1142,63 +1163,20 @@ func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID st
 		handleTaskRunError(t, attemptID, ctx, err)
 		return
 	}
-	t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, saved *taskRecovery) {
-		v.TransferID = result.Transfer.TransferID
-		v.SessionID = result.Evidence.SessionID
-		v.Phase = "completed"
-		v.ProcessedBytes = result.Transfer.Bytes
-		v.VerifiedBytes = result.Transfer.Bytes
-		v.CommittedBytes = result.Transfer.Bytes
-		v.BilateralConfirmed = true
-		saved.LogicalCompleted = result.Transfer.Bytes
-		n := result.Transfer.Bytes
-		v.TotalBytes = &n
-	})
-	t.finishAttempt(attemptID, "completed", nil)
+	t.completeTransfer(attemptID, result.Transfer, result.Evidence.SessionID)
 }
 
 func (s *Service) runResumeReceive(ctx context.Context, t *taskRecord, attemptID string, recovery taskRecovery, cfg DirectConfig) {
 	defer s.tasks.workers.Done()
 	defer s.ensureInbox()
 	cfg = taskAttemptConfig(t, attemptID, cfg)
-	var lastReceived int64
-	var resumeMismatch error
-	result, err := s.ReceiveOnceDetailed(ctx, recovery.PeerID, recovery.TargetDirectory, cfg, func(manifest transfer.Manifest) bool {
-		if manifest.TransferID != recovery.TransferID || manifest.Digest() != recovery.ManifestDigest || manifest.ChunkSize != recovery.ChunkSize || manifest.TotalBytes() != recovery.TotalBytes || len(manifest.Files) != recovery.FileCount {
-			resumeMismatch = protocol.Fail(protocol.ResumeMismatch, "resume manifest does not match persisted recovery identity")
-			return false
-		}
-		// ResumeTask is the explicit user confirmation. No body transfer is
-		// accepted before this method is invoked and the identity matches.
-		return true
-	}, func(p transfer.Progress) {
-		if p.Received >= lastReceived {
-			t.recordReceived(attemptID, p.Received-lastReceived)
-			lastReceived = p.Received
-		}
-		t.progress(attemptID, p)
-	})
-	if resumeMismatch != nil {
-		err = resumeMismatch
-	}
+	options := s.taskReceiveOptions(ctx, t, attemptID, recovery.TargetDirectory, &recovery, false)
+	result, err := s.ReceiveOnceWithOptionsDetailed(ctx, recovery.PeerID, cfg, options)
 	if err != nil {
 		handleTaskRunError(t, attemptID, ctx, err)
 		return
 	}
-	t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, saved *taskRecovery) {
-		v.TransferID = result.Transfer.TransferID
-		v.SessionID = result.Evidence.SessionID
-		v.Phase = "completed"
-		v.ProcessedBytes = result.Transfer.Bytes
-		v.VerifiedBytes = result.Transfer.Bytes
-		v.CommittedBytes = result.Transfer.Bytes
-		v.CommittedFiles = recovery.FileCount
-		v.BilateralConfirmed = true
-		saved.LogicalCompleted = result.Transfer.Bytes
-		n := result.Transfer.Bytes
-		v.TotalBytes = &n
-	})
-	t.finishAttempt(attemptID, "completed", nil)
+	t.completeTransfer(attemptID, result.Transfer, result.Evidence.SessionID)
 }
 func (s *Service) AcceptTask(id string) error { return s.decideTask(id, true) }
 func (s *Service) AcceptTaskAlways(id string) error {
@@ -1227,24 +1205,36 @@ func (s *Service) decideTask(id string, accepted bool) error {
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()
-	if t == nil || t.decision == nil {
+	if t == nil {
 		return errors.New("TASK_NOT_AWAITING_ACCEPTANCE")
 	}
-	snap := t.snapshot()
-	if snap.State != "awaiting_acceptance" {
+	t.mu.Lock()
+	if t.decision == nil || t.decisionSet || t.snap.State != "awaiting_acceptance" || (t.incoming != nil && t.incoming.decided) {
+		t.mu.Unlock()
 		return errors.New("TASK_NOT_AWAITING_ACCEPTANCE")
 	}
+	snap, hasIncoming := t.snap, t.incoming != nil
 	if accepted {
 		if err := s.checkPeerAllowed(snap.PeerID); err != nil {
+			t.mu.Unlock()
 			return err
 		}
+		if hasIncoming {
+			t.mu.Unlock()
+			preview, err := s.previewIncomingPlan(id, IncomingPlanRequest{ExpectedRevision: snap.Revision}, true)
+			if err != nil {
+				return err
+			}
+			return s.acceptReceivePlan(id, preview.Revision, preview.PlanDigest)
+		}
 	}
-	select {
-	case t.decision <- accepted:
-		return nil
-	default:
-		return errors.New("TASK_DECISION_ALREADY_SET")
+	t.decisionSet = true
+	if t.incoming != nil {
+		t.incoming.decided = true
 	}
+	t.decision <- accepted
+	t.mu.Unlock()
+	return nil
 }
 func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 	s.tasks.mu.RLock()

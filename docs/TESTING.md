@@ -146,3 +146,6 @@ GOWORK=off go build ./...
 ```
 
 另在桌面module独立执行 verify/test/vet/build，不能用根测试替代。平台编译检查与真实平台运行分列；Windows上的Darwin/Linux交叉编译不算原生运行。App接收决策界面、空间预检、物理LAN/跨NAT和原生包验收是后续单列项目。实际结果见 [M4传输证据](evidence/DESKTOP-M4-TRANSFER.md)。
+
+
+M4 App新增 `incoming_plan_test.go` / `selection_hook_test.go`：真实QUIC覆盖子集、全跳过、空目录、分页隐私、CAS过期/重复接受、双端持久失败时零正文、丢失目录不重建、恢复不扩大选择，以及4MiB传输后修改inbox设置保持当前计划并让下一任务使用新目录。新新协商 `acceptance_commit_v1` 时，持久失败必须发生在首个chunk请求前；正文恰好等于error JSON也必须真实落盘。完整命令与SQLITE_BUSY、帧歧义修复记录见 [M4 App](evidence/DESKTOP-M4-APP.md)。

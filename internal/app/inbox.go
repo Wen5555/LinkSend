@@ -40,6 +40,7 @@ type inboxManager struct {
 	connectionCount uint64
 	cfg             DirectConfig
 	cancel          context.CancelFunc
+	acceptCancel    context.CancelFunc
 	done            chan struct{}
 	preserve        bool
 	spare           *signaling.Session
@@ -60,12 +61,9 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return classifyTaskError(err)
 	}
-	if err := s.stopInbox(false); err != nil {
-		return err
-	}
 	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
 	if s.isClosing() {
+		s.operationMu.Unlock()
 		return errors.New("APP_CLOSING")
 	}
 	s.inbox.mu.Lock()
@@ -73,7 +71,13 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	s.inbox.directory = directory
 	s.inbox.cfg = cfg
 	s.inbox.lastError = ""
+	// Reconfigure an idle accept only. An authenticated in-flight transfer
+	// owns its original context and frozen receive plan until completion.
+	if s.inbox.listening && s.inbox.acceptCancel != nil {
+		s.inbox.acceptCancel()
+	}
 	s.inbox.mu.Unlock()
+	s.operationMu.Unlock()
 	s.prewarmNetwork(cfg)
 	s.startLANDiscovery(directory, cfg)
 	s.ensureInbox()
@@ -175,6 +179,7 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 			s.inbox.done = nil
 			s.inbox.connected = false
 			s.inbox.listening = false
+			s.inbox.acceptCancel = nil
 		}
 		s.inbox.mu.Unlock()
 		close(done)
@@ -222,9 +227,24 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 				}
 				s.inbox.mu.Unlock()
 				for ctx.Err() == nil {
+					s.inbox.mu.Lock()
+					directory = s.inbox.directory
+					currentCfg := s.inbox.cfg
+					currentCfg.WaitTimeout = listenerCfg.WaitTimeout
+					currentCfg.onPhase = listenerCfg.onPhase
+					currentCfg.onSession = nil
+					currentCfg.onEvidence = nil
+					currentCfg.onChunkSent = nil
+					acceptCtx, cancelAccept := context.WithCancel(ctx)
+					s.inbox.acceptCancel = cancelAccept
+					s.inbox.mu.Unlock()
 					var peer *PeerSession
-					peer, err = s.acceptDirectOnSession(ctx, "", listenerCfg, signalSession)
+					peer, err = s.acceptDirectOnSession(acceptCtx, "", currentCfg, signalSession)
+					s.inbox.mu.Lock()
+					s.inbox.acceptCancel = nil
+					s.inbox.mu.Unlock()
 					if err != nil {
+						cancelAccept()
 						break
 					}
 					s.inbox.mu.Lock()
@@ -235,6 +255,8 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 					} else {
 						_ = peer.Close()
 					}
+					cancelAccept()
+					s.ensureLANDiscovery()
 				}
 				stopHeartbeat()
 				parked := false
@@ -307,7 +329,6 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	s.inbox.mu.Lock()
 	t.cfg = s.inbox.cfg
 	s.inbox.mu.Unlock()
-	t.decision = make(chan bool, 1)
 	s.tasks.workers.Add(1)
 	s.operationMu.Unlock()
 	defer s.tasks.workers.Done()
@@ -325,71 +346,15 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		cancel()
 		return false
 	}
-	var lastReceived int64
-	result, runErr := transfer.Receive(ctx, transport.WrapStream(stream), directory, peer.PeerID, func(m transfer.Manifest) bool {
-		n := m.TotalBytes()
-		t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, recovery *taskRecovery) {
-			v.State = "awaiting_acceptance"
-			v.Phase = "awaiting_acceptance"
-			v.TotalBytes = &n
-			v.FileCount = len(m.Files)
-			v.ManifestSummary = manifestSummary(m)
-			v.TransferID = m.TransferID
-			v.ManifestDigest = m.Digest()
-			v.ChunkSize = m.ChunkSize
-			v.CanCancel = true
-			v.CanPause = false
-			v.RestartRecoverySupported = v.HistoryPersisted
-			v.ByteResumeSupported = true
-			recovery.Direction = "receive"
-			recovery.PeerID = peer.PeerID
-			recovery.PeerFingerprint = peer.PeerID
-			recovery.TargetDirectory = directory
-			recovery.TransferID = m.TransferID
-			recovery.ManifestDigest = m.Digest()
-			recovery.ChunkSize = m.ChunkSize
-			recovery.TotalBytes = n
-			recovery.FileCount = len(m.Files)
-		})
-		if s.checkPeerAllowed(peer.PeerID) != nil {
-			return false
-		}
-		if s.alwaysAccept(peer.PeerID) {
-			return true
-		}
-		select {
-		case accepted := <-t.decision:
-			return accepted
-		case <-ctx.Done():
-			return false
-		}
-	}, func(p transfer.Progress) {
-		if p.Received >= lastReceived {
-			t.recordReceived(attemptID, p.Received-lastReceived)
-			lastReceived = p.Received
-		}
-		t.progress(attemptID, p)
-	})
+	options := s.taskReceiveOptions(ctx, t, attemptID, directory, nil, s.alwaysAccept(peer.PeerID))
+	options.Peer = peer.PeerID
+	result, runErr := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
 	if runErr != nil {
 		handleTaskRunError(t, attemptID, ctx, runErr)
 		cancel()
 		return false
 	}
-	t.updateRecordAttempt(attemptID, func(v *TaskSnapshot, saved *taskRecovery) {
-		v.TransferID = result.TransferID
-
-		v.Phase = "completed"
-		v.ProcessedBytes = result.Bytes
-		v.VerifiedBytes = result.Bytes
-		v.ReceivedBytes = result.Bytes
-		v.CommittedBytes = result.Bytes
-		v.CommittedFiles = v.FileCount
-		v.BilateralConfirmed = true
-		saved.LogicalCompleted = result.Bytes
-		n := result.Bytes
-		v.TotalBytes = &n
-	})
-	t.finishAttempt(attemptID, "completed", nil)
+	t.completeTransfer(attemptID, result, peer.SessionID)
 	cancel()
 	return true
 }

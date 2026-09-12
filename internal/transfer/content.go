@@ -38,6 +38,14 @@ type ContentDescriptor struct {
 	Height    int          `json:"height,omitempty"`
 }
 
+// ContentAcceptance reports the validated interpretation after capability and
+// explicit fallback negotiation. The descriptor is a caller-owned copy.
+type ContentAcceptance struct {
+	Content       *ContentDescriptor `json:"content,omitempty"`
+	ContentDigest string             `json:"content_digest,omitempty"`
+	FileFallback  bool               `json:"file_fallback,omitempty"`
+}
+
 type SendOptions struct {
 	Hooks   SendHooks
 	Content *ContentDescriptor
@@ -201,7 +209,7 @@ func validateContentControl(c control) error {
 			return ErrContentInvalid
 		}
 		switch c.Op {
-		case opOffer, opAccept, opFinish, opCompleted, opConfirmed, opConfirmedAck:
+		case opOffer, opAccept, opAccepted, opFinish, opCompleted, opConfirmed, opConfirmedAck:
 		default:
 			return ErrContentInvalid
 		}

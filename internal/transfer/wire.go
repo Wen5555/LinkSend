@@ -42,9 +42,13 @@ type ChunkTransmission struct {
 	Retransmitted bool   `json:"retransmitted"`
 }
 type SendHooks struct {
-	Progress       func(Progress)
-	PreviouslySent func(fileID uint32, index int) bool
-	ChunkSent      func(ChunkTransmission)
+	// ContentAccepted persists the validated native/fallback decision before chunk scheduling.
+	ContentAccepted func(ContentAcceptance) error
+	// SelectionAccepted must durably bind the verified acceptance before chunk scheduling.
+	SelectionAccepted func(Selection, PlanSummary) error
+	Progress          func(Progress)
+	PreviouslySent    func(fileID uint32, index int) bool
+	ChunkSent         func(ChunkTransmission)
 }
 type Result struct {
 	TransferID      string             `json:"transfer_id"`
@@ -76,11 +80,13 @@ type control struct {
 	Content           *ContentDescriptor `json:"content,omitempty"`
 	ContentDigest     string             `json:"content_digest,omitempty"`
 	AllowFileFallback bool               `json:"allow_file_fallback,omitempty"`
+	CommitBarrier     bool               `json:"commit_barrier,omitempty"`
 }
 
 const (
 	opOffer        = "offer"
 	opAccept       = "accept"
+	opAccepted     = "accepted"
 	opReject       = "reject"
 	opChunk        = "chunk"
 	opAck          = "ack"
@@ -345,6 +351,9 @@ func safePeerError(s string) string {
 }
 
 func validateControl(c control) error {
+	if c.CommitBarrier && c.Op != opAccept {
+		return errors.New("INVALID_ACCEPTANCE_BARRIER")
+	}
 	if err := validateContentControl(c); err != nil {
 		return err
 	}
@@ -371,7 +380,7 @@ func validateControl(c control) error {
 			return ErrPlanInvalid
 		}
 		switch c.Op {
-		case opFinish, opCompleted, opConfirmed, opConfirmedAck:
+		case opAccepted, opFinish, opCompleted, opConfirmed, opConfirmedAck:
 		default:
 			return ErrPlanInvalid
 		}
@@ -400,7 +409,7 @@ func validateControl(c control) error {
 		if c.Manifest != nil || c.Digest != "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
 			return errors.New("INVALID_CONTROL")
 		}
-	case opFinish, opConfirmed, opConfirmedAck:
+	case opAccepted, opFinish, opConfirmed, opConfirmedAck:
 		if c.Manifest != nil || c.Digest == "" || c.File != 0 || c.Index != 0 || c.Verified != 0 || c.Error != "" {
 			return errors.New("INVALID_CONTROL")
 		}
@@ -448,7 +457,7 @@ func SendWithOptions(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, op
 	digest := m.Digest()
 	contentDigest := ""
 	fallback := false
-	capabilities := []string{CapabilityReceivePlan}
+	capabilities := []string{CapabilityReceivePlan, CapabilityAcceptanceCommit}
 	if descriptor != nil {
 		contentDigest = descriptor.BindingDigest(m)
 		capabilities = append(capabilities, CapabilityContent)
@@ -513,6 +522,23 @@ func SendWithOptions(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, op
 	progress.SkippedBytes = summary.SkippedBytes
 	if c.Verified < 0 || c.Verified > progress.Total {
 		return Result{}, errors.New("INVALID_ACCEPTANCE")
+	}
+	if hooks.SelectionAccepted != nil {
+		if err = hooks.SelectionAccepted(plan.Selection(), summary); err != nil {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+			return Result{}, err
+		}
+	}
+	if hooks.ContentAccepted != nil {
+		if err = hooks.ContentAccepted(ContentAcceptance{Content: cloneContent(descriptor), ContentDigest: contentDigest, FileFallback: fallback}); err != nil {
+			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
+			return Result{}, err
+		}
+	}
+	if c.CommitBarrier {
+		if err = writeControl(rw, control{Op: opAccepted, Digest: digest, SelectionDigest: selectionDigest, ContentDigest: contentDigest}); err != nil {
+			return Result{}, err
+		}
 	}
 	progress.State = "Transferring"
 	progress.Verified = c.Verified
@@ -674,7 +700,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(loadErr)})
 			return Result{}, loadErr
 		}
-		plan, err = options.Plan(ctx, Offer{Manifest: cloneManifest(m), Capabilities: append([]string(nil), offer.Capabilities...), ResumePlan: resumePlan, Content: cloneContent(descriptor), ContentDigest: contentDigest})
+		plan, err = options.Plan(ctx, Offer{Manifest: cloneManifest(m), Capabilities: append([]string(nil), offer.Capabilities...), ResumePlan: resumePlan, Content: cloneContent(descriptor), ContentDigest: contentDigest, FileFallback: fallback})
 		if err != nil {
 			if errors.Is(err, ErrRejected) {
 				writeTerminal(ctx, rw, control{Op: opReject})
@@ -692,10 +718,13 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		writeTerminal(ctx, rw, control{Op: opReject})
 		return Result{}, ErrRejected
 	}
-	planSupported := false
+	planSupported, commitBarrier := false, false
 	for _, capability := range offer.Capabilities {
 		if capability == CapabilityReceivePlan {
 			planSupported = true
+		}
+		if capability == CapabilityAcceptanceCommit {
+			commitBarrier = true
 		}
 	}
 	if !planSupported && plan.Selection().Digest != FullReceivePlan(m).Selection().Digest {
@@ -729,8 +758,20 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	if descriptor != nil {
 		acceptedCapabilities = []string{CapabilityContent}
 	}
-	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes(), Selection: selection, Capabilities: acceptedCapabilities, ContentDigest: contentDigest}); err != nil {
+	if err = writeControl(rw, control{Op: opAccept, Digest: m.Digest(), Verified: r.VerifiedBytes(), Selection: selection, Capabilities: acceptedCapabilities, ContentDigest: contentDigest, CommitBarrier: commitBarrier}); err != nil {
 		return fail(err)
+	}
+	if commitBarrier {
+		accepted, e := readControl(rw)
+		if e != nil {
+			return fail(e)
+		}
+		if accepted.ContentDigest != contentDigest {
+			return fail(ErrContentMismatch)
+		}
+		if accepted.Op != opAccepted || accepted.Digest != m.Digest() || accepted.SelectionDigest != selectionDigest {
+			return fail(ErrPlanMismatch)
+		}
 	}
 	start := time.Now()
 	initial := r.VerifiedBytes()
@@ -759,6 +800,16 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 			data, eRead := readFrame(rw, m.ChunkSize)
 			if eRead != nil {
 				return fail(eRead)
+			}
+			// V1 shares framing for body and terminal control. A sender can fail
+			// between accept and a chunk response. Only a bounded error envelope
+			// that does not match the expected chunk hash is control; a legitimate
+			// file containing identical JSON remains ordinary file content.
+			if len(data) <= maxPeerError+1024 && Sum(data) != e.Chunks[i] {
+				var terminal control
+				if json.Unmarshal(data, &terminal) == nil && terminal.Op == opError && validateControl(terminal) == nil {
+					return fail(&PeerError{Detail: safePeerError(terminal.Error)})
+				}
 			}
 			received += int64(len(data))
 			emit("Transferring")

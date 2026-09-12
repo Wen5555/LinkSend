@@ -19,6 +19,10 @@ import (
 )
 
 const CapabilityReceivePlan = "receive_plan_v1"
+
+// CapabilityAcceptanceCommit prevents pre-body sender errors from sharing a
+// frame position with file bytes. Both offer and accept must opt in.
+const CapabilityAcceptanceCommit = "acceptance_commit_v1"
 const maxKeepBothNames = 100
 
 var (
@@ -74,6 +78,7 @@ type Offer struct {
 	ResumePlan    *ReceivePlan       `json:"resume_plan,omitempty"`
 	Content       *ContentDescriptor `json:"content,omitempty"`
 	ContentDigest string             `json:"content_digest,omitempty"`
+	FileFallback  bool               `json:"file_fallback,omitempty"`
 }
 
 type ReceiveOptions struct {

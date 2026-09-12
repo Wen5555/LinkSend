@@ -82,10 +82,18 @@ M4 传输层实现见 [ADR 0005](adr/0005-receive-plans.md)。V1、TLS ALPN、�
 
 文字与 URL 使用 `text/plain; charset=utf-8`，非空、最多 64 KiB，无图片尺寸；图片仅为 `image/png`，编码最多 32 MiB，宽高分别不超过 32768、乘积不超过 40,000,000。发送与接收均验证正文摘要、UTF-8/NUL 或完整 PNG 解码和真实尺寸；接收校验在文件提交前完成。发送 URL 由 Go 的 `content.ValidateURL` 检查；接收的 URL 类型只是对端提示，未知 scheme 保留为不透明文本，应用只能在明确打开动作中再次允许 http/https。此层从不打开链接、执行内容或更改剪贴板。
 
-内容 offer 增加 `capabilities:["receive_plan_v1","content_v1"]`、`content` 和 `content_digest`。内容摘要是以下固定字段顺序紧凑 JSON 的 BLAKE3（描述符字段顺序如上，零宽高省略）：`{"domain":"LinkSend/content_v1","manifest_digest":<原manifest摘要>,"descriptor":<内容描述符>}`。新 receiver 只有显式设置 `ReceiveOptions.AcceptNativeContent=true` 且提供 `Plan` 内容感知决策才接受原生内容，accept 声明 `capabilities:["content_v1"]` 并回传相同 `content_digest`；只有旧式 Accept 或已有 M4 Plan 回调都不隐式接受原生类型。应用完成安全内容动作后才可打开该开关。
+内容 offer 增加 `capabilities:["receive_plan_v1","acceptance_commit_v1","content_v1"]`、`content` 和 `content_digest`。内容摘要是以下固定字段顺序紧凑 JSON 的 BLAKE3（描述符字段顺序如上，零宽高省略）：`{"domain":"LinkSend/content_v1","manifest_digest":<原manifest摘要>,"descriptor":<内容描述符>}`。新 receiver 只有显式设置 `ReceiveOptions.AcceptNativeContent=true` 且提供 `Plan` 内容感知决策才接受原生内容，accept 声明 `capabilities:["content_v1"]` 并回传相同 `content_digest`；只有旧式 Accept 或已有 M4 Plan 回调都不隐式接受原生类型。应用完成安全内容动作后才可打开该开关。
 
 sender 无显式降级选择时，遇到未声明内容能力的 accept 返回 `CONTENT_UNSUPPORTED`，在首正文帧前关闭流，不把旧端接受文件等同于接受原生内容。仅 Go 调用者 `SendOptions.AllowFileFallback=true` 可在 offer 携 `allow_file_fallback:true`；不支持内容的端点才按普通文件继续。成功降级的发送 Result 明确 `file_fallback:true`、`content=nil`、`content_digest` 为空；支持此实现但只有旧式 Accept 回调的接收端也返回相同降级事实。原生内容双方 Result 具有相同描述符和内容摘要，普通文件 Result 不增加非空内容字段。
 
 原生内容的 finish/completed/confirmed/confirmed_ack 均须回传完全相同的 `content_digest`，并独立保留 M4 的 `selection_digest`；旧 EOF 不能替代内容会话的显式 confirmed_ack。单文件仍遵循 M4 子集规则：全选或全跳过；全跳过返回 `NoContent`/0 B，保留类型元数据只用于历史说明，不能触发复制、打开或保存动作。
 
 接收 checkpoint 另存内容摘要，状态在原计划前缀外增加 `ContentV1/`。新 reader 在任何恢复写入前同时核对内容解释与原 manifest；同字节改 kind、缺失内容摘要、内容与普通文件间转换均拒绝，不能静默升级旧 checkpoint。旧 reader 因不认识关键状态前缀而明确拒绝。新增精确错误码 `CONTENT_UNSUPPORTED`、`INVALID_CONTENT_DESCRIPTOR`、`CONTENT_MISMATCH`；其他未知可选 JSON 字段保持 V1 可忽略语义。API、实际测试与未验收范围见 [M5 内容协议证据](evidence/DESKTOP-M5-CONTENT-WIRE.md)。
+
+## 可选接受持久化屏障（M4 App）
+
+`acceptance_commit_v1` 只在加密 QUIC offer 上声明。新 receiver 在 accept 中回显 `commit_barrier=true` 后等待 `accepted`，核对原始 `digest`、协商的 `selection_digest` 与实际原生 `content_digest`，才发送首个 chunk/ready 请求。sender 在 `SelectionAccepted` 与 `ContentAccepted` 都成功持久化后发出该控制；失败则在同一控制位置返回稳定 error。未双向协商的旧会话不插入新消息，Manifest、V1、ALPN及信令均保持不变。
+
+这是针对真实故障发现的兼容扩展：V1 error/body共用帧，且文件可恰好是error JSON，不能仅靠猜JSON或hash彻底消除旧端帧歧义。新屏障和合法JSON文件的真实QUIC测试见 [M4 App证据](evidence/DESKTOP-M4-APP.md)。
+
+联合能力、明确降级、两个接受记录的File.Sync及同字节错误JSON反例见 [M4/M5整合证据](evidence/DESKTOP-M4-M5-ACCEPTANCE-INTEGRATION.md)。

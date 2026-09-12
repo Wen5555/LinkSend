@@ -341,14 +341,14 @@ func (m *contentDigestMutator) Write(p []byte) (int, error) {
 }
 
 func TestContentEveryTerminalDigestIsChecked(t *testing.T) {
-	for _, op := range []string{opAccept, opFinish, opCompleted, opConfirmed, opConfirmedAck} {
+	for _, op := range []string{opAccept, opAccepted, opFinish, opCompleted, opConfirmed, opConfirmedAck} {
 		t.Run(op, func(t *testing.T) {
 			p, d, _ := contentFixture(t, content.Text)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			a, b := net.Pipe()
 			var send, receive io.ReadWriteCloser = a, b
-			if op == opFinish || op == opConfirmed {
+			if op == opAccepted || op == opFinish || op == opConfirmed {
 				send = &contentDigestMutator{a, op}
 			} else {
 				receive = &contentDigestMutator{b, op}
@@ -361,7 +361,7 @@ func TestContentEveryTerminalDigestIsChecked(t *testing.T) {
 			}()
 			r, e := SendWithOptions(ctx, send, p, SendOptions{Content: &d})
 			other := <-done
-			if op == opFinish || op == opConfirmed {
+			if op == opAccepted || op == opFinish || op == opConfirmed {
 				if !errors.Is(other.err, ErrContentMismatch) {
 					t.Fatalf("receiver missed binding: %v", other.err)
 				}
@@ -371,7 +371,7 @@ func TestContentEveryTerminalDigestIsChecked(t *testing.T) {
 			if e == nil && other.err == nil {
 				t.Fatalf("mismatched terminal completed: %+v %+v", r, other)
 			}
-			if op == opAccept || op == opFinish {
+			if op == opAccept || op == opAccepted || op == opFinish {
 				if _, err := os.Stat(filepath.Join(dest, p.Manifest.Files[0].Path)); !os.IsNotExist(err) {
 					t.Fatal("committed before matching acceptance/finish")
 				}

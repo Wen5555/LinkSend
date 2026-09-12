@@ -1,6 +1,6 @@
 # ADR 0005：不可变 offer、协商子集与持久接收计划
 
-日期：2026-09-12。状态：M4 传输层基础已实现；App/UI 接线与真实跨设备原生验收另行完成。
+日期：2026-09-12。状态：M4 传输层与 App 后端已实现并通过真实本机 QUIC 回归；UI 与真实跨设备原生验收另行完成。
 
 ## 决策
 
@@ -31,7 +31,7 @@ receiver.Summary() PlanSummary
 
 ## 兼容的 V1 协商
 
-新 sender 在既有首个 offer 上添加可选 `capabilities:["receive_plan_v1"]`。不在 offer 前插入新 hello，旧 receiver 忽略该字段后继续旧 accept。未知可选能力有数量、长度与控制字符限制，不因为出现新能力名称就升级权限。
+新 sender 在既有首个 offer 上添加可选 `capabilities:["receive_plan_v1","acceptance_commit_v1"]`。不在 offer 前插入新 hello，旧 receiver 忽略该字段后继续旧 accept。未知可选能力有数量、长度与控制字符限制，不因为出现新能力名称就升级权限。
 
 仅当 offer 明确包含能力时，新 receiver 才在 accept 中附加：
 
@@ -42,6 +42,8 @@ receiver.Summary() PlanSummary
 示意 ID 必须满足实际 manifest 的祖先目录闭包。selection digest 为固定字段顺序 JSON `{version:1,original_digest:<原摘要>,ids:<已排序ID>}` 的 BLAKE3；绝对目录和目标名称不参与线上摘要。accept 的原 `digest` 始终仍是 original manifest digest。
 
 新 sender 读到旧 accept（无 selection）时按完整 manifest 校验与发送。新 receiver 收到旧 offer（无能力）时只允许全量；请求部分或全部跳过返回 `RECEIVE_PLAN_UNSUPPORTED`。本地全量重命名不需要发送方理解保存名称。未来原生内容能力可沿用 offer/accept 协商阶段；本 ADR 不提前实现或宣称 M5 内容能力。
+
+`acceptance_commit_v1` 另需 accept 显式回显 `commit_barrier=true`。sender 验证选择并执行关键持久化 hook 后返回 `accepted` 控制，绑定原 digest 与协商的 selection_digest；receiver 在此之前不请求 chunk。此屏障避免“接受后持久化失败的 error JSON 恰好等于文件正文”导致的帧歧义。旧端未双向协商时不插入新控制，保留既有时序及其边界。
 
 协商后 sender 只响应已选 ID 的块请求，拒绝未选 ID；最终源文件再验证也只检查选中内容，未选文件变化不阻止已协商子集完成。旧 accept 保留原全量再验证。
 
@@ -69,4 +71,4 @@ receiver.Summary() PlanSummary
 
 ## 验收边界
 
-本分支仅实现传输层、协议与恢复基础。真实 App 接收清单、选择控件、剩余空间 API、最终目录展示、NoContent任务状态、稳定错误文案和原生包仍由后续接线验证。root/core、独立桌面编译测试、故障用例、旧帧固定结构和真实 loopback QUIC 的实际结果见 [M4 evidence](../evidence/DESKTOP-M4-TRANSFER.md)。不把 net.Pipe 当网络，也不把 loopback 当物理 LAN 或双 NAT；原有跨 NAT FAIL/NOT_RUN 不因本次工作改变。
+App 已提供受限分页、CAS 预览与接受、实际空间 API、目录/计划持久化、完整索引串联、NoContent计数和恢复错误文案；见 [M4 App evidence](../evidence/DESKTOP-M4-APP.md)。选择控件和原生包仍需主分支接线验收。root/core、独立桌面编译测试、故障用例、旧帧固定结构和真实 loopback QUIC 的传输层结果见 [M4 evidence](../evidence/DESKTOP-M4-TRANSFER.md)。不把 net.Pipe 当网络，也不把 loopback 当物理 LAN 或双 NAT；原有跨 NAT FAIL/NOT_RUN 不因本次工作改变。

@@ -316,6 +316,8 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 			continue
 		}
 		switch task.State {
+		case "no_content":
+			_ = s.setQueueState(item.ID, "completed", "")
 		case "completed", "cancelled":
 			_ = s.setQueueState(item.ID, task.State, "")
 		case "failed", "rejected":
