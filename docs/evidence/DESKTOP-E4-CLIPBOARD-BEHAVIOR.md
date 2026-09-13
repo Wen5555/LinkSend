@@ -4,7 +4,7 @@
 
 候选分支：`codex/desktop-experience-upgrade`
 
-基线提交：`422d96d` 加本文件所述未提交 E4-03 候选；最终提交 SHA 与 GitHub CI 在提交后补记。
+实现提交：`fb599c9bc1dde8f4f6b86b38eddf00e10401e653`；Windows clipboard generation 收尾修复：`4725c40`。
 
 ## 实现边界
 
@@ -43,12 +43,12 @@ pnpm run build
 
 ## 平台原生证据
 
-- Windows 普通本机测试不会修改用户剪贴板。workflow 仅在隔离 runner 设置 `LINKSEND_TEST_CLIPBOARD_WRITE=1`，用真实测试 HWND 写入并读回文字，同时验证过期写入不改变剪贴板；本候选提交后的 CI 结果待补。
+- Windows 普通本机测试不会修改用户剪贴板。workflow 仅在隔离 runner 设置 `LINKSEND_TEST_CLIPBOARD_WRITE=1`，用真实测试 HWND 写入并读回文字，同时验证过期写入不改变剪贴板。`fb599c9` 的 push/PR desktop 首轮都真实复现：写入函数在 defer `CloseClipboard` 前过早返回 sequence，关闭后读回 CAS 报 `CLIPBOARD_CHANGED_DURING_CAPTURE`；`4725c40` 改为显式关闭后读取 settled generation。随后 push run `34785043704` 与 PR run `34785046227` 的完整 desktop workflow 均 PASS，证明隔离原生写读与过期拒写通过，没有以重跑掩盖首轮失败。
 - macOS arm64 最终源码补丁作业 `/tmp/codex-ssh/linksend-e4-03-final-mac-r3-20260913T213854Z` 在 alias `mac-test-102342413`（user `wen`、host `10.234.212.116`）退出 0：`internal/clipboardsync` race、无文件 QUIC/文件取消/后台收件 race、desktop/nativeclipboard race、desktop vet/build 全部通过。保留既有 SDK 26 object 与 deployment target 13/11 linker warning。首次后台作业 `/tmp/codex-ssh/linksend-e4-03-final-mac-20260913T213620Z` 因 manager 的 zsh `status` 只读变量失败，第二次因非登录 PATH 找不到 `git` 退出 127；两次都未记为产品失败或通过，修正 PATH 后的 r3 才是最终结果。
 - 这些隔离测试没有操作两台物理设备的 general clipboard，不能记为物理 Win↔Mac 用户剪贴板通过。
 
 ## 尚未完成
 
-- 最终提交 SHA、GitHub core/desktop/packages CI 和 Windows 隔离原生写回执。
+- `4725c40` 的 core push `34785043702`、core PR `34785046240`、desktop push `34785043704`、desktop PR `34785046227` 全部 PASS；packages run `34785043707` 的 Windows amd64、macOS arm64、macOS amd64 三个 job 全部 PASS。workflow 仅有 GitHub Actions Node 20 强制运行于 Node 24 的弃用提示，不是产品测试失败。
 - 准确安装包中的锁屏、睡眠、连续快速复制、32 MiB 图片峰值内存、物理 Win↔Mac 双向和网络切换矩阵，统一留 E5。
 - Apple Developer ID、App Group 正式签名、Windows package identity、证书信任和签名安装按用户要求暂缓。

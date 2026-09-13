@@ -68,7 +68,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 待E4-03候选CI | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
-| E4-03 | 待审查 | PASS | 定向/race/前端PASS | Win源码与隔离测试待CI、Mac命名pasteboard PASS | loopback QUIC PASS | 待候选CI | 无文件主动认证会话、双向文字、文件并存、期限/回环/限额和独立托盘暂停已接线；物理Win↔Mac未运行 |
+| E4-03 | 待审查 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 4725c40五组checks/三平台包PASS | 无文件主动认证会话、双向文字、文件并存、期限/回环/限额和独立托盘暂停已接线；物理Win↔Mac未运行 |
 | E5-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E5-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 
