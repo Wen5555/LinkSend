@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wen5555/LinkSend/apps/desktop/nativeclipboard"
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -27,25 +28,30 @@ import (
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.
 type App struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	core          *linksendapp.Service
-	initErr       error
-	prefs         DesktopPreferences
-	prefsMu       sync.RWMutex
-	prefsWriteMu  sync.Mutex
-	prefsStatus   PreferencesStatus
-	configBlocked bool
-	dataDir       string
-	closeMu       sync.Mutex
-	closeDialog   bool
-	quitReady     bool
-	runtimeApp    *application.App
-	window        application.Window
-	eventsDone    chan struct{}
-	entries       *desktopEntries
-	background    *desktopBackground
-	nativeEvents  *nativeSystemEventPump
+	ctx             context.Context
+	cancel          context.CancelFunc
+	core            *linksendapp.Service
+	initErr         error
+	prefs           DesktopPreferences
+	prefsMu         sync.RWMutex
+	prefsWriteMu    sync.Mutex
+	prefsStatus     PreferencesStatus
+	configBlocked   bool
+	dataDir         string
+	closeMu         sync.Mutex
+	closeDialog     bool
+	quitReady       bool
+	runtimeApp      *application.App
+	window          application.Window
+	eventsDone      chan struct{}
+	entries         *desktopEntries
+	background      *desktopBackground
+	nativeEvents    *nativeSystemEventPump
+	clipboardMu     sync.Mutex
+	clipboardStop   func()
+	clipboardLast   nativeclipboard.Change
+	clipboardErr    string
+	clipboardPaused bool
 }
 
 type DesktopPreferences struct {
@@ -134,6 +140,7 @@ func (a *App) startup(ctx context.Context) {
 				return
 			}
 		}
+		a.refreshClipboardWatch()
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
 			if explicitDataDir {
 				a.prefs.ReceiveDirectory = filepath.Join(dataDir, "received")
@@ -158,6 +165,7 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	a.stopClipboardWatch()
 	a.stopNativeSystemEvents()
 	if a.cancel != nil {
 		a.cancel()
@@ -883,7 +891,9 @@ func (a *App) RemoveDevice(deviceID string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.core.Revoke(ctx, deviceID)
+	err := a.core.Revoke(ctx, deviceID)
+	a.refreshClipboardWatch()
+	return err
 }
 
 func (a *App) UnblockDevice(deviceID string) error {

@@ -570,3 +570,4 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 任务库升级 schema 8；权限按 peer、send/receive 与 text/link/image 分离保存并使用 revision CAS，默认无记录即关闭。
 - 启用前重验当前 peer 授权；本机阻止、成员移除或授权 generation 变化删除该 peer 全部剪贴板授权，解除阻止和重新配对不会自动恢复。
 - 当前候选只建立本机权限和原生变化监听边界；正文读取、lease wire、跨端同步与接收写入仍待 E4-03。
+- Windows 使用 `AddClipboardFormatListener` + `SetWindowSubclass`，回调只合并 sequence 和 text/link/image 格式标志；macOS 每 250ms 比较 `NSPasteboard.changeCount` 并只查询 types。仅存在 enabled grant 时注册，全部关闭、撤销、睡眠、锁屏或退出时停止；唤醒/解锁从新基线恢复，不补发停用期间变化。

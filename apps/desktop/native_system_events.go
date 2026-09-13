@@ -94,10 +94,18 @@ func (a *App) startNativeSystemEvents() {
 	a.nativeEvents = pump
 	if a.runtimeApp != nil {
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.SystemWillSleep, func(*application.ApplicationEvent) {
+			go a.pauseClipboardWatch()
 			pump.notify("sleep")
 		}))
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.SystemDidWake, func(*application.ApplicationEvent) {
 			pump.notify("wake")
+			go a.resumeClipboardWatch()
+		}))
+		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.ScreenLocked, func(*application.ApplicationEvent) {
+			go a.pauseClipboardWatch()
+		}))
+		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.ScreenUnlocked, func(*application.ApplicationEvent) {
+			go a.resumeClipboardWatch()
 		}))
 	}
 	stop, err := startNativeNetworkMonitor(func() { pump.notify("network") })

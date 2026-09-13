@@ -12,6 +12,54 @@ typedef struct {
     bool overflow;
 } LinkSendPNGBuffer;
 
+static NSPasteboard *linksendPasteboard(const char *name) {
+    return name ? [NSPasteboard pasteboardWithName:[NSString stringWithUTF8String:name]] : NSPasteboard.generalPasteboard;
+}
+
+uint64_t linksendClipboardChangeCount(const char *name) {
+    @autoreleasepool {
+        @try {
+            return (uint64_t)linksendPasteboard(name).changeCount;
+        } @catch (NSException *exception) {
+            (void)exception;
+            return 0;
+        }
+    }
+}
+
+uint32_t linksendClipboardTypes(const char *name) {
+    @autoreleasepool {
+        @try {
+            NSPasteboard *pasteboard = linksendPasteboard(name);
+            NSArray<NSPasteboardType> *types = pasteboard.types;
+            uint32_t result = 0;
+            if ([types containsObject:NSPasteboardTypeString]) result |= 1;
+            if ([types containsObject:NSPasteboardTypeURL]) result |= 2;
+            if ([types containsObject:NSPasteboardTypePNG] || [types containsObject:NSPasteboardTypeTIFF]) result |= 4;
+            return result;
+        } @catch (NSException *exception) {
+            (void)exception;
+            return 0;
+        }
+    }
+}
+
+int linksendTestPasteboardString(const char *name, const char *value) {
+    @autoreleasepool {
+        @try {
+            if (!name || !value) return 0;
+            NSString *pasteboardName = [NSString stringWithUTF8String:name];
+            if (![pasteboardName hasPrefix:@"com.linksend.native-test."]) return 0;
+            NSPasteboard *pasteboard = [NSPasteboard pasteboardWithName:pasteboardName];
+            [pasteboard clearContents];
+            return [pasteboard setString:[NSString stringWithUTF8String:value] forType:NSPasteboardTypeString] ? 1 : 0;
+        } @catch (NSException *exception) {
+            (void)exception;
+            return 0;
+        }
+    }
+}
+
 static size_t linksendPNGWrite(void *info, const void *buffer, size_t count) {
     LinkSendPNGBuffer *output = (LinkSendPNGBuffer *)info;
     if (count > LinkSendMaxImageBytes - output->data.length) {

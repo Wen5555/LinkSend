@@ -111,7 +111,9 @@ func (a *App) BlockPeer(id string) error {
 	if err := a.workspaceAvailable(); err != nil {
 		return err
 	}
-	return a.core.BlockPeer(id)
+	err := a.core.BlockPeer(id)
+	a.refreshClipboardWatch()
+	return err
 }
 func (a *App) UnblockPeer(id string) error {
 	if err := a.workspaceAvailable(); err != nil {
@@ -144,6 +146,7 @@ func (a *App) startWorkspaceEvents() {
 			case <-ticker.C:
 				if pending {
 					pending = false
+					a.refreshClipboardWatch()
 					a.runtimeApp.Event.Emit("workspace:changed", a.core.WorkspaceChange())
 				}
 			}

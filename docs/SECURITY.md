@@ -91,3 +91,5 @@ M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、�
 ## E4 自动剪贴板权限
 
 任务库 schema 8 按 peer、方向（send/receive）和内容类型（text/link/image）分别保存 revision CAS 授权。没有记录等同关闭；新配对、解除阻止或重新加入不会继承旧授权。启用前重新验证当前 peer 授权，本机阻止、成员移除或授权 generation 变化会删除该 peer 的全部剪贴板授权。该表只保存权限和时间戳，不保存剪贴板正文、图片或系统格式数据。
+
+原生监听器默认不注册。Windows `WM_CLIPBOARDUPDATE` 回调和 macOS `changeCount` 轮询只生成本机 sequence 与格式类别，不在系统回调中打开剪贴板、解码图片、访问文件 URL 或进入 JavaScript。睡眠、锁屏、撤销及退出会注销监听并清空最近变化基线；唤醒或解锁只观察后续变化。
