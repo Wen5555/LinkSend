@@ -562,4 +562,4 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 ## 2026-09-14 E4-01 认证 QUIC 文件会话复用候选
 
 - peer ID + authorization generation 绑定的短期池复用同一认证 QUIC；两端都有入站 stream owner，连续正向和原始响应方反向文件保持同一 session_id。
-- 每 peer 仍限制一个活动文件发送流；传输中取消只终止当前 stream，下一文件可在同一连接完成。授权撤销、连接错误、网络变化、3 秒空闲与 Shutdown 关闭池中连接。
+- 每 peer 仍限制一个活动文件发送流；传输中取消只终止当前 stream，下一文件可在同一连接完成。授权撤销、连接错误、3 秒空闲、空闲网络变化与 Shutdown 关闭池中连接；活动连接由真实 path watcher 决定。

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -27,6 +28,25 @@ func directPoolKey(peerID string, generation uint64) string {
 	return fmt.Sprintf("%s/%d", peerID, generation)
 }
 
+func (s *Service) directPoolKeyLock(key string) *sync.Mutex {
+	s.directPoolMu.Lock()
+	defer s.directPoolMu.Unlock()
+	lock := s.directPoolLocks[key]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.directPoolLocks[key] = lock
+	}
+	return lock
+}
+
+func (s *Service) startPooledPeerServer(key string, pooled *pooledPeerSession) {
+	s.directPoolWG.Add(1)
+	go func() {
+		defer s.directPoolWG.Done()
+		s.servePooledPeer(key, pooled)
+	}()
+}
+
 func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg DirectConfig) (*PeerSession, error) {
 	generation := cfg.expectedAuthorizationGeneration
 	if generation == 0 {
@@ -38,6 +58,12 @@ func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg Dir
 		cfg.expectedAuthorizationGeneration = generation
 	}
 	key := directPoolKey(peerID, generation)
+	keyLock := s.directPoolKeyLock(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
+	if s.isClosing() {
+		return nil, errors.New("APP_CLOSING")
+	}
 	s.directPoolMu.Lock()
 	pooled := s.directPool[key]
 	if pooled != nil && pooled.inUse {
@@ -68,6 +94,10 @@ func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg Dir
 		return nil, err
 	}
 	key = directPoolKey(peerID, peer.AuthorizationGeneration)
+	if s.isClosing() {
+		_ = peer.Close()
+		return nil, errors.New("APP_CLOSING")
+	}
 	s.directPoolMu.Lock()
 	if previous := s.directPool[key]; previous != nil && previous.peer != peer {
 		if previous.timer != nil {
@@ -78,7 +108,7 @@ func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg Dir
 	pooled = &pooledPeerSession{peer: peer, generation: peer.AuthorizationGeneration, inUse: true, serving: true}
 	s.directPool[key] = pooled
 	s.directPoolMu.Unlock()
-	go s.servePooledPeer(key, pooled)
+	s.startPooledPeerServer(key, pooled)
 	return peer, nil
 }
 
@@ -86,19 +116,17 @@ func (s *Service) detachPeerControl(peer *PeerSession) error {
 	if peer == nil {
 		return nil
 	}
-	if peer.stopHeartbeat != nil {
-		peer.stopHeartbeat()
-		peer.stopHeartbeat = nil
+	stopHeartbeat, signal, ownsSignal := peer.takeControl()
+	if stopHeartbeat != nil {
+		stopHeartbeat()
 	}
 	err := s.rememberLANPeer(peer)
-	if peer.signal != nil && peer.ownsSignal {
-		peer.ownsSignal = false
-		wss, reusable := peer.signal.(*signaling.Session)
+	if signal != nil && ownsSignal {
+		wss, reusable := signal.(*signaling.Session)
 		if !reusable || !s.keepSpareSignal(wss) {
-			err = errors.Join(err, peer.signal.Close())
+			err = errors.Join(err, signal.Close())
 		}
 	}
-	peer.signal = nil
 	return err
 }
 
@@ -106,8 +134,8 @@ func (s *Service) releasePeerSession(peer *PeerSession, operationErr error) erro
 	if peer == nil {
 		return operationErr
 	}
-	reusable := operationErr == nil || protocol.ErrorCode(operationErr) == protocol.Cancelled ||
-		errors.Is(operationErr, context.Canceled) || errors.Is(operationErr, transfer.ErrCancelled)
+	reusable := peer.SessionReuse && (operationErr == nil || protocol.ErrorCode(operationErr) == protocol.Cancelled ||
+		errors.Is(operationErr, context.Canceled) || errors.Is(operationErr, transfer.ErrCancelled))
 	if !reusable || peer.Data == nil || peer.Data.Conn.Context().Err() != nil {
 		s.removePeerSession(peer)
 		return errors.Join(operationErr, peer.Close())
@@ -117,6 +145,9 @@ func (s *Service) releasePeerSession(peer *PeerSession, operationErr error) erro
 		return errors.Join(operationErr, err, peer.Close())
 	}
 	key := directPoolKey(peer.PeerID, peer.AuthorizationGeneration)
+	keyLock := s.directPoolKeyLock(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
 	s.directPoolMu.Lock()
 	pooled := s.directPool[key]
 	if pooled == nil || pooled.peer != peer {
@@ -152,14 +183,22 @@ func (s *Service) schedulePoolIdleLocked(key string, pooled *pooledPeerSession) 
 }
 
 func (s *Service) adoptInboundPeerSession(peer *PeerSession) {
-	if peer == nil || peer.Data == nil || s.detachPeerControl(peer) != nil {
+	if peer == nil || peer.Data == nil || !peer.SessionReuse || s.detachPeerControl(peer) != nil {
 		_ = peer.Close()
 		return
 	}
 	key := directPoolKey(peer.PeerID, peer.AuthorizationGeneration)
+	keyLock := s.directPoolKeyLock(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
 	pooled := &pooledPeerSession{peer: peer, generation: peer.AuthorizationGeneration, serving: true}
 	s.directPoolMu.Lock()
 	if previous := s.directPool[key]; previous != nil && previous.peer != peer {
+		if previous.peer.Data != nil && previous.peer.Data.Conn.Context().Err() == nil {
+			s.directPoolMu.Unlock()
+			_ = peer.Close()
+			return
+		}
 		if previous.timer != nil {
 			previous.timer.Stop()
 		}
@@ -168,7 +207,7 @@ func (s *Service) adoptInboundPeerSession(peer *PeerSession) {
 	s.directPool[key] = pooled
 	s.schedulePoolIdleLocked(key, pooled)
 	s.directPoolMu.Unlock()
-	go s.servePooledPeer(key, pooled)
+	s.startPooledPeerServer(key, pooled)
 }
 
 func (s *Service) servePooledPeer(key string, pooled *pooledPeerSession) {

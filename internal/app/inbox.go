@@ -306,14 +306,6 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	if err := s.checkPeerAllowed(peer.PeerID); err != nil {
 		return false
 	}
-	var policyErr error
-	directory, policyErr = s.receiveDirectory(peer.PeerID, directory)
-	if policyErr != nil {
-		s.inbox.mu.Lock()
-		s.inbox.lastError = "RECEIVE_DIRECTORY_UNAVAILABLE"
-		s.inbox.mu.Unlock()
-		return false
-	}
 	stream, err := peer.Data.Conn.AcceptStream(inboxCtx)
 	if err != nil {
 		return false
@@ -322,6 +314,14 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 }
 
 func (s *Service) receiveIncomingStream(inboxCtx context.Context, peer *PeerSession, directory string, stream *transport.QUICStream) bool {
+	effectiveDirectory, policyErr := s.receiveDirectory(peer.PeerID, directory)
+	if policyErr != nil {
+		s.inbox.mu.Lock()
+		s.inbox.lastError = "RECEIVE_DIRECTORY_UNAVAILABLE"
+		s.inbox.mu.Unlock()
+		return false
+	}
+	directory = effectiveDirectory
 	ctx, cancel := context.WithCancel(inboxCtx)
 	authorizationGeneration := peer.AuthorizationGeneration
 	if authorizationGeneration == 0 {

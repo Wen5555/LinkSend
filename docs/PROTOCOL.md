@@ -54,7 +54,7 @@ LAN 控制通道为 TLS 1.3 双向 Ed25519 证书验证，允许的客户端必�
 
 QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送后，transport 先关闭发送方向，再有界等待对端结束读取，防止随后的 reset/连接关闭丢弃终态响应。该等待至多 2 秒且不延长调用者 deadline；原始错误仍作为任务结果。V1 帧结构和 completed/confirmed 语义保持不变，net.Pipe 兼容测试与真实 QUIC 负向回归分别覆盖同步和缓冲发送。
 
-`completed`/`confirmed` 成功边界增加向后兼容的 `confirmed_ack`：新版发送端收到匹配回执即可证明接收端已读 `confirmed`；旧接收端在读到 `confirmed` 后关闭发送方向，EOF 或远端 application code 0 仍是兼容证据。新版接收端向旧发送端写出的 `confirmed_ack` 会被旧 terminal flush 当作普通终态字节读取，不改变旧成功语义。非零 application close、timeout 和连接级错误仍失败；单个 stream reset 只终止该操作流。新版双方可在相同 peer identity 与 authorization generation 下短时复用已认证 QUIC，文件操作各占独立双向流；撤销、连接错误、网络失效、空闲超时或退出关闭会话。旧端正常 code-0 关闭仍按兼容终态处理。
+`completed`/`confirmed` 成功边界增加向后兼容的 `confirmed_ack`：新版发送端收到匹配回执即可证明接收端已读 `confirmed`；旧接收端在读到 `confirmed` 后关闭发送方向，EOF 或远端 application code 0 仍是兼容证据。新版接收端向旧发送端写出的 `confirmed_ack` 会被旧 terminal flush 当作普通终态字节读取，不改变旧成功语义。非零 application close、timeout 和连接级错误仍失败；单个 stream reset 只终止该操作流。新版双方只有在 connect_request/connect_response 都显式声明 session_reuse 时，才可在相同 peer identity 与 authorization generation 下短时复用已认证 QUIC，文件操作各占独立双向流；撤销、连接错误、真实 path watcher 失效、空闲超时或退出关闭会话，普通网络通知只关闭空闲池。旧端正常 code-0 关闭仍按兼容终态处理。
 
 信令协商状态绑定当前认证连接。断开或被同设备的新认证连接替换时清理该设备参与的协商；旧连接的迟到帧不能写入新连接状态。已建立的 QUIC 数据连接不因此被关闭。此修复需要升级信令服务源码；客户端升级无法修复仍运行旧版本的服务。
 

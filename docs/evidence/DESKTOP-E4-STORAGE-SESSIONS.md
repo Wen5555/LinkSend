@@ -21,6 +21,8 @@ Windows amd64、i9-13980HX 的 100 次写结果：persistent 为 2.024/2.076/2.0
 复测（共享单一 sql.DB 后）：persistent 2.140/2.176/2.190 ms/op；reopen_each_write 3.813/4.052/4.183 ms/op，中位数减少约46.3%。定向 race 三轮 PASS。
 ## 认证 QUIC 双向复用
 
-会话池以 peer ID + authorization generation 为键，连接两端持续接受独立双向 stream。连续两次正向文件和一次原始响应方反向文件保持相同 session_id；传输中取消第一条 stream 后，第二文件仍在同一 QUIC 会话完成。授权撤销、连接错误、网络变化、3 秒空闲与 Shutdown 关闭池中连接；活动文件流不会被并发新文件替换。
+会话池以 peer ID + authorization generation 为键，连接两端持续接受独立双向 stream。连续两次正向文件和一次原始响应方反向文件保持相同 session_id；传输中取消第一条 stream 后，第二文件仍在同一 QUIC 会话完成。授权撤销、连接错误、3 秒空闲、空闲网络变化与 Shutdown 关闭池中连接；活动连接由 path watcher 失效关闭；活动文件流不会被并发新文件替换。
 
 真实 Pion ICE + quic-go 定向测试 TestPairingCodePersistentInboxAndAlwaysAccept 与 TestCancelledStreamKeepsAuthenticatedSessionForNextFile 普通 5 轮、race 2 轮 PASS。该结果为本机双实例 loopback，物理 Windows/Mac 双向流仍需另行验证。
+
+C1修复：每条入站流统一解析设备接收目录覆盖；同key连接建立/发布使用串行锁，活动连接不被迟到dial/adopt替换；PeerSession控制字段通过takeControl互斥且serve goroutine由Service WaitGroup回收。session_reuse在双方ICE描述中显式协商，旧端缺字段保持单操作关闭。设备目录、双向复用、传输中stream取消、旧字段兼容、撤销与idle回收定向测试通过；相关race测试2轮通过。

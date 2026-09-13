@@ -26,6 +26,20 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	if err := f.a.StartInbox(senderDestination, cfg); err != nil {
 		t.Fatal(err)
 	}
+	forwardOverride := filepath.Join(t.TempDir(), "forward-device-override")
+	if err := os.MkdirAll(forwardOverride, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.SaveDeviceProfile(DeviceProfile{PeerID: f.aID.ID(), ReceiveDirectory: forwardOverride}); err != nil {
+		t.Fatal(err)
+	}
+	reverseOverride := filepath.Join(t.TempDir(), "reverse-device-override")
+	if err := os.MkdirAll(reverseOverride, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.SaveDeviceProfile(DeviceProfile{PeerID: f.bID.ID(), ReceiveDirectory: reverseOverride}); err != nil {
+		t.Fatal(err)
+	}
 	waitFor(t, 5*time.Second, func() bool { return f.b.InboxStatus().Listening }, "persistent inbox did not start")
 	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening }, "sender inbox did not start")
 	if status := f.b.InboxStatus(); !status.SignalingConnected || status.ConnectionCount != 1 || status.ConnectedAt == "" {
@@ -109,7 +123,7 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	if reverseDone.SessionID != firstDone.SessionID {
 		t.Fatalf("reverse transfer opened a different QUIC session: first=%s reverse=%s", firstDone.SessionID, reverseDone.SessionID)
 	}
-	if _, err := os.Stat(filepath.Join(senderDestination, "reverse.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(reverseOverride, "reverse.txt")); err != nil {
 		t.Fatal(err)
 	}
 	// One receiver WSS plus one fresh sender WSS per transfer. A reconnecting
@@ -117,10 +131,10 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	if connections := f.wsConnections.Load(); connections != 2 {
 		t.Fatalf("persistent inbox WSS was not reused bidirectionally: connections=%d, want 2", connections)
 	}
-	if _, err := os.Stat(filepath.Join(destination, "first.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(forwardOverride, "first.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(destination, "second.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(forwardOverride, "second.txt")); err != nil {
 		t.Fatal(err)
 	}
 	f.a.directPoolMu.Lock()

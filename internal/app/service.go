@@ -66,6 +66,8 @@ type Service struct {
 	lastNetworkChange time.Time
 	directPoolMu      sync.Mutex
 	directPool        map[string]*pooledPeerSession
+	directPoolLocks   map[string]*sync.Mutex
+	directPoolWG      sync.WaitGroup
 }
 
 type cachedNetworkSelection struct {
@@ -159,7 +161,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession)}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession), directPoolLocks: make(map[string]*sync.Mutex)}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	keepHistory := false
 	defer func() {
