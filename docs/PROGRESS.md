@@ -1,5 +1,11 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E0候选同步与E1后端实施授权
+
+- `ec55db3`、`11c44df`、`2342009` 的既有证据已复用；总控接受 `2342009` 作为Mac共享原型的有界IO修补，不把它视为U6、4097 helper通信或文件交接通过，也不重复十项SafeIO测试。
+- 最新用户提示词明确恢复实施并授权阶段工作分支推送、复用draft PR和CI；旧TODO中的“未审不push”“等待派发E1”门槛已经失效。当前唯一产品写入方一次交接至 `/root/desktop_executor`，本批继续 E1-01 至 E1-05 的设备配对/撤销、LAN同意、发现、统一目录与恢复后端闭环。
+- 仍未证明且不会冒充通过：Windows安装信任、Mac共享4097/文件交接、准确候选包Windows↔Mac真实双向、双 NAT。网络原型缺口补齐前不扩张UI。
+
 ## 2026-09-13 E0 Mac资源安全修补收尾（待审提交）
 
 按E0-supervision-ui-v1/E0-safeio-close-v1，Host的payload/receipt改为读入时有界校验；扩展失败只清理独占创建且身份仍匹配的本请求文件。真实Mac10项文件IO边界测试、host/.appex构建/签名通过。标准系统Share菜单展示及action已实际派发；分离服务复测仍NSCocoaErrorDomain/4097、最终退出1、无captured回执，保持E0-04待修技术缺陷。精确注册已注销，owned进程计数0；见 [安全修补回执](evidence/DESKTOP-E0-MAC-SAFEIO.md)。

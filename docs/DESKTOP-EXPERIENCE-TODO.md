@@ -1,8 +1,8 @@
 # LinkSend 桌面体验全轮 TODO
 
-日期：2026-09-13。唯一产品写入方：执行任务 `01a096c7-6cfb-71b0-87aa-aa7ed781bb2f`（local）。
+日期：2026-09-13。唯一产品写入方：执行任务 `/root/desktop_executor`（由已停止的 `01a096c7-6cfb-71b0-87aa-aa7ed781bb2f` 一次交接）。
 总控：`01a096c4-2e59-7db3-a7a8-ec2a125409d6`（local）。工作分支：`codex/desktop-experience-upgrade`。
-基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。已收到正式 E0-dispatch-v1，执行 E0-01 至 E0-05；E1 尚未派发。
+基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。最新授权已接受 `2342009` 的原型 IO 修补，要求同步 E0 候选后连续执行 E1-01 至 E1-05 的独立后端闭环。
 
 依据：[用户执行提示词](prompts/DESKTOP-EXPERIENCE-GOAL.md)、[完整方案](DESKTOP-EXPERIENCE-IMPROVEMENT-PLAN.md)。
 七项均为必交付：U1 一次接收；U2 删除与配对；U3 发现可靠性；U4 移除手动内容并自动剪贴板；U5 设置；U6 真正系统共享；U7 有界四视图。
@@ -48,16 +48,16 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 | ID | 生命周期 | 代码 | 自动测试 | 原生 | 网络 | GitHub | 总控判定/阻塞 |
 |---|---|---|---|---|---|---|---|
-| E0-01 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
-| E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
+| E0-01 | 待审查 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | 执行中 | 候选提交待推送/CI；见分项记录 |
+| E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | 执行中 | 已有网络证据复用，真实双向与双 NAT 缺项不改写 |
 | E0-03 | 外部阻塞 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 构建/签名PASS、系统安装FAIL、激活NOT RUN；不降格U6 |
-| E0-04 | 执行中 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | SafeIO10项PASS/菜单动作实测，安全修补提交待审；服务4097退出1是待修技术缺陷，见MAC-SAFEIO证据 |
+| E0-04 | 待审查 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 执行中 | 总控接受2342009原型IO修补；服务4097与文件交接仍未通过，见MAC-SAFEIO证据 |
 | E0-05 | 验收通过 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 仅ADR语义：总控E0-safeio-close-v1接受11c44df；具体API/schema/实现及兼容测试仍待E1/E4 |
-| E1-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E1-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E1-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E1-04 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E1-05 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
+| E1-01 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，先落实协议/schema与相关负例 |
+| E1-02 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，与代际持久化和会话失效联动 |
+| E1-03 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，独立LAN同意事务 |
+| E1-04 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，发现provider/多地址/恢复后端 |
+| E1-05 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，统一目录与恢复闭环；准确包实机矩阵后补 |
 | E2-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
@@ -73,11 +73,11 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 ## 执行边界与恢复入口
 
-- E0 未经总控批次分派不扩展至 E1。各批整批实现/修复后回报并待审查；未审提交不推送。
+- 当前批次为 E0 候选同步及 E1-01 至 E1-05 后端闭环；按最新用户授权完成阶段提交、工作分支推送、draft PR 与 CI，无需等待逐次回执。
 - 授权含阶段工作分支/PR、两平台项目依赖及隔离安装、香港 LinkSend 支持组件事务部署、荷兰构建与专属 namespace/container NAT。
 - 不合并 main、不正式 Release、不购买签名服务、不改宿主防火墙/路由/代理、不影响无关业务。
-- 远程全部 codex-ssh-manager resolve/probe/audit；Mac 从登记 alias 更新到 10.234.39.151，保留 host key 校验。复杂任务使用 durable job，断线先 resume/tail。
+- 远程全部 codex-ssh-manager resolve/probe/audit；Mac 最新地址为 10.234.186.184，保留登记 alias 与 host key 校验。复杂任务使用 durable job，断线先 resume/tail。
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 活跃远程作业：无；历史jobPath见E0分项证据。E0-A为ec55db317b0b5b0dfa60c1a61219f28da9b401da；ADR语义修订11c44df已接受；本次SafeIO修补见evidence/DESKTOP-E0-MAC-SAFEIO.md，待总控复审。push/PR仍NOT RUN。按E0-safeio-close-v1先提交收尾，不再扩大新加载器；待总控派发工作分支/PR/CI同步与E0-B实际双向网络和Mac根因。E0整体未完成。
+- 活跃远程作业：无；历史jobPath见E0分项证据。E0-A为ec55db317b0b5b0dfa60c1a61219f28da9b401da；ADR语义修订11c44df已接受；2342009原型IO修补已被总控接受但不代表U6/文件交接通过。当前先同步E0候选，再连续交付E1后端；Windows安装信任、Mac 4097/文件交接、准确包物理双向与双 NAT 仍是明确缺项。
