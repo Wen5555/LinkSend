@@ -45,6 +45,19 @@ func TestProvisionalLANSurvivesReloadAndRejectsNewGeneration(t *testing.T) {
 	}
 }
 
+func TestProvisionalLANAllowsSignedFrameClockSkew(t *testing.T) {
+	peer := policyTestPeer(t, "clock-skew")
+	grant := ProvisionalLANGrant{RequestID: strings.Repeat("c", 32), Nonce: strings.Repeat("d", 32), Peer: peer, Generation: 1, State: "accepted", ExpiresAt: time.Now().Add(74 * time.Second).UTC()}
+	if err := BeginProvisionalLAN(t.TempDir(), grant); err != nil {
+		t.Fatalf("valid signed-frame skew was rejected: %v", err)
+	}
+	grant.RequestID = strings.Repeat("e", 32)
+	grant.ExpiresAt = time.Now().Add(76 * time.Second).UTC()
+	if err := BeginProvisionalLAN(t.TempDir(), grant); err == nil {
+		t.Fatal("provisional exceeded signed TTL plus clock-skew bound")
+	}
+}
+
 func writeLegacyPolicy(t *testing.T, dir string, peers ...TrustedPeer) []byte {
 	t.Helper()
 	data, err := json.Marshal(TrustFile{Peers: peers})

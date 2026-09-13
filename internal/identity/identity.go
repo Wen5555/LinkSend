@@ -594,7 +594,9 @@ func BeginProvisionalLAN(dir string, grant ProvisionalLANGrant) error {
 			return authenticationError("LAN pairing request conflict")
 		}
 	}
-	if len(f.ProvisionalLAN) >= 64 || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(60*time.Second)) {
+	// The signed frame separately enforces ExpiresAt-IssuedAt <= 60s and
+	// permits at most 15s of clock skew. Align persistence with that bound.
+	if len(f.ProvisionalLAN) >= 64 || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(75*time.Second)) {
 		return errors.New("LAN_PAIR_RESOURCE_LIMIT")
 	}
 	current := uint64(1)

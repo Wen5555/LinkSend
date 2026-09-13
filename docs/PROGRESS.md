@@ -5,6 +5,7 @@
 - 完整成员快照移除peer后取消其活动task；queue保存的expected authorization generation贯穿StartSend、PeerSession和开流检查，LAN-only可信nearby设备可独立尝试，不再伪造online。持久authorization epoch阻止解除屏蔽后generation回退。
 - LAN发起端在正常及query恢复路径都只在验证done后启用pin；恢复helper共用credential消费，能继续报告joined/switch_required/pending。断线保留最多60秒、上限64的provisional/completed事务，query可在重启后恢复ready/done和target凭证，撤销/重配清除旧事务。发现多地址签名稳定排序，UDP重建与Close串行收尾，取消后不能遗留新socket。
 - 受影响三个包完整测试PASS；定向race覆盖活动快照撤销、旧queue generation、LAN同意及UDP rebuild/Close。准确包物理LAN、跨NAT和系统确认仍NOT RUN，不部署当前授权变更。
+- 物理Windows→Mac首次独立LAN同意在双方时钟相差约1秒时暴露provisional本地期限误按“本机now+60秒”复核，合法签名帧被接收端提前关闭为EOF。签名验证原本已约束 `ExpiresAt-IssuedAt<=60秒` 且允许15秒时钟偏差；持久层上限现与之对齐为75秒，并新增74秒接受/76秒拒绝边界回归。该失败未记为网络PASS，修复后重新从全新隔离profile执行。
 
 ## 2026-09-13 E1-C3原生网络与睡眠事件源码闭环（已验收，物理待测）
 
