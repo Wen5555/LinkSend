@@ -133,22 +133,26 @@ func writeClipboardPayload(kind clipboardsync.Kind, payload []byte, expected uin
 		globalFree.Call(handle)
 		return clipboardGeneration(), errors.Join(ErrUnavailable, err)
 	}
-	defer closeClipboard.Call()
 	if current := clipboardGeneration(); current != expected {
+		closeClipboard.Call()
 		globalFree.Call(handle)
 		return current, ErrChanged
 	}
 	if !deadline.IsZero() && !time.Now().Before(deadline) {
+		closeClipboard.Call()
 		globalFree.Call(handle)
 		return clipboardGeneration(), clipboardsync.ErrExpired
 	}
 	if ok, _, err := emptyClipboard.Call(); ok == 0 {
+		closeClipboard.Call()
 		globalFree.Call(handle)
 		return clipboardGeneration(), errors.Join(ErrUnavailable, err)
 	}
 	if result, _, err := setClipboardData.Call(format, handle); result == 0 {
+		closeClipboard.Call()
 		globalFree.Call(handle)
 		return clipboardGeneration(), errors.Join(ErrUnavailable, err)
 	}
+	closeClipboard.Call()
 	return clipboardGeneration(), nil
 }
