@@ -1,6 +1,11 @@
 # LinkSend implementation progress
 
-## 2026-09-13 E1-C2残余授权/LAN恢复/发现竞态修复（待复审）
+## 2026-09-13 E1物理LAN最小闭环（PARTIAL）
+
+- 固定源码 `e896f92`、Windows `10.234.232.205` 与Mac `10.234.212.116` 的全新隔离profile完成双向发现、独立LAN同确同意、LAN grant及Windows→Mac 1,179,648 bytes传输；两端SHA256同为 `8b1dc5b2...17a336d1`。
+- Mac→Windows在 `lan_control_connect` 后失败并回退不可用信令，0正文；独立Mac→Windows TCP/54446探针3,002ms timeout且Windows 15秒无accept。未改防火墙，因此整体网络PARTIAL，不冒充双向/准确包PASS。完整证据见 [E1物理LAN](evidence/DESKTOP-E1-PHYSICAL-LAN.md)。
+
+## 2026-09-13 E1-C2残余授权/LAN恢复/发现竞态修复（后端验收通过）
 
 - 完整成员快照移除peer后取消其活动task；queue保存的expected authorization generation贯穿StartSend、PeerSession和开流检查，LAN-only可信nearby设备可独立尝试，不再伪造online。持久authorization epoch阻止解除屏蔽后generation回退。
 - LAN发起端在正常及query恢复路径都只在验证done后启用pin；恢复helper共用credential消费，能继续报告joined/switch_required/pending。断线保留最多60秒、上限64的provisional/completed事务，query可在重启后恢复ready/done和target凭证，撤销/重配清除旧事务。发现多地址签名稳定排序，UDP重建与Close串行收尾，取消后不能遗留新socket。

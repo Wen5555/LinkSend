@@ -56,8 +56,8 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 | E1-01 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | schema4/incarnation/revision/旧端拒绝、空组初始化、显式跨组切换候选 |
 | E1-02 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | 完整快照、本机屏障/outbox、generation绑定和幂等撤销候选；真实离线重启补同步未实机 |
-| E1-03 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | provisional/query、服务target凭证及拒绝零pin候选；物理双机未闭合 |
-| E1-04 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 多地址/独立降级/Windows源绑定/socket重建/记忆重试；IPv6/mDNS/物理矩阵未闭合 |
+| E1-03 | 验收通过 | PASS | PASS | NOT RUN | PARTIAL | 执行中 | C2后端通过总控审查；物理LAN同意及Win→Mac文件PASS，反向入站阻塞 |
+| E1-04 | 待复审 | PARTIAL | PASS | NOT RUN | PARTIAL | 执行中 | 物理双端发现/正向路径PASS；反向TCP入站timeout，IPv6/mDNS/矩阵未闭合 |
 | E1-05 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录、原生OS事件与5秒快照已接线；准确包事件延迟/网络/睡眠矩阵未闭合 |
 | E2-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
