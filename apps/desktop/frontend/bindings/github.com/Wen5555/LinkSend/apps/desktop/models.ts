@@ -32,6 +32,7 @@ export interface DesktopEntryStatus {
 
 export interface DesktopPreferences {
     "format_version": number;
+    "revision": number;
     "server_url": string;
     "bind_address": string;
     "interface_priority": string[] | null;

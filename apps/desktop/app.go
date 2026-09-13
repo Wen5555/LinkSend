@@ -49,6 +49,7 @@ type App struct {
 
 type DesktopPreferences struct {
 	FormatVersion      int               `json:"format_version"`
+	Revision           uint64            `json:"revision"`
 	ServerURL          string            `json:"server_url"`
 	BindAddress        string            `json:"bind_address"`
 	InterfacePriority  []string          `json:"interface_priority"`
@@ -433,6 +434,12 @@ func loadPreferencesDetailed(dataDir string) (DesktopPreferences, PreferencesSta
 	if loaded.FormatVersion != 1 {
 		return p, PreferencesStatus{State: "unsupported", Message: "偏好文件版本不受支持；原文件已保留，请重置桌面偏好"}
 	}
+	if loaded.Revision == 0 {
+		// Files written before section-scoped saves did not carry a revision.
+		// Treat that valid snapshot as the first revision without rewriting it
+		// during startup.
+		loaded.Revision = 1
+	}
 	return loaded, PreferencesStatus{State: "valid"}
 }
 
@@ -489,12 +496,47 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	return a.savePreferencesLocked(next, true)
 }
 
+// SavePreferencesSection applies only fields owned by the named settings
+// category. Revision is a compare-and-swap guard, so a form opened before a
+// newer save cannot replace fields from that save with an old snapshot.
+func (a *App) SavePreferencesSection(section string, expectedRevision uint64, patch DesktopPreferences) (DesktopPreferences, error) {
+	a.prefsWriteMu.Lock()
+	defer a.prefsWriteMu.Unlock()
+	current := a.Preferences()
+	if current.Revision != expectedRevision {
+		return current, errors.New("PREFERENCES_REVISION_CONFLICT: 设置已在其他位置更新，请重试保存")
+	}
+	next := current
+	switch section {
+	case "general":
+		next.DeviceName = patch.DeviceName
+	case "receive":
+		next.ReceiveDirectory = patch.ReceiveDirectory
+	case "network":
+		next.ServerURL = patch.ServerURL
+		next.BindAddress = patch.BindAddress
+		next.InterfacePriority = append([]string(nil), patch.InterfacePriority...)
+		next.ExcludedInterfaces = append([]string(nil), patch.ExcludedInterfaces...)
+		next.STUNURLs = append([]string(nil), patch.STUNURLs...)
+	default:
+		return current, errors.New("INVALID_CONFIG: unknown preferences section")
+	}
+	if err := a.savePreferencesLocked(next, true); err != nil {
+		return current, err
+	}
+	return a.Preferences(), nil
+}
+
 func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool) error {
 	previous := a.Preferences()
 	if a.dataDir == "" {
 		return errBackendUnavailable
 	}
+	if previous.Revision == ^uint64(0) {
+		return errors.New("PREFERENCES_REVISION_EXHAUSTED")
+	}
 	next.FormatVersion = 1
+	next.Revision = previous.Revision + 1
 	next.ServerURL = strings.TrimSpace(next.ServerURL)
 	next.BindAddress = strings.TrimSpace(next.BindAddress)
 	next.InterfacePriority = normalizedList(next.InterfacePriority)
@@ -806,6 +848,17 @@ func (a *App) RespondLANPair(requestID string, accept bool) error {
 		return errBackendUnavailable
 	}
 	return a.core.RespondLANPair(requestID, accept)
+}
+
+func (a *App) RemoveDevice(deviceID string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.Revoke(ctx, deviceID)
 }
 
 func (a *App) NetworkChanged(reason string) error {

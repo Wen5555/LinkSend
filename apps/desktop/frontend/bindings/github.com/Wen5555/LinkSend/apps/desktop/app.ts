@@ -18,6 +18,10 @@ import * as app$0 from "../../internal/app/models.js";
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function AcceptIncomingDefault(id: string, attemptID: string, revision: number, remember: boolean): $CancellablePromise<app$0.AcceptIncomingDefaultResult> {
+    return $Call.ByID(597288934, id, attemptID, revision, remember);
+}
+
 export function AcceptReceivePlan(id: string, revision: number, digest: string): $CancellablePromise<void> {
     return $Call.ByID(1555079805, id, revision, digest);
 }
@@ -242,6 +246,10 @@ export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
 }
 
+export function RemoveDevice(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(2755636563, deviceID);
+}
+
 export function ReorderQueue(ids: string[] | null): $CancellablePromise<void> {
     return $Call.ByID(1496578879, ids);
 }
@@ -288,6 +296,15 @@ export function SaveDraft(draft: app$0.SendDraft): $CancellablePromise<app$0.Sen
 
 export function SavePreferences(next: $models.DesktopPreferences): $CancellablePromise<void> {
     return $Call.ByID(3232231562, next);
+}
+
+/**
+ * SavePreferencesSection applies only fields owned by the named settings
+ * category. Revision is a compare-and-swap guard, so a form opened before a
+ * newer save cannot replace fields from that save with an old snapshot.
+ */
+export function SavePreferencesSection(section: string, expectedRevision: number, patch: $models.DesktopPreferences): $CancellablePromise<$models.DesktopPreferences> {
+    return $Call.ByID(3171888101, section, expectedRevision, patch);
 }
 
 export function SaveReceivedImage(taskID: string): $CancellablePromise<app$0.ContentActionResult> {

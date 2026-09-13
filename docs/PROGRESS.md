@@ -1,5 +1,12 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E2桌面接收、设置与四视图候选（待复审）
+
+- U1：新增绑定 attempt/revision 的 Go 一次接收命令，默认 `keep_both`，计划/空间/授权/持久化完成后才同意；恢复仍沿用原计划，免确认保存失败不反转本次接收。
+- U5/U7：设置改为六个用途分类，偏好增加 revision 和分类局部 CAS；设备专属目录留空继承全局。主导航收敛为传输、记录、设备、设置，长列表使用单主滚动区与局部有界滚动。
+- U4：传输页移除文字、链接、图片手动创作入口；旧队列升级/重启后保持 `needs_attention`，不会自动续发。自动剪贴板仍属于 E4，本轮未开始。
+- 针对性 Go、前端 typecheck/lint/58 tests/build 已通过；Playwright production preview 覆盖 1100×720、960×640、125%/150%、深色、reduced motion 和键盘焦点，0 console error。准确 Wails 包与双机 UI 未运行，网络事实继续引用 E1，不把浏览器预览当网络结果。见 [默认接收](evidence/DESKTOP-E2-DEFAULT-RECEIVE.md)、[设置](evidence/DESKTOP-E2-SETTINGS.md)、[旧内容](evidence/DESKTOP-E2-LEGACY-CONTENT.md)、[布局](evidence/DESKTOP-E2-LAYOUT.md)。
+
 ## 2026-09-13 E1物理LAN最小闭环（PARTIAL）
 
 - 固定源码 `e896f92`、Windows `10.234.232.205` 与Mac `10.234.212.116` 的全新隔离profile完成双向发现、独立LAN同确同意、LAN grant及Windows→Mac 1,179,648 bytes传输；两端SHA256同为 `8b1dc5b2...17a336d1`。

@@ -161,3 +161,73 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (prefers-color-scheme: dark) {
   :root { --blue-soft: rgba(41,151,255,.13); --green-soft: rgba(38,145,104,.18); }
 }
+
+/* E2 four-view shell: keep navigation stable and confine long content to one
+   main scroller inside the native window. */
+.app-shell { height: 100vh; overflow: hidden; }
+.workspace { height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { flex: 0 0 auto; }
+.workspace > .page-stack, .workspace > .settings-shell { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 28px; scrollbar-gutter: stable; }
+.view-switch { position: sticky; top: 0; z-index: 4; display: flex; width: fit-content; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(18px); }
+.view-switch button { min-height: 32px; padding: 6px 13px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 12px; }
+.view-switch button.active { color: var(--text); background: var(--surface); box-shadow: 0 2px 9px rgba(0,0,0,.08); }
+.view-switch span { margin-left: 4px; color: var(--subtle); font-size: 10px; }
+.bounded-view { margin-top: 18px; max-height: calc(100vh - 205px); overflow-y: auto; }
+.bounded-view .tasks-section { margin-top: 0; }
+.settings-shell { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 22px; padding-top: 26px; }
+.settings-nav { position: sticky; top: 26px; align-self: start; display: grid; gap: 4px; }
+.settings-nav button { min-height: 52px; padding: 9px 11px; border: 0; border-radius: 11px; color: var(--muted); background: transparent; text-align: left; }
+.settings-nav button:hover, .settings-nav button.active { color: var(--text); background: var(--surface); }
+.settings-nav button.active { box-shadow: 0 3px 12px rgba(0,0,0,.06); }
+.settings-nav strong, .settings-nav small { display: block; }
+.settings-nav strong { font-size: 12px; }
+.settings-nav small { margin-top: 3px; color: var(--subtle); font-size: 10px; }
+.settings-panel { min-width: 0; }
+.settings-stack { display: grid; gap: 18px; }
+.settings-page { max-width: 760px; }
+.settings-page h2 { margin: 4px 0 22px; }
+.settings-page details { margin: 8px 0 18px; }
+.settings-page summary { margin-bottom: 14px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.settings-diagnostics { margin: 0; display: grid; gap: 0; }
+.settings-diagnostics div { display: flex; justify-content: space-between; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.settings-diagnostics dt { color: var(--muted); }
+.settings-diagnostics dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+.device-directory { max-height: calc(100vh - 225px); overflow-y: auto; }
+.nearby-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.nearby-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.nearby-row strong, .nearby-row small { display: block; overflow-wrap: anywhere; }
+.nearby-row strong { font-size: 12px; }
+.nearby-row small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.incoming-device-state { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.incoming-destination { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; }
+.incoming-destination span { color: var(--muted); font-size: 11px; }
+.incoming-destination strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.receive-advanced { padding-top: 4px; border-top: 1px solid var(--line); }
+.receive-plan-modal .modal-actions { position: sticky; bottom: -30px; z-index: 2; margin-inline: -30px; padding: 17px 30px 0; background: linear-gradient(transparent, var(--surface) 28%); }
+
+@media (max-width: 980px) {
+  .settings-shell { grid-template-columns: 158px minmax(0,1fr); gap: 16px; }
+  .settings-nav small { display: none; }
+  .device-directory { max-height: none; }
+}
+@media (max-width: 720px) {
+  .app-shell, .workspace { height: 100vh; }
+  .app-shell { display: flex; flex-direction: column; }
+  .sidebar { flex: 0 0 auto; }
+  .sidebar nav { grid-template-columns: repeat(4,1fr); }
+  .workspace { width: 100%; flex: 1 1 auto; }
+  .settings-shell { display: block; padding-top: 14px; }
+  .settings-nav { position: sticky; top: 0; z-index: 5; display: flex; overflow-x: auto; padding: 4px 0 10px; background: var(--bg); }
+  .settings-nav button { min-width: max-content; min-height: 38px; }
+  .view-switch { width: 100%; }
+  .view-switch button { flex: 1; padding-inline: 7px; }
+  .bounded-view { max-height: none; }
+  .incoming-destination { grid-template-columns: auto minmax(0,1fr); }
+  .incoming-destination button { grid-column: 1 / -1; width: 100%; }
+  .receive-plan-modal .modal-actions { bottom: -24px; margin-inline: -24px; padding-inline: 24px; }
+}
+@media (prefers-color-scheme: dark) {
+  .view-switch { background: rgba(28,28,30,.88); }
+  .settings-nav button:hover, .settings-nav button.active, .view-switch button.active { background: rgba(58,58,60,.92); }
+  .receive-plan-modal .modal-actions { background: linear-gradient(transparent, rgba(44,44,46,.98) 28%); }
+}

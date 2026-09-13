@@ -59,10 +59,10 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E1-03 | 验收通过 | PASS | PASS | NOT RUN | PARTIAL | 执行中 | C2后端通过总控审查；物理LAN同意及Win→Mac文件PASS，反向入站阻塞 |
 | E1-04 | 待复审 | PARTIAL | PASS | NOT RUN | PARTIAL | 执行中 | 物理双端发现/正向路径PASS；反向TCP入站timeout，IPv6/mDNS/矩阵未闭合 |
 | E1-05 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录、原生OS事件与5秒快照已接线；准确包事件延迟/网络/睡眠矩阵未闭合 |
-| E2-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E2-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E2-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E2-04 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
+| E2-01 | 待复审 | PASS | PASS | 浏览器PASS/准确包NOT RUN | 复用E1 | NOT RUN | Go原子默认计划、keep-both、attempt/revision/双击、偏好失败及真实QUIC回归 |
+| E2-02 | 待复审 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | NOT RUN | 六分类、全局revision局部CAS、设备目录继承与统一反馈 |
+| E2-03 | 待复审 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | NOT RUN | 手动内容入口移除；旧队列needs_attention且不自动续发；E4剪贴板未开始 |
+| E2-04 | 待复审 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | NOT RUN | 四视图及1100×720、960×640、125%/150%、深色、键盘证据 |
 | E3-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E3-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E3-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |

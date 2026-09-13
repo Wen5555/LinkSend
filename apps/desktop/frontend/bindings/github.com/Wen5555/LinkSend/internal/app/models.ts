@@ -14,6 +14,12 @@ import * as protocol$0 from "../protocol/models.js";
 // @ts-ignore: Unused imports
 import * as transfer$0 from "../transfer/models.js";
 
+export interface AcceptIncomingDefaultResult {
+    "accepted": boolean;
+    "preference_saved": boolean;
+    "message"?: string;
+}
+
 export interface ContentActionResult {
     "task_id": string;
     "action": string;

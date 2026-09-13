@@ -71,6 +71,57 @@ type IncomingPlanPreview struct {
 	SpaceEstimate   string               `json:"space_estimate"`
 }
 
+type AcceptIncomingDefaultResult struct {
+	Accepted        bool   `json:"accepted"`
+	PreferenceSaved bool   `json:"preference_saved"`
+	Message         string `json:"message,omitempty"`
+}
+
+// AcceptIncomingDefault is the ordinary one-click receive path. The caller
+// must bind the visible attempt and revision; plan creation, directory/space
+// checks, durable persistence and the acceptance decision remain in Go.
+func (s *Service) AcceptIncomingDefault(id, attemptID string, revision uint64, remember bool) (AcceptIncomingDefaultResult, error) {
+	done, err := s.beginProfileWork()
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	defer done()
+	t, err := s.incomingTask(id)
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	t.mu.RLock()
+	if err = t.checkIncomingLocked(revision); err == nil && t.snap.AttemptID != attemptID {
+		err = errors.New("REVISION_CONFLICT")
+	}
+	peerID := t.snap.PeerID
+	t.mu.RUnlock()
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	preview, err := s.previewIncomingPlan(id, IncomingPlanRequest{ExpectedRevision: revision, ConflictPolicy: transfer.ConflictKeepBoth}, true)
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	if err = s.acceptReceivePlan(id, preview.Revision, preview.PlanDigest); err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	return defaultAcceptanceResult(remember, func() error { return s.SetAlwaysAccept(peerID, true) }), nil
+}
+
+func defaultAcceptanceResult(remember bool, save func() error) AcceptIncomingDefaultResult {
+	result := AcceptIncomingDefaultResult{Accepted: true, PreferenceSaved: !remember}
+	if !remember {
+		return result
+	}
+	if err := save(); err != nil {
+		result.Message = "本次已接收，免确认设置未保存；可稍后在设备页修改。"
+		return result
+	}
+	result.PreferenceSaved = true
+	return result
+}
+
 // This is a conservative free-space admission check, not a filesystem quota
 // guarantee: metadata/inodes and safe resume copy peaks depend on the volume.
 // Count full selected content and reserve 16 MiB for checkpoint/metadata writes.

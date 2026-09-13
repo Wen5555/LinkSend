@@ -1,5 +1,11 @@
 # Security
 
+## 2026-09-13 E2接收与设置边界
+
+普通接收按钮携带当前 task ID、attempt ID 和 revision；Go 在创建默认 `keep_both` 计划前后重验这些门闩、授权 generation、目录和空间，并在计划持久化成功后才发送同意。重复点击和陈旧窗口不能同意新的 attempt。免确认偏好在本次 acceptance 之后独立保存，失败会明确反馈且不谎称本次接收失败。
+
+桌面偏好增加单调 revision。分类保存仅合并该分类拥有的允许字段，并以 expected revision 拒绝陈旧表单；背景生命周期继续由独立命令拥有。该机制避免多个页面或异步刷新用旧整份快照覆盖较新的目录、网络或后台设置。
+
 ## 2026-09-13 E1成员代际与LAN同意实现
 
 本机 trust schema 2 将完整组快照、组/LAN grant、双方incarnation、服务端revision、本机 `grant_generation` 和provisional LAN transcript统一持久化。组删除先原子移除全部组/LAN pin与免确认并写入带request ID的拒绝屏障及待同步outbox，再取消目标任务，最后提交服务端幂等事务；服务不可达时本机拒绝与outbox保留。完整新快照会撤销已消失成员，旧revision或同一incarnation不能清除屏障；只有可验证的新incarnation和更高revision能建立新的组grant。显式本机block（含schema1迁移记录）永不被成员同步解除。

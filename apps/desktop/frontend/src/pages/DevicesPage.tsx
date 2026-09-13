@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
@@ -11,25 +12,30 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
   const [invite, setInvite] = useState<InvitationInfo>();
   const [code, setCode] = useState('');
   const [address, setAddress] = useState('');
-  const peers = devices.filter(device => device.id !== identityID);
+  const [switchCode, setSwitchCode] = useState('');
+  const peers = devices.filter(device => device.id !== identityID && device.trusted && !device.blocked);
+  const nearby = devices.filter(device => device.id !== identityID && device.nearby && !device.trusted && !device.blocked);
+  const pending = useQuery({ queryKey: ['lan-pair-pending'], queryFn: () => Backend.PendingLANPairings(), refetchInterval: 1000, retry: false, enabled: available });
   return <div className="page-stack">
-    <div className="page-intro"><div><p className="eyebrow">附近与已配对</p><h2>设备</h2><p>本地别名、固定顺序和接收权限分别设置。</p></div><button className="primary" disabled={!!op || membership?.state !== 'member'} onClick={() => void run('invite', async () => setInvite(await Backend.CreateInvitation()))}>生成配对码</button></div>
+    <div className="page-intro"><div><p className="eyebrow">可信设备</p><h2>设备</h2><p>配对关系与当前连接状态分开显示。</p></div>{membership?.state === 'not_member' ? <button className="primary" disabled={!!op} onClick={() => void run('initialize', () => Backend.InitializeMembership(name || 'LinkSend desktop'), '本机设备组已初始化')}>初始化本机</button> : <button className="primary" disabled={!!op || membership?.state !== 'member'} onClick={() => void run('invite', async () => setInvite(await Backend.CreateInvitation()))}>生成配对码</button>}</div>
     {invite && <InvitationPanel key={invite.token} invite={invite} run={run} />}
     <div className="device-columns">
-      <section className="surface device-directory"><div className="section-heading compact"><h2>我的设备与附近设备</h2><span className="task-count">{peers.length}</span></div>
-        {!peers.length && <div className="empty-state small"><strong>还没有发现设备</strong><p>在另一台设备打开 LinkSend；跨网络连接可输入配对码。</p></div>}
+      <section className="surface device-directory"><div className="section-heading compact"><h2>已配对设备</h2><span className="task-count">{peers.length}</span></div>
+        {!peers.length && <div className="empty-state small"><strong>还没有已配对设备</strong><p>可输入配对码，或从附近设备发起添加。</p></div>}
         {peers.map(device => <DeviceRow key={device.id} device={device} run={run} op={op} available={available} />)}
+        <div className="nearby-section"><div className="section-heading compact"><h3>添加附近设备</h3><span className="task-count">{nearby.length}</span></div>{!nearby.length ? <p className="field-help">在另一台设备打开 LinkSend 后会出现在这里。</p> : nearby.map(device => <div className="nearby-row" key={device.id}><div><strong>{device.name || '附近设备'}</strong><small>已发现 · 尚未建立信任</small></div><button className="secondary" disabled={!!op} onClick={() => void run(`lan-add-${device.id}`, () => Backend.RequestLANPair(device.id), '请求已发送，等待对方确认')}>请求添加</button></div>)}</div>
       </section>
       <section className="surface pairing-form"><span className="section-kicker">连接另一台设备</span><h2>跨网络配对</h2><p className="muted">输入一次性配对码建立信任，接收时仍按本机策略确认。</p>
         <form onSubmit={event => {
           event.preventDefault();
-          void run('join', async () => { await Backend.PairDevice(code.trim(), name || 'LinkSend desktop'); setCode(''); }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
+          void run('join', async () => { try { await Backend.PairDevice(code.trim(), name || 'LinkSend desktop'); setCode(''); } catch (cause) { if (String(cause).includes('PAIRING_IDENTITY_CONFLICT')) setSwitchCode(code.trim()); throw cause; } }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
         }}><label className="field-label">配对码<input className="pairing-input" value={code} onChange={event => setCode(formatPairingCodeInput(event.target.value))} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
+        {switchCode && <div className="queue-notice"><strong>本机已属于另一设备组</strong><p>切换会离开当前设备组；历史记录和已接收文件保留。</p><button className="secondary" disabled={!!op} onClick={() => void run('switch-membership', async () => { await Backend.SwitchMembership(switchCode, name || 'LinkSend desktop'); setSwitchCode(''); setCode(''); }, '已切换并完成配对')}>确认切换设备组</button></div>}
         {membership?.message && <p className="field-help pairing-help">{membership.message}</p>}
         <div className="divider" /><h3>附近设备没有出现？</h3><p className="field-help">输入对方的局域网 IPv4 地址，只查找这一台设备。</p>
         <form onSubmit={event => { event.preventDefault(); void run('lan-probe', () => Backend.ProbeLANAddress(address.trim()), '已发送定向发现请求'); }}><label className="field-label">对方局域网地址<input value={address} onChange={event => setAddress(event.target.value)} placeholder="例如 192.168.1.20" inputMode="decimal" spellCheck={false} /></label><button className="secondary full" disabled={!!op || !address.trim() || !available}>查找设备</button></form>
       </section>
-    </div>
+    </div>{(pending.data ?? []).map(request => <div className="modal-backdrop" key={request.request_id}><section className="incoming-modal" role="dialog" aria-modal="true" aria-labelledby="lan-pair-title"><p className="eyebrow">附近设备请求</p><h2 id="lan-pair-title">{request.peer_name || '附近设备'} 想添加此设备</h2><p className="field-help">同意后双方建立局域网信任；文件接收仍按本机策略确认。</p><div className="modal-actions"><button className="ghost danger" disabled={!!op} onClick={() => void run(`lan-reject-${request.request_id}`, async () => { await Backend.RespondLANPair(request.request_id, false); await pending.refetch(); }, '已拒绝添加请求')}>拒绝</button><button className="primary" disabled={!!op} onClick={() => void run(`lan-accept-${request.request_id}`, async () => { await Backend.RespondLANPair(request.request_id, true); await pending.refetch(); }, '已同意添加设备')}>添加设备</button></div></section></div>)}
   </div>;
 }
 
@@ -43,6 +49,7 @@ function DeviceRow({ device, run, op, available }: { device: DeviceInfo; run: Co
 
 function DeviceEditor({ device, run, op }: { device: DeviceInfo; run: CommandRunner; op: string }) {
   const [profile, setProfile] = useState<DeviceProfile>({ ...device.profile, peer_id: device.id });
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const update = (patch: Partial<DeviceProfile>) => setProfile(current => ({ ...current, ...patch }));
   return <div className="device-editor"><form onSubmit={event => {
     event.preventDefault();
@@ -60,7 +67,7 @@ function DeviceEditor({ device, run, op }: { device: DeviceInfo; run: CommandRun
       const enabled = event.target.checked;
       void run(`consent-${device.id}`, () => Backend.SetAlwaysAccept(device.id, enabled), enabled ? '已开启此设备免确认接收' : '已恢复每次接收确认');
     }} /><span><strong>免确认接收</strong><small>与收藏和“我的设备”标签独立，仍验证设备身份与文件完整性。</small></span></label>
-      <button className="ghost danger" disabled={!!op} onClick={() => void run(`block-${device.id}`, () => device.blocked ? Backend.UnblockPeer(device.id) : Backend.BlockPeer(device.id), device.blocked ? '已解除屏蔽；需重新配对或确认建立信任' : '已屏蔽设备并停止其未完成传输')}>{device.blocked ? '解除屏蔽' : '屏蔽并取消信任'}</button>
+      {confirmRemove ? <div className="queue-notice" role="alert"><strong>删除此设备？</strong><p>将撤销本机授权并停止未完成传输；历史记录和已接收文件会保留。</p><div className="inline-actions"><button className="ghost danger" disabled={!!op} onClick={() => void run(`remove-${device.id}`, () => Backend.RemoveDevice(device.id), '设备已删除；服务不可用时会在恢复后继续同步')}>确认删除</button><button className="secondary" disabled={!!op} onClick={() => setConfirmRemove(false)}>取消</button></div></div> : <button className="ghost danger" disabled={!!op} onClick={() => setConfirmRemove(true)}>删除设备</button>}
     </div>
   </div>;
 }

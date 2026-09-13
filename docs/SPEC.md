@@ -1,5 +1,7 @@
 # LinkSend protocol V1 implementation specification
 
+2026-09-13 E2候选：桌面普通接收由 Go 基于 task/attempt/revision 原子生成并持久化默认 `keep_both` 计划，高级选收按需展开；设置使用分类局部 revision 保存，设备接收目录可继承全局；UI 固定为传输、记录、设备、设置四视图。文字/链接/图片的手动创作入口已从传输页移除，旧队列仍需显式确认继续。该变更没有增加文件信令/IPC/中继路径，也不提前实现 E4 自动剪贴板。
+
 2026-09-13：桌面体验 U1–U7 已进入实施。文件数据协议仍为V1；E1第二候选已落实 `membership_version=2`、控制库schema4、任务库schema6、完整成员快照/成员代际/撤销事务、独立LAN同意与target-bound短期凭证、多地址发现和低频网络快照恢复，见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 与 [全轮TODO](DESKTOP-EXPERIENCE-TODO.md)。该源码/自动测试结果不等于准确包物理双向、双NAT或原生共享通过；自动剪贴板wire仍待E4。
 
 2026-09-12 desktop six-feature implementation: current source targets product

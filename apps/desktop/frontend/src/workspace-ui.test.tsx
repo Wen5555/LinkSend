@@ -7,6 +7,7 @@ import type { DeviceInfo, QueueItem, TaskSnapshot, WorkspaceSnapshot } from '../
 import type { CommandRunner } from './hooks/useDesktop';
 import { TransferPage } from './pages/TransferPage';
 import { Queue } from './components/Queue';
+import { TaskList } from './components/Tasks';
 import { deviceName, movedQueueIDs } from './presentation';
 import { EnqueueIdentity } from './workspace-cache';
 
@@ -30,13 +31,17 @@ describe('workspace operation surfaces', () => {
   it('keeps pause and cancel enabled while a different enqueue command is preparing', () => {
     const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [device], run, op: 'enqueue', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).toContain('正在核对内容并加入');
-    expect(markup).toMatch(/<button class="secondary">暂停传输<\/button>/);
-    expect(markup).toMatch(/<button class="ghost">取消<\/button>/);
+    expect(markup).toContain('进行中');
+    expect(markup).not.toContain('保存内容草稿');
+    expect(markup).not.toContain('内容类型');
+    const controls = renderToStaticMarkup(createElement(TaskList, { tasks: [task], devices: [device], run, op: '' }));
+    expect(controls).toMatch(/<button class="secondary">暂停传输<\/button>/);
+    expect(controls).toMatch(/<button class="ghost">取消<\/button>/);
   });
   it('requires an explicit waiting choice for an offline destination', () => {
     const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [{ ...device, online: false }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).toContain('勾选等待后可加入队列');
-    expect(markup).toMatch(/<button class="primary full send-button" disabled="">加入发送队列<\/button>/);
+    expect(markup).toMatch(/<button class="primary full send-button" disabled="">发送文件<\/button>/);
   });
   it('shows restart confirmation separately from actual running transfer states', () => {
     const markup = renderToStaticMarkup(createElement(Queue, { items: [queueItem('pending', 'needs_attention')], devices: [device], paused: false, run, op: '', available: true }));

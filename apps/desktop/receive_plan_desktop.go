@@ -22,3 +22,10 @@ func (a *App) AcceptReceivePlan(id string, revision uint64, digest string) error
 	}
 	return a.core.AcceptReceivePlan(id, revision, digest)
 }
+
+func (a *App) AcceptIncomingDefault(id, attemptID string, revision uint64, remember bool) (coreapp.AcceptIncomingDefaultResult, error) {
+	if err := a.workspaceAvailable(); err != nil {
+		return coreapp.AcceptIncomingDefaultResult{}, err
+	}
+	return a.core.AcceptIncomingDefault(id, attemptID, revision, remember)
+}
