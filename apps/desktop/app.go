@@ -28,30 +28,33 @@ import (
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.
 type App struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	core            *linksendapp.Service
-	initErr         error
-	prefs           DesktopPreferences
-	prefsMu         sync.RWMutex
-	prefsWriteMu    sync.Mutex
-	prefsStatus     PreferencesStatus
-	configBlocked   bool
-	dataDir         string
-	closeMu         sync.Mutex
-	closeDialog     bool
-	quitReady       bool
-	runtimeApp      *application.App
-	window          application.Window
-	eventsDone      chan struct{}
-	entries         *desktopEntries
-	background      *desktopBackground
-	nativeEvents    *nativeSystemEventPump
-	clipboardMu     sync.Mutex
-	clipboardStop   func()
-	clipboardLast   nativeclipboard.Change
-	clipboardErr    string
-	clipboardPaused bool
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	core                *linksendapp.Service
+	initErr             error
+	prefs               DesktopPreferences
+	prefsMu             sync.RWMutex
+	prefsWriteMu        sync.Mutex
+	prefsStatus         PreferencesStatus
+	configBlocked       bool
+	dataDir             string
+	closeMu             sync.Mutex
+	closeDialog         bool
+	quitReady           bool
+	runtimeApp          *application.App
+	window              application.Window
+	eventsDone          chan struct{}
+	entries             *desktopEntries
+	background          *desktopBackground
+	nativeEvents        *nativeSystemEventPump
+	clipboardMu         sync.Mutex
+	clipboardOwnerMu    sync.Mutex
+	clipboardStop       func()
+	clipboardLast       nativeclipboard.Change
+	clipboardErr        string
+	clipboardSleeping   bool
+	clipboardLocked     bool
+	clipboardUserPaused bool
 }
 
 type DesktopPreferences struct {

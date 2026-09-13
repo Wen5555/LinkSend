@@ -48,19 +48,27 @@ func (a *App) ClipboardWatcher() ClipboardWatchStatus {
 	a.clipboardMu.Lock()
 	defer a.clipboardMu.Unlock()
 	enabled := a.core != nil && a.core.ClipboardSyncEnabled()
-	return ClipboardWatchStatus{Enabled: enabled, Active: a.clipboardStop != nil, Paused: a.clipboardPaused, Last: a.clipboardLast, Error: a.clipboardErr}
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	return ClipboardWatchStatus{Enabled: enabled, Active: a.clipboardStop != nil, Paused: paused, Last: a.clipboardLast, Error: a.clipboardErr}
 }
 
 func (a *App) refreshClipboardWatch() {
+	a.clipboardOwnerMu.Lock()
+	defer a.clipboardOwnerMu.Unlock()
+	a.refreshClipboardWatchOwned()
+}
+
+func (a *App) refreshClipboardWatchOwned() {
 	if a.core == nil || a.ctx == nil {
 		return
 	}
 	a.clipboardMu.Lock()
-	enabled := a.core.ClipboardSyncEnabled() && !a.clipboardPaused
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	enabled := a.core.ClipboardSyncEnabled() && !paused
 	active := a.clipboardStop != nil
 	a.clipboardMu.Unlock()
 	if !enabled {
-		a.stopClipboardWatch()
+		a.stopClipboardWatchOwned()
 		return
 	}
 	if active || a.runtimeApp == nil || a.window == nil {
@@ -79,7 +87,8 @@ func (a *App) refreshClipboardWatch() {
 		a.clipboardMu.Unlock()
 		return
 	}
-	stale := !a.core.ClipboardSyncEnabled() || a.clipboardPaused || a.clipboardStop != nil
+	paused = a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	stale := !a.core.ClipboardSyncEnabled() || paused || a.clipboardStop != nil
 	if !stale {
 		a.clipboardStop = stop
 		a.clipboardErr = ""
@@ -92,13 +101,19 @@ func (a *App) refreshClipboardWatch() {
 
 func (a *App) recordClipboardChange(change nativeclipboard.Change) {
 	a.clipboardMu.Lock()
-	if a.clipboardStop != nil && !a.clipboardPaused {
+	if a.clipboardStop != nil && !a.clipboardSleeping && !a.clipboardLocked && !a.clipboardUserPaused {
 		a.clipboardLast = change
 	}
 	a.clipboardMu.Unlock()
 }
 
 func (a *App) stopClipboardWatch() {
+	a.clipboardOwnerMu.Lock()
+	defer a.clipboardOwnerMu.Unlock()
+	a.stopClipboardWatchOwned()
+}
+
+func (a *App) stopClipboardWatchOwned() {
 	a.clipboardMu.Lock()
 	stop := a.clipboardStop
 	a.clipboardStop = nil
@@ -108,18 +123,28 @@ func (a *App) stopClipboardWatch() {
 	}
 }
 
-func (a *App) pauseClipboardWatch() {
+func (a *App) setClipboardSuspended(reason string, suspended bool) {
+	a.clipboardOwnerMu.Lock()
+	defer a.clipboardOwnerMu.Unlock()
 	a.clipboardMu.Lock()
-	a.clipboardPaused = true
+	switch reason {
+	case "sleep":
+		a.clipboardSleeping = suspended
+	case "lock":
+		a.clipboardLocked = suspended
+	case "user":
+		a.clipboardUserPaused = suspended
+	}
 	a.clipboardLast = nativeclipboard.Change{}
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
 	a.clipboardMu.Unlock()
-	a.stopClipboardWatch()
+	if paused {
+		a.stopClipboardWatchOwned()
+	} else {
+		a.refreshClipboardWatchOwned()
+	}
 }
 
-func (a *App) resumeClipboardWatch() {
-	a.clipboardMu.Lock()
-	a.clipboardPaused = false
-	a.clipboardLast = nativeclipboard.Change{}
-	a.clipboardMu.Unlock()
-	a.refreshClipboardWatch()
-}
+func (a *App) SetClipboardPaused(paused bool) { a.setClipboardSuspended("user", paused) }
+func (a *App) pauseClipboardWatch()           { a.setClipboardSuspended("sleep", true) }
+func (a *App) resumeClipboardWatch()          { a.setClipboardSuspended("sleep", false) }

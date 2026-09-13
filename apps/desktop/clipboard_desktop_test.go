@@ -46,3 +46,23 @@ func TestClipboardWatcherFollowsScopedGrantAndRevocation(t *testing.T) {
 		t.Fatalf("revocation retained watcher: %+v", status)
 	}
 }
+
+func TestClipboardPauseReasonsDoNotResumeEachOther(t *testing.T) {
+	app := NewApp()
+	app.ctx = context.Background()
+	app.setClipboardSuspended("lock", true)
+	app.setClipboardSuspended("sleep", true)
+	app.setClipboardSuspended("sleep", false)
+	if !app.ClipboardWatcher().Paused {
+		t.Fatal("wake resumed watcher while screen remained locked")
+	}
+	app.setClipboardSuspended("user", true)
+	app.setClipboardSuspended("lock", false)
+	if !app.ClipboardWatcher().Paused {
+		t.Fatal("unlock cleared user pause")
+	}
+	app.setClipboardSuspended("user", false)
+	if app.ClipboardWatcher().Paused {
+		t.Fatal("all pause reasons cleared but watcher remained paused")
+	}
+}

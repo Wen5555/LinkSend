@@ -23,7 +23,7 @@ type nativeSystemEventPump struct {
 
 func newNativeSystemEventPump(parent context.Context, deliver func(string)) *nativeSystemEventPump {
 	ctx, cancel := context.WithCancel(parent)
-	p := &nativeSystemEventPump{cancel: cancel, done: make(chan struct{}), events: make(chan string, 1)}
+	p := &nativeSystemEventPump{cancel: cancel, done: make(chan struct{}), events: make(chan string, 16)}
 	go func() {
 		defer close(p.done)
 		for {
@@ -87,25 +87,35 @@ func (a *App) startNativeSystemEvents() {
 		return
 	}
 	pump := newNativeSystemEventPump(a.ctx, func(reason string) {
-		if err := a.core.NetworkChanged(reason); err != nil {
-			slog.Warn("native network recovery event failed", "reason", reason, "error", err)
+		switch reason {
+		case "sleep":
+			a.setClipboardSuspended("sleep", true)
+		case "wake":
+			a.setClipboardSuspended("sleep", false)
+		case "lock":
+			a.setClipboardSuspended("lock", true)
+		case "unlock":
+			a.setClipboardSuspended("lock", false)
+		}
+		if reason != "lock" && reason != "unlock" {
+			if err := a.core.NetworkChanged(reason); err != nil {
+				slog.Warn("native network recovery event failed", "reason", reason, "error", err)
+			}
 		}
 	})
 	a.nativeEvents = pump
 	if a.runtimeApp != nil {
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.SystemWillSleep, func(*application.ApplicationEvent) {
-			go a.pauseClipboardWatch()
 			pump.notify("sleep")
 		}))
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.SystemDidWake, func(*application.ApplicationEvent) {
 			pump.notify("wake")
-			go a.resumeClipboardWatch()
 		}))
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.ScreenLocked, func(*application.ApplicationEvent) {
-			go a.pauseClipboardWatch()
+			pump.notify("lock")
 		}))
 		pump.addStop(a.runtimeApp.Event.OnApplicationEvent(events.Common.ScreenUnlocked, func(*application.ApplicationEvent) {
-			go a.resumeClipboardWatch()
+			pump.notify("unlock")
 		}))
 	}
 	stop, err := startNativeNetworkMonitor(func() { pump.notify("network") })

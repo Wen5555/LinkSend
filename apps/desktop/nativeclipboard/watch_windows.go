@@ -37,6 +37,7 @@ type windowsClipboardWatch struct {
 	urlW    uintptr
 	urlA    uintptr
 	once    sync.Once
+	last    atomic.Uint32
 }
 
 func clipboardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclassID, _ uintptr) uintptr {
@@ -44,14 +45,41 @@ func clipboardSubclassProc(hwnd uintptr, message uint32, wParam, lParam, subclas
 		if value, ok := clipboardWatches.Load(subclassID); ok {
 			watch := value.(*windowsClipboardWatch)
 			change := watch.snapshot()
-			select {
-			case watch.changes <- change:
-			default:
+			if watch.acceptSequence(uint32(change.Sequence)) {
+				watch.offer(change)
 			}
 		}
 	}
 	result, _, _ := defSubclass.Call(hwnd, uintptr(message), wParam, lParam)
 	return result
+}
+
+func (w *windowsClipboardWatch) acceptSequence(sequence uint32) bool {
+	for {
+		last := w.last.Load()
+		if sequence == last || int32(sequence-last) <= 0 {
+			return false
+		}
+		if w.last.CompareAndSwap(last, sequence) {
+			return true
+		}
+	}
+}
+
+func (w *windowsClipboardWatch) offer(change Change) {
+	select {
+	case w.changes <- change:
+		return
+	default:
+	}
+	select {
+	case <-w.changes:
+	default:
+	}
+	select {
+	case w.changes <- change:
+	default:
+	}
 }
 
 func (w *windowsClipboardWatch) snapshot() Change {
@@ -75,6 +103,8 @@ func watchChanges(ctx context.Context, nativeWindow uintptr, notify func(Change)
 	watchCtx, cancel := context.WithCancel(ctx)
 	id := uintptr(clipboardWatchID.Add(1))
 	watch := &windowsClipboardWatch{id: id, hwnd: nativeWindow, notify: notify, changes: make(chan Change, 1), cancel: cancel, done: make(chan struct{})}
+	baseline, _, _ := getSequence.Call()
+	watch.last.Store(uint32(baseline))
 	register := func(name string) uintptr {
 		value, err := windows.UTF16PtrFromString(name)
 		if err != nil {

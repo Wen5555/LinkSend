@@ -571,3 +571,4 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 启用前重验当前 peer 授权；本机阻止、成员移除或授权 generation 变化删除该 peer 全部剪贴板授权，解除阻止和重新配对不会自动恢复。
 - 当前候选只建立本机权限和原生变化监听边界；正文读取、lease wire、跨端同步与接收写入仍待 E4-03。
 - Windows 使用 `AddClipboardFormatListener` + `SetWindowSubclass`，回调只合并 sequence 和 text/link/image 格式标志；macOS 每 250ms 比较 `NSPasteboard.changeCount` 并只查询 types。仅存在 enabled grant 时注册，全部关闭、撤销、睡眠、锁屏或退出时停止；唤醒/解锁从新基线恢复，不补发停用期间变化。
+- C1 将 grant 升级到 schema 9 并绑定当前可信配对 generation；启用提交与撤销共用门闩，清理失败或重新配对都不能复活旧 generation。watcher 由单一 owner 串行 start/stop，分别跟踪睡眠、锁屏和用户暂停；Windows 注册时记录 OS sequence 基线并以 latest-only 合并变化。

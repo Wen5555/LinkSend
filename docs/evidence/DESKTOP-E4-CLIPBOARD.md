@@ -4,10 +4,11 @@
 
 ## 已实现边界
 
-- task-history schema 8 按 peer、send/receive、text/link/image 保存 revision CAS grant；无记录即关闭。
+- task-history schema 9 按 peer、authorization generation、send/receive、text/link/image 保存 revision CAS grant；无记录或代际不匹配即关闭。
 - 启用 grant 前重验 peer 授权；本机阻止、成员移除或 authorization generation 变化删除该 peer 的 grant。
 - 桌面只在至少一个 grant enabled 时启动 watcher。Windows 使用 `AddClipboardFormatListener` 与 `SetWindowSubclass`；macOS 使用 `NSPasteboard.changeCount`。回调只报告 sequence 和格式类别。
 - 睡眠、锁屏、撤销、全部 grant 关闭和 Shutdown 停止 watcher 并清空变化基线；恢复后从当前系统 sequence 开始，不补发停用期间变化。
+- 启用与撤销共享 grant 提交门闩；watcher start/stop 由单一 owner 串行。睡眠、锁屏、用户暂停分别记账，wake 不会解除仍存在的锁屏或用户暂停。Windows 容量1队列淘汰旧变化并保留最新 sequence，注册基线与迟到旧通知不产生事件。
 
 ## 实际验证
 

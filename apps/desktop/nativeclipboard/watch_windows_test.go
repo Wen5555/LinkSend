@@ -25,20 +25,29 @@ func TestWindowsClipboardListenerUsesNativeWindowSubclass(t *testing.T) {
 		t.Fatal(callErr)
 	}
 	defer destroyWindow.Call(hwnd)
-	changes := make(chan Change, 1)
+	changes := make(chan Change, 2)
 	stop, err := Watch(context.Background(), hwnd, func(change Change) { changes <- change })
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer stop()
-	expectedSequence, _, _ := getSequence.Call()
 	sendMessage.Call(hwnd, wmClipboardUpdate, 0, 0)
 	select {
 	case change := <-changes:
-		if change.Sequence != uint64(uint32(expectedSequence)) {
-			t.Fatalf("native callback sequence = %d, want %d", change.Sequence, uint32(expectedSequence))
-		}
-	case <-time.After(time.Second):
-		t.Fatal("WM_CLIPBOARDUPDATE did not reach subclass callback")
+		t.Fatalf("unchanged registration baseline was reported: %+v", change)
+	case <-time.After(25 * time.Millisecond):
+	}
+}
+
+func TestWindowsClipboardListenerKeepsLatestSequence(t *testing.T) {
+	watch := &windowsClipboardWatch{changes: make(chan Change, 1)}
+	watch.offer(Change{Sequence: 11})
+	watch.offer(Change{Sequence: 12})
+	if got := <-watch.changes; got.Sequence != 12 {
+		t.Fatalf("latest sequence = %d, want 12", got.Sequence)
+	}
+	watch.last.Store(20)
+	if watch.acceptSequence(19) || watch.acceptSequence(20) || !watch.acceptSequence(21) {
+		t.Fatal("baseline accepted stale or rejected fresh sequence")
 	}
 }
