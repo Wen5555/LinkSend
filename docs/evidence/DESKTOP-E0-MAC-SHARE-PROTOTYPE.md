@@ -1,5 +1,7 @@
 # E0-04 Mac 真 Share Extension 原型
 
+后续安全修补与实测见 [E0 Mac SafeIO回执](DESKTOP-E0-MAC-SAFEIO.md)：10项原生文件边界测试PASS，真实标准Share菜单动作已派发，分离服务复测仍返回NSCocoaErrorDomain/4097；文件交接继续FAIL/待修。下面保留较早原型证据，不能复用其hash代表新包。
+
 2026-09-13。状态 PARTIAL：真实host/.appex构建、ad-hoc签名、系统注册、共享服务发现/激活和注销状态有证据；**文件接管、后台冷启动交接和退出后可读尚未通过**。不能称U6完成。
 目标为登记alias mac-test-102342413，wen@10.234.39.151，macOS26.5/ARM64；不是最低macOS13或Intel实机。
 

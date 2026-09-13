@@ -1,5 +1,7 @@
 # E0-ADR-review-v1 审查回复
 
+后续状态：总控E0-safeio-close-v1已复审接受11c44df中的语义；具体API/schema/实现/兼容测试仍需E1/E4。下文保留提交该回复时的待审状态和检查事实。
+
 2026-09-13。基于E0-A提交 `ec55db317b0b5b0dfa60c1a61219f28da9b401da` 的文档修订；状态**待总控复审，尚未冻结**。
 已读取实际审查文件 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/pending-e0-adr-review.md`。其“尚无待审commit”描述的是较早工作树；现已有E0-A，不改写原审查记录。
 该输入文件SHA256：`3a6b8dc1d3bee533f9582cff3555d8496fa76b0e10ad5a18695b533b1cf0da98`。

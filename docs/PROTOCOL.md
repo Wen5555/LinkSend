@@ -1,6 +1,6 @@
 # Protocol
 
-2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，状态为待审提案。当前 M5 wire/schema/授权实现尚未改变；实施前需冻结协议并补兼容与安全测试，不能将提案当作已实现能力。
+2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
 
 E0-ADR-review-v1已在提案中明确：剪贴板事件绑定接收方预签发lease及原始单调deadline，迟到首帧/重传不得重获寿命；origin_sequence与Lamport分离。具体wire/schema仍待后续实现冻结，不修改现役V1消息。
 

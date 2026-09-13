@@ -2,6 +2,8 @@
 
 这些是开发原型和验证工具，不是正式共享功能。没有模拟设备列表，没有网络文件发送，不能替代 E1/E3。
 
+E0-supervision-ui-v1修补：Mac `FixtureIO.swift`同时限制host正文/回执读取和扩展接管，失败只清理本请求且文件身份匹配的输出。`test-mac-safeio.sh`执行10项真实文件边界检查；`test-mac-native-menu.sh`分进程验证系统标准Share菜单与服务激活，服务失败返回非零。完整已运行命令、包hash及已知4097失败见docs/evidence/DESKTOP-E0-MAC-SAFEIO.md，不将菜单登记当成文件交接通过。
+
 - `inspect-{mac,hk,nl}.sh`：只读主机/工具/拓扑。nl 仅创建临时 user/net namespace 做能力检查，不改宿主网络。
 - `control-inspect`：HTTPS health → WSS 认证 → 已认证设备列表。需要**当前没有 GUI/WSS 使用的身份**，新的 WSS 会替换同身份连接。使用隔离目录中的受保护测试身份；不输出密钥/邀请码/设备全名，不修改授权或发送正文。
 - `windows-share-prototype`：.NET9 WPF + Windows AppInstance/ShareTargetActivatedEventArgs/StorageItems；真实 MSIX，独立包标识。只接管最多128个、总实际64MiB的小 fixture，持久回执分 captured/completed/failed；正式 E3 不能照搬全文件复制策略。

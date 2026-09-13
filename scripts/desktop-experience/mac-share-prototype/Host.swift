@@ -22,11 +22,11 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
                 includingPropertiesForKeys: nil) else { return }
         for folder in entries {
             let receipt = folder.appendingPathComponent("captured.json")
-            guard let bytes = try? Data(contentsOf: receipt),
+            guard let bytes = try? FixtureIO.readBounded(receipt, limit: FixtureIO.receiptLimit),
                   let item = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
                   let expected = item["sha256"] as? String else { continue }
             let file = folder.appendingPathComponent("fixture.payload")
-            guard let data = try? Data(contentsOf: file), data.count <= 1024 * 1024 else { continue }
+            guard let data = try? FixtureIO.readBounded(file, limit: FixtureIO.payloadLimit) else { continue }
             let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
             let result: [String: Any] = ["background_readable": true, "hash_matches": actual == expected,
                 "host_pid": ProcessInfo.processInfo.processIdentifier, "bytes": data.count,
@@ -36,8 +36,13 @@ final class HostDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
-let application = NSApplication.shared
-let delegate = HostDelegate()
-application.delegate = delegate
-application.setActivationPolicy(.regular)
-application.run()
+@main
+enum HostMain {
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = HostDelegate()
+        application.delegate = delegate
+        application.setActivationPolicy(.regular)
+        withExtendedLifetime(delegate) { application.run() }
+    }
+}

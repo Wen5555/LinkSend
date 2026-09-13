@@ -51,8 +51,8 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E0-01 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
 | E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
 | E0-03 | 外部阻塞 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 构建/签名PASS、系统安装FAIL、激活NOT RUN；不降格U6 |
-| E0-04 | 执行中 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 原生权限缺口与未定位回调分别保留；注册/激活不等于交接 |
-| E0-05 | 待审查 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | E0-ADR-review-v1已修订，见ADR-REVIEW-V1证据；待总控冻结 |
+| E0-04 | 执行中 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | SafeIO10项PASS/菜单动作实测，安全修补提交待审；服务4097退出1是待修技术缺陷，见MAC-SAFEIO证据 |
+| E0-05 | 验收通过 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 仅ADR语义：总控E0-safeio-close-v1接受11c44df；具体API/schema/实现及兼容测试仍待E1/E4 |
 | E1-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E1-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E1-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
@@ -80,4 +80,4 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 活跃远程作业：无；历史jobPath见E0分项证据。E0-A提交为ec55db317b0b5b0dfa60c1a61219f28da9b401da；其后的E0-ADR-review-v1文档修订另作提交，见evidence/DESKTOP-E0-ADR-REVIEW-V1.md。push/PR仍NOT RUN。继续E0剩余准确包/网络/原型，待总控审查冻结语义后再派发E1，不能视为已通过E0。
+- 活跃远程作业：无；历史jobPath见E0分项证据。E0-A为ec55db317b0b5b0dfa60c1a61219f28da9b401da；ADR语义修订11c44df已接受；本次SafeIO修补见evidence/DESKTOP-E0-MAC-SAFEIO.md，待总控复审。push/PR仍NOT RUN。按E0-safeio-close-v1先提交收尾，不再扩大新加载器；待总控派发工作分支/PR/CI同步与E0-B实际双向网络和Mac根因。E0整体未完成。

@@ -1,5 +1,10 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E0 Mac资源安全修补收尾（待审提交）
+
+按E0-supervision-ui-v1/E0-safeio-close-v1，Host的payload/receipt改为读入时有界校验；扩展失败只清理独占创建且身份仍匹配的本请求文件。真实Mac10项文件IO边界测试、host/.appex构建/签名通过。标准系统Share菜单展示及action已实际派发；分离服务复测仍NSCocoaErrorDomain/4097、最终退出1、无captured回执，保持E0-04待修技术缺陷。精确注册已注销，owned进程计数0；见 [安全修补回执](evidence/DESKTOP-E0-MAC-SAFEIO.md)。
+总控已复审接受11c44df的ADR语义，具体API/schema/实现及兼容测试仍待E1/E4。未宣布E0整体通过，未push；仓库外executor-progress.json持续记录当前状态。下一步等待总控复审后派发阶段同步和E0-B，不再在此批扩大共享加载器重构。
+
 ## 2026-09-13 E0-ADR-review-v1 修订（待复审）
 
 已读取总控仓库外pending-e0-adr-review.md并修订ADR0007：接收端预签发lease/不可延长单调deadline阻止首帧或重传滞留后重获TTL；删除推进peer级generation使全部旧组/LAN grant失效；origin_sequence、Lamport与串行落板revision门闩分离。新增对应后续验收负例，见 [审查回复](evidence/DESKTOP-E0-ADR-REVIEW-V1.md)。
