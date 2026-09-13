@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-func clipboardGeneration() uint64 { return 0 }
+func clipboardGeneration() uint64   { return 0 }
+func clipboardReadProhibited() bool { return false }
 func readClipboardText(context.Context, clipboardsync.Kind, uint64) ([]byte, uint64, error) {
 	return nil, 0, ErrUnsupported
 }

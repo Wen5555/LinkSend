@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	quic "github.com/quic-go/quic-go"
 )
@@ -22,6 +23,9 @@ func TestSessionReuseRequiresBilateralCapability(t *testing.T) {
 	if envelopeSupportsSessionReuse(old) {
 		t.Fatal("legacy response was treated as reusable")
 	}
+	if envelopeSupportsClipboardSync(old) {
+		t.Fatal("legacy session-reuse response entered the clipboard owner")
+	}
 	modern, err := protocol.NewEnvelope("connect_response", "sender", "recipient",
 		"0123456789abcdef0123456789abcdef", 1, iceDescription{Ufrag: "u", Password: "p", SessionReuse: true})
 	if err != nil {
@@ -30,12 +34,33 @@ func TestSessionReuseRequiresBilateralCapability(t *testing.T) {
 	if !envelopeSupportsSessionReuse(modern) {
 		t.Fatal("bilateral reuse capability was lost")
 	}
+	if envelopeSupportsClipboardSync(modern) {
+		t.Fatal("session reuse alone enabled clipboard sync")
+	}
+	clipboard, err := protocol.NewEnvelope("connect_response", "sender", "recipient",
+		"0123456789abcdef0123456789abcdef", 1, iceDescription{Ufrag: "u", Password: "p", SessionReuse: true, ClipboardSync: true, AuthorizationGeneration: 7})
+	if err != nil || !envelopeSupportsClipboardSync(clipboard) {
+		t.Fatal("explicit clipboard capability was lost", err)
+	}
 	var legacy struct {
 		Ufrag    string `json:"ufrag"`
 		Password string `json:"password"`
 	}
 	if err := json.Unmarshal(modern.Payload, &legacy); err != nil || legacy.Ufrag != "u" || legacy.Password != "p" {
 		t.Fatalf("new optional field broke legacy ICE parsing: %+v %v", legacy, err)
+	}
+}
+
+func TestClipboardWireUsesDirectionalAuthorizationGenerations(t *testing.T) {
+	peer := &PeerSession{AuthorizationGeneration: 11, RemoteAuthorizationGeneration: 29}
+	if !clipboardMessageGenerationValid(peer, clipboardsync.Message{Type: "lease", Generation: 29}) {
+		t.Fatal("remote receiver lease generation was compared with the local generation")
+	}
+	if !clipboardMessageGenerationValid(peer, clipboardsync.Message{Type: "event", Generation: 11}) {
+		t.Fatal("inbound event generation was compared with the remote generation")
+	}
+	if clipboardMessageGenerationValid(peer, clipboardsync.Message{Type: "lease", Generation: 11}) || clipboardMessageGenerationValid(peer, clipboardsync.Message{Type: "event", Generation: 29}) {
+		t.Fatal("asymmetric authorization generations were treated as interchangeable")
 	}
 }
 

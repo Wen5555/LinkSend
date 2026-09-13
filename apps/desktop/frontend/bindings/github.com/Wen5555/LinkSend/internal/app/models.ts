@@ -38,6 +38,13 @@ export interface ClipboardGrantPatch {
     "expected_revision": number;
 }
 
+export interface ClipboardPeerStatus {
+    "peer_id": string;
+    "state": string;
+    "send_ready": boolean;
+    "receive_ready": boolean;
+}
+
 export interface ContentActionResult {
     "task_id": string;
     "action": string;

@@ -25,7 +25,7 @@ Windows Share Target 只接受 `StorageItems` 中能由 broker 打开且具有�
 
 Windows 上 `x/net/ipv4.ControlMessage` 不提供有效源地址选择，因此发现发送使用最多 32 个临时 source-bound UDP socket；每个 socket绑定具体本地 IPv4、发送后在同一 socket有界接收回复。Darwin/Linux 保留 pktinfo/cmsg。组播、广播、受限单播与 TLS 控制分别降级，单个 provider 失败不关闭其余路径；peer、route、响应表和握手 goroutine均有固定上限。
 
-2026-09-14 E4-03：自动剪贴板正文只通过固定身份的 TLS 1.3 QUIC 传输；权限、lease、generation、原生 CAS 与资源边界已有源码和自动测试候选，物理双机用户剪贴板仍未验收。
+2026-09-14 E4-03修复候选：自动剪贴板正文只通过固定身份的TLS 1.3 QUIC传输；独立clipboard_sync能力阻止只支持文件会话复用的旧端进入该owner。两端本地授权代次可不同，lease/event按方向绑定接收方实际generation；origin必须等于认证peer。receive lease和event digest绑定双方permission revision，关闭/重开同一权限不能复用旧lease或已读正文。图片验证在最终状态锁外，实际原生mutation前仍重验暂停、当前peer generation、receive revision、OS generation与原始deadline。密码管理器等明确的Windows/macOS禁止同步标记会拒绝读取；总开关和细分权限均持久默认关闭。物理双机用户剪贴板仍未验收。
 
 E0-ADR-review-v1要求未来删除先使目标peer的全部既有组/LAN grant generation失效，禁止授权回退；新配对不恢复旧LAN/免确认/剪贴板。剪贴板提交门闩内重验授权、lease期限与OS/application generation。以上是待实现契约，不是当前M5安全能力声明。
 

@@ -2,10 +2,13 @@ package app
 
 import (
 	"errors"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/Wen5555/LinkSend/internal/identity"
 )
 
@@ -47,6 +50,116 @@ func TestClipboardGrantsDefaultOffCASAndRevocation(t *testing.T) {
 	}
 	if _, err = service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "send", Kind: "text", Enabled: true}); err == nil {
 		t.Fatal("blocked peer regained clipboard permission")
+	}
+}
+
+func TestClipboardPermissionRevisionRevokesOldLeaseWithoutBreakingOtherDirection(t *testing.T) {
+	dir := t.TempDir()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Shutdown)
+	peer, _ := identity.Generate()
+	if err = identity.TrustPairedPeer(dir, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	receive, err := service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "receive", Kind: "text", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := service.clipboardSync.IssueScoped(peer.ID(), "session", receive.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Text, Revision: receive.Revision}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "send", Kind: "image", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	header := clipboardsync.Event{LeaseID: lease.ID, OriginID: peer.ID(), Boot: "boot", OriginSeq: 1, Lamport: 1, Kind: clipboardsync.Text, Digest: strings.Repeat("0", 64), SenderGrantRevision: 1, ReceiverGrantRevision: receive.Revision}
+	if _, err = service.clipboardSync.BeginHeader(peer.ID(), "session", receive.AuthorizationGeneration, header); err != nil {
+		t.Fatal("unrelated send permission invalidated receive lease", err)
+	}
+	if _, err = service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "receive", Kind: "text", Enabled: false, ExpectedRevision: receive.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.clipboardSync.BeginHeader(peer.ID(), "session", receive.AuthorizationGeneration, header); !errors.Is(err, clipboardsync.ErrExpired) {
+		t.Fatal("disabled permission retained old lease", err)
+	}
+	reopened, err := service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "receive", Kind: "text", Enabled: true, ExpectedRevision: receive.Revision + 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newLease, err := service.clipboardSync.IssueScoped(peer.ID(), "session", reopened.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Text, Revision: reopened.Revision}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header.LeaseID = newLease.ID
+	if _, err = service.clipboardSync.BeginHeader(peer.ID(), "session", reopened.AuthorizationGeneration, header); !errors.Is(err, clipboardsync.ErrStale) {
+		t.Fatal("old permission revision entered reopened lease", err)
+	}
+}
+
+func TestClipboardValidationDoesNotHoldCommitLockAndRevocationWinsFinalGate(t *testing.T) {
+	dir := t.TempDir()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Shutdown)
+	peerIdentity, _ := identity.Generate()
+	if err = identity.TrustPairedPeer(dir, identity.TrustedPeer{ID: peerIdentity.ID(), Name: "peer", PublicKey: peerIdentity.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peerIdentity.ID(), Direction: "receive", Kind: "image", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "session"
+	lease, err := service.clipboardSync.IssueScoped(peerIdentity.ID(), sessionID, grant.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Image, Revision: grant.Revision}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sender := clipboardsync.New(peerIdentity.ID(), nil)
+	sender.Reset(false, 1)
+	if err = sender.InstallScoped(lease.ID, service.identity.ID(), sessionID, grant.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Image, Revision: grant.Revision}}, time.Minute, 1); err != nil {
+		t.Fatal(err)
+	}
+	base, err := sender.ObserveLocalEvent(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err = sender.PrepareObserved(base, clipboardsync.Image, []byte("validated outside state lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := sender.BindScoped(base, lease.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := service.clipboardSync.Begin(peerIdentity.ID(), sessionID, grant.AuthorizationGeneration, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := &PeerSession{PeerID: peerIdentity.ID(), AuthorizationGeneration: grant.AuthorizationGeneration}
+	validated, release := make(chan struct{}), make(chan struct{})
+	var writes atomic.Int32
+	commitDone := make(chan error, 1)
+	go func() {
+		commitDone <- service.commitClipboardCandidate(peer, candidate, ClipboardAdapter{
+			Validate: func(clipboardsync.Kind, []byte) error { close(validated); <-release; return nil },
+			Write:    func(clipboardsync.Kind, []byte, uint64, time.Time) (uint64, error) { writes.Add(1); return 2, nil },
+		})
+	}()
+	<-validated
+	if _, err = service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peerIdentity.ID(), Direction: "receive", Kind: "image", Enabled: false, ExpectedRevision: grant.Revision}); err != nil {
+		t.Fatal("revocation blocked behind image validation", err)
+	}
+	close(release)
+	if err = <-commitDone; err == nil {
+		t.Fatal("revoked candidate crossed the final mutation gate")
+	}
+	if writes.Load() != 0 {
+		t.Fatal("native mutation ran after revocation")
 	}
 }
 

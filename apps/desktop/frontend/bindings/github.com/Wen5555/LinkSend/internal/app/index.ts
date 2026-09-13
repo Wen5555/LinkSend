@@ -5,6 +5,7 @@ export type {
     AcceptIncomingDefaultResult,
     ClipboardGrant,
     ClipboardGrantPatch,
+    ClipboardPeerStatus,
     ContentActionResult,
     ContentCleanupResult,
     ContentDraft,

@@ -36,13 +36,21 @@ type Lease struct {
 	ID, PeerID, SessionID string
 	Generation            uint64
 	Kinds                 map[Kind]bool
+	revisions             map[Kind]uint64
 	issued, deadline      time.Time
 	baseline              uint64
 	outbound              bool
 }
+type Grant struct {
+	Kind     Kind   `json:"kind"`
+	Revision uint64 `json:"revision"`
+}
 type Event struct {
 	LeaseID, OriginID, Boot string
 	OriginSeq, Lamport      uint64
+	Revision                uint64
+	SenderGrantRevision     uint64
+	ReceiverGrantRevision   uint64
 	Kind                    Kind
 	Digest                  string
 	OSGeneration            uint64
@@ -88,6 +96,25 @@ func New(originID string, now func() time.Time) *State {
 func (s *State) Issue(peerID, sessionID string, generation uint64, kinds []Kind, ttl time.Duration) (Lease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	grants := make([]Grant, 0, len(kinds))
+	for _, kind := range kinds {
+		grants = append(grants, Grant{Kind: kind})
+	}
+	return s.issueLocked(peerID, sessionID, generation, grants, ttl)
+}
+
+func (s *State) IssueScoped(peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration) (Lease, error) {
+	for _, grant := range grants {
+		if grant.Revision == 0 {
+			return Lease{}, ErrStale
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.issueLocked(peerID, sessionID, generation, grants, ttl)
+}
+
+func (s *State) issueLocked(peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration) (Lease, error) {
 	if s.paused || peerID == "" || sessionID == "" || generation == 0 || ttl <= 0 {
 		return Lease{}, ErrStale
 	}
@@ -105,32 +132,52 @@ func (s *State) Issue(peerID, sessionID string, generation uint64, kinds []Kind,
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return Lease{}, err
 	}
-	allowed := make(map[Kind]bool)
-	for _, kind := range kinds {
-		if validKind(kind) {
-			allowed[kind] = true
+	allowed, revisions := make(map[Kind]bool), make(map[Kind]uint64)
+	for _, grant := range grants {
+		if validKind(grant.Kind) {
+			allowed[grant.Kind] = true
+			revisions[grant.Kind] = grant.Revision
 		}
 	}
 	if len(allowed) == 0 {
 		return Lease{}, ErrStale
 	}
 	now := s.now()
-	lease := Lease{ID: hex.EncodeToString(nonce[:]), PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, issued: now, deadline: now.Add(ttl), baseline: s.osGen}
+	lease := Lease{ID: hex.EncodeToString(nonce[:]), PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, revisions: revisions, issued: now, deadline: now.Add(ttl), baseline: s.osGen}
 	s.leases[lease.ID] = lease
 	return lease, nil
 }
-
 func (s *State) Install(id, peerID, sessionID string, generation uint64, kinds []Kind, ttl time.Duration, baseline uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	grants := make([]Grant, 0, len(kinds))
+	for _, kind := range kinds {
+		grants = append(grants, Grant{Kind: kind})
+	}
+	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline)
+}
+
+func (s *State) InstallScoped(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64) error {
+	for _, grant := range grants {
+		if grant.Revision == 0 {
+			return ErrStale
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline)
+}
+
+func (s *State) installLocked(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64) error {
 	if s.paused || id == "" || peerID == "" || sessionID == "" || generation == 0 || ttl <= 0 {
 		return ErrStale
 	}
 	s.pruneLocked()
-	allowed := make(map[Kind]bool)
-	for _, kind := range kinds {
-		if validKind(kind) {
-			allowed[kind] = true
+	allowed, revisions := make(map[Kind]bool), make(map[Kind]uint64)
+	for _, grant := range grants {
+		if validKind(grant.Kind) {
+			allowed[grant.Kind] = true
+			revisions[grant.Kind] = grant.Revision
 		}
 	}
 	if len(allowed) == 0 {
@@ -146,9 +193,11 @@ func (s *State) Install(id, peerID, sessionID string, generation uint64, kinds [
 		return ErrLimit
 	}
 	now := s.now()
-	s.leases[id] = Lease{ID: id, PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, issued: now, deadline: now.Add(ttl), baseline: baseline, outbound: true}
+	s.leases[id] = Lease{ID: id, PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, revisions: revisions, issued: now, deadline: now.Add(ttl), baseline: baseline, outbound: true}
 	return nil
 }
+func (l Lease) ExpiresAt() time.Time      { return l.deadline }
+func (l Lease) Revision(kind Kind) uint64 { return l.revisions[kind] }
 
 func (s *State) LocalChange(leaseID string, osGeneration uint64, kind Kind, payload []byte) (Event, error) {
 	s.mu.Lock()
@@ -163,18 +212,31 @@ func (s *State) LocalChange(leaseID string, osGeneration uint64, kind Kind, payl
 func (s *State) PrepareLocal(osGeneration uint64, kind Kind, payload []byte) (Event, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.prepareLocalLocked(osGeneration, kind, payload)
+	base, err := s.observeLocalLocked(osGeneration)
+	if err != nil {
+		return Event{}, err
+	}
+	return s.prepareObservedLocked(base, kind, payload)
 }
 
 func (s *State) prepareLocalLocked(osGeneration uint64, kind Kind, payload []byte) (Event, error) {
 	if err := validatePayload(kind, payload); err != nil {
 		return Event{}, err
 	}
-	payloadSum := sha256.Sum256(payload)
-	if osGeneration == s.suppressedGeneration && hex.EncodeToString(payloadSum[:]) == s.suppressedPayloadDigest {
-		s.suppressedGeneration, s.suppressedPayloadDigest = 0, ""
-		return Event{}, ErrStale
+	base, err := s.observeLocalLocked(osGeneration)
+	if err != nil {
+		return Event{}, err
 	}
+	return s.prepareObservedLocked(base, kind, payload)
+}
+
+func (s *State) ObserveLocalEvent(osGeneration uint64) (Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.observeLocalLocked(osGeneration)
+}
+
+func (s *State) observeLocalLocked(osGeneration uint64) (Event, error) {
 	if s.paused || osGeneration <= s.osGen {
 		return Event{}, ErrStale
 	}
@@ -188,9 +250,38 @@ func (s *State) prepareLocalLocked(osGeneration uint64, kind Kind, payload []byt
 	s.pending = orderKey{}
 	s.pendingRevision = 0
 	s.pendingDeadline = time.Time{}
-	event := Event{OriginID: s.originID, Boot: s.boot, OriginSeq: s.seq, Lamport: s.lamport, Kind: kind, OSGeneration: osGeneration, Payload: append([]byte(nil), payload...)}
+	event := Event{OriginID: s.originID, Boot: s.boot, OriginSeq: s.seq, Lamport: s.lamport, OSGeneration: osGeneration, Revision: s.revision}
 	s.committed = event.key()
 	return event, nil
+}
+
+func (s *State) PrepareObserved(base Event, kind Kind, payload []byte) (Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.prepareObservedLocked(base, kind, payload)
+}
+
+func (s *State) prepareObservedLocked(base Event, kind Kind, payload []byte) (Event, error) {
+	if err := validatePayload(kind, payload); err != nil {
+		return Event{}, err
+	}
+	payloadSum := sha256.Sum256(payload)
+	if base.OSGeneration == s.suppressedGeneration && hex.EncodeToString(payloadSum[:]) == s.suppressedPayloadDigest {
+		s.suppressedGeneration, s.suppressedPayloadDigest = 0, ""
+		return Event{}, ErrStale
+	}
+	if s.paused || base.Revision != s.revision || base.OSGeneration != s.osGen || base.OriginID != s.originID || base.Boot != s.boot || base.OriginSeq != s.seq {
+		return Event{}, ErrStale
+	}
+	base.Kind = kind
+	base.Payload = append([]byte(nil), payload...)
+	return base, nil
+}
+
+func (s *State) LocalCurrent(event Event) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.paused && event.Revision == s.revision && event.OSGeneration == s.osGen && event.OriginID == s.originID && event.Boot == s.boot && event.OriginSeq == s.seq
 }
 
 func (s *State) Bind(base Event, leaseID string) (Event, error) {
@@ -199,12 +290,24 @@ func (s *State) Bind(base Event, leaseID string) (Event, error) {
 	return s.bindLocked(base, leaseID)
 }
 
+func (s *State) BindScoped(base Event, leaseID string, senderRevision uint64) (Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lease, ok := s.leases[leaseID]
+	if !ok {
+		return Event{}, ErrExpired
+	}
+	base.SenderGrantRevision = senderRevision
+	base.ReceiverGrantRevision = lease.revisions[base.Kind]
+	return s.bindLocked(base, leaseID)
+}
+
 func (s *State) bindLocked(base Event, leaseID string) (Event, error) {
 	lease, ok := s.leases[leaseID]
 	if !ok || !lease.outbound || s.paused || !s.now().Before(lease.deadline) {
 		return Event{}, ErrExpired
 	}
-	if !lease.Kinds[base.Kind] || base.OSGeneration <= lease.baseline || base.OSGeneration != s.osGen || base.OriginID != s.originID || base.Boot != s.boot || base.OriginSeq != s.seq {
+	if !lease.Kinds[base.Kind] || base.Revision != s.revision || base.OSGeneration <= lease.baseline || base.OSGeneration != s.osGen || base.OriginID != s.originID || base.Boot != s.boot || base.OriginSeq != s.seq {
 		return Event{}, ErrStale
 	}
 	event := base
@@ -231,7 +334,10 @@ func (s *State) BeginHeader(peerID, sessionID string, generation uint64, event E
 	if lease.PeerID != peerID || lease.SessionID != sessionID || lease.Generation != generation || !lease.Kinds[event.Kind] {
 		return Candidate{}, ErrStale
 	}
-	if event.OriginID == "" || event.Boot == "" || event.OriginSeq == 0 || event.Lamport == 0 || len(event.Digest) != 64 || event.OriginSeq <= s.high[event.OriginID+"/"+event.Boot] || compareOrder(event.key(), s.committed) <= 0 {
+	if event.ReceiverGrantRevision != lease.revisions[event.Kind] {
+		return Candidate{}, ErrStale
+	}
+	if event.OriginID != peerID || event.Boot == "" || event.OriginSeq == 0 || event.Lamport == 0 || len(event.Digest) != 64 || event.OriginSeq <= s.high[event.OriginID+"/"+event.Boot] || compareOrder(event.key(), s.committed) <= 0 {
 		return Candidate{}, ErrStale
 	}
 	if s.pendingRevision == s.revision && !s.now().Before(s.pendingDeadline) {
@@ -308,20 +414,8 @@ func (s *State) Commit(candidate Candidate, write func(uint64, Kind, []byte) (ui
 func (s *State) ObserveLocal(osGeneration uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.paused || osGeneration <= s.osGen {
-		return ErrStale
-	}
-	if s.seq == math.MaxUint64 || s.lamport == math.MaxUint64 {
-		return ErrLimit
-	}
-	s.seq++
-	s.lamport++
-	s.osGen = osGeneration
-	s.revision++
-	s.pending = orderKey{}
-	s.pendingRevision = 0
-	s.pendingDeadline = time.Time{}
-	return nil
+	_, err := s.observeLocalLocked(osGeneration)
+	return err
 }
 
 func (s *State) Reset(paused bool, osGeneration uint64) {
@@ -369,6 +463,32 @@ func (s *State) DropSession(peerID, sessionID string) {
 			delete(s.leases, id)
 		}
 	}
+}
+
+func (s *State) InvalidateGrant(peerID string, outbound bool, kind Kind) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for id, lease := range s.leases {
+		if lease.PeerID != peerID || lease.outbound != outbound || !lease.Kinds[kind] {
+			continue
+		}
+		changed = true
+		delete(lease.Kinds, kind)
+		delete(lease.revisions, kind)
+		if len(lease.Kinds) == 0 {
+			delete(s.leases, id)
+		} else {
+			s.leases[id] = lease
+		}
+	}
+	if !changed {
+		return
+	}
+	s.revision++
+	s.pending = orderKey{}
+	s.pendingRevision = 0
+	s.pendingDeadline = time.Time{}
 }
 func (s *State) pruneLocked() {
 	now := s.now()
@@ -433,7 +553,7 @@ func eventDigest(event Event) string {
 		h.Write(number[:])
 		h.Write([]byte(value))
 	}
-	for _, value := range []uint64{event.OriginSeq, event.Lamport, event.OSGeneration} {
+	for _, value := range []uint64{event.OriginSeq, event.Lamport, event.OSGeneration, event.SenderGrantRevision, event.ReceiverGrantRevision} {
 		binary.BigEndian.PutUint64(number[:], value)
 		h.Write(number[:])
 	}

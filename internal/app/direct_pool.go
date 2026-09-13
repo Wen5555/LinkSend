@@ -49,9 +49,12 @@ func (s *Service) startPooledPeerServerLocked(key string, pooled *pooledPeerSess
 	go func() {
 		defer s.directPoolWG.Done()
 		var owners sync.WaitGroup
-		owners.Add(2)
+		owners.Add(1)
 		go func() { defer owners.Done(); s.servePooledPeer(key, pooled) }()
-		go func() { defer owners.Done(); s.serveClipboardPeer(pooled.peer) }()
+		if pooled.peer.ClipboardSync {
+			owners.Add(1)
+			go func() { defer owners.Done(); s.serveClipboardPeer(pooled.peer) }()
+		}
 		owners.Wait()
 	}()
 }

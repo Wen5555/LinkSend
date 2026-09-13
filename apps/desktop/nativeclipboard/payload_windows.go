@@ -3,7 +3,6 @@
 package nativeclipboard
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -15,7 +14,6 @@ import (
 	"unsafe"
 
 	"github.com/Wen5555/LinkSend/internal/clipboardsync"
-	"github.com/Wen5555/LinkSend/internal/content"
 	"golang.org/x/sys/windows"
 )
 
@@ -27,6 +25,19 @@ var (
 )
 
 func clipboardGeneration() uint64 { value, _, _ := getSequence.Call(); return uint64(uint32(value)) }
+
+func clipboardReadProhibited() bool {
+	for _, name := range []string{"ExcludeClipboardContentFromMonitorProcessing"} {
+		value, _ := windows.UTF16PtrFromString(name)
+		format, _, _ := registerClipboardFormat.Call(uintptr(unsafe.Pointer(value)))
+		if format != 0 {
+			if ok, _, _ := clipboardFormatAvailable.Call(format); ok != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func readClipboardText(ctx context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
 	if kind != clipboardsync.Text && kind != clipboardsync.Link {
@@ -84,19 +95,6 @@ func readClipboardText(ctx context.Context, kind clipboardsync.Kind, expected ui
 }
 
 func writeClipboardPayload(kind clipboardsync.Kind, payload []byte, expected uint64, deadline time.Time) (uint64, error) {
-	if kind == clipboardsync.Image {
-		if _, err := content.DecodeImage(context.Background(), bytes.NewReader(payload)); err != nil {
-			return clipboardGeneration(), err
-		}
-	} else if !utf8.Valid(payload) || len(payload) == 0 || len(payload) > clipboardsync.MaxTextBytes {
-		return clipboardGeneration(), clipboardsync.ErrLimit
-	}
-	if kind == clipboardsync.Link {
-		parsed, err := url.Parse(string(payload))
-		if err != nil || parsed.Scheme == "" {
-			return clipboardGeneration(), ErrUnsupported
-		}
-	}
 	format := uintptr(13)
 	data := payload
 	var units []uint16

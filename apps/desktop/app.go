@@ -28,37 +28,38 @@ import (
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.
 type App struct {
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	core                *linksendapp.Service
-	initErr             error
-	prefs               DesktopPreferences
-	prefsMu             sync.RWMutex
-	prefsWriteMu        sync.Mutex
-	prefsStatus         PreferencesStatus
-	configBlocked       bool
-	dataDir             string
-	closeMu             sync.Mutex
-	closeDialog         bool
-	quitReady           bool
-	runtimeApp          *application.App
-	window              application.Window
-	eventsDone          chan struct{}
-	entries             *desktopEntries
-	background          *desktopBackground
-	nativeEvents        *nativeSystemEventPump
-	clipboardMu         sync.Mutex
-	clipboardOwnerMu    sync.Mutex
-	clipboardStop       func()
-	clipboardLast       nativeclipboard.Change
-	clipboardErr        string
-	clipboardSleeping   bool
-	clipboardLocked     bool
-	clipboardUserPaused bool
-	clipboardClosed     bool
-	clipboardWatchStart func() (func(), error)
-	clipboardChanges    chan nativeclipboard.Change
-	clipboardDone       chan struct{}
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	core                    *linksendapp.Service
+	initErr                 error
+	prefs                   DesktopPreferences
+	prefsMu                 sync.RWMutex
+	prefsWriteMu            sync.Mutex
+	prefsStatus             PreferencesStatus
+	configBlocked           bool
+	dataDir                 string
+	closeMu                 sync.Mutex
+	closeDialog             bool
+	quitReady               bool
+	runtimeApp              *application.App
+	window                  application.Window
+	eventsDone              chan struct{}
+	entries                 *desktopEntries
+	background              *desktopBackground
+	nativeEvents            *nativeSystemEventPump
+	clipboardMu             sync.Mutex
+	clipboardOwnerMu        sync.Mutex
+	clipboardStop           func()
+	clipboardLast           nativeclipboard.Change
+	clipboardErr            string
+	clipboardSleeping       bool
+	clipboardLocked         bool
+	clipboardUserPaused     bool
+	clipboardMasterDisabled bool
+	clipboardClosed         bool
+	clipboardWatchStart     func() (func(), error)
+	clipboardChanges        chan nativeclipboard.Change
+	clipboardDone           chan struct{}
 }
 
 type DesktopPreferences struct {
@@ -73,6 +74,7 @@ type DesktopPreferences struct {
 	ConflictPolicy     string            `json:"conflict_policy"`
 	DeviceName         string            `json:"device_name"`
 	Background         BackgroundOptions `json:"background"`
+	ClipboardEnabled   bool              `json:"clipboard_enabled"`
 }
 
 type PreferencesStatus struct {
@@ -150,7 +152,8 @@ func (a *App) startup(ctx context.Context) {
 		if runtime.GOOS == "windows" && a.window != nil {
 			nativeclipboard.SetOwnerWindow(uintptr(a.window.NativeWindow()))
 		}
-		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Write: nativeclipboard.WritePayloadBefore})
+		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Validate: nativeclipboard.ValidatePayload, Write: nativeclipboard.WritePreparedPayloadBefore})
+		a.setClipboardSuspended("master", !a.prefs.ClipboardEnabled)
 		a.startClipboardDelivery()
 		a.refreshClipboardWatch()
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
@@ -559,6 +562,8 @@ func (a *App) SavePreferencesSection(section string, expectedRevision uint64, pa
 		next.InterfacePriority = append([]string(nil), patch.InterfacePriority...)
 		next.ExcludedInterfaces = append([]string(nil), patch.ExcludedInterfaces...)
 		next.STUNURLs = append([]string(nil), patch.STUNURLs...)
+	case "clipboard":
+		next.ClipboardEnabled = patch.ClipboardEnabled
 	default:
 		return current, errors.New("INVALID_CONFIG: unknown preferences section")
 	}
@@ -628,6 +633,9 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
 	a.prefsMu.Unlock()
+	if previous.ClipboardEnabled != next.ClipboardEnabled {
+		a.setClipboardSuspended("master", !next.ClipboardEnabled)
+	}
 	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.ConflictPolicy != next.ConflictPolicy || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
 	if updateReceiver && receiverChanged && a.core != nil && next.ReceiveDirectory != "" {
 		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {

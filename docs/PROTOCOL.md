@@ -2,11 +2,11 @@
 
 ## 2026-09-14 E4 自动剪贴板 wire
 
-只有双方在连接请求与响应中显式声明 `session_reuse` 时，已认证 QUIC 会话才接受自动剪贴板单向流。每条单向流以 ASCII magic `LSCB01`、4-byte big-endian JSON header 长度、最多 8 KiB header 和可选原始 payload 组成；消息类型仅为 `lease` 或 `event`。文件双向流和原 V1 文件帧不变，剪贴板正文不进入 WSS、信令、JavaScript IPC、HTTP 或第三方中继。
+只有双方在连接请求与响应中显式声明 `session_reuse` 和独立的 `clipboard_sync`，已认证 QUIC 会话才启动自动剪贴板单向流owner；只声明旧 `session_reuse` 的端不会进入剪贴板协议。ICE描述同时携带发送端对认证peer的本地 `authorization_generation`，两端数值不要求相等。每条单向流以 ASCII magic `LSCB01`、4-byte big-endian JSON header 长度、最多 8 KiB header 和可选原始 payload 组成；消息类型仅为 `lease` 或 `event`。文件双向流和原 V1 文件帧不变，剪贴板正文不进入 WSS、信令、JavaScript IPC、HTTP 或第三方中继。
 
-接收方为指定 peer identity、QUIC session ID、authorization generation 和允许的 `text|link|image` 集合预签发 lease。lease 从接收方签发时起固定有效 10 秒，每 7 秒可签发新的独立 lease；续租不会延长旧 event。每个 peer/session 每方向最多保留两个 lease，重连、暂停、睡眠、锁屏、撤销、generation 变化和 Shutdown 清除旧 lease。event 必须在正文读取前通过 lease、session、generation、类型、origin、origin sequence、Lamport、digest 和首帧期限检查；正文读取 deadline 继续使用该原始 lease deadline，读完后再次验证 digest、应用 revision、系统剪贴板 generation、授权和稳定全序。
+接收方为指定认证 peer identity、QUIC session ID、接收方本地authorization generation、允许的 `text|link|image` 及其receive permission revision预签发lease；event另携带发送方本地send permission revision，并把双方revision纳入digest。lease从接收方签发时起固定有效10秒，每7秒可签发新的独立lease；续租不会延长旧event。每个peer/session每方向最多保留两个lease，重连、暂停、睡眠、锁屏、撤销、permission revision变化、generation变化和Shutdown清除旧lease。event的`origin_id`必须等于TLS认证peer，且在正文读取前通过lease、session、方向对应generation、类型、origin sequence、Lamport、digest、permission revision和首帧期限检查；正文读取deadline继续使用原始lease期限，读完后再次验证digest、应用revision、系统剪贴板generation、暂停状态、当前授权和稳定全序。
 
-文字和链接正文最多 64 KiB，图片 PNG 最多 32 MiB；header 声明长度、实际长度、UTF-8/URL/PNG 与图片尺寸在对应层复核。一个本机复制事件 fan-out 给多个 peer 时复用同一 origin sequence 与 Lamport，各 peer 的 lease 不同，因此 event digest 不同。接收写入成功后的原生通知只按新 OS generation 与 payload digest 抑制一次；用户随后复制相同内容产生的新 generation 仍可发送。当前实现每个会话分别串行发送，接收正文/解码全局最多两路。
+文字和链接正文最多64 KiB，图片PNG最多32 MiB；header声明长度、实际长度、UTF-8/URL/PNG与图片尺寸在对应层复核。所有真实系统变化先推进OS generation、origin sequence、Lamport和应用revision，即使没有lease、没有发送权限或格式不支持也不会留下可补发的旧复制。一个本机复制事件fan-out给多个peer时复用同一origin sequence与Lamport，各peer的lease不同，因此event digest不同。发送与接收正文各全局最多两路；发送每64 KiB复核connection context、deadline和latest-only状态并执行有界节流。接收写入成功后的原生通知只按新OS generation与payload digest抑制一次；用户随后复制相同内容产生的新generation仍可发送。
 
 ## 2026-09-13 membership_v2 与 LAN pairing 控制契约
 

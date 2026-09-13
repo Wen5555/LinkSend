@@ -69,6 +69,7 @@ func (s *Service) shutdownOwners() {
 	s.listenerWorkers.Wait()
 	s.closePooledSessions("")
 	s.directPoolWG.Wait()
+	s.clipboardWorkers.Wait()
 	s.tasks.workers.Wait()
 	s.content.mu.Lock()
 	if s.content.store != nil {

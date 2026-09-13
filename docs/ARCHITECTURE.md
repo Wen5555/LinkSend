@@ -46,11 +46,11 @@ WSS 信令：设备/会话/候选
 
 逻辑任务在恢复过程中保留 `task_id`，每次执行创建新 `attempt_id`，每次连接创建新 `session_id`，ICE generation 只在该 session 内有效；完整任务快照通过单调 `revision` 防止旧回调覆盖。公开状态为 Preparing、AwaitingAcceptance、Transferring、Verifying、Paused、Recovering、Completed、Rejected、Cancelled、Failed。Completed 要求接收端唯一块验证、提交成功以及 completed/confirmed 双边终态完成。
 
-E4 的 direct session owner 以 peer ID 和双方当前授权 generation 为键短时保留已认证 QUIC。一个文件任务对应一个双向 stream；连接两端都保持 AcceptStream owner，因此最初的响应方可以在同一连接上发起反向文件流。取消或 reset 只回收该 stream；授权撤销、路径/连接失败、3 秒空闲、空闲网络快照变化或进程退出关闭池中连接；活动连接只在真实 path watcher 失效时关闭。每 peer 仍至多一个活动文件发送流，不开放无界并发。复用要求 connect_request 与 connect_response 双方显式声明 session_reuse，任一端未声明时沿用单操作连接关闭。
+E4 的 direct session owner 以 peer ID 和本机当前授权 generation 为池键短时保留已认证 QUIC；双方通过ICE描述交换各自本地generation，剪贴板lease/event按方向使用对应值，不要求两端数字相等。一个文件任务对应一个双向 stream；连接两端都保持 AcceptStream owner，因此最初的响应方可以在同一连接上发起反向文件流。取消或 reset 只回收该 stream；授权撤销、路径/连接失败、3 秒空闲、空闲网络快照变化或进程退出关闭池中连接；活动连接只在真实 path watcher 失效时关闭。每 peer 仍至多一个活动文件发送流，不开放无界并发。文件复用要求双方显式声明session_reuse；剪贴板owner还要求双方显式声明独立clipboard_sync能力，旧端只声明session_reuse时不会解析剪贴板流。
 
-同一复用连接另有唯一的剪贴板单向流 owner，与文件双向流 owner 并行。接收方续签 lease，发送方只在持有对方有效 lease 且本机 send grant、对方 receive grant 对应时读取一次原生剪贴板并发送。正文到达后先锁定 header 候选和原始 deadline，再占用全局两个 receive slot 之一读取/验证正文；最终 Commit 在状态机锁内重验 application revision 与 OS generation，并在 grant→trust 的一致锁序下重验 peer generation 和 receive grant，最后调用平台 CAS 写入。单流失败或过期不关闭文件连接；只要任一剪贴板方向 ready，3 秒文件空闲回收不会关闭连接。暂停或全部方向失效会恢复空闲回收。
+同一复用连接另有唯一的剪贴板单向流owner，与文件双向流owner并行。接收方按当前receive permission revision续签lease；发送方只在持有对方有效lease且本机send grant仍为相同revision时读取一次原生剪贴板并发送。正文到达后先锁定header候选和原始deadline，再占用全局两个receive slot之一读取正文；图片解码等纯验证在状态机锁外完成。最终Commit按grant→state一致锁序重验application revision、OS generation、peer generation、receive permission revision、暂停状态和deadline，最后调用平台CAS写入。单流失败或过期不关闭文件连接；只要任一剪贴板方向ready，3秒文件空闲回收不会关闭连接。暂停或全部方向失效会恢复空闲回收。
 
-桌面 watcher 使用容量 1 的 latest-only 变化队列，发送 owner 串行处理；本机一次复制只准备一个 origin 事件，再绑定各 peer lease。首次启动、授权变更、每 5 秒和变化到达前会尝试为已授权 peer 建立认证会话，不创建文件 Task。会话建立后的 lease 以当前系统 generation 为 baseline，因此离线或尚未建连期间的旧复制不会补发。
+桌面watcher使用容量1的latest-only变化队列；本机一次系统变化先推进唯一状态owner，再按可读格式准备一个origin事件并绑定各peer lease。发送worker异步执行、全局最多两路，每64 KiB复核新复制/暂停/撤权/连接/deadline并节流；会话Ensure按peer并行，变化交付不等待坏peer连接。首次启动、恢复、授权变更和每5秒尝试为已授权peer建立认证会话，不创建文件Task。会话建立后的lease以当前系统generation为baseline，因此离线、无权限、格式不支持或尚未建连期间的旧复制不会补发。
 
 QUIC 成功终态使用 `completed → confirmed → confirmed_ack` 显式闭环，并兼容旧端以 EOF/application code 0 表示已读确认。终态完成后标准 QUIC close 仍发送，但 quic-go draining 和 endpoint 回收在后台进行；任何非零 close、reset、deadline 或普通传输阶段的 close 都不能转换为成功。响应端在发送 `connect_response` 前先注册固定身份的 QUIC listener，避免首个 Initial 因监听窗口尚未建立而等待 PTO 重传。
 

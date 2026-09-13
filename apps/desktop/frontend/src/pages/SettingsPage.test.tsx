@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DesktopPreferences } from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
+import type { ClipboardWatchStatus, DesktopPreferences } from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
 import type { CommandRunner } from '../hooks/useDesktop';
 import { SettingsPage } from './SettingsPage';
 
@@ -10,6 +10,7 @@ const backend = vi.hoisted(() => ({
   Preferences: vi.fn(),
   SavePreferencesSection: vi.fn(),
   PickDirectory: vi.fn(),
+  SetClipboardPaused: vi.fn(),
 }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
@@ -25,6 +26,7 @@ const basePreferences: DesktopPreferences = {
   excluded_interfaces: [],
   stun_urls: [],
   background: { close_mode: '', notifications: false, prevent_sleep: false },
+  clipboard_enabled: false,
 };
 
 function deferred<T>() {
@@ -47,11 +49,11 @@ const run: CommandRunner = async (_key, action, _message, onError) => {
   }
 };
 
-function renderSettings() {
+function renderSettings(clipboard?: ClipboardWatchStatus) {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  act(() => root.render(<SettingsPage preferences={basePreferences} interfaces={[]} run={run} controlRun={run} op="" available />));
+  act(() => root.render(<SettingsPage preferences={basePreferences} clipboard={clipboard} interfaces={[]} run={run} controlRun={run} op="" available />));
   return { container, root };
 }
 
@@ -120,5 +122,18 @@ describe('SettingsPage save lifecycle', () => {
     await act(async () => Promise.resolve());
     expect(backend.Preferences).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain('设置已在其他位置更新');
+  });
+
+  it('saves the clipboard master switch and renders peer capability state', async () => {
+    backend.SavePreferencesSection.mockResolvedValueOnce({ ...basePreferences, revision: 3, clipboard_enabled: true });
+    const { container, root } = renderSettings({ enabled: false, master_enabled: false, active: false, paused: true, pause_reason: 'master_disabled', last: { sequence: 0, text: false, link: false, image: false }, peers: [{ peer_id: 'peer-a', state: 'unsupported', send_ready: false, receive_ready: false }] });
+    roots.push(root);
+    act(() => button(container, '自动剪贴板').click());
+    const toggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    act(() => toggle.click());
+    expect(toggle.checked).toBe(true);
+    expect(container.textContent).toContain('对端不支持');
+    await act(async () => button(container, '保存自动剪贴板设置').click());
+    expect(backend.SavePreferencesSection).toHaveBeenCalledWith('clipboard', 2, expect.objectContaining({ clipboard_enabled: true }));
   });
 });

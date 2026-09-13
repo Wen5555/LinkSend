@@ -4,6 +4,9 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as nativeclipboard$0 from "./nativeclipboard/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as app$0 from "../../internal/app/models.js";
 
 export interface BackgroundOptions {
     /**
@@ -28,10 +31,13 @@ export interface BackgroundStatus {
 
 export interface ClipboardWatchStatus {
     "enabled": boolean;
+    "master_enabled": boolean;
     "active": boolean;
     "paused": boolean;
+    "pause_reason"?: string;
     "last": nativeclipboard$0.Change;
     "error"?: string;
+    "peers": app$0.ClipboardPeerStatus[] | null;
 }
 
 export interface DesktopEntryStatus {
@@ -55,6 +61,7 @@ export interface DesktopPreferences {
     "conflict_policy": string;
     "device_name": string;
     "background": BackgroundOptions;
+    "clipboard_enabled": boolean;
 }
 
 export interface DesktopStatus {

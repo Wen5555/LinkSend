@@ -92,6 +92,9 @@ func TestClipboardPauseReasonsDoNotResumeEachOther(t *testing.T) {
 	app := NewApp()
 	app.ctx = context.Background()
 	app.setClipboardSuspended("lock", true)
+	if status := app.ClipboardWatcher(); status.PauseReason != "screen_locked" {
+		t.Fatalf("pause reason=%q", status.PauseReason)
+	}
 	app.setClipboardSuspended("sleep", true)
 	app.setClipboardSuspended("sleep", false)
 	if !app.ClipboardWatcher().Paused {

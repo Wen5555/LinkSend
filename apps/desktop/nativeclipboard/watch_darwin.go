@@ -10,6 +10,7 @@ package nativeclipboard
 uint64_t linksendClipboardChangeCount(const char *name);
 uint32_t linksendClipboardTypes(const char *name);
 int linksendTestPasteboardString(const char *name, const char *value);
+int linksendTestPasteboardMarker(const char *name, const char *marker);
 */
 import "C"
 
@@ -64,4 +65,11 @@ func setTestPasteboardString(name, value string) bool {
 	defer C.free(unsafe.Pointer(nativeName))
 	defer C.free(unsafe.Pointer(nativeValue))
 	return C.linksendTestPasteboardString(nativeName, nativeValue) == 1
+}
+
+func setTestPasteboardMarker(name, marker string) bool {
+	nativeName, nativeMarker := C.CString(name), C.CString(marker)
+	defer C.free(unsafe.Pointer(nativeName))
+	defer C.free(unsafe.Pointer(nativeMarker))
+	return C.linksendTestPasteboardMarker(nativeName, nativeMarker) == 1
 }

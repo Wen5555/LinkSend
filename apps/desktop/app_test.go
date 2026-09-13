@@ -37,12 +37,12 @@ func TestShouldQuitAllowsEmptyInitializedService(t *testing.T) {
 func TestDesktopPreferencesAtomicRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{dataDir: dir}
-	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}, STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备"}
+	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}, STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备", ClipboardEnabled: true}
 	if err := a.SavePreferences(got); err != nil {
 		t.Fatal(err)
 	}
 	loaded := loadPreferences(dir)
-	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName || len(loaded.InterfacePriority) != 2 || loaded.InterfacePriority[0] != "Wi-Fi" || len(loaded.ExcludedInterfaces) != 1 {
+	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName || !loaded.ClipboardEnabled || len(loaded.InterfacePriority) != 2 || loaded.InterfacePriority[0] != "Wi-Fi" || len(loaded.ExcludedInterfaces) != 1 {
 		t.Fatalf("round trip mismatch: %#v", loaded)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "desktop-preferences.json")); err != nil {

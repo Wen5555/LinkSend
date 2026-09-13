@@ -35,6 +35,9 @@ func ReadPayload(ctx context.Context, kind clipboardsync.Kind, expected uint64) 
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
+	if clipboardReadProhibited() {
+		return nil, Generation(), ErrUnsupported
+	}
 	if kind != clipboardsync.Image {
 		return readClipboardText(ctx, kind, expected)
 	}
@@ -61,24 +64,38 @@ func WritePayload(kind clipboardsync.Kind, payload []byte, expected uint64) (uin
 }
 
 func WritePayloadBefore(kind clipboardsync.Kind, payload []byte, expected uint64, deadline time.Time) (uint64, error) {
+	if err := ValidatePayload(kind, payload); err != nil {
+		return Generation(), err
+	}
+	return WritePreparedPayloadBefore(kind, payload, expected, deadline)
+}
+
+func ValidatePayload(kind clipboardsync.Kind, payload []byte) error {
+	if kind != clipboardsync.Text && kind != clipboardsync.Link && kind != clipboardsync.Image {
+		return ErrUnsupported
+	}
 	if len(payload) == 0 || len(payload) > clipboardsync.MaxImageBytes {
-		return Generation(), clipboardsync.ErrLimit
+		return clipboardsync.ErrLimit
 	}
 	if kind == clipboardsync.Image {
 		if _, err := content.DecodeImage(context.Background(), bytes.NewReader(payload)); err != nil {
-			return Generation(), err
+			return err
 		}
 	} else {
 		if len(payload) > clipboardsync.MaxTextBytes || !utf8.Valid(payload) {
-			return Generation(), clipboardsync.ErrLimit
+			return clipboardsync.ErrLimit
 		}
 		if kind == clipboardsync.Link {
 			parsed, err := url.Parse(string(payload))
 			if err != nil || parsed.Scheme == "" {
-				return Generation(), ErrUnsupported
+				return ErrUnsupported
 			}
 		}
 	}
+	return nil
+}
+
+func WritePreparedPayloadBefore(kind clipboardsync.Kind, payload []byte, expected uint64, deadline time.Time) (uint64, error) {
 	if !deadline.IsZero() && !time.Now().Before(deadline) {
 		return Generation(), clipboardsync.ErrExpired
 	}

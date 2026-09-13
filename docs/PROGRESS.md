@@ -559,6 +559,14 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 本轮包标记 `UNCOMMITTED_TEST_SNAPSHOT`，基线 `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`，不冒充该提交的干净构建。Windows 为 `UNSIGNED_TEST_BUILD`；Mac `code_signature=ADHOC / distribution_identity=NONE / notarization=NOT_RUN`。本轮无新 PR/合并/Release。
 - 该现场阶段当时 `NOT_IMPLEMENTED`：桌面重启恢复、字节级续传、桌面暂停/恢复；这些能力随后已在本文顶部所述源码快照中实现并通过本地真实 QUIC 回归，但尚未做新的物理双机恢复验收。中继仍为 `NOT_IMPLEMENTED`；真实双 NAT、Linux 双机、完整网卡矩阵、原生 UI 缺口仍见验收报告。
 - 历史交付勘误：较早的 Windows 便携包曾缺包内 SHA256/准确合并提交来源信息，不能视为满足本轮发布要求；本轮 ZIP 单独记录未提交来源并包含包内校验和。默认 Windows 身份数据目录通常为 `%APPDATA%\LinkSend`（`os.UserConfigDir()`），不是 `%LOCALAPPDATA%`。
+## 2026-09-14 E4-03 集中修复候选
+
+- 所有真实本机变化先推进剪贴板状态owner；无lease、无发送权限、格式不支持和离线变化均不补发。发送改为异步两slot、64 KiB状态复核和节流，lease deadline约束QUIC写；新复制、暂停、撤权及Shutdown能淘汰或结束旧worker，Ensure按peer并行且变化交付不等待连接。
+- 连接协商增加独立`clipboard_sync`；只声明旧`session_reuse`不会启动剪贴板owner。双方各自本地authorization generation可不同，真实loopback用例以1/29非对称代次验证双向文字。origin绑定认证peer，lease/event绑定双方permission revision；关闭/重开同一权限后旧lease/正文拒绝，无关方向不删除健康lease。
+- 图片解码/验证移出最终state锁；mutation前按grant→state锁序复核暂停、peer generation、receive revision、deadline和OS generation。macOS普通文字不误判link，命名pasteboard的文字、URL、PNG和concealed marker已在arm64通过；Windows读取明确exclude marker。Windows PNG跨应用粘贴仍按计划留E5。
+- 设置新增独立自动剪贴板分类、持久且默认关闭的总开关、读取/远端写入说明、临时暂停，以及ready/connecting/unsupported/pause/error状态。Wails bindings已重新生成。
+- Windows根完整test/vet/GOWORK=off test、定向race、桌面独立race/vet/build、前端typecheck/lint/66 tests/build通过。Mac最终作业`/tmp/codex-ssh/linksend-e4-fix-mac-final-20260913T232901Z`的根定向测试、nativeclipboard race、desktop完整test/vet通过；保留既有SDK 26/deployment target warning。物理Win↔Mac自动剪贴板、准确包锁屏/睡眠/网络切换仍留E5，未恢复E5部署。
+
 ## 2026-09-14 E4-01 认证 QUIC 文件会话复用候选
 
 - peer ID + authorization generation 绑定的短期池复用同一认证 QUIC；两端都有入站 stream owner，连续正向和原始响应方反向文件保持同一 session_id。

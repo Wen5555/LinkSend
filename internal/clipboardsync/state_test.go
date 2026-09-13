@@ -208,3 +208,96 @@ func TestSameRevisionCandidatesChooseStableOrderAndKeepOriginalDeadline(t *testi
 		t.Fatal("candidate crossed original lease deadline", err)
 	}
 }
+
+func TestObservedLocalChangeCannotBeBackfilledAfterLeaseArrives(t *testing.T) {
+	state := New("sender", nil)
+	state.Reset(false, 10)
+	old, err := state.ObserveLocalEvent(11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = state.InstallScoped("lease", "peer", "session", 7, []Grant{{Kind: Text, Revision: 2}}, time.Minute, 11); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := state.PrepareObserved(old, Text, []byte("copied before lease"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = state.BindScoped(prepared, "lease", 3); !errors.Is(err, ErrStale) {
+		t.Fatal("pre-lease clipboard content was backfilled", err)
+	}
+	unsupported, err := state.ObserveLocalEvent(12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = state.PrepareObserved(unsupported, Kind("files"), []byte("ignored")); !errors.Is(err, ErrStale) {
+		t.Fatal("unsupported format was accepted", err)
+	}
+	fresh, err := state.ObserveLocalEvent(13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err = state.PrepareObserved(fresh, Text, []byte("fresh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = state.BindScoped(fresh, "lease", 3); err != nil {
+		t.Fatal("future clipboard content could not use existing lease", err)
+	}
+}
+
+func TestLocalObservationStillAllowsNewerAuthorizedRemoteWrite(t *testing.T) {
+	state := New("receiver", nil)
+	state.Reset(false, 20)
+	lease, err := state.IssueScoped("peer", "session", 9, []Grant{{Kind: Text, Revision: 4}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = state.ObserveLocalEvent(21); err != nil {
+		t.Fatal(err)
+	}
+	event := Event{LeaseID: lease.ID, OriginID: "peer", Boot: "boot", OriginSeq: 1, Lamport: 50, Kind: Text, OSGeneration: 31, SenderGrantRevision: 6, ReceiverGrantRevision: 4, Payload: []byte("remote after local copy")}
+	event.Digest = eventDigest(event)
+	candidate, err := state.Begin("peer", "session", 9, event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = state.Commit(candidate, func(expected uint64, _ Kind, _ []byte) (uint64, error) { return expected + 1, nil }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGrantRevisionAndAuthenticatedOriginInvalidateOldBodies(t *testing.T) {
+	state := New("receiver", nil)
+	state.Reset(false, 1)
+	lease, err := state.IssueScoped("peer", "session", 3, []Grant{{Kind: Text, Revision: 1}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeEvent := func(origin string, revision uint64) Event {
+		event := Event{LeaseID: lease.ID, OriginID: origin, Boot: "boot", OriginSeq: 1, Lamport: 2, Kind: Text, SenderGrantRevision: 1, ReceiverGrantRevision: revision, Payload: []byte("body")}
+		event.Digest = eventDigest(event)
+		return event
+	}
+	if _, err = state.Begin("peer", "session", 3, makeEvent("impostor", 1)); !errors.Is(err, ErrStale) {
+		t.Fatal("authenticated origin mismatch accepted", err)
+	}
+	candidate, err := state.Begin("peer", "session", 3, makeEvent("peer", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.InvalidateGrant("peer", false, Text)
+	if err = state.Commit(candidate, func(uint64, Kind, []byte) (uint64, error) { return 2, nil }); !errors.Is(err, ErrExpired) {
+		t.Fatal("revoked body committed", err)
+	}
+	newLease, err := state.IssueScoped("peer", "session", 3, []Grant{{Kind: Text, Revision: 3}}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := makeEvent("peer", 1)
+	old.LeaseID = newLease.ID
+	old.Digest = eventDigest(old)
+	if _, err = state.Begin("peer", "session", 3, old); !errors.Is(err, ErrStale) {
+		t.Fatal("old grant revision accepted after re-enable", err)
+	}
+}

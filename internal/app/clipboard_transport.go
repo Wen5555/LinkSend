@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/clipboardsync"
@@ -15,9 +18,51 @@ type ClipboardChange struct {
 	Kinds      []clipboardsync.Kind
 }
 
+type ClipboardPeerStatus struct {
+	PeerID       string `json:"peer_id"`
+	State        string `json:"state"`
+	SendReady    bool   `json:"send_ready"`
+	ReceiveReady bool   `json:"receive_ready"`
+}
+
+func clipboardMessageGenerationValid(peer *PeerSession, message clipboardsync.Message) bool {
+	if peer == nil {
+		return false
+	}
+	switch message.Type {
+	case "lease":
+		return peer.RemoteAuthorizationGeneration > 0 && message.Generation == peer.RemoteAuthorizationGeneration
+	case "event":
+		return peer.AuthorizationGeneration > 0 && message.Generation == peer.AuthorizationGeneration
+	default:
+		return false
+	}
+}
+
+func (s *Service) ClipboardPeerStatuses() []ClipboardPeerStatus {
+	s.directPoolMu.Lock()
+	defer s.directPoolMu.Unlock()
+	statuses := make([]ClipboardPeerStatus, 0, len(s.directPool))
+	for _, pooled := range s.directPool {
+		if pooled.peer == nil {
+			continue
+		}
+		state := "ready"
+		if !pooled.peer.ClipboardSync {
+			state = "unsupported"
+		} else if !pooled.clipboardSendReady && !pooled.clipboardReceiveReady {
+			state = "connecting"
+		}
+		statuses = append(statuses, ClipboardPeerStatus{PeerID: pooled.peer.PeerID, State: state, SendReady: pooled.clipboardSendReady, ReceiveReady: pooled.clipboardReceiveReady})
+	}
+	sort.Slice(statuses, func(i, j int) bool { return statuses[i].PeerID < statuses[j].PeerID })
+	return statuses
+}
+
 type ClipboardAdapter struct {
 	Generation func() uint64
 	Read       func(context.Context, clipboardsync.Kind, uint64) ([]byte, uint64, error)
+	Validate   func(clipboardsync.Kind, []byte) error
 	Write      func(clipboardsync.Kind, []byte, uint64, time.Time) (uint64, error)
 }
 
@@ -30,6 +75,17 @@ func (s *Service) ConfigureClipboard(adapter ClipboardAdapter) {
 		generation = adapter.Generation()
 	}
 	s.clipboardSync.Reset(false, generation)
+}
+
+func (s *Service) invalidateClipboardState() {
+	s.clipboardAdapterMu.RLock()
+	adapter := s.clipboardAdapter
+	s.clipboardAdapterMu.RUnlock()
+	generation := uint64(0)
+	if adapter.Generation != nil {
+		generation = adapter.Generation()
+	}
+	s.ResetClipboard(s.clipboardPaused.Load(), generation)
 }
 
 func (s *Service) clipboardKinds(peerID, direction string, generation uint64) []clipboardsync.Kind {
@@ -54,6 +110,37 @@ func (s *Service) clipboardKindsLocked(peerID, direction string, generation uint
 	return kinds
 }
 
+func (s *Service) clipboardGrant(peerID, direction string, kind clipboardsync.Kind, generation uint64) (ClipboardGrant, bool) {
+	s.clipboardGrantMu.Lock()
+	defer s.clipboardGrantMu.Unlock()
+	return s.clipboardGrantLocked(peerID, direction, kind, generation)
+}
+
+func (s *Service) clipboardGrantLocked(peerID, direction string, kind clipboardsync.Kind, generation uint64) (ClipboardGrant, bool) {
+	var grant ClipboardGrant
+	err := s.store.db.QueryRow(`SELECT peer_id,direction,kind,enabled,revision,updated_at,authorization_generation FROM clipboard_grants WHERE peer_id=? AND direction=? AND kind=? AND enabled=1 AND authorization_generation=?`, peerID, direction, kind, generation).Scan(&grant.PeerID, &grant.Direction, &grant.Kind, &grant.Enabled, &grant.Revision, &grant.UpdatedAt, &grant.AuthorizationGeneration)
+	return grant, err == nil && grant.Enabled
+}
+
+func (s *Service) clipboardGrants(peerID, direction string, generation uint64) []clipboardsync.Grant {
+	s.clipboardGrantMu.Lock()
+	defer s.clipboardGrantMu.Unlock()
+	rows, err := s.store.db.Query(`SELECT kind,revision FROM clipboard_grants WHERE peer_id=? AND direction=? AND enabled=1 AND authorization_generation=? ORDER BY kind`, peerID, direction, generation)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var grants []clipboardsync.Grant
+	for rows.Next() {
+		var kind string
+		var revision uint64
+		if rows.Scan(&kind, &revision) == nil {
+			grants = append(grants, clipboardsync.Grant{Kind: clipboardsync.Kind(kind), Revision: revision})
+		}
+	}
+	return grants
+}
+
 func containsClipboardKind(kinds []clipboardsync.Kind, kind clipboardsync.Kind) bool {
 	for _, candidate := range kinds {
 		if candidate == kind {
@@ -64,10 +151,15 @@ func containsClipboardKind(kinds []clipboardsync.Kind, kind clipboardsync.Kind) 
 }
 
 func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) error {
-	s.clipboardSendMu.Lock()
-	defer s.clipboardSendMu.Unlock()
-	if s.clipboardPaused.Load() || change.Generation == 0 || len(change.Kinds) == 0 {
+	if s.clipboardPaused.Load() || change.Generation == 0 {
 		return clipboardsync.ErrStale
+	}
+	observation, err := s.clipboardSync.ObserveLocalEvent(change.Generation)
+	if err != nil {
+		return err
+	}
+	if len(change.Kinds) == 0 {
+		return nil
 	}
 	s.clipboardAdapterMu.RLock()
 	adapter := s.clipboardAdapter
@@ -83,21 +175,23 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 		}
 	}
 	s.directPoolMu.Unlock()
-	var result error
 	for _, kind := range change.Kinds {
 		targets := make([]struct {
-			peer  *PeerSession
-			lease clipboardsync.Lease
+			peer     *PeerSession
+			lease    clipboardsync.Lease
+			revision uint64
 		}, 0, len(peers))
 		for _, peer := range peers {
-			if s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil || !containsClipboardKind(s.clipboardKinds(peer.PeerID, "send", peer.AuthorizationGeneration), kind) {
+			if !peer.ClipboardSync || s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil {
 				continue
 			}
-			if lease, ok := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration, kind); ok {
+			grant, allowed := s.clipboardGrant(peer.PeerID, "send", kind, peer.AuthorizationGeneration)
+			if lease, ok := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, kind); ok && allowed {
 				targets = append(targets, struct {
-					peer  *PeerSession
-					lease clipboardsync.Lease
-				}{peer, lease})
+					peer     *PeerSession
+					lease    clipboardsync.Lease
+					revision uint64
+				}{peer, lease, grant.Revision})
 			}
 		}
 		if len(targets) == 0 {
@@ -105,31 +199,95 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 		}
 		payload, current, err := adapter.Read(ctx, kind, change.Generation)
 		if err != nil || current != change.Generation {
-			result = errors.Join(result, err)
 			continue
 		}
-		base, err := s.clipboardSync.PrepareLocal(current, kind, payload)
+		base, err := s.clipboardSync.PrepareObserved(observation, kind, payload)
 		if err != nil {
-			return errors.Join(result, err)
+			return err
 		}
 		for _, target := range targets {
-			event, err := s.clipboardSync.Bind(base, target.lease.ID)
+			event, err := s.clipboardSync.BindScoped(base, target.lease.ID, target.revision)
 			if err != nil {
-				result = errors.Join(result, err)
 				continue
 			}
-			peer := target.peer
-			message := clipboardsync.Message{Type: "event", LeaseID: event.LeaseID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, OriginID: event.OriginID, Boot: event.Boot, OriginSeq: event.OriginSeq, Lamport: event.Lamport, Kind: event.Kind, Digest: event.Digest, OSGeneration: event.OSGeneration, PayloadBytes: uint32(len(event.Payload))}
-			stream, err := peer.Data.Conn.OpenUniStreamSync(ctx)
-			if err == nil {
-				err = clipboardsync.Write(stream, message, event.Payload)
-				err = errors.Join(err, stream.Close())
-			}
-			result = errors.Join(result, err)
+			s.startClipboardSend(target.peer, target.lease, event)
 		}
 		break
 	}
-	return result
+	return nil
+}
+
+type clipboardGuardedWriter struct {
+	ctx      context.Context
+	dst      io.Writer
+	state    *clipboardsync.State
+	event    clipboardsync.Event
+	deadline time.Time
+}
+
+func (w clipboardGuardedWriter) Write(payload []byte) (int, error) {
+	total := 0
+	for len(payload) > 0 {
+		if w.ctx.Err() != nil || !time.Now().Before(w.deadline) || !w.state.LocalCurrent(w.event) {
+			return total, clipboardsync.ErrStale
+		}
+		n := 64 << 10
+		if len(payload) < n {
+			n = len(payload)
+		}
+		written, err := w.dst.Write(payload[:n])
+		total += written
+		payload = payload[written:]
+		if err != nil {
+			return total, err
+		}
+		if written == 0 {
+			return total, io.ErrShortWrite
+		}
+		if len(payload) > 0 {
+			timer := time.NewTimer(4 * time.Millisecond)
+			select {
+			case <-w.ctx.Done():
+				timer.Stop()
+				return total, w.ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return total, nil
+}
+
+func (s *Service) startClipboardSend(peer *PeerSession, lease clipboardsync.Lease, event clipboardsync.Event) {
+	s.operationMu.Lock()
+	if s.isClosing() {
+		s.operationMu.Unlock()
+		return
+	}
+	s.clipboardWorkers.Add(1)
+	s.operationMu.Unlock()
+	go func() {
+		defer s.clipboardWorkers.Done()
+		ctx := peer.Data.Conn.Context()
+		select {
+		case s.clipboardSendSlots <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		defer func() { <-s.clipboardSendSlots }()
+		deadline := lease.ExpiresAt()
+		stream, err := peer.Data.Conn.OpenUniStreamSync(ctx)
+		if err != nil {
+			return
+		}
+		_ = stream.SetWriteDeadline(deadline)
+		message := clipboardsync.Message{Type: "event", LeaseID: event.LeaseID, SessionID: peer.SessionID, Generation: peer.RemoteAuthorizationGeneration, OriginID: event.OriginID, Boot: event.Boot, OriginSeq: event.OriginSeq, Lamport: event.Lamport, Kind: event.Kind, Digest: event.Digest, OSGeneration: event.OSGeneration, SenderGrantRevision: event.SenderGrantRevision, ReceiverGrantRevision: event.ReceiverGrantRevision, PayloadBytes: uint32(len(event.Payload))}
+		writer := clipboardGuardedWriter{ctx: ctx, dst: stream, state: s.clipboardSync, event: event, deadline: deadline}
+		if err = clipboardsync.Write(writer, message, event.Payload); err != nil {
+			stream.CancelWrite(0)
+			return
+		}
+		_ = stream.Close()
+	}()
 }
 
 func (s *Service) serveClipboardPeer(peer *PeerSession) {
@@ -138,7 +296,7 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 	go func() {
 		defer close(renewDone)
 		s.sendClipboardLease(ctx, peer)
-		s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration))
+		s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration))
 		ticker := time.NewTicker(7 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -147,7 +305,7 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 				return
 			case <-ticker.C:
 				s.sendClipboardLease(ctx, peer)
-				s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration))
+				s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration))
 			}
 		}
 	}()
@@ -163,7 +321,7 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			stream.CancelRead(0)
 			continue
 		}
-		if message.SessionID != peer.SessionID || message.Generation != peer.AuthorizationGeneration || s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil {
+		if message.SessionID != peer.SessionID || !clipboardMessageGenerationValid(peer, message) || s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil {
 			stream.CancelRead(0)
 			continue
 		}
@@ -178,11 +336,10 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			if payloadErr != nil || len(payload) != 0 {
 				continue
 			}
-			allowed := s.clipboardKinds(peer.PeerID, "send", peer.AuthorizationGeneration)
-			var kinds []clipboardsync.Kind
-			for _, kind := range message.Kinds {
-				if containsClipboardKind(allowed, kind) {
-					kinds = append(kinds, kind)
+			var grants []clipboardsync.Grant
+			for _, remoteGrant := range message.Grants {
+				if _, ok := s.clipboardGrant(peer.PeerID, "send", remoteGrant.Kind, peer.AuthorizationGeneration); ok {
+					grants = append(grants, clipboardsync.Grant{Kind: remoteGrant.Kind, Revision: remoteGrant.Revision})
 				}
 			}
 			s.clipboardAdapterMu.RLock()
@@ -191,15 +348,19 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			if adapter.Generation == nil {
 				continue
 			}
-			if err := s.clipboardSync.Install(message.LeaseID, peer.PeerID, peer.SessionID, peer.AuthorizationGeneration, kinds, time.Duration(message.TTLMillis)*time.Millisecond, adapter.Generation()); err == nil {
+			if err := s.clipboardSync.InstallScoped(message.LeaseID, peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, grants, time.Duration(message.TTLMillis)*time.Millisecond, adapter.Generation()); err == nil {
 				s.setClipboardReady(peer, "send", true)
 			}
 		case "event":
+			if message.OriginID != peer.PeerID {
+				stream.CancelRead(0)
+				continue
+			}
 			if !containsClipboardKind(s.clipboardKinds(peer.PeerID, "receive", peer.AuthorizationGeneration), message.Kind) {
 				stream.CancelRead(0)
 				continue
 			}
-			event := clipboardsync.Event{LeaseID: message.LeaseID, OriginID: message.OriginID, Boot: message.Boot, OriginSeq: message.OriginSeq, Lamport: message.Lamport, Kind: message.Kind, Digest: message.Digest, OSGeneration: message.OSGeneration}
+			event := clipboardsync.Event{LeaseID: message.LeaseID, OriginID: message.OriginID, Boot: message.Boot, OriginSeq: message.OriginSeq, Lamport: message.Lamport, Kind: message.Kind, Digest: message.Digest, OSGeneration: message.OSGeneration, SenderGrantRevision: message.SenderGrantRevision, ReceiverGrantRevision: message.ReceiverGrantRevision}
 			candidate, err := s.clipboardSync.BeginHeader(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration, event)
 			if err != nil {
 				stream.CancelRead(0)
@@ -229,49 +390,66 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 				if adapter.Write == nil {
 					return
 				}
-				_ = s.clipboardSync.Commit(candidate, func(expected uint64, kind clipboardsync.Kind, body []byte) (uint64, error) {
-					if s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil {
-						return 0, clipboardsync.ErrStale
-					}
-					s.clipboardGrantMu.Lock()
-					defer s.clipboardGrantMu.Unlock()
-					if generation, err := s.clipboardPeerGeneration(peer.PeerID); err != nil || generation != peer.AuthorizationGeneration || !containsClipboardKind(s.clipboardKindsLocked(peer.PeerID, "receive", generation), kind) {
-						return 0, clipboardsync.ErrStale
-					}
-					return adapter.Write(kind, body, expected, candidate.Deadline)
-				})
+				_ = s.commitClipboardCandidate(peer, candidate, adapter)
 			}()
 		}
 	}
 }
 
+func (s *Service) commitClipboardCandidate(peer *PeerSession, candidate clipboardsync.Candidate, adapter ClipboardAdapter) error {
+	if peer == nil || adapter.Write == nil {
+		return errors.New("CLIPBOARD_ADAPTER_UNAVAILABLE")
+	}
+	if adapter.Validate != nil {
+		if err := adapter.Validate(candidate.Kind, candidate.Payload); err != nil {
+			return err
+		}
+	}
+	s.clipboardGrantMu.Lock()
+	defer s.clipboardGrantMu.Unlock()
+	return s.clipboardSync.Commit(candidate, func(expected uint64, kind clipboardsync.Kind, body []byte) (uint64, error) {
+		if s.clipboardPaused.Load() || s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration) != nil {
+			return 0, clipboardsync.ErrStale
+		}
+		grant, enabled := s.clipboardGrantLocked(peer.PeerID, "receive", kind, peer.AuthorizationGeneration)
+		if generation, err := s.clipboardPeerGeneration(peer.PeerID); err != nil || generation != peer.AuthorizationGeneration || !enabled || grant.Revision != candidate.ReceiverGrantRevision || s.clipboardPaused.Load() || !time.Now().Before(candidate.Deadline) {
+			return 0, clipboardsync.ErrStale
+		}
+		return adapter.Write(kind, body, expected, candidate.Deadline)
+	})
+}
+
 func (s *Service) sendClipboardLease(parent context.Context, peer *PeerSession) {
-	if s.clipboardPaused.Load() {
+	if s.clipboardPaused.Load() || !peer.ClipboardSync || peer.RemoteAuthorizationGeneration == 0 {
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
-	kinds := s.clipboardKinds(peer.PeerID, "receive", peer.AuthorizationGeneration)
-	if len(kinds) == 0 {
+	grants := s.clipboardGrants(peer.PeerID, "receive", peer.AuthorizationGeneration)
+	if len(grants) == 0 {
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
-	s.setClipboardReady(peer, "receive", true)
-	lease, err := s.clipboardSync.Issue(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration, kinds, clipboardLeaseTTL)
+	lease, err := s.clipboardSync.IssueScoped(peer.PeerID, peer.SessionID, peer.AuthorizationGeneration, grants, clipboardLeaseTTL)
 	if err != nil {
+		s.setClipboardReady(peer, "receive", false)
 		return
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	stream, err := peer.Data.Conn.OpenUniStreamSync(ctx)
 	if err != nil {
+		s.setClipboardReady(peer, "receive", false)
 		return
 	}
-	message := clipboardsync.Message{Type: "lease", LeaseID: lease.ID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, Kinds: kinds, TTLMillis: uint32(clipboardLeaseTTL / time.Millisecond)}
+	message := clipboardsync.Message{Type: "lease", LeaseID: lease.ID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, Grants: grants, TTLMillis: uint32(clipboardLeaseTTL / time.Millisecond)}
 	err = clipboardsync.Write(stream, message, nil)
-	_ = stream.Close()
+	err = errors.Join(err, stream.Close())
 	if err != nil {
 		stream.CancelWrite(0)
+		s.setClipboardReady(peer, "receive", false)
+		return
 	}
+	s.setClipboardReady(peer, "receive", true)
 }
 
 func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready bool) {
@@ -303,15 +481,13 @@ func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready b
 func (s *Service) ResetClipboard(paused bool, generation uint64) {
 	s.clipboardPaused.Store(paused)
 	s.clipboardSync.Reset(paused, generation)
-	if paused {
-		s.directPoolMu.Lock()
-		for key, pooled := range s.directPool {
-			pooled.clipboardSendReady = false
-			pooled.clipboardReceiveReady = false
-			s.schedulePoolIdleLocked(key, pooled)
-		}
-		s.directPoolMu.Unlock()
+	s.directPoolMu.Lock()
+	for key, pooled := range s.directPool {
+		pooled.clipboardSendReady = false
+		pooled.clipboardReceiveReady = false
+		s.schedulePoolIdleLocked(key, pooled)
 	}
+	s.directPoolMu.Unlock()
 }
 
 func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig) error {
@@ -342,25 +518,38 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 	if rowsErr != nil {
 		return rowsErr
 	}
-	var result error
+	results := make(chan error, len(targets))
+	var workers sync.WaitGroup
 	for _, item := range targets {
-		key := directPoolKey(item.id, item.generation)
-		s.directPoolMu.Lock()
-		pooled := s.directPool[key]
-		healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
-		s.directPoolMu.Unlock()
-		if healthy {
-			continue
-		}
-		connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		cfg.expectedAuthorizationGeneration = item.generation
-		peer, connectErr := s.acquirePeerSession(connectCtx, item.id, cfg)
-		cancel()
-		if connectErr != nil {
-			result = errors.Join(result, connectErr)
-			continue
-		}
-		result = errors.Join(result, s.releasePeerSession(peer, nil))
+		item := item
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			key := directPoolKey(item.id, item.generation)
+			s.directPoolMu.Lock()
+			pooled := s.directPool[key]
+			healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
+			s.directPoolMu.Unlock()
+			if healthy {
+				return
+			}
+			connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			peerCfg := cfg
+			peerCfg.expectedAuthorizationGeneration = item.generation
+			peer, connectErr := s.acquirePeerSession(connectCtx, item.id, peerCfg)
+			cancel()
+			if connectErr != nil {
+				results <- connectErr
+				return
+			}
+			results <- s.releasePeerSession(peer, nil)
+		}()
+	}
+	workers.Wait()
+	close(results)
+	var result error
+	for err := range results {
+		result = errors.Join(result, err)
 	}
 	return result
 }

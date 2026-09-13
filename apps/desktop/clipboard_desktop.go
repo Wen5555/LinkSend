@@ -12,11 +12,14 @@ import (
 )
 
 type ClipboardWatchStatus struct {
-	Enabled bool                   `json:"enabled"`
-	Active  bool                   `json:"active"`
-	Paused  bool                   `json:"paused"`
-	Last    nativeclipboard.Change `json:"last"`
-	Error   string                 `json:"error,omitempty"`
+	Enabled       bool                          `json:"enabled"`
+	MasterEnabled bool                          `json:"master_enabled"`
+	Active        bool                          `json:"active"`
+	Paused        bool                          `json:"paused"`
+	PauseReason   string                        `json:"pause_reason,omitempty"`
+	Last          nativeclipboard.Change        `json:"last"`
+	Error         string                        `json:"error,omitempty"`
+	Peers         []coreapp.ClipboardPeerStatus `json:"peers"`
 }
 
 func (a *App) ClipboardGrants(peerID string) ([]coreapp.ClipboardGrant, error) {
@@ -58,10 +61,25 @@ func (a *App) ensureClipboardSessions() {
 
 func (a *App) ClipboardWatcher() ClipboardWatchStatus {
 	a.clipboardMu.Lock()
-	defer a.clipboardMu.Unlock()
-	enabled := a.core != nil && a.core.ClipboardSyncEnabled()
-	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
-	return ClipboardWatchStatus{Enabled: enabled, Active: a.clipboardStop != nil, Paused: paused, Last: a.clipboardLast, Error: a.clipboardErr}
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused || a.clipboardMasterDisabled
+	pauseReason := ""
+	switch {
+	case a.clipboardMasterDisabled:
+		pauseReason = "master_disabled"
+	case a.clipboardLocked:
+		pauseReason = "screen_locked"
+	case a.clipboardSleeping:
+		pauseReason = "system_sleep"
+	case a.clipboardUserPaused:
+		pauseReason = "user"
+	}
+	status := ClipboardWatchStatus{MasterEnabled: !a.clipboardMasterDisabled, Active: a.clipboardStop != nil, Paused: paused, PauseReason: pauseReason, Last: a.clipboardLast, Error: a.clipboardErr}
+	a.clipboardMu.Unlock()
+	if a.core != nil {
+		status.Enabled = a.core.ClipboardSyncEnabled() && status.MasterEnabled
+		status.Peers = a.core.ClipboardPeerStatuses()
+	}
+	return status
 }
 
 func (a *App) refreshClipboardWatch() {
@@ -79,7 +97,7 @@ func (a *App) refreshClipboardWatchOwned() {
 		a.clipboardMu.Unlock()
 		return
 	}
-	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused || a.clipboardMasterDisabled
 	enabled := a.core.ClipboardSyncEnabled() && !paused
 	active := a.clipboardStop != nil
 	a.clipboardMu.Unlock()
@@ -111,7 +129,7 @@ func (a *App) refreshClipboardWatchOwned() {
 		a.clipboardMu.Unlock()
 		return
 	}
-	paused = a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	paused = a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused || a.clipboardMasterDisabled
 	stale := a.clipboardClosed || !a.core.ClipboardSyncEnabled() || paused || a.clipboardStop != nil
 	if !stale {
 		a.clipboardStop = stop
@@ -155,21 +173,15 @@ func (a *App) startClipboardDelivery() {
 		defer close(a.clipboardDone)
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
-		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
-		_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
-		cancel()
+		go a.ensureClipboardSessions()
 		for {
 			select {
 			case <-a.ctx.Done():
 				return
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
-				_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
-				cancel()
+				go a.ensureClipboardSessions()
+
 			case change := <-a.clipboardChanges:
-				ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
-				_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
-				cancel()
 				kinds := make([]clipboardsync.Kind, 0, 3)
 				if change.Link || change.Text {
 					kinds = append(kinds, clipboardsync.Link)
@@ -180,9 +192,7 @@ func (a *App) startClipboardDelivery() {
 				if change.Text {
 					kinds = append(kinds, clipboardsync.Text)
 				}
-				if len(kinds) > 0 {
-					_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: kinds})
-				}
+				_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: kinds})
 			}
 		}
 	}()
@@ -227,9 +237,11 @@ func (a *App) setClipboardSuspended(reason string, suspended bool) {
 		a.clipboardLocked = suspended
 	case "user":
 		a.clipboardUserPaused = suspended
+	case "master":
+		a.clipboardMasterDisabled = suspended
 	}
 	a.clipboardLast = nativeclipboard.Change{}
-	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
+	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused || a.clipboardMasterDisabled
 	a.clipboardMu.Unlock()
 	if a.core != nil {
 		a.core.ResetClipboard(paused, nativeclipboard.Generation())
@@ -238,6 +250,7 @@ func (a *App) setClipboardSuspended(reason string, suspended bool) {
 		a.stopClipboardWatchOwned()
 	} else {
 		a.refreshClipboardWatchOwned()
+		go a.ensureClipboardSessions()
 	}
 }
 

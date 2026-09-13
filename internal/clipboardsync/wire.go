@@ -12,20 +12,23 @@ const MaxHeaderBytes = 8 << 10
 var wireMagic = [8]byte{'L', 'S', 'C', 'B', '0', '1', 0, 0}
 
 type Message struct {
-	Type         string `json:"type"`
-	LeaseID      string `json:"lease_id"`
-	SessionID    string `json:"session_id"`
-	Generation   uint64 `json:"generation"`
-	Kinds        []Kind `json:"kinds,omitempty"`
-	TTLMillis    uint32 `json:"ttl_ms,omitempty"`
-	OriginID     string `json:"origin_id,omitempty"`
-	Boot         string `json:"boot,omitempty"`
-	OriginSeq    uint64 `json:"origin_sequence,omitempty"`
-	Lamport      uint64 `json:"lamport,omitempty"`
-	Kind         Kind   `json:"kind,omitempty"`
-	Digest       string `json:"digest,omitempty"`
-	OSGeneration uint64 `json:"os_generation,omitempty"`
-	PayloadBytes uint32 `json:"payload_bytes,omitempty"`
+	Type                  string  `json:"type"`
+	LeaseID               string  `json:"lease_id"`
+	SessionID             string  `json:"session_id"`
+	Generation            uint64  `json:"generation"`
+	Kinds                 []Kind  `json:"kinds,omitempty"`
+	Grants                []Grant `json:"grants,omitempty"`
+	TTLMillis             uint32  `json:"ttl_ms,omitempty"`
+	OriginID              string  `json:"origin_id,omitempty"`
+	Boot                  string  `json:"boot,omitempty"`
+	OriginSeq             uint64  `json:"origin_sequence,omitempty"`
+	Lamport               uint64  `json:"lamport,omitempty"`
+	Kind                  Kind    `json:"kind,omitempty"`
+	Digest                string  `json:"digest,omitempty"`
+	OSGeneration          uint64  `json:"os_generation,omitempty"`
+	SenderGrantRevision   uint64  `json:"sender_grant_revision,omitempty"`
+	ReceiverGrantRevision uint64  `json:"receiver_grant_revision,omitempty"`
+	PayloadBytes          uint32  `json:"payload_bytes,omitempty"`
 }
 
 func Write(w io.Writer, message Message, payload []byte) error {
@@ -108,13 +111,13 @@ func validateHeader(m Message) error {
 		return ErrStale
 	}
 	if m.Type == "lease" {
-		if m.PayloadBytes != 0 || m.TTLMillis == 0 || m.TTLMillis > 10_000 || len(m.Kinds) == 0 || len(m.Kinds) > 3 {
+		if !validLeaseMessage(m) {
 			return ErrStale
 		}
 		return nil
 	}
 	if m.Type == "event" {
-		if m.OriginID == "" || m.Boot == "" || m.OriginSeq == 0 || m.Lamport == 0 || !validKind(m.Kind) || len(m.Digest) != 64 {
+		if m.OriginID == "" || m.Boot == "" || m.OriginSeq == 0 || m.Lamport == 0 || !validKind(m.Kind) || len(m.Digest) != 64 || m.SenderGrantRevision == 0 || m.ReceiverGrantRevision == 0 {
 			return ErrStale
 		}
 		return nil
@@ -128,22 +131,17 @@ func validateMessage(m Message, payload []byte) error {
 	}
 	switch m.Type {
 	case "lease":
-		if len(payload) != 0 || m.TTLMillis == 0 || m.TTLMillis > 10000 || len(m.Kinds) == 0 || len(m.Kinds) > 3 {
+		if len(payload) != 0 || !validLeaseMessage(m) {
 			return ErrStale
 		}
-		for _, k := range m.Kinds {
-			if !validKind(k) {
-				return ErrStale
-			}
-		}
 	case "event":
-		if m.OriginID == "" || m.Boot == "" || m.OriginSeq == 0 || m.Lamport == 0 || !validKind(m.Kind) || int(m.PayloadBytes) != len(payload) {
+		if m.OriginID == "" || m.Boot == "" || m.OriginSeq == 0 || m.Lamport == 0 || !validKind(m.Kind) || int(m.PayloadBytes) != len(payload) || m.SenderGrantRevision == 0 || m.ReceiverGrantRevision == 0 {
 			return ErrStale
 		}
 		if err := validatePayload(m.Kind, payload); err != nil {
 			return err
 		}
-		event := Event{LeaseID: m.LeaseID, OriginID: m.OriginID, Boot: m.Boot, OriginSeq: m.OriginSeq, Lamport: m.Lamport, Kind: m.Kind, Digest: m.Digest, OSGeneration: m.OSGeneration, Payload: payload}
+		event := Event{LeaseID: m.LeaseID, OriginID: m.OriginID, Boot: m.Boot, OriginSeq: m.OriginSeq, Lamport: m.Lamport, Kind: m.Kind, Digest: m.Digest, OSGeneration: m.OSGeneration, SenderGrantRevision: m.SenderGrantRevision, ReceiverGrantRevision: m.ReceiverGrantRevision, Payload: payload}
 		if m.Digest != eventDigest(event) {
 			return ErrStale
 		}
@@ -151,6 +149,26 @@ func validateMessage(m Message, payload []byte) error {
 		return errors.New("CLIPBOARD_MESSAGE_UNSUPPORTED")
 	}
 	return nil
+}
+
+func validLeaseMessage(m Message) bool {
+	if m.PayloadBytes != 0 || m.TTLMillis == 0 || m.TTLMillis > 10_000 || (len(m.Kinds) == 0) == (len(m.Grants) == 0) || len(m.Kinds)+len(m.Grants) > 3 {
+		return false
+	}
+	seen := make(map[Kind]bool, len(m.Kinds)+len(m.Grants))
+	for _, kind := range m.Kinds {
+		if !validKind(kind) || seen[kind] {
+			return false
+		}
+		seen[kind] = true
+	}
+	for _, grant := range m.Grants {
+		if !validKind(grant.Kind) || grant.Revision == 0 || seen[grant.Kind] {
+			return false
+		}
+		seen[grant.Kind] = true
+	}
+	return true
 }
 func payloadLimit(kind Kind) int {
 	if kind == Image {

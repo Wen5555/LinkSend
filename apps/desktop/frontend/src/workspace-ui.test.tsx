@@ -70,7 +70,7 @@ describe('workspace operation surfaces', () => {
     expect(movedQueueIDs([queueItem('a', 'queued'), queueItem('running', 'running'), queueItem('b', 'waiting_peer')], 'b', -1)).toEqual(['b', 'a']);
   });
   it('preserves dirty category input while rebasing clean settings fields', () => {
-    const current: DesktopPreferences = { format_version: 1, revision: 2, device_name: '正在输入', receive_directory: 'C:\\old', conflict_policy: 'keep_both', server_url: 'https://old.example', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], background: { close_mode: '', notifications: false, prevent_sleep: false } };
+    const current: DesktopPreferences = { format_version: 1, revision: 2, device_name: '正在输入', receive_directory: 'C:\\old', conflict_policy: 'keep_both', server_url: 'https://old.example', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], background: { close_mode: '', notifications: false, prevent_sleep: false }, clipboard_enabled: false };
     const latest: DesktopPreferences = { ...current, revision: 3, device_name: '后台名称', receive_directory: 'C:\\new', server_url: 'https://new.example' };
     const merged = mergePreferences(current, latest, new Set(['device_name' as const]));
     expect(merged.device_name).toBe('正在输入');

@@ -39,10 +39,10 @@ export function useDesktop() {
   });
   const shell = useQuery({ queryKey: shellKey, enabled, refetchInterval: 5000,
     queryFn: async () => {
-      const [status, inbox, membership, diagnostics, entries, background] = await Promise.all([
-        Backend.Status(), Backend.InboxStatus(), Backend.Membership(), Backend.Diagnostics(), Backend.DesktopEntries(), Backend.Background(),
+      const [status, inbox, membership, diagnostics, entries, background, clipboard] = await Promise.all([
+        Backend.Status(), Backend.InboxStatus(), Backend.Membership(), Backend.Diagnostics(), Backend.DesktopEntries(), Backend.Background(), Backend.ClipboardWatcher(),
       ]);
-      return { status, inbox, membership, diagnostics, entries, background };
+      return { status, inbox, membership, diagnostics, entries, background, clipboard };
     },
   });
   const preferences = useQuery({ queryKey: ['preferences'], enabled, queryFn: () => Backend.Preferences() });

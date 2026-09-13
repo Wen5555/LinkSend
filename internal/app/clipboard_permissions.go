@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 )
@@ -122,6 +123,7 @@ func (s *Service) SetClipboardGrant(ctx context.Context, patch ClipboardGrantPat
 	if err = tx.Commit(); err != nil {
 		return ClipboardGrant{}, err
 	}
+	s.clipboardSync.InvalidateGrant(patch.PeerID, patch.Direction == "send", clipboardsync.Kind(patch.Kind))
 	s.notifyChange()
 	return next, nil
 }
@@ -137,6 +139,7 @@ func (s *Service) clearClipboardGrants(peerID string) error {
 
 func (s *Service) clearClipboardGrantsLocked(peerID string) error {
 	_, err := s.store.db.Exec(`UPDATE clipboard_grants SET enabled=0,revision=revision+1,updated_at=? WHERE peer_id=?`, time.Now().UTC().Format(time.RFC3339Nano), peerID)
+	s.invalidateClipboardState()
 	s.notifyChange()
 	return err
 }
