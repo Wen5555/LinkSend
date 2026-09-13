@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -137,14 +138,16 @@ type taskRecovery struct {
 }
 
 type taskManager struct {
-	mu          sync.RWMutex
-	seq         uint64
-	tasks       map[string]*taskRecord
-	historyPath string
-	historyMu   sync.RWMutex
-	historyErr  error
-	workers     sync.WaitGroup
-	onChange    func(TaskSnapshot)
+	mu              sync.RWMutex
+	seq             uint64
+	tasks           map[string]*taskRecord
+	historyPath     string
+	historyMu       sync.RWMutex
+	historyErr      error
+	historyDB       *sql.DB
+	historyOpenPath string
+	workers         sync.WaitGroup
+	onChange        func(TaskSnapshot)
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }

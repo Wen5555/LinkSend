@@ -266,7 +266,7 @@ func (s *Service) initializeWorkspace() {
 	s.epoch = protocol.RandomID()
 	s.queue.wake = make(chan struct{}, 1)
 	s.workCtx, s.workCancel = context.WithCancel(context.Background())
-	s.store, s.storeErr = openDesktopStore(s.tasks.historyPath)
+	s.store, s.storeErr = desktopStoreFromDB(s.tasks.sharedHistoryDB())
 	if s.storeErr == nil {
 		_, s.storeErr = s.store.db.Exec(`UPDATE send_queue SET state='needs_attention',last_error='RESTART_CONFIRMATION_REQUIRED',revision=revision+1,updated_at=? WHERE state IN ('queued','waiting_peer','running')`, time.Now().UTC().Format(time.RFC3339Nano))
 		var paused string

@@ -63,10 +63,10 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E2-02 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | schema7设备策略继承、全局策略、字段级dirty合并、deferred-save和CAS重试已验收 |
 | E2-03 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | 旧草稿可见/取消、队列直达且不自动续发；E4未开始 |
 | E2-04 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | 完整外壳960×640主按钮可见可点；准确包原生DPI/键盘与双机UI留E5 |
-| E3-01 | 待审查 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | 待候选CI | 正式Share Target、真实设备小面板、当前用户journal与持久去重；云端无绝对路径仍明确拒绝 |
-| E3-02 | 待审查 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | 待候选CI | 正式Share Extension、临时表示接管/bookmark、App Group journal；签名/App Group实机由用户暂缓 |
-| E3-03 | 待审查 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | 待候选CI | 两平台正式manifest/entitlement与构建任务；签名、安装升级卸载由用户暂缓 |
-| E4-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
+| E3-01 | 源码验收通过 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | c205b12 CI运行中 | 原生目标动作、临时来源接管、持久授权/回收与错误隔离已验收；签名激活暂缓 |
+| E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | c205b12 CI运行中 | bookmark/临时表示、冷启动与持久生命周期源码验收；签名/App Group实机暂缓 |
+| E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
+| E4-01 | 执行中 | 存储owner PASS | 定向PASS | NOT RUN | NOT RUN | NOT RUN | 单一SQLite pool与benchmark完成；会话复用/流取消/公平调度继续 |
 | E4-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E4-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E5-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
@@ -74,7 +74,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 ## 执行边界与恢复入口
 
-- 当前批次为 E3-01/02/03 原生共享源码候选；E2 源码/浏览器范围已验收。签名相关由用户暂缓，准确包 DPI、双向网络和双机 UI 留 E5；候选通过后开始独立 E4 支撑。
+- 当前批次为 E4-01 存储、会话与调度支撑；E3 源码范围已验收。签名相关由用户暂缓，准确包 DPI、双向网络和双机 UI 留 E5。
 - 授权含阶段工作分支/PR、两平台项目依赖及隔离安装、香港 LinkSend 支持组件事务部署、荷兰构建与专属 namespace/container NAT。
 - 不合并 main、不正式 Release、不购买签名服务、不改宿主防火墙/路由/代理、不影响无关业务。
 - 远程全部使用 codex-ssh-manager resolve/probe/audit；2026-09-13 当前 Mac 地址为 `10.234.212.116`，保留登记 alias 与 host key 校验。复杂任务使用 durable job，断线先 resume/tail。

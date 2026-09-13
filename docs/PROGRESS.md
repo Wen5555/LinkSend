@@ -1,3 +1,8 @@
+## 2026-09-14 E4-01 profile SQLite owner 测量
+
+- taskManager 持有 profile 生命周期唯一 task-history.sqlite 连接并共享给 desktopStore，构造失败和 Shutdown 显式关闭；MaxOpenConns=1，失败仍撤销 durability claim。
+- Windows 微基准 100x、3轮：persistent 2.024/2.076/2.084 ms/op；reopen_each_write 3.663/4.254/3.699 ms/op，中位数减少约43.9%。根模块 test/vet 与历史/构造失败定向测试 PASS。
+- 仅存储 owner 子项完成；认证 QUIC 会话复用、流取消和公平调度仍为 NOT RUN，自动剪贴板未实现。见 docs/evidence/DESKTOP-E4-STORAGE-SESSIONS.md。
 ## 2026-09-14 E3-C3 共享接管竞态与刷新
 
 - 放弃请求与 Enqueue 共用串行边界，队列已有 request_id 时拒绝并要求在队列取消；资源清理失败继续保留 journal。

@@ -57,7 +57,8 @@ type SendDraft struct {
 }
 
 type desktopStore struct {
-	db *sql.DB
+	db     *sql.DB
+	ownsDB bool
 }
 
 func openDesktopStore(path string) (*desktopStore, error) {
@@ -65,10 +66,22 @@ func openDesktopStore(path string) (*desktopStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &desktopStore{db: db, ownsDB: true}, nil
+}
+
+func desktopStoreFromDB(db *sql.DB) (*desktopStore, error) {
+	if db == nil {
+		return nil, errors.New("TASK_STORE_UNAVAILABLE")
+	}
 	return &desktopStore{db: db}, nil
 }
 
-func (s *desktopStore) Close() error { return s.db.Close() }
+func (s *desktopStore) Close() error {
+	if s.ownsDB {
+		return s.db.Close()
+	}
+	return nil
+}
 
 func migrateDesktopMetadata(tx *sql.Tx) error {
 	statements := []string{

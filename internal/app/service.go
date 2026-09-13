@@ -159,6 +159,12 @@ func New(cfg Config) (*Service, error) {
 	}
 	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
+	keepHistory := false
+	defer func() {
+		if !keepHistory {
+			_ = s.tasks.closeHistory()
+		}
+	}()
 	if strings.TrimSpace(cfg.ServerURL) != "" {
 		s.signal, err = signaling.New(signaling.Config{ServerURL: cfg.ServerURL, Identity: id, AllowInsecureLoopback: cfg.AllowInsecureLoopback})
 		if err != nil {
@@ -167,6 +173,7 @@ func New(cfg Config) (*Service, error) {
 	}
 	s.initializeWorkspace()
 	keepLock = true
+	keepHistory = true
 	return s, nil
 }
 

@@ -259,7 +259,12 @@ func (m *taskManager) configureHistory(path string) {
 		m.setHistoryError(err)
 		return
 	}
-	defer db.Close()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = db.Close()
+		}
+	}()
 	rows, err := db.Query(`SELECT id,revision,snapshot,recovery FROM tasks WHERE inbox_state NOT IN ('completed','rejected','failed','cancelled','no_content') OR id IN (SELECT id FROM tasks ORDER BY inbox_started DESC,id DESC LIMIT 200) ORDER BY id`)
 	if err != nil {
 		m.setHistoryError(err)
@@ -338,6 +343,11 @@ func (m *taskManager) configureHistory(path string) {
 			return
 		}
 	}
+	m.historyMu.Lock()
+	m.historyDB = db
+	m.historyOpenPath = path
+	m.historyMu.Unlock()
+	keep = true
 }
 
 func quarantineTask(db *sql.DB, item storedTask, reason string) error {
@@ -393,10 +403,35 @@ func (m *taskManager) persistRecord(snap TaskSnapshot, recovery taskRecovery) er
 	if historyErr := m.historyError(); historyErr != nil {
 		return historyErr
 	}
+	m.historyMu.RLock()
+	db := m.historyDB
+	openPath := m.historyOpenPath
+	m.historyMu.RUnlock()
+	if db != nil && openPath == m.historyPath {
+		return upsertTask(db, snap, recovery)
+	}
 	db, err := historyDB(m.historyPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 	return upsertTask(db, snap, recovery)
+}
+
+func (m *taskManager) closeHistory() error {
+	m.historyMu.Lock()
+	db := m.historyDB
+	m.historyDB = nil
+	m.historyOpenPath = ""
+	m.historyMu.Unlock()
+	if db != nil {
+		return db.Close()
+	}
+	return nil
+}
+
+func (m *taskManager) sharedHistoryDB() *sql.DB {
+	m.historyMu.RLock()
+	defer m.historyMu.RUnlock()
+	return m.historyDB
 }

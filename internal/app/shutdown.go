@@ -76,6 +76,7 @@ func (s *Service) shutdownOwners() {
 	if s.store != nil {
 		_ = s.store.Close()
 	}
+	_ = s.tasks.closeHistory()
 	if s.profileLock != nil {
 		_ = s.profileLock.Close()
 	}
