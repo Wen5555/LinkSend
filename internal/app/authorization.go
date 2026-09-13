@@ -83,9 +83,10 @@ func (s *Service) BlockPeer(peerID string) error {
 	if err != nil {
 		return err
 	}
+	grantErr := s.clearClipboardGrants(peerID)
 	s.closePooledSessions(peerID)
 	s.cancelPeerTasks(peerID)
-	return nil
+	return grantErr
 }
 
 // UnblockPeer removes only the local denial. Pairing/explicit LAN consent is

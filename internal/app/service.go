@@ -450,6 +450,7 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		}
 		for _, peer := range before {
 			if generation, ok := current[peer.ID]; !ok || generation != peer.GrantGeneration {
+				_ = s.clearClipboardGrants(peer.ID)
 				s.closePooledSessions(peer.ID)
 				s.cancelPeerTasks(peer.ID)
 			}

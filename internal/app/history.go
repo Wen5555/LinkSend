@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 7
+const taskStoreSchema = 8
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -152,6 +152,19 @@ func historyDB(path string) (*sql.DB, error) {
 			if _, err = tx.Exec("ALTER TABLE device_profiles ADD COLUMN conflict_policy TEXT NOT NULL DEFAULT ''"); err != nil {
 				return rollback(err)
 			}
+		}
+	}
+	if schema < 8 {
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS clipboard_grants (
+			peer_id TEXT NOT NULL,
+			direction TEXT NOT NULL CHECK(direction IN ('send','receive')),
+			kind TEXT NOT NULL CHECK(kind IN ('text','link','image')),
+			enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(peer_id,direction,kind)
+		)`); err != nil {
+			return rollback(err)
 		}
 	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {

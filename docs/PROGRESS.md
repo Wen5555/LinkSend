@@ -563,3 +563,9 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 
 - peer ID + authorization generation 绑定的短期池复用同一认证 QUIC；两端都有入站 stream owner，连续正向和原始响应方反向文件保持同一 session_id。
 - 每 peer 仍限制一个活动文件发送流；传输中取消只终止当前 stream，下一文件可在同一连接完成。授权撤销、连接错误、3 秒空闲、空闲网络变化与 Shutdown 关闭池中连接；活动连接由真实 path watcher 决定。
+
+## 2026-09-14 E4-02 自动剪贴板权限候选
+
+- 任务库升级 schema 8；权限按 peer、send/receive 与 text/link/image 分离保存并使用 revision CAS，默认无记录即关闭。
+- 启用前重验当前 peer 授权；本机阻止、成员移除或授权 generation 变化删除该 peer 全部剪贴板授权，解除阻止和重新配对不会自动恢复。
+- 当前候选只建立本机权限和原生变化监听边界；正文读取、lease wire、跨端同步与接收写入仍待 E4-03。

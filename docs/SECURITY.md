@@ -87,3 +87,7 @@ M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、�
 ## E4 认证会话复用
 
 复用键包含固定 peer identity 与本机 authorization generation；每次打开文件流前重新读取当前授权，成员代际变化或本机阻止会关闭该 peer 的池中连接。0-RTT 仍关闭。取消只 reset 对应 QUIC stream；未知连接级错误、路径失效、空闲超时和退出关闭整个连接。复用不扩大文件路径或剪贴板权限。
+
+## E4 自动剪贴板权限
+
+任务库 schema 8 按 peer、方向（send/receive）和内容类型（text/link/image）分别保存 revision CAS 授权。没有记录等同关闭；新配对、解除阻止或重新加入不会继承旧授权。启用前重新验证当前 peer 授权，本机阻止、成员移除或授权 generation 变化会删除该 peer 的全部剪贴板授权。该表只保存权限和时间戳，不保存剪贴板正文、图片或系统格式数据。
