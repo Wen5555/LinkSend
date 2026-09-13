@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+ xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+ xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+ xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+ IgnorableNamespaces="uap uap10 rescap">
+ <Identity Name="LinkSend.E0.SharePrototype" Publisher="CN=LinkSend E0 Prototype" Version="0.0.1.0" ProcessorArchitecture="x64"/>
+ <Properties><DisplayName>LinkSend E0 共享原型</DisplayName><PublisherDisplayName>LinkSend E0</PublisherDisplayName><Logo>Assets\Logo.png</Logo></Properties>
+ <Resources><Resource Language="zh-cn"/></Resources>
+ <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22621.0" MaxVersionTested="10.0.26200.0"/></Dependencies>
+ <Applications>
+ <Application Id="SharePrototype" Executable="LinkSend.SharePrototype.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+ <uap:VisualElements DisplayName="LinkSend E0 共享原型" Description="仅用于系统共享包级验证" BackgroundColor="transparent" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\Logo.png"/>
+ <Extensions><uap:Extension Category="windows.shareTarget"><uap:ShareTarget Description="LinkSend E0 共享原型"><uap:SupportedFileTypes><uap:SupportsAnyFileType/></uap:SupportedFileTypes><uap:DataFormat>StorageItems</uap:DataFormat></uap:ShareTarget></uap:Extension></Extensions>
+ </Application>
+ </Applications>
+ <Capabilities><rescap:Capability Name="runFullTrust"/></Capabilities>
+</Package>

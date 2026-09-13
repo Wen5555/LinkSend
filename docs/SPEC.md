@@ -1,5 +1,7 @@
 # LinkSend protocol V1 implementation specification
 
+2026-09-13：桌面体验 U1–U7 已进入新的 E0 实施轮。当前生产协议仍为 V1；成员代际、独立 LAN 同意与自动剪贴板契约是待审提案，见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 和 [全轮 TODO](DESKTOP-EXPERIENCE-TODO.md)。旧 M5 停止要求不限制本轮，新能力未因文档存在而视为实现。
+
 2026-09-12 desktop six-feature implementation: current source targets product
 0.5.0 milestone prereleases; protocol remains V1. The user's explicit milestone
 push/deploy/publish authorization overrides this document's default local-only

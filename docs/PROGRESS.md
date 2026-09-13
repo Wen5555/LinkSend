@@ -1,5 +1,14 @@
 # LinkSend implementation progress
 
+## 2026-09-13 桌面体验 E0 中间检查点（未验收）
+
+本轮按新的 U1–U7 授权继续，不受旧 M5 停止点限制。唯一工作分支 `codex/desktop-experience-upgrade`，基线3bcb730；全轮22条 [TODO](DESKTOP-EXPERIENCE-TODO.md) 已建立，E1尚未启动。
+准确M5四包本地SHA256与当前GitHub digest重新一致；Windows准确ZIP payload真实UIA复现手动内容、长设置、只有屏蔽入口及预览前禁用接收。NSIS和Mac完整准确包矩阵未运行；详见 [E0基线](evidence/DESKTOP-E0-BASELINE.md)。
+Mac/香港/登记荷兰节点当前manager登录与只读审计成功；香港health/真实WSS认证/在线列表分列通过，物理桌面双向文件链尚未运行，namespace能力检查不算双NAT；见 [E0网络](evidence/DESKTOP-E0-NETWORK.md)。
+Windows真Share Target开发MSIX编译/打包/签名成功，但系统拒绝证书信任和开发注册，未改主机安全策略；Mac真.appex编译/注册/系统共享服务激活有证据，文件授权交接仍在验证。原型不含假设备/发送，不称U6完成。
+[ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 提出成员代际、同事务撤销、独立LAN同意、旧端拒绝和自动剪贴板支撑，待总控审查，尚未冻结或改变产品协议/schema。
+实际根基线普通/workspace/独立vet由总控在3bcb730验证（缓存边界保留）；执行任务desktop独立test及新增control-inspect编译/vet/真实HTTPS运行退出0。未推送/部署/合并/正式发布。本检查点不能把原型、源码或提交等同阶段通过。
+
 ## 2026-09-12 桌面能力（用户指定M5收尾）
 
 M5已合并main并于2026-09-12T10:13:32Z发布 [v0.5.0-m5](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-m5)。三平台CI、精确Windows/Mac ARM payload、6个远端asset digest与香港最终部署验证通过；详见 [M5发布回执](evidence/DESKTOP-M5-RELEASE.md)。本轮按用户要求停止，不继续M6。
