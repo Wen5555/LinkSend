@@ -2,6 +2,8 @@
 
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，状态为待审提案。当前 M5 wire/schema/授权实现尚未改变；实施前需冻结协议并补兼容与安全测试，不能将提案当作已实现能力。
 
+E0-ADR-review-v1要求未来删除先使目标peer的全部既有组/LAN grant generation失效，禁止授权回退；新配对不恢复旧LAN/免确认/剪贴板。剪贴板提交门闩内重验授权、lease期限与OS/application generation。以上是待实现契约，不是当前M5安全能力声明。
+
 2026-09-12 M0 安全更新（源码 0.5.0）：本机撤销先原子删除 pin/auto_accept 并保存 denied_peers，
 随后尝试服务器撤销。服务器失败不会取消本机拒绝；成员同步、LAN、新发送、确认和恢复都不能复活授权。
 解除拒绝不自动恢复 pin/免确认。trust 迁移后丢失、损坏或未来 schema 拒绝授权，禁止从拒绝前的

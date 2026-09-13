@@ -2,6 +2,8 @@
 
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，状态为待审提案。当前 M5 wire/schema/授权实现尚未改变；实施前需冻结协议并补兼容与安全测试，不能将提案当作已实现能力。
 
+E0-ADR-review-v1提案将剪贴板并行解码与唯一原生提交owner分开：origin sequence用于来源去重，Lamport用于因果排序，OS generation加应用revision门闩防止两个候选共用过时检查。lease由接收端单调期限管理；不以应用锁声称macOS全系统剪贴板CAS已实现。
+
 2026-09-12 M0 更新：Go1.27.1 + Wails3 beta.18，当前源码产品版本 0.5.0。
 `internal/app.New` 在身份/SQLite 前取得 profile 内核排他锁，退出待所有 owner 结束后释放。
 授权拒绝由唯一 identity trust schema 1 所有者持久化；应用的所有新连接、确认和恢复路径共用检查。

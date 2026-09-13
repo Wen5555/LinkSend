@@ -25,7 +25,7 @@
 | E0-04 | U6 | E0 | E0-01 来源核对 | Mac Share Extension .appex 包级最小原型 | 真实 App Group/entitlements、文件表示期限、后台冷启动及扩展退出后可读；明确实际凭据/系统授权缺口 | evidence/DESKTOP-E0-MAC-SHARE-PROTOTYPE.md |
 | E0-05 | U2/U3/U4/支撑 | E0 | E0-01；结合 E0-02/03/04 证据 | ADR、PROTOCOL、SECURITY、SPEC、产品范围 | 冻结配对/撤销/同步作用范围、成员版本及旧端拒绝、LAN 同意事务、剪贴板权限/冲突/TTL 与会话调度；总控审查 | evidence/DESKTOP-E0-DECISIONS.md |
 | E1-01 | U2 | E1 | E0-05 | 配对服务、控制库、身份与桌面流程 | 有效码直接配对、首台初始化、幂等与明确跨组切换；普通成员仅组内权限；重放/跨组负测 | evidence/DESKTOP-E1-PAIRING.md |
-| E1-02 | U2 | E1 | E1-01 | 撤销/设备删除、连接、重试、同步 | 先持久撤销再关闭权限/连接/重试；幂等组删除、离线待同步；重启/旧快照/WSS/LAN 不复活；保留文件历史、重新配对重新授权 | evidence/DESKTOP-E1-REVOCATION.md |
+| E1-02 | U2 | E1 | E1-01 | 撤销/设备删除、连接、重试、同步 | 先持久撤销全部既有组/LAN grant，再关闭权限/连接/重试；幂等组删除、离线待同步；重启/旧快照/WSS/LAN/旧控制会话不复活；新配对不恢复旧LAN/免确认/剪贴板；保留文件历史 | evidence/DESKTOP-E1-REVOCATION.md |
 | E1-03 | U2 | E1 | E0-05 | LAN 独立添加/同意事务 | 被连接端确认；拒绝/超时无残留，nonce/身份绑定、双向幂等；服务失败状态真实 | evidence/DESKTOP-E1-LAN-PAIRING.md |
 | E1-04 | U3 | E1 | E0-02 | 发现 providers、地址/接口/回程与缓存 | 多接口多地址、独立降级、明确源/回程、记忆地址退避、容量/过期/socket 重建；核实 LocalSend 一手来源并记录双栈/mDNS 选择 | evidence/DESKTOP-E1-DISCOVERY.md |
 | E1-05 | U2/U3 | E1 | E1-01/02/03/04 | 统一目录、状态、网络/睡眠恢复 | 事实状态；健康 QUIC 不随 WSS/发现重启取消；准确包真实双向矩阵 | evidence/DESKTOP-E1-DIRECTORY-RECOVERY.md |
@@ -38,7 +38,7 @@
 | E3-03 | U6 | E3 | E3-01/02 | 双平台准确包与安装生命周期 | 准确身份与签名/权限；冷启动/后台/主窗打开/连续共享/扩展退出继续发送；安装升级卸载 | evidence/DESKTOP-E3-NATIVE-PACKAGES.md |
 | E4-01 | U4/支撑 | E4 | E0-05 | profile 存储所有权、会话与调度 | 先测量再收敛；提交屏障、认证会话复用、流级取消、有界文件和剪贴板调度 | evidence/DESKTOP-E4-STORAGE-SESSIONS.md |
 | E4-02 | U4 | E4 | E4-01 | 权限、原生监听/写入、能力协商 | 默认关闭；按设备/方向/类型双端授权；Windows AddClipboardFormatListener、Mac changeCount；正文不经 JS/WSS | evidence/DESKTOP-E4-CLIPBOARD-NATIVE.md |
-| E4-03 | U4 | E4 | E4-02 | 自动同步状态机、资源与托盘 | 文本/链接/图片、防多设备回环、并发排序、代际去重、快复制合并、TTL/离线不补发/锁屏暂停、撤销/限额/暂存回收/托盘暂停；保护日常剪贴板 | evidence/DESKTOP-E4-CLIPBOARD-BEHAVIOR.md |
+| E4-03 | U4 | E4 | E4-02 | 自动同步状态机、资源与托盘 | 文本/链接/图片、防回环；origin sequence与Lamport分离、串行落板revision门闩；预签发lease拒绝首帧/整图/重传晚到，续期不续旧事件、重连旧lease无效；快复制/离线不补发/锁屏/撤销/限额/暂存回收/托盘暂停 | evidence/DESKTOP-E4-CLIPBOARD-BEHAVIOR.md |
 | E5-01 | U1–U7 | E5 | E1–E4 全部待总控验收完成 | 同提交候选联合验收 | 七项联合、文件/恢复/异常、旧版升级/混合版本、网络与原生实机矩阵；准确包 hash/来源/OS | evidence/DESKTOP-E5-ACCEPTANCE.md |
 | E5-02 | U1–U7 | E5 | E5-01 | 工程文档、PR/CI、产物与部署回执 | 最终工作分支 PR/CI、包来源、部署/备份/回滚证据齐全；只有总控判定全部达标后结束 Goal | evidence/DESKTOP-E5-DELIVERY.md |
 
@@ -50,9 +50,9 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 |---|---|---|---|---|---|---|---|
 | E0-01 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
 | E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
-| E0-03 | 外部阻塞 | PARTIAL | PARTIAL | FAIL | NOT RUN | NOT RUN | 系统安装签名信任/旁加载限制；原型未激活 |
-| E0-04 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 中间证据待审；见分项记录 |
-| E0-05 | 待审查 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | ADR0007提案待冻结；产品协议未改 |
+| E0-03 | 外部阻塞 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 构建/签名PASS、系统安装FAIL、激活NOT RUN；不降格U6 |
+| E0-04 | 执行中 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 原生权限缺口与未定位回调分别保留；注册/激活不等于交接 |
+| E0-05 | 待审查 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | E0-ADR-review-v1已修订，见ADR-REVIEW-V1证据；待总控冻结 |
 | E1-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E1-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E1-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
@@ -80,4 +80,4 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 当前远程 jobPath：无；当前待审提交：E0-A中间检查点（见git log -1与evidence/DESKTOP-E0-CHECKPOINT-A.md）；当前 push/PR：NOT RUN。下一动作：总控审查E0-A后继续E0剩余准确包/网络/原型，不能视为已通过E0。
+- 活跃远程作业：无；历史jobPath见E0分项证据。E0-A提交为ec55db317b0b5b0dfa60c1a61219f28da9b401da；其后的E0-ADR-review-v1文档修订另作提交，见evidence/DESKTOP-E0-ADR-REVIEW-V1.md。push/PR仍NOT RUN。继续E0剩余准确包/网络/原型，待总控审查冻结语义后再派发E1，不能视为已通过E0。

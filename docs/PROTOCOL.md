@@ -2,6 +2,8 @@
 
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，状态为待审提案。当前 M5 wire/schema/授权实现尚未改变；实施前需冻结协议并补兼容与安全测试，不能将提案当作已实现能力。
 
+E0-ADR-review-v1已在提案中明确：剪贴板事件绑定接收方预签发lease及原始单调deadline，迟到首帧/重传不得重获寿命；origin_sequence与Lamport分离。具体wire/schema仍待后续实现冻结，不修改现役V1消息。
+
 2026-09-12 M0：当前源码产品为 0.5.0，V1 wire/ALPN/签名编码和任务 schema 2 保持兼容。
 本机拒绝在 LAN/WSS/恢复/接收确认前执行；拒绝使用既有 AUTHENTICATION_FAILED，不暴露本地拒绝详情。
 trust schema 1 与 profile 锁是本地迁移，不是协议版本。新内容及选收能力尚待 M4/M5 协商实现，

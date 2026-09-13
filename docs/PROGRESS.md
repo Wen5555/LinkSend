@@ -1,5 +1,10 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E0-ADR-review-v1 修订（待复审）
+
+已读取总控仓库外pending-e0-adr-review.md并修订ADR0007：接收端预签发lease/不可延长单调deadline阻止首帧或重传滞留后重获TTL；删除推进peer级generation使全部旧组/LAN grant失效；origin_sequence、Lamport与串行落板revision门闩分离。新增对应后续验收负例，见 [审查回复](evidence/DESKTOP-E0-ADR-REVIEW-V1.md)。
+本次仅工程文档，未改变产品代码/wire/schema，新增场景测试NOT RUN；E0-01/02现有证据与剩余物理/准确安装包矩阵不变，两平台U6仍PARTIAL。未推送，不自行宣称ADR冻结或E0通过。
+
 ## 2026-09-13 桌面体验 E0 中间检查点（未验收）
 
 本轮按新的 U1–U7 授权继续，不受旧 M5 停止点限制。唯一工作分支 `codex/desktop-experience-upgrade`，基线3bcb730；全轮22条 [TODO](DESKTOP-EXPERIENCE-TODO.md) 已建立，E1尚未启动。
