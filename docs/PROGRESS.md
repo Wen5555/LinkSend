@@ -1,5 +1,11 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E1-C3原生网络与睡眠事件候选（待复审）
+
+- Windows使用系统 `NotifyIpInterfaceChange`/`CancelMibChangeNotify2` 监听所有地址族接口变化；macOS使用 `SCDynamicStore` 监听全局和接口IPv4/IPv6状态。Wails 3的系统睡眠/唤醒事件与网络回调进入容量1串行泵，再调用既有core门闩；5秒接口快照fallback保留。
+- 关闭先注销Wails和系统订阅，停止并join macOS CFRunLoop/Windows通知，再等待事件泵退出和关闭core。通知只刷新未来发现/endpoint选择，不取消健康活动QUIC。
+- Windows桌面专项test/vet/build、前端typecheck/lint/58项测试/build、Wails 3 beta.18 production build PASS。Mac `10.234.212.116`（macOS26.5 arm64）对固定源码 `844e286` 的真实SCDynamicStore注册/停止测试、desktop vet/build PASS，作业 `/tmp/codex-ssh/linksend-e1-c3-mac-build-final-20260913T114047Z`；链接器deployment-target warning保留。准确包Windows/macOS事件延迟、网络切换、睡眠唤醒与文件hash仍NOT RUN；物理结果不得由源码检查替代。
+
 ## 2026-09-13 E1第二候选与C1审查修复（待复审）
 
 - 修复C1六组问题：完整成员快照撤销第三方消失成员且拒绝revision回滚；组/LAN双关系不互相覆盖，旧LAN generation不能附着新关系；schema1本机block在授权读取前迁移；任务/恢复/queue/迟到确认绑定真实授权generation，任务库升级schema6。

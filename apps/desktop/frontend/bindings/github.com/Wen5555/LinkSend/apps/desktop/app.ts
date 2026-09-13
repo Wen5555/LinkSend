@@ -154,12 +154,20 @@ export function IncomingPlan(id: string, request: app$0.IncomingPlanRequest): $C
     return $Call.ByID(2659825470, id, request);
 }
 
+export function InitializeMembership(name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(1250672251, name);
+}
+
 export function JoinGroup(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
     return $Call.ByID(2730586904, token, name);
 }
 
 export function Membership(): $CancellablePromise<app$0.MembershipStatus> {
     return $Call.ByID(3247912641);
+}
+
+export function NetworkChanged(reason: string): $CancellablePromise<void> {
+    return $Call.ByID(465047923, reason);
 }
 
 export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfaceInfo[] | null> {
@@ -184,6 +192,10 @@ export function PairDevice(code: string, name: string): $CancellablePromise<app$
 
 export function PauseTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3621607596, id);
+}
+
+export function PendingLANPairings(): $CancellablePromise<app$0.LANPairRequestInfo[] | null> {
+    return $Call.ByID(3701228766);
 }
 
 export function PickDirectory(): $CancellablePromise<string> {
@@ -234,12 +246,20 @@ export function ReorderQueue(ids: string[] | null): $CancellablePromise<void> {
     return $Call.ByID(1496578879, ids);
 }
 
+export function RequestLANPair(deviceID: string): $CancellablePromise<app$0.LANPairResult> {
+    return $Call.ByID(1572173169, deviceID);
+}
+
 export function RequestNotificationPermission(): $CancellablePromise<$models.BackgroundStatus> {
     return $Call.ByID(3109134518);
 }
 
 export function ResendInbox(request: app$0.ResendInboxRequest): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(1667322102, request);
+}
+
+export function RespondLANPair(requestID: string, accept: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2082189565, requestID, accept);
 }
 
 export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -303,6 +323,10 @@ export function StartSend(peerID: string, paths: string[] | null): $CancellableP
  */
 export function Status(): $CancellablePromise<$models.DesktopStatus> {
     return $Call.ByID(2836613335);
+}
+
+export function SwitchMembership(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(768739229, token, name);
 }
 
 export function Tasks(): $CancellablePromise<app$0.TaskSnapshot[] | null> {

@@ -32,6 +32,8 @@ export type {
     IncomingPlanPreview,
     IncomingPlanRequest,
     InvitationInfo,
+    LANPairRequestInfo,
+    LANPairResult,
     MembershipStatus,
     QueueItem,
     ResendInboxRequest,

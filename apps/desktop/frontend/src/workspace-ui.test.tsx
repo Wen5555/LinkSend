@@ -13,7 +13,7 @@ import { EnqueueIdentity } from './workspace-cache';
 vi.mock('../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => ({}));
 
 const run: CommandRunner = async () => true;
-const device: DeviceInfo = { id: 'peer', name: '对方远端名称', group_id: '', public_key_hex: '', admin: false, online: true, trusted: true, always_accept: false, nearby: false, blocked: false,
+const device: DeviceInfo = { id: 'peer', name: '对方远端名称', group_id: '', public_key_hex: '', admin: false, online: true, trusted: true, always_accept: false, nearby: false, blocked: false, relationship: 'group_paired', service_state: 'membership_synced', lan_control_state: 'unavailable', connection_state: 'not_connected',
   profile: { peer_id: 'peer', alias: '我的电脑', my_device: true, pinned: true, position: 1, receive_directory: '', last_used_at: '', revision: 1 } };
 const task: TaskSnapshot = {
   id: 'task', task_id: 'task', attempt_id: 'attempt', direction: 'send', peer_id: 'peer', state: 'transferring', phase: 'transferring',

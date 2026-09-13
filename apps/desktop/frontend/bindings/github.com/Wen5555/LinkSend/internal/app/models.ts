@@ -69,6 +69,12 @@ export interface DeviceInfo {
     "nearby": boolean;
     "blocked": boolean;
     "profile": DeviceProfile;
+    "incarnation"?: string;
+    "membership_revision"?: number;
+    "relationship": string;
+    "service_state": string;
+    "lan_control_state": string;
+    "connection_state": string;
 }
 
 /**
@@ -294,6 +300,19 @@ export interface InvitationInfo {
     "expires_in_seconds": number;
 }
 
+export interface LANPairRequestInfo {
+    "request_id": string;
+    "peer_id": string;
+    "peer_name": string;
+    "expires_at": string;
+}
+
+export interface LANPairResult {
+    "peer_id": string;
+    "state": string;
+    "server_state": string;
+}
+
 export interface MembershipStatus {
     /**
      * pending, member, not_member, auth_failed, unavailable
@@ -322,6 +341,7 @@ export interface QueueItem {
     "last_error": string;
     "wait_for_peer": boolean;
     "content"?: content$0.Snapshot | null;
+    "authorization_generation"?: number;
 }
 
 export interface ResendInboxRequest {
@@ -421,6 +441,7 @@ export interface TaskSnapshot {
     "history_persisted": boolean;
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
+    "authorization_generation"?: number;
 }
 
 export interface WorkspaceChange {

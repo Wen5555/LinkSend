@@ -44,6 +44,7 @@ type App struct {
 	eventsDone    chan struct{}
 	entries       *desktopEntries
 	background    *desktopBackground
+	nativeEvents  *nativeSystemEventPump
 }
 
 type DesktopPreferences struct {
@@ -123,6 +124,7 @@ func (a *App) startup(ctx context.Context) {
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
 	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
+		a.startNativeSystemEvents()
 		if a.runtimeApp != nil {
 			if err := a.initializeContentActions(); err != nil {
 				a.initErr = err
@@ -153,6 +155,7 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	a.stopNativeSystemEvents()
 	if a.cancel != nil {
 		a.cancel()
 	}

@@ -249,7 +249,7 @@ func (s *Service) RefreshLANDiscovery() error {
 // discovery without cancelling a healthy active QUIC task.
 func (s *Service) NetworkChanged(reason string) error {
 	switch reason {
-	case "network", "wake", "interface", "address", "route":
+	case "network", "sleep", "wake", "interface", "address", "route":
 	default:
 		return errors.New("INVALID_ARGUMENT: unknown network change reason")
 	}
