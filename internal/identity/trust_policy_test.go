@@ -21,6 +21,30 @@ func policyTestPeer(t *testing.T, name string) TrustedPeer {
 	return TrustedPeer{ID: i.ID(), Name: name, PublicKey: i.PublicKey()}
 }
 
+func TestProvisionalLANSurvivesReloadAndRejectsNewGeneration(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	grant := ProvisionalLANGrant{RequestID: strings.Repeat("a", 32), Nonce: strings.Repeat("b", 32), Peer: peer, Generation: 1, State: "accepted", ExpiresAt: time.Now().Add(time.Minute).UTC()}
+	if err := BeginProvisionalLAN(dir, grant); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := LANPairStatus(dir, peer.ID, grant.RequestID, grant.Nonce); err != nil || status != "ready" {
+		t.Fatalf("persisted provisional status=%q err=%v", status, err)
+	}
+	if resumed, ok, err := PendingProvisionalLAN(dir, peer.ID); err != nil || !ok || resumed.RequestID != grant.RequestID || resumed.Nonce != grant.Nonce {
+		t.Fatalf("restart recovery lost provisional: %+v ok=%v err=%v", resumed, ok, err)
+	}
+	if err := RevokePeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := AllowPeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := CommitProvisionalLAN(dir, grant.RequestID, grant.Nonce); err == nil {
+		t.Fatal("old provisional grant committed after authorization generation changed")
+	}
+}
+
 func writeLegacyPolicy(t *testing.T, dir string, peers ...TrustedPeer) []byte {
 	t.Helper()
 	data, err := json.Marshal(TrustFile{Peers: peers})

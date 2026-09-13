@@ -314,8 +314,11 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		return false
 	}
 	ctx, cancel := context.WithCancel(inboxCtx)
-	authorizationGeneration, generationErr := s.currentAuthorizationGeneration(peer.PeerID)
-	if generationErr != nil {
+	authorizationGeneration := peer.AuthorizationGeneration
+	if authorizationGeneration == 0 {
+		authorizationGeneration, _ = s.currentAuthorizationGeneration(peer.PeerID)
+	}
+	if generationErr := s.checkAuthorizationGeneration(peer.PeerID, authorizationGeneration); generationErr != nil {
 		cancel()
 		return false
 	}

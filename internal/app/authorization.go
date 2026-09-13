@@ -50,6 +50,22 @@ func (s *Service) checkTaskGrant(snapshot TaskSnapshot) error {
 	return nil
 }
 
+func (s *Service) checkAuthorizationGeneration(peerID string, expected uint64) error {
+	current, err := identity.AuthorizationGeneration(s.cfg.DataDir, peerID)
+	if err != nil || expected == 0 || current != expected {
+		return protocol.Wrap(protocol.AuthenticationFailed, "peer authorization generation changed", err)
+	}
+	return nil
+}
+
+func (s *Service) cancelPeerTasks(peerID string) {
+	for _, task := range s.Tasks() {
+		if task.PeerID == peerID && !isTerminal(task.State) {
+			_ = s.CancelTask(task.ID)
+		}
+	}
+}
+
 // BlockPeer is local and works even when the membership server is unavailable.
 // Persist the denial before stopping tasks so discovery cannot restore the pin.
 func (s *Service) BlockPeer(peerID string) error {
@@ -67,11 +83,7 @@ func (s *Service) BlockPeer(peerID string) error {
 	if err != nil {
 		return err
 	}
-	for _, task := range s.Tasks() {
-		if task.PeerID == peerID && !isTerminal(task.State) {
-			_ = s.CancelTask(task.ID)
-		}
-	}
+	s.cancelPeerTasks(peerID)
 	return nil
 }
 

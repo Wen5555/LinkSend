@@ -410,7 +410,7 @@ func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Clie
 // removes the manual fingerprint step while still rejecting later key changes.
 func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 	s.trustMu.Lock()
-	defer s.trustMu.Unlock()
+	before, beforeErr := identity.LoadTrust(s.cfg.DataDir)
 	var local signaling.Device
 	for _, d := range devices {
 		if d.ID == s.identity.ID() {
@@ -419,13 +419,31 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		}
 	}
 	if local.ID == "" {
+		s.trustMu.Unlock()
 		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 local incarnation missing")
 	}
 	snapshot := make([]identity.TrustedPeer, 0, len(devices))
 	for _, d := range devices {
 		snapshot = append(snapshot, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey, GroupID: d.GroupID, PeerIncarnation: d.Incarnation, LocalIncarnation: local.Incarnation, MembershipRevision: d.MembershipRevision})
 	}
-	return identity.ApplyMembershipSnapshot(s.cfg.DataDir, s.identity.ID(), snapshot)
+	err := identity.ApplyMembershipSnapshot(s.cfg.DataDir, s.identity.ID(), snapshot)
+	after, afterErr := identity.LoadTrust(s.cfg.DataDir)
+	s.trustMu.Unlock()
+	if err != nil {
+		return err
+	}
+	if beforeErr == nil && afterErr == nil {
+		current := make(map[string]uint64, len(after))
+		for _, peer := range after {
+			current[peer.ID] = peer.GrantGeneration
+		}
+		for _, peer := range before {
+			if generation, ok := current[peer.ID]; !ok || generation != peer.GrantGeneration {
+				s.cancelPeerTasks(peer.ID)
+			}
+		}
+	}
+	return nil
 }
 
 // Membership reports only evidence returned by the authenticated server. A

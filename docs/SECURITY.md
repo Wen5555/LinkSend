@@ -4,7 +4,7 @@
 
 本机 trust schema 2 将完整组快照、组/LAN grant、双方incarnation、服务端revision、本机 `grant_generation` 和provisional LAN transcript统一持久化。组删除先原子移除全部组/LAN pin与免确认并写入带request ID的拒绝屏障及待同步outbox，再取消目标任务，最后提交服务端幂等事务；服务不可达时本机拒绝与outbox保留。完整新快照会撤销已消失成员，旧revision或同一incarnation不能清除屏障；只有可验证的新incarnation和更高revision能建立新的组grant。显式本机block（含schema1迁移记录）永不被成员同步解除。
 
-任务、恢复记录和持久队列保存创建时的授权generation；派发、恢复和迟到接收确认均与当前generation精确比较，从而拒绝删除前状态在重新配对后复活。发现、WSS和LAN提交继续重验屏障/generation；授权文件损坏或未来schema仍按拒绝处理。桌面任务库因此由schema5迁移到schema6，迁移前保留可读备份。
+任务、恢复记录、持久队列和已认证PeerSession保存创建时的授权generation；派发、建连完成、实际开流、恢复和迟到接收确认均与当前generation精确比较，从而拒绝删除前状态在重新配对后复活。授权epoch独立持久，解除本机屏蔽也不能让generation回退。发现、WSS和LAN提交继续重验屏障/generation；授权文件损坏或未来schema仍按拒绝处理。桌面任务库因此由schema5迁移到schema6，迁移前保留可读备份。
 
 Windows 上 `x/net/ipv4.ControlMessage` 不提供有效源地址选择，因此发现发送使用最多 32 个临时 source-bound UDP socket；每个 socket绑定具体本地 IPv4、发送后在同一 socket有界接收回复。Darwin/Linux 保留 pktinfo/cmsg。组播、广播、受限单播与 TLS 控制分别降级，单个 provider 失败不关闭其余路径；peer、route、响应表和握手 goroutine均有固定上限。
 

@@ -671,10 +671,17 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if err := s.checkPeerAllowed(peerID); err != nil {
 		return TaskSnapshot{}, err
 	}
-	authorizationGeneration, err := s.currentAuthorizationGeneration(peerID)
-	if err != nil {
-		return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+	authorizationGeneration := cfg.expectedAuthorizationGeneration
+	var err error
+	if authorizationGeneration == 0 {
+		authorizationGeneration, err = s.currentAuthorizationGeneration(peerID)
+		if err != nil {
+			return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+		}
+	} else if err = s.checkAuthorizationGeneration(peerID, authorizationGeneration); err != nil {
+		return TaskSnapshot{}, err
 	}
+	cfg.expectedAuthorizationGeneration = authorizationGeneration
 	if s.tasks.hasActive() {
 		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 	}
@@ -842,6 +849,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 			s.ensureInbox()
 			return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
 		}
+		cfg.expectedAuthorizationGeneration = authorizationGeneration
 	}
 	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
@@ -1096,6 +1104,7 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		s.ensureInbox()
 		return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "task belongs to an older peer authorization", generationErr)
 	}
+	cfg.expectedAuthorizationGeneration = t.recovery.AuthorizationGeneration
 	if err := s.configureContentResume(s.workCtx, id, t.recovery, &cfg); err != nil {
 		t.mu.Unlock()
 		s.ensureInbox()

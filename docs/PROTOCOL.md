@@ -6,9 +6,9 @@
 
 控制库 schema 4 为每次有效入组生成不可复用的 128-bit `incarnation`，每个组维护单调 `membership_revision`。邀请码摘要绑定 inviter ID、组、inviter incarnation 和创建 revision；LAN短期凭证另绑定target DeviceID。同身份同组消费重试保持幂等，fresh code 不提权。被撤销身份只有使用新有效码才获得新 incarnation；跨组切换必须提交并签名当前group/incarnation/revision，旧组离开与新组加入在同一事务完成。
 
-`DELETE /v1/devices/{id}` 的签名正文为 `{request_id,target_incarnation,expected_revision}`。服务端在一个事务内重验 actor 当前 incarnation、同组目标、目标 incarnation/revision 和 request ID，普通有效成员均可撤销组内其他设备；重复 request ID 返回原 revision，已撤销 actor 的迟到请求和跨组目标拒绝。提交后组内 WSS 断开并重新认证/同步，既有 QUIC 数据面不依赖 WSS 存活。
+`DELETE /v1/devices/{id}` 的签名正文为 `{request_id,target_incarnation,expected_revision}`。服务端在一个事务内重验 actor 当前 incarnation、同组目标、目标 incarnation/revision 和 request ID，普通有效成员均可撤销组内其他设备；重复 request ID 返回原 revision，已撤销 actor 的迟到请求和跨组目标拒绝。提交后组内 WSS 断开并重新认证/同步；客户端完整快照同步会停止被撤销peer的本机活动任务。与撤销无关的既有 QUIC 数据面不依赖 WSS 存活。
 
-LAN 添加使用刚通过签名公告和双向 TLS 1.3 验证的有界控制通道，交换签名 `lan_pair` request/accept|reject/commit/ready/confirm/done transcript。双方先持久provisional；接收端在收到confirm前没有有效pin，ack丢失可用query按request/nonce恢复。字段绑定双方DeviceID、request ID、128-bit nonce、本机授权generation和不超过60秒的期限；拒绝、超时、断线或transcript不一致都不产生可用授权。已入组同意方可凭双方签名transcript签发target-bound 60秒加入凭证；服务不可达时只建立独立LAN grant并显示跨网络未加入。文件正文仍只走经身份验证的QUIC。
+LAN 添加使用刚通过签名公告和双向 TLS 1.3 验证的有界控制通道，交换签名 `lan_pair` request/accept|reject/commit/ready/confirm/done transcript。双方先持久provisional；接收端在收到confirm前没有有效pin，发起端在验证done前没有有效pin，断线可用query按request/nonce恢复ready/done及未过期target凭证。字段绑定双方DeviceID、request ID、128-bit nonce、本机授权generation和不超过60秒的期限；拒绝、超时或transcript不一致不产生可用授权，断线只保留不可用于正文的provisional。已入组同意方可凭双方签名transcript签发target-bound 60秒加入凭证；服务不可达时只建立独立LAN grant并显示跨网络未加入。文件正文仍只走经身份验证的QUIC。
 
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
 

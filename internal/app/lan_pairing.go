@@ -96,6 +96,11 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 		return LANPairResult{}, err
 	}
 	defer session.Close()
+	if pending, ok, pendingErr := identity.PendingProvisionalLAN(s.cfg.DataDir, peerID); pendingErr == nil && ok {
+		if s.recoverLANPair(ctx, manager, peer, pending.RequestID, pending.Nonce, pending.Generation, pending.ExpiresAt.Unix()) {
+			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		}
+	}
 	requestID, nonce := protocol.RandomID(), protocol.RandomID()
 	s.lanPair.mu.Lock()
 	if s.lanPair.outgoing == nil {
@@ -133,7 +138,6 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	if err = identity.BeginProvisionalLAN(s.cfg.DataDir, identity.ProvisionalLANGrant{RequestID: requestID, Nonce: nonce, Peer: peerGrant, Generation: generation, State: "accepted", ExpiresAt: time.Unix(expires, 0).UTC()}); err != nil {
 		return LANPairResult{}, err
 	}
-	defer identity.CancelProvisionalLAN(s.cfg.DataDir, requestID)
 	if err = session.SendLANPair(ctx, newLANPairFrame("commit", requestID, nonce, s.identity.ID(), peerID, generation, expires)); err != nil {
 		return LANPairResult{}, err
 	}
@@ -150,10 +154,10 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	if err = wire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()); err != nil {
 		return LANPairResult{}, err
 	}
-	if err = identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce); err != nil {
-		return LANPairResult{}, err
-	}
 	if err = session.SendLANPair(ctx, newLANPairFrame("confirm", requestID, nonce, s.identity.ID(), peerID, generation, expires)); err != nil {
+		if s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires) {
+			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		}
 		return LANPairResult{}, err
 	}
 	wire, err = session.Read(ctx)
@@ -164,6 +168,9 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 		return LANPairResult{}, protocol.Fail(protocol.InvalidMessage, "LAN pairing completion acknowledgement missing")
 	}
 	if err = wire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()); err != nil {
+		return LANPairResult{}, err
+	}
+	if err = identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce); err != nil {
 		return LANPairResult{}, err
 	}
 	serverState := "not_joined"
@@ -237,6 +244,9 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 			return
 		}
 		if err := incoming.Session.SendLANPair(ctx, newLANPairFrame(status, request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, request.Generation, request.ExpiresAt)); err != nil || status == "done" {
+			if err == nil && status == "done" {
+				s.sendRecoveredLANCredential(ctx, incoming, request)
+			}
 			return
 		}
 		wire, err := incoming.Session.Read(ctx)
@@ -247,6 +257,7 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 			return
 		}
 		_ = incoming.Session.SendLANPair(ctx, newLANPairFrame("done", request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, request.Generation, request.ExpiresAt))
+		s.sendRecoveredLANCredential(ctx, incoming, request)
 		return
 	}
 	if request.Phase != "request" || request.Verify(incoming.Peer.PublicKey, s.identity.ID(), time.Now()) != nil {
@@ -303,7 +314,6 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 		if err = identity.BeginProvisionalLAN(s.cfg.DataDir, identity.ProvisionalLANGrant{RequestID: request.RequestID, Nonce: request.Nonce, Peer: peerGrant, Generation: generation, State: "accepted", ExpiresAt: time.Unix(request.ExpiresAt, 0).UTC()}); err != nil {
 			return
 		}
-		defer identity.CancelProvisionalLAN(s.cfg.DataDir, request.RequestID)
 	}
 	approval := newLANPairFrame(phase, request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, generation, request.ExpiresAt)
 	approval.Signature = s.identity.Sign(approval.SigningBytes())
@@ -311,6 +321,7 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 		if c, clientErr := s.client(); clientErr == nil {
 			if invitation, credentialErr := c.CreateLANCredential(ctx, incoming.Peer.PublicKey, request, approval); credentialErr == nil {
 				credential = invitation.Token
+				_ = identity.SetProvisionalLANCredential(s.cfg.DataDir, request.RequestID, request.Nonce, credential)
 			}
 		}
 	}
@@ -346,6 +357,16 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 		frame.Credential = credential
 		_ = incoming.Session.SendLANPair(ctx, frame)
 	}
+}
+
+func (s *Service) sendRecoveredLANCredential(ctx context.Context, incoming discovery.Incoming, request signaling.LANPairFrame) {
+	credential, err := identity.LANPairCredential(s.cfg.DataDir, incoming.Peer.ID, request.RequestID, request.Nonce)
+	if err != nil || credential == "" {
+		return
+	}
+	frame := newLANPairFrame("credential", request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, request.Generation, request.ExpiresAt)
+	frame.Credential = credential
+	_ = incoming.Session.SendLANPair(ctx, frame)
 }
 
 func (s *Service) lanRememberAddress(address string) string {

@@ -222,9 +222,11 @@ func (m *Manager) Close() error {
 		if m.cancel != nil {
 			m.cancel()
 		}
+		m.writeMu.Lock()
 		if m.udp != nil {
 			closeErr = errors.Join(closeErr, m.udp.Close())
 		}
+		m.writeMu.Unlock()
 		if m.tcp != nil {
 			closeErr = errors.Join(closeErr, m.tcp.Close())
 		}
@@ -400,10 +402,14 @@ func (m *Manager) refreshInterfaces() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	presentIndexes := map[int]*net.Interface{}
-	signatures := map[int]string{}
+	signatureParts := map[int][]string{}
 	for _, route := range next {
 		presentIndexes[route.iface.Index] = route.iface
-		signatures[route.iface.Index] += "|" + route.address.String() + "/" + route.network.String()
+		signatureParts[route.iface.Index] = append(signatureParts[route.iface.Index], route.address.String()+"/"+route.network.String())
+	}
+	signatures := make(map[int]string, len(signatureParts))
+	for index, parts := range signatureParts {
+		signatures[index] = stableInterfaceSignature(parts)
 	}
 	if m.joinSignatures == nil {
 		m.joinSignatures = map[int]string{}
@@ -448,6 +454,12 @@ func (m *Manager) refreshInterfaces() error {
 	}
 	delete(m.channelErrors, "interfaces")
 	return nil
+}
+
+func stableInterfaceSignature(parts []string) string {
+	parts = append([]string(nil), parts...)
+	sort.Strings(parts)
+	return strings.Join(parts, "|")
 }
 
 func sameInterfaceRoutes(left, right map[string]interfaceRoute) bool {
@@ -538,7 +550,13 @@ func (m *Manager) readLoop() {
 	buffer := make([]byte, maxPacketBytes+1)
 	consecutiveErrors := 0
 	for {
-		n, control, source, err := m.packet.ReadFrom(buffer)
+		m.mu.RLock()
+		packetConn := m.packet
+		m.mu.RUnlock()
+		if packetConn == nil {
+			return
+		}
+		n, control, source, err := packetConn.ReadFrom(buffer)
 		if err != nil {
 			if m.ctx.Err() != nil {
 				return

@@ -423,7 +423,7 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 	}
 	online := map[string]bool{}
 	for _, device := range devices {
-		online[device.ID] = device.Online && !device.Blocked && (device.Trusted || device.Nearby)
+		online[device.ID] = !device.Blocked && device.Trusted && (device.Online || device.Nearby)
 	}
 	for _, item := range runnable {
 		if !online[item.PeerID] {
@@ -443,6 +443,7 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 		cfg.contentSnapshot = contentSnapshot
 		cfg.contentAllowFallback = allowFallback
 		cfg.expectedSourceDigest = record.digest
+		cfg.expectedAuthorizationGeneration = record.AuthorizationGeneration
 		cfg.beforeDispatch = func(task TaskSnapshot) error {
 			if !task.HistoryPersisted {
 				return errors.New("WORKSPACE_STORE_UNAVAILABLE")

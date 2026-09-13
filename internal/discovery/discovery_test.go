@@ -30,6 +30,44 @@ func newTCPTestManager(t *testing.T, id *identity.Identity, name string) *Manage
 	return m
 }
 
+func TestStableInterfaceSignatureIgnoresMapIterationOrder(t *testing.T) {
+	left := stableInterfaceSignature([]string{"192.168.1.2/192.168.1.0/24", "10.0.0.2/10.0.0.0/24"})
+	right := stableInterfaceSignature([]string{"10.0.0.2/10.0.0.0/24", "192.168.1.2/192.168.1.0/24"})
+	if left != right {
+		t.Fatalf("interface signature changed with address order: %q != %q", left, right)
+	}
+}
+
+func TestRebuildUDPSocketCannotOutliveClose(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	_ = probe.Close()
+	m, err := Start(Config{Identity: id, Name: "close-race", Port: port, AllowLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rebuilt := make(chan error, 1)
+	go func() { rebuilt <- m.rebuildUDPSocket() }()
+	if err = m.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		t.Fatal(err)
+	}
+	select {
+	case <-rebuilt:
+	case <-time.After(2 * time.Second):
+		t.Fatal("socket rebuild remained blocked after Close")
+	}
+	if m.ctx.Err() == nil {
+		t.Fatal("manager context remained active after Close")
+	}
+}
+
 func rememberLoopbackPeer(m *Manager, peer *Manager) {
 	m.remember(packet{DeviceID: peer.cfg.Identity.ID(), Name: peer.cfg.Name, PublicKey: peer.cfg.Identity.PublicKey(), Port: peer.port}, Route{RemoteAddress: "127.0.0.1", ControlPort: peer.port, Interface: "loopback-test", LocalAddress: "127.0.0.1", LastSeen: time.Now()})
 }

@@ -268,6 +268,7 @@ type TrustFile struct {
 	DeniedPeers         []DeniedPeer          `json:"denied_peers,omitempty"`
 	MembershipSnapshots []MembershipSnapshot  `json:"membership_snapshots,omitempty"`
 	ProvisionalLAN      []ProvisionalLANGrant `json:"provisional_lan,omitempty"`
+	AuthorizationEpochs map[string]uint64     `json:"authorization_epochs,omitempty"`
 }
 
 type ProvisionalLANGrant struct {
@@ -277,6 +278,7 @@ type ProvisionalLANGrant struct {
 	Generation uint64      `json:"generation"`
 	State      string      `json:"state"`
 	ExpiresAt  time.Time   `json:"expires_at"`
+	Credential string      `json:"credential,omitempty"`
 }
 
 type MembershipSnapshot struct {
@@ -352,7 +354,7 @@ func LANPairGeneration(dir, peerID string) (uint64, error) {
 			return max(uint64(1), peer.GrantGeneration), nil
 		}
 	}
-	return 1, nil
+	return max(uint64(1), f.AuthorizationEpochs[peerID]+1), nil
 }
 
 func AuthorizationGeneration(dir, peerID string) (uint64, error) {
@@ -398,6 +400,7 @@ func commitLANPeerFile(f *TrustFile, peer TrustedPeer, expectedGeneration uint64
 		if denied.LocalBlock || denied.AuthorizationGeneration != expectedGeneration {
 			return ErrPeerDenied
 		}
+		retainAuthorizationEpoch(f, peer.ID, denied.AuthorizationGeneration)
 		f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
 		break
 	}
@@ -512,6 +515,14 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 		return TrustFile{}, errUnsupportedTrustSchema
 	}
 	seen := map[string]bool{}
+	if len(f.AuthorizationEpochs) > 1024 {
+		return TrustFile{}, errors.New("too many authorization epochs")
+	}
+	for peerID, generation := range f.AuthorizationEpochs {
+		if !validPeerID(peerID) || generation == 0 {
+			return TrustFile{}, errors.New("invalid authorization epoch")
+		}
+	}
 	for _, p := range f.Peers {
 		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) || len(p.LANAddressHistory) > 8 || p.GrantKind != "" && p.GrantKind != "group" && p.GrantKind != "lan" && p.GrantKind != "group+lan" {
 			return TrustFile{}, errors.New("invalid trust file")
@@ -539,7 +550,7 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 		return TrustFile{}, errors.New("too many provisional LAN grants")
 	}
 	for _, grant := range f.ProvisionalLAN {
-		if len(grant.RequestID) != 32 || len(grant.Nonce) != 32 || grant.Generation == 0 || grant.ExpiresAt.IsZero() || len(grant.Peer.PublicKey) != 32 || DeviceID(grant.Peer.PublicKey) != grant.Peer.ID {
+		if len(grant.RequestID) != 32 || len(grant.Nonce) != 32 || grant.Generation == 0 || grant.ExpiresAt.IsZero() || len(grant.Credential) > 512 || len(grant.Peer.PublicKey) != 32 || DeviceID(grant.Peer.PublicKey) != grant.Peer.ID {
 			return TrustFile{}, errors.New("invalid provisional LAN grant")
 		}
 	}
@@ -600,6 +611,7 @@ func BeginProvisionalLAN(dir string, grant ProvisionalLANGrant) error {
 			current = denied.AuthorizationGeneration
 		}
 	}
+	current = max(current, f.AuthorizationEpochs[grant.Peer.ID]+1)
 	if current != grant.Generation {
 		return authenticationError("stale LAN grant generation")
 	}
@@ -625,10 +637,68 @@ func LANPairStatus(dir, peerID, requestID, nonce string) (string, error) {
 	}
 	for _, grant := range f.ProvisionalLAN {
 		if grant.Peer.ID == peerID && grant.RequestID == requestID && grant.Nonce == nonce && grant.ExpiresAt.After(time.Now().UTC()) {
+			if grant.State == "done" {
+				return "done", nil
+			}
 			return "ready", nil
 		}
 	}
 	return "unknown", nil
+}
+
+func SetProvisionalLANCredential(dir, requestID, nonce, credential string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if credential == "" || len(credential) > 512 {
+		return errors.New("invalid LAN credential")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index := range f.ProvisionalLAN {
+		grant := &f.ProvisionalLAN[index]
+		if grant.RequestID == requestID && grant.Nonce == nonce && grant.ExpiresAt.After(time.Now().UTC()) {
+			grant.Credential = credential
+			return saveTrust(dir, f)
+		}
+	}
+	return errors.New("LAN_PAIR_REQUEST_NOT_FOUND")
+}
+
+func LANPairCredential(dir, peerID, requestID, nonce string) (string, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, grant := range f.ProvisionalLAN {
+		if grant.Peer.ID == peerID && grant.RequestID == requestID && grant.Nonce == nonce && grant.State == "done" && grant.ExpiresAt.After(time.Now().UTC()) {
+			return grant.Credential, nil
+		}
+	}
+	return "", errors.New("LAN_PAIR_CREDENTIAL_NOT_FOUND")
+}
+
+// PendingProvisionalLAN returns the newest unexpired transaction for one peer.
+// It enables an explicit RequestLANPair retry after process restart to resume
+// the signed query instead of creating a second authorization transaction.
+func PendingProvisionalLAN(dir, peerID string) (ProvisionalLANGrant, bool, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return ProvisionalLANGrant{}, false, err
+	}
+	now := time.Now().UTC()
+	var newest ProvisionalLANGrant
+	for _, grant := range f.ProvisionalLAN {
+		if grant.Peer.ID == peerID && grant.ExpiresAt.After(now) && (newest.ExpiresAt.IsZero() || grant.ExpiresAt.After(newest.ExpiresAt)) {
+			newest = grant
+		}
+	}
+	return newest, !newest.ExpiresAt.IsZero(), nil
 }
 
 func CommitProvisionalLAN(dir, requestID, nonce string) error {
@@ -647,10 +717,13 @@ func CommitProvisionalLAN(dir, requestID, nonce string) error {
 			_ = saveTrust(dir, f)
 			return errors.New("LAN_PAIR_EXPIRED")
 		}
+		if grant.State == "done" {
+			return nil
+		}
 		if err = commitLANPeerFile(&f, grant.Peer, grant.Generation); err != nil {
 			return err
 		}
-		f.ProvisionalLAN = append(f.ProvisionalLAN[:index], f.ProvisionalLAN[index+1:]...)
+		f.ProvisionalLAN[index].State = "done"
 		return saveTrust(dir, f)
 	}
 	return errors.New("LAN_PAIR_REQUEST_NOT_FOUND")
@@ -734,7 +807,7 @@ func trustPeer(dir string, peer TrustedPeer) error {
 	// Auto-accept is a separate local command, never an enrollment field.
 	peer.AutoAccept = false
 	if peer.GrantGeneration == 0 {
-		peer.GrantGeneration = 1
+		peer.GrantGeneration = max(uint64(1), f.AuthorizationEpochs[peer.ID]+1)
 	}
 	if peer.GrantKind == "" {
 		peer.GrantKind = "lan"
@@ -766,7 +839,7 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || peer.GroupID == "" || len(peer.PeerIncarnation) != 32 || len(peer.LocalIncarnation) != 32 || peer.MembershipRevision == 0 {
 		return authenticationError("invalid membership_v2 grant")
 	}
-	generation := uint64(1)
+	generation := max(uint64(1), f.AuthorizationEpochs[peer.ID]+1)
 	for index := 0; index < len(f.DeniedPeers); index++ {
 		denied := f.DeniedPeers[index]
 		if denied.ID != peer.ID {
@@ -776,6 +849,7 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
 		}
 		generation = denied.AuthorizationGeneration + 1
+		retainAuthorizationEpoch(f, peer.ID, denied.AuthorizationGeneration)
 		f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
 		break
 	}
@@ -994,6 +1068,15 @@ func RevokePeer(dir, peerID string) error {
 			break
 		}
 	}
+	for index := len(f.ProvisionalLAN) - 1; index >= 0; index-- {
+		grant := f.ProvisionalLAN[index]
+		if grant.Peer.ID == peerID {
+			denied.Name = grant.Peer.Name
+			denied.AuthorizationGeneration = max(denied.AuthorizationGeneration, grant.Generation+1)
+			f.ProvisionalLAN = append(f.ProvisionalLAN[:index], f.ProvisionalLAN[index+1:]...)
+		}
+	}
+	retainAuthorizationEpoch(&f, peerID, denied.AuthorizationGeneration)
 	f.DeniedPeers = append(f.DeniedPeers, denied)
 	return saveTrust(dir, f)
 }
@@ -1065,11 +1148,19 @@ func AllowPeer(dir, peerID string) error {
 	}
 	for index, denied := range f.DeniedPeers {
 		if denied.ID == peerID {
+			retainAuthorizationEpoch(&f, peerID, denied.AuthorizationGeneration)
 			f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
 			return saveTrust(dir, f)
 		}
 	}
 	return nil
+}
+
+func retainAuthorizationEpoch(f *TrustFile, peerID string, generation uint64) {
+	if f.AuthorizationEpochs == nil {
+		f.AuthorizationEpochs = map[string]uint64{}
+	}
+	f.AuthorizationEpochs[peerID] = max(f.AuthorizationEpochs[peerID], generation)
 }
 
 func saveTrust(dir string, f TrustFile) error {

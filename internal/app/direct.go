@@ -25,25 +25,26 @@ const firstGeneration uint64 = 1
 const candidateExchangeBudget = 10 * time.Second
 
 type DirectConfig struct {
-	BindAddress          string
-	InterfacePriority    []string
-	ExcludedInterfaces   []string
-	STUNURLs             []string
-	AllowLoopback        bool
-	CheckTimeout         time.Duration
-	WaitTimeout          time.Duration // receiver only: time allowed for an incoming request
-	onPhase              func(string)  // local application observation; never serialized
-	onSession            func(string, string)
-	onEvidence           func(DirectEvidence)
-	onChunkSent          func(transfer.ChunkTransmission)
-	knownInterface       string
-	expectedSourceDigest string
-	beforeDispatch       func(TaskSnapshot) error
-	contentSnapshot      *content.Snapshot
-	contentAllowFallback bool
-	contentForceFile     bool
-	contentTaskID        string
-	contentAttemptID     string
+	BindAddress                     string
+	InterfacePriority               []string
+	ExcludedInterfaces              []string
+	STUNURLs                        []string
+	AllowLoopback                   bool
+	CheckTimeout                    time.Duration
+	WaitTimeout                     time.Duration // receiver only: time allowed for an incoming request
+	onPhase                         func(string)  // local application observation; never serialized
+	onSession                       func(string, string)
+	onEvidence                      func(DirectEvidence)
+	onChunkSent                     func(transfer.ChunkTransmission)
+	knownInterface                  string
+	expectedSourceDigest            string
+	beforeDispatch                  func(TaskSnapshot) error
+	contentSnapshot                 *content.Snapshot
+	contentAllowFallback            bool
+	contentForceFile                bool
+	contentTaskID                   string
+	contentAttemptID                string
+	expectedAuthorizationGeneration uint64
 }
 
 func (c DirectConfig) phase(value string) {
@@ -63,19 +64,20 @@ func (c DirectConfig) evidence(value DirectEvidence) {
 }
 
 type PeerSession struct {
-	PeerID        string
-	SessionID     string
-	Path          connectivity.Path
-	Data          *transport.Session
-	Timings       DirectTimings
-	signal        directSignalSession
-	signalBase    signaling.SessionStats
-	ownsSignal    bool
-	stopHeartbeat context.CancelFunc
-	localPeer     bool
-	peerName      string
-	peerPublicKey ed25519.PublicKey
-	lanAddress    string
+	PeerID                  string
+	SessionID               string
+	Path                    connectivity.Path
+	Data                    *transport.Session
+	Timings                 DirectTimings
+	AuthorizationGeneration uint64
+	signal                  directSignalSession
+	signalBase              signaling.SessionStats
+	ownsSignal              bool
+	stopHeartbeat           context.CancelFunc
+	localPeer               bool
+	peerName                string
+	peerPublicKey           ed25519.PublicKey
+	lanAddress              string
 }
 
 type directSignalSession interface {
@@ -191,6 +193,17 @@ func (s *Service) closePeerAfterTransfer(p *PeerSession) error {
 
 func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectConfig) (*PeerSession, error) {
 	if err := s.checkPeerAllowed(peerID); err != nil {
+		return nil, err
+	}
+	authorizationGeneration := cfg.expectedAuthorizationGeneration
+	if authorizationGeneration == 0 {
+		var err error
+		authorizationGeneration, err = s.currentAuthorizationGeneration(peerID)
+		if err != nil {
+			return nil, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+		}
+	}
+	if err := s.checkAuthorizationGeneration(peerID, authorizationGeneration); err != nil {
 		return nil, err
 	}
 	connectStarted := time.Now()
@@ -332,12 +345,16 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 			return nil, establishErr
 		}
 		cfg.phase("connected")
+		if err = s.checkAuthorizationGeneration(peer.ID, authorizationGeneration); err != nil {
+			_ = data.Close()
+			return nil, err
+		}
 		timings.PeerResponseMS = durationMS(stageStarted)
 		timings.TotalConnectMS = durationMS(connectStarted)
 		cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings}).Evidence())
 		closeSignal = false
 		closeEndpoint = false
-		return &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession)}, nil
+		return &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession)}, nil
 	}
 	if responseWire.Message == nil || responseWire.Message.Type != "connect_response" || responseWire.Message.SessionID != sessionID || responseWire.Message.Generation != firstGeneration || responseWire.Message.Sender != peer.ID || responseWire.Message.Recipient != s.identity.ID() {
 		if responseWire.Message != nil && responseWire.Message.Type == "status" {
@@ -374,11 +391,15 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 		return nil, err
 	}
 	cfg.phase("connected")
+	if err = s.checkAuthorizationGeneration(peer.ID, authorizationGeneration); err != nil {
+		_ = data.Close()
+		return nil, err
+	}
 	timings.TotalConnectMS = durationMS(connectStarted)
 	cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings}).Evidence())
 	closeSignal = false
 	closeEndpoint = false
-	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession)}, nil
+	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession)}, nil
 }
 
 // AcceptDirect waits for one authenticated request from expectedPeerID. An
@@ -464,6 +485,16 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 		sendSessionFailure(signalSession, s.identity, peer, *requestWire.Message, err)
 		return nil, err
 	}
+	authorizationGeneration := cfg.expectedAuthorizationGeneration
+	if authorizationGeneration == 0 {
+		authorizationGeneration, err = s.currentAuthorizationGeneration(peer.ID)
+	}
+	if err != nil {
+		return nil, protocol.Wrap(protocol.AuthenticationFailed, "peer authorization changed before session", err)
+	}
+	if err = s.checkAuthorizationGeneration(peer.ID, authorizationGeneration); err != nil {
+		return nil, err
+	}
 	reportFailure := func(setupErr error) error {
 		sendSessionFailure(signalSession, s.identity, peer, *requestWire.Message, setupErr)
 		return setupErr
@@ -492,7 +523,11 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 		return nil, reportFailure(err)
 	}
 	cfg.phase("connected")
-	result := &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, signal: signalSession, signalBase: signalBase}
+	if err = s.checkAuthorizationGeneration(peer.ID, authorizationGeneration); err != nil {
+		_ = data.Close()
+		return nil, reportFailure(err)
+	}
+	result := &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, AuthorizationGeneration: authorizationGeneration, signal: signalSession, signalBase: signalBase}
 	cfg.evidence(result.Evidence())
 	closeEndpoint = false
 	return result, nil
@@ -665,6 +700,9 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
+	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
+		return DirectTransferResult{Evidence: peer.Evidence()}, err
+	}
 	options, err := s.sendContentOptions(ctx, prepared, cfg, hooks)
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence()}, err

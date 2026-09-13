@@ -1,10 +1,16 @@
 # LinkSend implementation progress
 
-## 2026-09-13 E1-C3原生网络与睡眠事件候选（待复审）
+## 2026-09-13 E1-C2残余授权/LAN恢复/发现竞态修复（待复审）
+
+- 完整成员快照移除peer后取消其活动task；queue保存的expected authorization generation贯穿StartSend、PeerSession和开流检查，LAN-only可信nearby设备可独立尝试，不再伪造online。持久authorization epoch阻止解除屏蔽后generation回退。
+- LAN发起端只在验证done后启用pin；断线保留最多60秒、上限64的provisional/completed事务，query可在重启后恢复ready/done和target凭证，撤销/重配清除旧事务。发现多地址签名稳定排序，UDP重建与Close串行收尾，取消后不能遗留新socket。
+- 受影响三个包完整测试PASS；定向race覆盖活动快照撤销、旧queue generation、LAN同意及UDP rebuild/Close。准确包物理LAN、跨NAT和系统确认仍NOT RUN，不部署当前授权变更。
+
+## 2026-09-13 E1-C3原生网络与睡眠事件源码闭环（已验收，物理待测）
 
 - Windows使用系统 `NotifyIpInterfaceChange`/`CancelMibChangeNotify2` 监听所有地址族接口变化；macOS使用 `SCDynamicStore` 监听全局和接口IPv4/IPv6状态。Wails 3的系统睡眠/唤醒事件与网络回调进入容量1串行泵，再调用既有core门闩；5秒接口快照fallback保留。
 - 关闭先注销Wails和系统订阅，停止并join macOS CFRunLoop/Windows通知，再等待事件泵退出和关闭core。通知只刷新未来发现/endpoint选择，不取消健康活动QUIC。
-- Windows桌面专项test/vet/build、前端typecheck/lint/58项测试/build、Wails 3 beta.18 production build PASS。Mac `10.234.212.116`（macOS26.5 arm64）对固定源码 `844e286` 的真实SCDynamicStore注册/停止测试、desktop vet/build PASS，作业 `/tmp/codex-ssh/linksend-e1-c3-mac-build-final-20260913T114047Z`；链接器deployment-target warning保留。准确包Windows/macOS事件延迟、网络切换、睡眠唤醒与文件hash仍NOT RUN；物理结果不得由源码检查替代。
+- Windows桌面专项test/vet/build、前端typecheck/lint/58项测试/build、Wails 3 beta.18 production build PASS。Mac `10.234.212.116`（macOS26.5 arm64）对固定源码 `844e286` 的真实SCDynamicStore注册/停止测试、desktop vet/build PASS，作业 `/tmp/codex-ssh/linksend-e1-c3-mac-build-final-20260913T114047Z`；链接器deployment-target warning保留。提交 `248e1ee` 的core、desktop、Windows/macOS双架构包CI全部PASS，总控接受源码和两平台注册/停止构建闭环。准确包Windows/macOS事件延迟、网络切换、睡眠唤醒与文件hash仍NOT RUN；物理结果不得由源码检查替代。
 
 ## 2026-09-13 E1第二候选与C1审查修复（待复审）
 
