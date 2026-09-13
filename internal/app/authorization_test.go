@@ -63,7 +63,8 @@ func TestMembershipAndLANCompletionCannotRepinRevokedPeer(t *testing.T) {
 	if err = svc.BlockPeer(peer.ID()); err != nil {
 		t.Fatal(err)
 	}
-	if err = svc.syncPairedDevices([]signaling.Device{{ID: peer.ID(), PublicKey: peer.PublicKey(), Name: "new display name"}}); err != nil {
+	localIncarnation, peerIncarnation := "11111111111111111111111111111111", "22222222222222222222222222222222"
+	if err = svc.syncPairedDevices([]signaling.Device{{ID: svc.identity.ID(), PublicKey: svc.identity.PublicKey(), Name: "local", GroupID: "group", Incarnation: localIncarnation, MembershipRevision: 2}, {ID: peer.ID(), PublicKey: peer.PublicKey(), Name: "new display name", GroupID: "group", Incarnation: peerIncarnation, MembershipRevision: 2}}); err != nil {
 		t.Fatalf("blocked membership should be skipped without breaking other members: %v", err)
 	}
 	lateSession := &PeerSession{PeerID: peer.ID(), peerName: "peer", peerPublicKey: peer.PublicKey(), localPeer: true, lanAddress: "192.168.10.5"}

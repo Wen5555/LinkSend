@@ -34,33 +34,36 @@ type Config struct {
 }
 
 type Service struct {
-	profileLock     *profileLock
-	cfg             Config
-	identity        *identity.Identity
-	signal          *signaling.Client
-	mu              sync.RWMutex
-	trustMu         sync.Mutex
-	tasks           *taskManager
-	inbox           inboxManager
-	networkMu       sync.Mutex
-	network         cachedNetworkSelection
-	lanMu           sync.RWMutex
-	lan             *lanRuntime
-	lanError        string
-	operationMu     sync.Mutex
-	closing         atomic.Bool
-	lanLifecycleMu  sync.Mutex
-	listenerWorkers sync.WaitGroup
-	shutdownOnce    sync.Once
-	shutdownDone    chan struct{}
-	store           *desktopStore
-	storeErr        error
-	queue           queueManager
-	changes         changeHub
-	epoch           string
-	workCtx         context.Context
-	workCancel      context.CancelFunc
-	content         contentManager
+	profileLock       *profileLock
+	cfg               Config
+	identity          *identity.Identity
+	signal            *signaling.Client
+	mu                sync.RWMutex
+	trustMu           sync.Mutex
+	tasks             *taskManager
+	inbox             inboxManager
+	networkMu         sync.Mutex
+	network           cachedNetworkSelection
+	lanMu             sync.RWMutex
+	lan               *lanRuntime
+	lanError          string
+	operationMu       sync.Mutex
+	closing           atomic.Bool
+	lanLifecycleMu    sync.Mutex
+	listenerWorkers   sync.WaitGroup
+	shutdownOnce      sync.Once
+	shutdownDone      chan struct{}
+	store             *desktopStore
+	storeErr          error
+	queue             queueManager
+	changes           changeHub
+	epoch             string
+	workCtx           context.Context
+	workCancel        context.CancelFunc
+	content           contentManager
+	lanPair           lanPairCoordinator
+	recoveryMu        sync.Mutex
+	lastNetworkChange time.Time
 }
 
 type cachedNetworkSelection struct {
@@ -82,17 +85,23 @@ type DiagnosticIdentity struct {
 }
 
 type DeviceInfo struct {
-	ID           string        `json:"id"`
-	GroupID      string        `json:"group_id"`
-	Name         string        `json:"name"`
-	PublicKey    string        `json:"public_key_hex"`
-	Admin        bool          `json:"admin"`
-	Online       bool          `json:"online"`
-	Trusted      bool          `json:"trusted"`
-	AlwaysAccept bool          `json:"always_accept"`
-	Nearby       bool          `json:"nearby"`
-	Blocked      bool          `json:"blocked"`
-	Profile      DeviceProfile `json:"profile"`
+	ID                 string        `json:"id"`
+	GroupID            string        `json:"group_id"`
+	Name               string        `json:"name"`
+	PublicKey          string        `json:"public_key_hex"`
+	Admin              bool          `json:"admin"`
+	Online             bool          `json:"online"`
+	Trusted            bool          `json:"trusted"`
+	AlwaysAccept       bool          `json:"always_accept"`
+	Nearby             bool          `json:"nearby"`
+	Blocked            bool          `json:"blocked"`
+	Profile            DeviceProfile `json:"profile"`
+	Incarnation        string        `json:"incarnation,omitempty"`
+	MembershipRevision uint64        `json:"membership_revision,omitempty"`
+	Relationship       string        `json:"relationship"`
+	ServiceState       string        `json:"service_state"`
+	LANControlState    string        `json:"lan_control_state"`
+	ConnectionState    string        `json:"connection_state"`
 }
 
 type InvitationInfo struct {
@@ -232,6 +241,7 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	var devices []signaling.Device
 	serverErr := err
 	if err == nil {
+		s.flushPendingRevocations(ctx, c)
 		devices, serverErr = c.Devices(ctx)
 		if serverErr == nil {
 			if err = s.syncPairedDevices(devices); err != nil {
@@ -260,7 +270,9 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		item.Trusted = ok || d.ID == s.identity.ID()
 		item.AlwaysAccept = ok && peer.AutoAccept
 		_, item.Nearby = nearbyByID[d.ID]
-		item.Online = item.Online || item.Nearby
+		if item.Nearby {
+			item.LANControlState = "discovered_unverified"
+		}
 		out = append(out, item)
 		seen[d.ID] = true
 	}
@@ -269,14 +281,18 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 			continue
 		}
 		_, isNearby := nearbyByID[peer.ID]
-		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: isNearby, Trusted: true, AlwaysAccept: peer.AutoAccept, Nearby: isNearby})
+		relationship := "lan_paired"
+		if peer.GrantKind == "group" {
+			relationship = "group_paired"
+		}
+		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: false, Trusted: true, AlwaysAccept: peer.AutoAccept, Nearby: isNearby, Relationship: relationship, ServiceState: "unavailable", LANControlState: map[bool]string{true: "discovered_unverified", false: "not_seen"}[isNearby], ConnectionState: "not_connected"})
 		seen[peer.ID] = true
 	}
 	for _, peer := range nearby {
 		if seen[peer.ID] || peer.ID == s.identity.ID() {
 			continue
 		}
-		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: true, Nearby: true})
+		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: false, Nearby: true, Relationship: "unpaired", ServiceState: "unknown", LANControlState: "discovered_unverified", ConnectionState: "not_connected"})
 		seen[peer.ID] = true
 	}
 	denied, err := identity.LoadDeniedPeers(s.cfg.DataDir)
@@ -287,12 +303,18 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		found := false
 		for i := range out {
 			if out[i].ID == blocked.ID {
-				out[i].Blocked, out[i].Trusted, out[i].AlwaysAccept = true, false, false
+				out[i].Blocked, out[i].Trusted, out[i].AlwaysAccept, out[i].Relationship = true, false, false, "removed"
+				if blocked.PendingSync {
+					out[i].ServiceState = "pending_revoke_sync"
+				} else {
+					out[i].ServiceState = "revoked"
+				}
+				out[i].LANControlState, out[i].ConnectionState = "blocked", "blocked"
 				found = true
 			}
 		}
 		if !found {
-			out = append(out, DeviceInfo{ID: blocked.ID, Name: blocked.Name, Blocked: true})
+			out = append(out, DeviceInfo{ID: blocked.ID, Name: blocked.Name, Blocked: true, Relationship: "removed", ServiceState: map[bool]string{true: "pending_revoke_sync", false: "revoked"}[blocked.PendingSync], LANControlState: "blocked", ConnectionState: "blocked"})
 		}
 	}
 	if len(out) == 0 && serverErr != nil {
@@ -301,17 +323,46 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	return s.decorateDevices(out), nil
 }
 
+func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Client) {
+	denied, err := identity.LoadDeniedPeers(s.cfg.DataDir)
+	if err != nil {
+		return
+	}
+	for _, pending := range denied {
+		if !pending.PendingSync || pending.RequestID == "" || pending.TargetIncarnation == "" || pending.SeenRevision == 0 {
+			continue
+		}
+		revision, revokeErr := c.RevokeMembership(ctx, pending.ID, pending.TargetIncarnation, pending.SeenRevision, pending.RequestID)
+		if revokeErr != nil {
+			continue
+		}
+		s.trustMu.Lock()
+		_ = identity.MarkMembershipRevokeSynced(s.cfg.DataDir, pending.ID, pending.RequestID, revision)
+		s.trustMu.Unlock()
+	}
+}
+
 // syncPairedDevices intentionally implements the simplified trust model:
 // successful pairing-service membership pins every returned device key. This
 // removes the manual fingerprint step while still rejecting later key changes.
 func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 	s.trustMu.Lock()
 	defer s.trustMu.Unlock()
+	var local signaling.Device
+	for _, d := range devices {
+		if d.ID == s.identity.ID() {
+			local = d
+			break
+		}
+	}
+	if local.ID == "" {
+		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 local incarnation missing")
+	}
 	for _, d := range devices {
 		if d.ID == s.identity.ID() {
 			continue
 		}
-		if err := identity.TrustPairedPeer(s.cfg.DataDir, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey}); err != nil {
+		if err := identity.TrustMembershipPeer(s.cfg.DataDir, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey, GroupID: d.GroupID, PeerIncarnation: d.Incarnation, LocalIncarnation: local.Incarnation, MembershipRevision: d.MembershipRevision}); err != nil {
 			if errors.Is(err, identity.ErrPeerDenied) {
 				continue
 			}
@@ -414,14 +465,54 @@ func (s *Service) alwaysAccept(deviceID string) bool {
 }
 
 func (s *Service) Revoke(ctx context.Context, deviceID string) error {
-	if err := s.BlockPeer(deviceID); err != nil {
+	peers, err := identity.LoadTrust(s.cfg.DataDir)
+	if err != nil {
 		return err
+	}
+	var peer identity.TrustedPeer
+	for _, candidate := range peers {
+		if candidate.ID == deviceID {
+			peer = candidate
+			break
+		}
+	}
+	if peer.ID == "" {
+		return errors.New("UNPAIRED: current membership grant required")
+	}
+	if peer.GrantKind != "group" || len(peer.PeerIncarnation) != 32 || peer.MembershipRevision == 0 {
+		if err = s.BlockPeer(deviceID); err != nil {
+			return err
+		}
+		c, clientErr := s.client()
+		if clientErr != nil {
+			return clientErr
+		}
+		return c.Revoke(ctx, deviceID)
+	}
+	requestID := protocol.RandomID()
+	s.trustMu.Lock()
+	err = identity.RevokeMembershipPeer(s.cfg.DataDir, deviceID, peer.PeerIncarnation, requestID, peer.MembershipRevision)
+	s.trustMu.Unlock()
+	if err != nil {
+		return err
+	}
+	for _, task := range s.Tasks() {
+		if task.PeerID == deviceID && !isTerminal(task.State) {
+			_ = s.CancelTask(task.ID)
+		}
 	}
 	c, err := s.client()
 	if err != nil {
 		return err
 	}
-	return c.Revoke(ctx, deviceID)
+	revision, err := c.RevokeMembership(ctx, deviceID, peer.PeerIncarnation, peer.MembershipRevision, requestID)
+	if err != nil {
+		return err
+	}
+	s.trustMu.Lock()
+	syncErr := identity.MarkMembershipRevokeSynced(s.cfg.DataDir, deviceID, requestID, revision)
+	s.trustMu.Unlock()
+	return syncErr
 }
 
 func (s *Service) Health(ctx context.Context) (protocol.Capabilities, error) {
@@ -485,7 +576,7 @@ func (s *Service) name(value string) string {
 }
 
 func (s *Service) device(d signaling.Device) DeviceInfo {
-	return DeviceInfo{ID: d.ID, GroupID: d.GroupID, Name: d.Name, PublicKey: hex.EncodeToString(d.PublicKey), Admin: d.Admin, Online: d.Online}
+	return DeviceInfo{ID: d.ID, GroupID: d.GroupID, Name: d.Name, PublicKey: hex.EncodeToString(d.PublicKey), Admin: d.Admin, Online: d.Online, Incarnation: d.Incarnation, MembershipRevision: d.MembershipRevision, Relationship: "group_paired", ServiceState: "membership_synced", ConnectionState: "not_connected"}
 }
 
 func redactURL(raw string) string {

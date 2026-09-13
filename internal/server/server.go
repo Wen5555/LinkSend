@@ -244,6 +244,10 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.Path != "/healthz" && r.Header.Get("X-LinkSend-Membership") != "2" {
+			reject(w, http.StatusUpgradeRequired, protocol.VersionIncompatible, "membership_v2 client required")
+			return
+		}
 		m.ServeHTTP(w, r)
 	})
 }
@@ -410,28 +414,47 @@ func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, devices)
 }
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
-	d, ok := s.authenticate(w, r, nil)
+	body, err := readBody(w, r)
+	if err != nil {
+		reject(w, 400, protocol.InvalidMessage, "invalid revocation request")
+		return
+	}
+	d, ok := s.authenticate(w, r, body)
 	if !ok {
 		return
 	}
 	id := r.PathValue("id")
-	if err := s.store.Revoke(r.Context(), d, id); err != nil {
+	var req store.RevokeRequest
+	if json.Unmarshal(body, &req) != nil || req.TargetID != "" && req.TargetID != id {
+		reject(w, 400, protocol.InvalidMessage, "invalid revocation request")
+		return
+	}
+	req.TargetID = id
+	revision, err := s.store.Revoke(r.Context(), d, req)
+	if err != nil {
 		reject(w, 403, protocol.AuthenticationFailed, "revocation not authorized")
 		return
 	}
 	s.mu.Lock()
-	p := s.clients[id]
+	peers := make([]*peer, 0, len(s.clients))
+	for _, connected := range s.clients {
+		if connected.device.GroupID == d.GroupID {
+			peers = append(peers, connected)
+		}
+	}
 	for sid, n := range s.sessions {
 		if n.from == id || n.to == id {
 			delete(s.sessions, sid)
 		}
 	}
 	s.mu.Unlock()
-	if p != nil {
-		p.cancel()
-		_ = p.conn.CloseNow()
+	// Force every online group member to reauthenticate and fetch the new
+	// revision. Established QUIC sessions remain independent of WSS teardown.
+	for _, connected := range peers {
+		connected.cancel()
+		_ = connected.conn.CloseNow()
 	}
-	respond(w, 200, map[string]bool{"revoked": true})
+	respond(w, 200, map[string]any{"revoked": true, "membership_revision": revision})
 }
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {

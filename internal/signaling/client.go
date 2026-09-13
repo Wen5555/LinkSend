@@ -41,18 +41,20 @@ type Config struct {
 // Device mirrors the bounded public device representation returned by the
 // rendezvous service. Membership is deliberately not equivalent to local trust.
 type Device struct {
-	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	Name      string `json:"name"`
-	PublicKey []byte `json:"public_key"`
-	Admin     bool   `json:"admin"`
-	Revoked   bool   `json:"revoked"`
-	Online    bool   `json:"online"`
+	ID                 string `json:"id"`
+	GroupID            string `json:"group_id"`
+	Name               string `json:"name"`
+	PublicKey          []byte `json:"public_key"`
+	Admin              bool   `json:"admin"`
+	Revoked            bool   `json:"revoked"`
+	Online             bool   `json:"online"`
+	Incarnation        string `json:"incarnation"`
+	MembershipRevision uint64 `json:"membership_revision"`
 }
 
 func (d Device) Validate() error {
-	if len(d.ID) != 64 || len(d.PublicKey) != ed25519.PublicKeySize || identity.DeviceID(d.PublicKey) != d.ID || d.Name == "" || len(d.Name) > 128 {
-		return protocol.Fail(protocol.InvalidMessage, "invalid device response")
+	if len(d.ID) != 64 || len(d.PublicKey) != ed25519.PublicKeySize || identity.DeviceID(d.PublicKey) != d.ID || d.Name == "" || len(d.Name) > 128 || len(d.Incarnation) != 32 || d.MembershipRevision == 0 {
+		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 device response required")
 	}
 	return nil
 }
@@ -75,6 +77,42 @@ type Wire struct {
 	Message      *protocol.Envelope     `json:"message,omitempty"`
 	Error        *protocol.Error        `json:"error,omitempty"`
 	Capabilities *protocol.Capabilities `json:"capabilities,omitempty"`
+	LANPair      *LANPairFrame          `json:"lan_pair,omitempty"`
+}
+
+type LANPairFrame struct {
+	Version    int    `json:"version"`
+	Phase      string `json:"phase"`
+	RequestID  string `json:"request_id"`
+	Nonce      string `json:"nonce"`
+	Sender     string `json:"sender"`
+	Recipient  string `json:"recipient"`
+	Generation uint64 `json:"grant_generation"`
+	IssuedAt   int64  `json:"issued_at"`
+	ExpiresAt  int64  `json:"expires_at"`
+	Signature  []byte `json:"signature"`
+}
+
+func (f LANPairFrame) SigningBytes() []byte {
+	body, _ := json.Marshal(struct {
+		Version                                    int `json:"version"`
+		Phase, RequestID, Nonce, Sender, Recipient string
+		Generation                                 uint64 `json:"grant_generation"`
+		IssuedAt, ExpiresAt                        int64
+	}{f.Version, f.Phase, f.RequestID, f.Nonce, f.Sender, f.Recipient, f.Generation, f.IssuedAt, f.ExpiresAt})
+	return protocol.AuthBytes("LINKSEND-LAN-PAIR", "/membership/v2", f.Sender, f.Nonce, f.IssuedAt, body)
+}
+
+func (f LANPairFrame) Verify(public ed25519.PublicKey, expectedRecipient string, now time.Time) error {
+	if f.Version != 2 || len(f.RequestID) != 32 || len(f.Nonce) != 32 || len(f.Sender) != 64 || f.Recipient != expectedRecipient || f.Generation == 0 || f.IssuedAt > now.Add(15*time.Second).Unix() || f.ExpiresAt < now.Unix() || f.ExpiresAt-f.IssuedAt > 60 || identity.DeviceID(public) != f.Sender || len(f.Signature) != ed25519.SignatureSize || !ed25519.Verify(public, f.SigningBytes(), f.Signature) {
+		return protocol.Fail(protocol.AuthenticationFailed, "invalid LAN pairing transcript")
+	}
+	switch f.Phase {
+	case "request", "accept", "reject", "commit", "ack":
+	default:
+		return protocol.Fail(protocol.InvalidMessage, "invalid LAN pairing phase")
+	}
+	return nil
 }
 
 // RemoteError retains the server's stable protocol code and HTTP status.
@@ -165,6 +203,7 @@ func (c *Client) signedRequest(ctx context.Context, method, p string, body []byt
 	req.Header.Set("X-LinkSend-Nonce", nonce)
 	req.Header.Set("X-LinkSend-Time", fmt.Sprintf("%d", at))
 	req.Header.Set("X-LinkSend-Signature", base64.RawStdEncoding.EncodeToString(sig))
+	req.Header.Set("X-LinkSend-Membership", "2")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, protocol.Wrap(protocol.SignalingUnreachable, "request failed", err)
@@ -243,6 +282,7 @@ func (c *Client) register(ctx context.Context, p, token, name string) (Device, e
 		return Device{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-LinkSend-Membership", "2")
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return Device{}, protocol.Wrap(protocol.SignalingUnreachable, "registration request failed", err)
@@ -336,11 +376,46 @@ func (c *Client) Revoke(ctx context.Context, deviceID string) error {
 	if len(deviceID) != 64 {
 		return protocol.Fail(protocol.InvalidMessage, "invalid device id")
 	}
-	resp, err := c.signedRequest(ctx, http.MethodDelete, "/v1/devices/"+deviceID, nil)
+	devices, err := c.Devices(ctx)
 	if err != nil {
 		return err
 	}
-	return decodeSuccess(resp, nil)
+	var target Device
+	for _, device := range devices {
+		if device.ID == deviceID {
+			target = device
+			break
+		}
+	}
+	if target.ID == "" {
+		return protocol.Fail(protocol.AuthenticationFailed, "target is not a current group member")
+	}
+	_, err = c.RevokeMembership(ctx, deviceID, target.Incarnation, target.MembershipRevision, protocol.RandomID())
+	return err
+}
+
+func (c *Client) RevokeMembership(ctx context.Context, deviceID, targetIncarnation string, expectedRevision uint64, requestID string) (uint64, error) {
+	if len(deviceID) != 64 || len(targetIncarnation) != 32 || expectedRevision == 0 || requestID == "" {
+		return 0, protocol.Fail(protocol.InvalidMessage, "invalid membership revocation")
+	}
+	body, err := json.Marshal(map[string]any{"request_id": requestID, "target_incarnation": targetIncarnation, "expected_revision": expectedRevision})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := c.signedRequest(ctx, http.MethodDelete, "/v1/devices/"+deviceID, body)
+	if err != nil {
+		return 0, err
+	}
+	var result struct {
+		MembershipRevision uint64 `json:"membership_revision"`
+	}
+	if err = decodeSuccess(resp, &result); err != nil {
+		return 0, err
+	}
+	if result.MembershipRevision <= expectedRevision {
+		return 0, protocol.Fail(protocol.InvalidMessage, "membership revision did not advance")
+	}
+	return result.MembershipRevision, nil
 }
 
 func (c *Client) Health(ctx context.Context) (protocol.Capabilities, error) {
@@ -370,7 +445,7 @@ func (c *Client) Health(ctx context.Context) (protocol.Capabilities, error) {
 }
 
 func supported(c protocol.Capabilities) bool {
-	return c.ProtocolVersion == protocol.Version && !c.Relay && c.Transport == "quic"
+	return c.ProtocolVersion == protocol.Version && !c.Relay && c.Transport == "quic" && c.MembershipVersion == 2
 }
 
 func (c *Client) websocketURL() string {
@@ -387,7 +462,9 @@ func (c *Client) websocketURL() string {
 // Connect opens a WSS connection and proves possession of the enrolled device
 // private key. It does not itself accept remote device identities as trusted.
 func (c *Client) Connect(ctx context.Context) (*Session, error) {
-	conn, response, err := websocket.Dial(ctx, c.websocketURL(), &websocket.DialOptions{HTTPClient: c.http, Subprotocols: []string{subprotocol}, CompressionMode: websocket.CompressionDisabled})
+	headers := http.Header{}
+	headers.Set("X-LinkSend-Membership", "2")
+	conn, response, err := websocket.Dial(ctx, c.websocketURL(), &websocket.DialOptions{HTTPClient: c.http, HTTPHeader: headers, Subprotocols: []string{subprotocol}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {
 		if response != nil {
 			defer response.Body.Close()

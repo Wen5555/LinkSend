@@ -1068,6 +1068,11 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
+	if err := identity.CheckTaskAuthorization(s.cfg.DataDir, t.recovery.PeerID, t.snap.StartedAt); err != nil {
+		t.mu.Unlock()
+		s.ensureInbox()
+		return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "task belongs to an older peer authorization", err)
+	}
 	if err := s.configureContentResume(s.workCtx, id, t.recovery, &cfg); err != nil {
 		t.mu.Unlock()
 		s.ensureInbox()

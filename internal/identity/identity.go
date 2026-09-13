@@ -247,11 +247,19 @@ func VerifyPeer(chain []*x509.Certificate, expected ed25519.PublicKey, peerIsCli
 }
 
 type TrustedPeer struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	PublicKey      []byte `json:"public_key"`
-	AutoAccept     bool   `json:"auto_accept,omitempty"`
-	LastLANAddress string `json:"last_lan_address,omitempty"`
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	PublicKey          []byte    `json:"public_key"`
+	AutoAccept         bool      `json:"auto_accept,omitempty"`
+	LastLANAddress     string    `json:"last_lan_address,omitempty"`
+	LANAddressHistory  []string  `json:"lan_address_history,omitempty"`
+	GroupID            string    `json:"group_id,omitempty"`
+	PeerIncarnation    string    `json:"peer_incarnation,omitempty"`
+	LocalIncarnation   string    `json:"local_incarnation,omitempty"`
+	MembershipRevision uint64    `json:"membership_revision,omitempty"`
+	GrantGeneration    uint64    `json:"grant_generation,omitempty"`
+	GrantKind          string    `json:"grant_kind,omitempty"`
+	GrantedAt          time.Time `json:"granted_at,omitempty"`
 }
 type TrustFile struct {
 	SchemaVersion int           `json:"schema_version,omitempty"`
@@ -260,12 +268,18 @@ type TrustFile struct {
 }
 
 type DeniedPeer struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name,omitempty"`
-	DeniedAt time.Time `json:"denied_at"`
+	ID                      string    `json:"id"`
+	Name                    string    `json:"name,omitempty"`
+	DeniedAt                time.Time `json:"denied_at"`
+	LocalBlock              bool      `json:"local_block,omitempty"`
+	AuthorizationGeneration uint64    `json:"authorization_generation,omitempty"`
+	TargetIncarnation       string    `json:"target_incarnation,omitempty"`
+	SeenRevision            uint64    `json:"seen_revision,omitempty"`
+	RequestID               string    `json:"request_id,omitempty"`
+	PendingSync             bool      `json:"pending_sync,omitempty"`
 }
 
-const trustSchemaVersion = 1
+const trustSchemaVersion = 2
 const trustMigrationBackup = "trust.json.pre-schema-1"
 
 func LoadTrust(dir string) ([]TrustedPeer, error) {
@@ -296,6 +310,75 @@ func CheckPeerAllowed(dir, peerID string) error {
 		return err
 	}
 	return checkPeerAllowed(f, peerID)
+}
+
+func LANPairGeneration(dir, peerID string) (uint64, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if !validPeerID(peerID) {
+		return 0, authenticationError("invalid device identity")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return 0, err
+	}
+	for _, denied := range f.DeniedPeers {
+		if denied.ID == peerID {
+			if denied.LocalBlock {
+				return 0, ErrPeerDenied
+			}
+			return denied.AuthorizationGeneration, nil
+		}
+	}
+	for _, peer := range f.Peers {
+		if peer.ID == peerID {
+			return max(uint64(1), peer.GrantGeneration), nil
+		}
+	}
+	return 1, nil
+}
+
+func CommitLANPeer(dir string, peer TrustedPeer, expectedGeneration uint64) error {
+	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || expectedGeneration == 0 || !validLANAddress(peer.LastLANAddress) {
+		return authenticationError("invalid LAN pairing grant")
+	}
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index := 0; index < len(f.DeniedPeers); index++ {
+		denied := f.DeniedPeers[index]
+		if denied.ID != peer.ID {
+			continue
+		}
+		if denied.LocalBlock || denied.AuthorizationGeneration != expectedGeneration {
+			return ErrPeerDenied
+		}
+		f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
+		break
+	}
+	for index, existing := range f.Peers {
+		if existing.ID != peer.ID {
+			continue
+		}
+		if !bytes.Equal(existing.PublicKey, peer.PublicKey) {
+			return authenticationError("peer key changed")
+		}
+		peer.GrantGeneration = existing.GrantGeneration
+		peer.AutoAccept = existing.AutoAccept
+		peer.GrantedAt = existing.GrantedAt
+		peer.GrantKind = "lan"
+		f.Peers[index] = peer
+		return saveTrust(dir, f)
+	}
+	peer.AutoAccept = false
+	peer.GrantKind = "lan"
+	peer.GrantGeneration = expectedGeneration
+	peer.GrantedAt = time.Now().UTC()
+	f.Peers = append(f.Peers, peer)
+	return saveTrust(dir, f)
 }
 
 func checkPeerAllowed(f TrustFile, peerID string) error {
@@ -380,13 +463,18 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 	}
 	seen := map[string]bool{}
 	for _, p := range f.Peers {
-		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) {
+		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) || len(p.LANAddressHistory) > 8 || p.GrantKind != "" && p.GrantKind != "group" && p.GrantKind != "lan" {
 			return TrustFile{}, errors.New("invalid trust file")
+		}
+		for _, address := range p.LANAddressHistory {
+			if address == "" || !validLANAddress(address) {
+				return TrustFile{}, errors.New("invalid remembered LAN address history")
+			}
 		}
 		seen[p.ID] = true
 	}
 	for _, denied := range f.DeniedPeers {
-		if !validPeerID(denied.ID) || denied.DeniedAt.IsZero() || seen[denied.ID] {
+		if !validPeerID(denied.ID) || denied.DeniedAt.IsZero() || seen[denied.ID] || denied.AuthorizationGeneration == 0 && f.SchemaVersion >= 2 {
 			return TrustFile{}, errors.New("invalid denied peer record")
 		}
 		seen[denied.ID] = true
@@ -438,7 +526,13 @@ func trustPeer(dir string, peer TrustedPeer) error {
 				return authenticationError("peer key changed")
 			}
 			if peer.LastLANAddress != "" && existing.LastLANAddress != peer.LastLANAddress {
+				history := append([]string{}, existing.LANAddressHistory...)
+				if existing.LastLANAddress != "" {
+					history = appendRememberedAddress(history, existing.LastLANAddress)
+				}
+				history = appendRememberedAddress(history, peer.LastLANAddress)
 				f.Peers[index].LastLANAddress = peer.LastLANAddress
+				f.Peers[index].LANAddressHistory = history
 				return saveTrust(dir, f)
 			}
 			// The authenticated service remains the live source of display names.
@@ -449,10 +543,116 @@ func trustPeer(dir string, peer TrustedPeer) error {
 	}
 	// Auto-accept is a separate local command, never an enrollment field.
 	peer.AutoAccept = false
+	if peer.GrantGeneration == 0 {
+		peer.GrantGeneration = 1
+	}
+	if peer.GrantKind == "" {
+		peer.GrantKind = "lan"
+	}
+	if peer.GrantedAt.IsZero() {
+		peer.GrantedAt = time.Now().UTC()
+	}
 	f.Peers = append(f.Peers, peer)
 	return saveTrust(dir, f)
 }
 
+// TrustMembershipPeer applies an authenticated membership_v2 snapshot. A
+// newer verified incarnation may clear only a group-removal barrier; an
+// explicit local block is never cleared by server state.
+func TrustMembershipPeer(dir string, peer TrustedPeer) error {
+	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || peer.GroupID == "" || len(peer.PeerIncarnation) != 32 || len(peer.LocalIncarnation) != 32 || peer.MembershipRevision == 0 {
+		return authenticationError("invalid membership_v2 grant")
+	}
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	generation := uint64(1)
+	for index := 0; index < len(f.DeniedPeers); index++ {
+		denied := f.DeniedPeers[index]
+		if denied.ID != peer.ID {
+			continue
+		}
+		if denied.LocalBlock || denied.TargetIncarnation == peer.PeerIncarnation || peer.MembershipRevision <= denied.SeenRevision {
+			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
+		}
+		generation = denied.AuthorizationGeneration + 1
+		f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
+		break
+	}
+	for index, existing := range f.Peers {
+		if existing.ID != peer.ID {
+			continue
+		}
+		if !bytes.Equal(existing.PublicKey, peer.PublicKey) {
+			return authenticationError("peer key changed")
+		}
+		if existing.PeerIncarnation == peer.PeerIncarnation && existing.LocalIncarnation == peer.LocalIncarnation && existing.GroupID == peer.GroupID {
+			if peer.MembershipRevision < existing.MembershipRevision {
+				return authenticationError("stale membership revision")
+			}
+			peer.AutoAccept = existing.AutoAccept
+			peer.LastLANAddress = existing.LastLANAddress
+			peer.LANAddressHistory = existing.LANAddressHistory
+			peer.GrantGeneration = existing.GrantGeneration
+			peer.GrantedAt = existing.GrantedAt
+		} else {
+			peer.AutoAccept = false
+			peer.LastLANAddress = ""
+			peer.GrantGeneration = max(generation, existing.GrantGeneration+1)
+		}
+		peer.GrantKind = "group"
+		f.Peers[index] = peer
+		return saveTrust(dir, f)
+	}
+	peer.AutoAccept = false
+	peer.GrantKind = "group"
+	peer.GrantGeneration = generation
+	peer.GrantedAt = time.Now().UTC()
+	f.Peers = append(f.Peers, peer)
+	return saveTrust(dir, f)
+}
+
+func appendRememberedAddress(history []string, address string) []string {
+	for index, existing := range history {
+		if existing == address {
+			history = append(history[:index], history[index+1:]...)
+			break
+		}
+	}
+	history = append(history, address)
+	if len(history) > 8 {
+		history = history[len(history)-8:]
+	}
+	return history
+}
+
+func CheckTaskAuthorization(dir, peerID, startedAt string) error {
+	when, err := time.Parse(time.RFC3339Nano, startedAt)
+	if err != nil {
+		return authenticationError("task authorization timestamp invalid")
+	}
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	if err = checkPeerAllowed(f, peerID); err != nil {
+		return err
+	}
+	for _, peer := range f.Peers {
+		if peer.ID == peerID {
+			if peer.GrantGeneration > 1 && !peer.GrantedAt.IsZero() && when.Before(peer.GrantedAt) {
+				return authenticationError("task predates current peer grant")
+			}
+			return nil
+		}
+	}
+	return authenticationError("current peer grant missing")
+}
 func validLANAddress(value string) bool {
 	if value == "" {
 		return true
@@ -500,16 +700,70 @@ func RevokePeer(dir, peerID string) error {
 	if errors.Is(checkPeerAllowed(f, peerID), ErrPeerDenied) {
 		return nil
 	}
-	denied := DeniedPeer{ID: peerID, DeniedAt: time.Now().UTC()}
+	denied := DeniedPeer{ID: peerID, DeniedAt: time.Now().UTC(), LocalBlock: true, AuthorizationGeneration: 1}
 	for index, peer := range f.Peers {
 		if peer.ID == peerID {
 			denied.Name = peer.Name
+			denied.AuthorizationGeneration = max(uint64(1), peer.GrantGeneration+1)
 			f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
 			break
 		}
 	}
 	f.DeniedPeers = append(f.DeniedPeers, denied)
 	return saveTrust(dir, f)
+}
+
+// RevokeMembershipPeer persists the group-removal intent before the network
+// request. It invalidates group and LAN grants and is idempotent by request ID.
+func RevokeMembershipPeer(dir, peerID, targetIncarnation, requestID string, seenRevision uint64) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if !validPeerID(peerID) || len(targetIncarnation) != 32 || requestID == "" || seenRevision == 0 {
+		return authenticationError("invalid membership revocation")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for _, denied := range f.DeniedPeers {
+		if denied.ID == peerID {
+			if denied.LocalBlock || denied.RequestID == requestID {
+				return nil
+			}
+			return ErrPeerDenied
+		}
+	}
+	denied := DeniedPeer{ID: peerID, DeniedAt: time.Now().UTC(), AuthorizationGeneration: 1, TargetIncarnation: targetIncarnation, SeenRevision: seenRevision, RequestID: requestID, PendingSync: true}
+	for index, peer := range f.Peers {
+		if peer.ID == peerID {
+			denied.Name = peer.Name
+			denied.AuthorizationGeneration = max(uint64(1), peer.GrantGeneration+1)
+			f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
+			break
+		}
+	}
+	f.DeniedPeers = append(f.DeniedPeers, denied)
+	return saveTrust(dir, f)
+}
+
+func MarkMembershipRevokeSynced(dir, peerID, requestID string, revision uint64) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index := range f.DeniedPeers {
+		d := &f.DeniedPeers[index]
+		if d.ID == peerID && d.RequestID == requestID {
+			if revision > d.SeenRevision {
+				d.SeenRevision = revision
+			}
+			d.PendingSync = false
+			return saveTrust(dir, f)
+		}
+	}
+	return ErrPeerDenied
 }
 
 // AllowPeer is an explicit local unblock command. It restores neither the old
@@ -535,6 +789,20 @@ func AllowPeer(dir, peerID string) error {
 
 func saveTrust(dir string, f TrustFile) error {
 	legacy := f.SchemaVersion == 0
+	for index := range f.Peers {
+		if f.Peers[index].GrantGeneration == 0 {
+			f.Peers[index].GrantGeneration = 1
+		}
+		if f.Peers[index].GrantKind == "" {
+			f.Peers[index].GrantKind = "group"
+		}
+	}
+	for index := range f.DeniedPeers {
+		if f.DeniedPeers[index].AuthorizationGeneration == 0 {
+			f.DeniedPeers[index].AuthorizationGeneration = 1
+			f.DeniedPeers[index].LocalBlock = true
+		}
+	}
 	f.SchemaVersion = trustSchemaVersion
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {

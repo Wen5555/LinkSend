@@ -100,10 +100,11 @@ type Capabilities struct {
 	HistoryPersisted         bool   `json:"history_persisted"`
 	RestartRecoverySupported bool   `json:"restart_recovery_supported"`
 	ByteResumeSupported      bool   `json:"byte_resume_supported"`
+	MembershipVersion        int    `json:"membership_version"`
 }
 
 func Supported() Capabilities {
-	return Capabilities{ProtocolVersion: Version, ProductVersion: ProductVersion, Relay: false, Transport: "quic"}
+	return Capabilities{ProtocolVersion: Version, ProductVersion: ProductVersion, Relay: false, Transport: "quic", MembershipVersion: 2}
 }
 
 type Envelope struct {

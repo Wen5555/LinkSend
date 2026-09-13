@@ -1,6 +1,6 @@
 # LinkSend protocol V1 implementation specification
 
-2026-09-13：桌面体验 U1–U7 已进入新的 E0 实施轮。当前生产协议仍为 V1；成员代际、独立 LAN 同意与自动剪贴板契约已由总控接受语义，具体API/schema/实现及测试仍待后续阶段，见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 和 [全轮 TODO](DESKTOP-EXPERIENCE-TODO.md)。旧 M5 停止要求不限制本轮，新能力未因文档存在而视为实现。
+2026-09-13：桌面体验 U1–U7 已进入实施。文件数据协议仍为 V1；E1候选已落实 `membership_version=2`、控制库schema 3成员代际/撤销事务、本机trust schema 2、独立LAN同意控制帧、多地址发现和网络恢复入口，见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 与 [全轮 TODO](DESKTOP-EXPERIENCE-TODO.md)。该源码/自动测试结果不等于准确包物理双向、双NAT或原生共享通过；自动剪贴板wire仍待E4。
 
 2026-09-12 desktop six-feature implementation: current source targets product
 0.5.0 milestone prereleases; protocol remains V1. The user's explicit milestone

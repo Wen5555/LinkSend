@@ -1,5 +1,12 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E1设备与发现后端第一候选（待总控审查）
+
+- E1-01/02：成员控制面升级为 `membership_version=2` 与数据库schema 3，加入随机incarnation、组revision、邀请码代际绑定和普通成员幂等撤销事务；本机trust schema 2先持久拒绝/outbox并推进grant generation，旧快照、跨组、迟到actor、旧客户端与删后旧码负例通过。
+- E1-03：新增最近签名公告固定公钥后的TLS 1.3 `lan_pair` request/accept|reject/commit/ack；接收端明确同意，双方成功才写独立LAN grant，拒绝零pin。服务短期入组凭证和ack丢失查询仍待下一候选。
+- E1-04/05：同接口保留全部IPv4和多route目录；组播/广播/单播/TLS独立降级并限制资源。Windows使用真实source-bound UDP socket接收回包；网络/唤醒入口刷新未来路径但不取消健康任务。IPv6/mDNS与准确包物理网络矩阵未运行。
+- 实际通过：根 `go test ./...`、`go vet ./...`、`GOWORK=off go test ./...`；桌面模块 `GOWORK=off go test/go vet/go build ./...`；`git diff --check`。E0 draft PR #8 在 `1518e31` 的core、desktop、Windows和双Mac包CI全部SUCCESS。
+
 ## 2026-09-13 E0候选同步与E1后端实施授权
 
 - `ec55db3`、`11c44df`、`2342009` 的既有证据已复用；总控接受 `2342009` 作为Mac共享原型的有界IO修补，不把它视为U6、4097 helper通信或文件交接通过，也不重复十项SafeIO测试。

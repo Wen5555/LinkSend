@@ -48,16 +48,17 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 | ID | 生命周期 | 代码 | 自动测试 | 原生 | 网络 | GitHub | 总控判定/阻塞 |
 |---|---|---|---|---|---|---|---|
-| E0-01 | 待审查 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | 执行中 | 候选提交待推送/CI；见分项记录 |
-| E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | 执行中 | 已有网络证据复用，真实双向与双 NAT 缺项不改写 |
+| E0-01 | 阶段已同步 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PASS | draft PR #8 / 1518e31，core/desktop/三平台包CI全PASS；见分项记录 |
+| E0-02 | 执行中 | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PASS | 已有网络证据复用，真实双向与双 NAT 缺项不改写 |
 | E0-03 | 外部阻塞 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | NOT RUN | 构建/签名PASS、系统安装FAIL、激活NOT RUN；不降格U6 |
 | E0-04 | 待审查 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 执行中 | 总控接受2342009原型IO修补；服务4097与文件交接仍未通过，见MAC-SAFEIO证据 |
 | E0-05 | 验收通过 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 仅ADR语义：总控E0-safeio-close-v1接受11c44df；具体API/schema/实现及兼容测试仍待E1/E4 |
-| E1-01 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，先落实协议/schema与相关负例 |
-| E1-02 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，与代际持久化和会话失效联动 |
-| E1-03 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，独立LAN同意事务 |
-| E1-04 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，发现provider/多地址/恢复后端 |
-| E1-05 | 执行中 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 已派发，统一目录与恢复闭环；准确包实机矩阵后补 |
+
+| E1-01 | 待审查 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | schema3/incarnation/revision/旧端拒绝候选；空组初始化与显式跨组切换未闭合 |
+| E1-02 | 待审查 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | 本机屏障/outbox/幂等撤销及负例候选；真实离线重启补同步未实机 |
+| E1-03 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | TLS签名同意/拒绝零pin候选；服务凭证、ack查询与物理双机未闭合 |
+| E1-04 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 多地址/独立降级/Windows源绑定候选；IPv6/mDNS/物理矩阵未闭合 |
+| E1-05 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录与不取消健康task候选；准确包双向/网络切换/睡眠/双NAT未闭合 |
 | E2-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |

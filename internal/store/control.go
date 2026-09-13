@@ -33,15 +33,38 @@ var ErrInvitationUsed = fmt.Errorf("used pairing invitation: %w", ErrInvitation)
 var ErrInvitationConflict = fmt.Errorf("pairing identity conflict: %w", ErrInvitation)
 
 type Device struct {
-	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	Name      string `json:"name"`
-	PublicKey []byte `json:"public_key"`
-	Admin     bool   `json:"admin"`
-	Revoked   bool   `json:"revoked"`
-	Online    bool   `json:"online"`
+	ID                 string `json:"id"`
+	GroupID            string `json:"group_id"`
+	Name               string `json:"name"`
+	PublicKey          []byte `json:"public_key"`
+	Admin              bool   `json:"admin"`
+	Revoked            bool   `json:"revoked"`
+	Online             bool   `json:"online"`
+	Incarnation        string `json:"incarnation"`
+	MembershipRevision uint64 `json:"membership_revision"`
+}
+
+type RevokeRequest struct {
+	RequestID         string `json:"request_id"`
+	TargetID          string `json:"target_id"`
+	TargetIncarnation string `json:"target_incarnation"`
+	ExpectedRevision  uint64 `json:"expected_revision"`
 }
 type Control struct{ db *sql.DB }
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanDevice(row rowScanner, d *Device) error {
+	return row.Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked, &d.Incarnation, &d.MembershipRevision)
+}
+
+func randomIncarnation() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", raw[:]), nil
+}
 
 func OpenControl(path string) (*Control, error) {
 	if path != ":memory:" {
@@ -65,8 +88,10 @@ func OpenControl(path string) (*Control, error) {
 	}
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;
-CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,group_id TEXT NOT NULL,name TEXT NOT NULL,public_key BLOB NOT NULL,admin INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS invitations(hash BLOB PRIMARY KEY,group_id TEXT NOT NULL,inviter TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0,used_by TEXT NOT NULL DEFAULT '',used_at INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS groups(id TEXT PRIMARY KEY,revision INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,group_id TEXT NOT NULL,name TEXT NOT NULL,public_key BLOB NOT NULL,admin INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0,incarnation TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS invitations(hash BLOB PRIMARY KEY,group_id TEXT NOT NULL,inviter TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0,used_by TEXT NOT NULL DEFAULT '',used_at INTEGER NOT NULL DEFAULT 0,inviter_incarnation TEXT NOT NULL DEFAULT '',created_revision INTEGER NOT NULL DEFAULT 0,used_incarnation TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS membership_requests(request_id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,target_id TEXT NOT NULL,target_incarnation TEXT NOT NULL,result_revision INTEGER NOT NULL,created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);`)
 	if err != nil {
 		db.Close()
@@ -97,7 +122,7 @@ CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);`)
 		return nil, err
 	}
 	if len(versions) == 0 {
-		if _, err = db.Exec("INSERT INTO schema_version(version) VALUES(2)"); err != nil {
+		if _, err = db.Exec("INSERT INTO schema_version(version) VALUES(3)"); err != nil {
 			db.Close()
 			return nil, err
 		}
@@ -106,11 +131,46 @@ CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);`)
 			db.Close()
 			return nil, err
 		}
-	} else if len(versions) != 1 || versions[0] != 2 {
+		if err = migrateControlV2ToV3(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	} else if len(versions) == 1 && versions[0] == 2 {
+		if err = migrateControlV2ToV3(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	} else if len(versions) != 1 || versions[0] != 3 {
 		db.Close()
 		return nil, errors.New("unsupported control database schema version")
 	}
 	return &Control{db: db}, nil
+}
+
+func migrateControlV2ToV3(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	statements := []string{
+		"CREATE TABLE IF NOT EXISTS groups(id TEXT PRIMARY KEY,revision INTEGER NOT NULL)",
+		"INSERT INTO groups(id,revision) SELECT DISTINCT group_id,1 FROM devices",
+		"ALTER TABLE devices ADD COLUMN incarnation TEXT NOT NULL DEFAULT ''",
+		"UPDATE devices SET incarnation=lower(hex(randomblob(16)))",
+		"ALTER TABLE invitations ADD COLUMN inviter_incarnation TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE invitations ADD COLUMN created_revision INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE invitations ADD COLUMN used_incarnation TEXT NOT NULL DEFAULT ''",
+		"UPDATE invitations SET used=1 WHERE used=0",
+		"CREATE TABLE IF NOT EXISTS membership_requests(request_id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,target_id TEXT NOT NULL,target_incarnation TEXT NOT NULL,result_revision INTEGER NOT NULL,created_at INTEGER NOT NULL)",
+		"UPDATE schema_version SET version=3 WHERE version=2",
+	}
+	for _, statement := range statements {
+		if _, err = tx.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func migrateControlV1ToV2(db *sql.DB) error {
@@ -149,22 +209,29 @@ func (s *Control) Bootstrap(ctx context.Context, name string, key []byte) (Devic
 		return Device{}, errors.New("bootstrap already completed")
 	}
 	id := identity.DeviceID(key)
-	d := Device{ID: id, GroupID: id, Name: name, PublicKey: key, Admin: true}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,admin) VALUES(?,?,?,?,1)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
+	incarnation, err := randomIncarnation()
+	if err != nil {
+		return Device{}, err
+	}
+	d := Device{ID: id, GroupID: id, Name: name, PublicKey: key, Admin: true, Incarnation: incarnation, MembershipRevision: 1}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO groups(id,revision) VALUES(?,1)", d.GroupID); err != nil {
+		return Device{}, err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,admin,incarnation) VALUES(?,?,?,?,1,?)", d.ID, d.GroupID, d.Name, d.PublicKey, d.Incarnation); err != nil {
 		return Device{}, err
 	}
 	return d, tx.Commit()
 }
 func (s *Control) Device(ctx context.Context, id string) (Device, error) {
 	var d Device
-	err := s.db.QueryRowContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE id=?", id).Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked)
+	err := scanDevice(s.db.QueryRowContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.id=?", id), &d)
 	if errors.Is(err, sql.ErrNoRows) || d.Revoked {
 		return Device{}, ErrUnauthorized
 	}
 	return d, err
 }
 func (s *Control) Devices(ctx context.Context, group string) ([]Device, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE group_id=? AND revoked=0 ORDER BY name,id", group)
+	rows, err := s.db.QueryContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.group_id=? AND d.revoked=0 ORDER BY d.name,d.id", group)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +239,7 @@ func (s *Control) Devices(ctx context.Context, group string) ([]Device, error) {
 	out := []Device{}
 	for rows.Next() {
 		var d Device
-		if err = rows.Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked); err != nil {
+		if err = rows.Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked, &d.Incarnation, &d.MembershipRevision); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -204,7 +271,7 @@ func (s *Control) Invitation(ctx context.Context, member Device) (string, time.T
 		compact := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
 		token := compact[:4] + "-" + compact[4:]
 		sum := sha256.Sum256([]byte(compact))
-		result, insertErr := tx.ExecContext(ctx, "INSERT OR IGNORE INTO invitations(hash,group_id,inviter,expires) VALUES(?,?,?,?)", sum[:], current.GroupID, current.ID, expires.Unix())
+		result, insertErr := tx.ExecContext(ctx, "INSERT OR IGNORE INTO invitations(hash,group_id,inviter,expires,inviter_incarnation,created_revision) VALUES(?,?,?,?,?,?)", sum[:], current.GroupID, current.ID, expires.Unix(), current.Incarnation, current.MembershipRevision)
 		if insertErr != nil {
 			return "", time.Time{}, insertErr
 		}
@@ -236,26 +303,27 @@ func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Dev
 		return Device{}, err
 	}
 	defer tx.Rollback()
-	var group, usedBy string
+	var group, usedBy, inviterIncarnation, usedIncarnation, currentInviterIncarnation string
 	var expires int64
 	var used, inviterRevoked int
-	err = tx.QueryRowContext(ctx, "SELECT i.group_id,i.expires,i.used,i.used_by,d.revoked FROM invitations i JOIN devices d ON d.id=i.inviter WHERE i.hash=?", sum[:]).Scan(&group, &expires, &used, &usedBy, &inviterRevoked)
+	var createdRevision, currentRevision uint64
+	err = tx.QueryRowContext(ctx, "SELECT i.group_id,i.expires,i.used,i.used_by,i.inviter_incarnation,i.created_revision,i.used_incarnation,d.revoked,d.incarnation,g.revision FROM invitations i JOIN devices d ON d.id=i.inviter JOIN groups g ON g.id=i.group_id WHERE i.hash=?", sum[:]).Scan(&group, &expires, &used, &usedBy, &inviterIncarnation, &createdRevision, &usedIncarnation, &inviterRevoked, &currentInviterIncarnation, &currentRevision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Device{}, ErrInvitationInvalid
 	}
 	if err != nil {
 		return Device{}, err
 	}
+	if inviterRevoked != 0 || inviterIncarnation == "" || inviterIncarnation != currentInviterIncarnation || createdRevision == 0 || createdRevision > currentRevision {
+		return Device{}, ErrInvitationInvalid
+	}
 	if used != 0 {
 		if usedBy == deviceID {
-			if existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key); existingErr == nil {
+			if existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key, usedIncarnation); existingErr == nil {
 				return existing, nil
 			}
 		}
 		return Device{}, ErrInvitationUsed
-	}
-	if inviterRevoked != 0 {
-		return Device{}, ErrInvitationInvalid
 	}
 	if expires <= time.Now().Unix() {
 		return Device{}, ErrInvitationExpired
@@ -263,12 +331,18 @@ func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Dev
 
 	// An already-enrolled, non-revoked identity is a successful idempotent
 	// pairing result. The fresh invitation is still consumed exactly once.
-	existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key)
+	existing, existingErr := joinedDevice(ctx, tx, deviceID, group, key, "")
 	if existingErr != nil && !errors.Is(existingErr, sql.ErrNoRows) {
 		return Device{}, ErrInvitationConflict
 	}
 
-	res, err := tx.ExecContext(ctx, "UPDATE invitations SET used=1,used_by=?,used_at=? WHERE hash=? AND used=0", deviceID, time.Now().Unix(), sum[:])
+	incarnation := ""
+	if existingErr == nil {
+		incarnation = existing.Incarnation
+	} else if incarnation, err = randomIncarnation(); err != nil {
+		return Device{}, err
+	}
+	res, err := tx.ExecContext(ctx, "UPDATE invitations SET used=1,used_by=?,used_at=?,used_incarnation=? WHERE hash=? AND used=0", deviceID, time.Now().Unix(), incarnation, sum[:])
 	if err != nil {
 		return Device{}, err
 	}
@@ -282,20 +356,39 @@ func (s *Control) Join(ctx context.Context, token, name string, key []byte) (Dev
 		}
 		return existing, nil
 	}
-	d := Device{ID: deviceID, GroupID: group, Name: name, PublicKey: key}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key) VALUES(?,?,?,?)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
-		return Device{}, fmt.Errorf("register pairing identity: %w", err)
+	if _, err = tx.ExecContext(ctx, "UPDATE groups SET revision=revision+1 WHERE id=?", group); err != nil {
+		return Device{}, err
+	}
+	if err = tx.QueryRowContext(ctx, "SELECT revision FROM groups WHERE id=?", group).Scan(&currentRevision); err != nil {
+		return Device{}, err
+	}
+	d := Device{ID: deviceID, GroupID: group, Name: name, PublicKey: key, Incarnation: incarnation, MembershipRevision: currentRevision}
+	result, err := tx.ExecContext(ctx, "UPDATE devices SET group_id=?,name=?,public_key=?,admin=0,revoked=0,incarnation=? WHERE id=? AND revoked=1", d.GroupID, d.Name, d.PublicKey, d.Incarnation, d.ID)
+	if err != nil {
+		return Device{}, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return Device{}, err
+	}
+	if changed == 0 {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,incarnation) VALUES(?,?,?,?,?)", d.ID, d.GroupID, d.Name, d.PublicKey, d.Incarnation); err != nil {
+			return Device{}, fmt.Errorf("register pairing identity: %w", err)
+		}
 	}
 	return d, tx.Commit()
 }
 
-func joinedDevice(ctx context.Context, tx *sql.Tx, deviceID, group string, key []byte) (Device, error) {
+func joinedDevice(ctx context.Context, tx *sql.Tx, deviceID, group string, key []byte, expectedIncarnation string) (Device, error) {
 	var d Device
-	err := tx.QueryRowContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE id=?", deviceID).Scan(&d.ID, &d.GroupID, &d.Name, &d.PublicKey, &d.Admin, &d.Revoked)
+	err := scanDevice(tx.QueryRowContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.id=?", deviceID), &d)
 	if err != nil {
 		return Device{}, err
 	}
-	if d.Revoked || d.GroupID != group || !bytes.Equal(d.PublicKey, key) {
+	if d.Revoked && expectedIncarnation == "" && bytes.Equal(d.PublicKey, key) {
+		return Device{}, sql.ErrNoRows
+	}
+	if d.Revoked || d.GroupID != group || !bytes.Equal(d.PublicKey, key) || expectedIncarnation != "" && d.Incarnation != expectedIncarnation {
 		return Device{}, ErrInvitationConflict
 	}
 	return d, nil
@@ -354,12 +447,20 @@ func (s *Control) JoinTestCode(ctx context.Context, name string, key []byte, gro
 			return Device{}, err
 		}
 	}
-	d := Device{ID: identity.DeviceID(key), GroupID: group, Name: name, PublicKey: key, Admin: true}
+	incarnation, err := randomIncarnation()
+	if err != nil {
+		return Device{}, err
+	}
+	var revision uint64
+	if err = tx.QueryRowContext(ctx, "SELECT revision FROM groups WHERE id=?", group).Scan(&revision); err != nil {
+		return Device{}, err
+	}
+	d := Device{ID: identity.DeviceID(key), GroupID: group, Name: name, PublicKey: key, Admin: true, Incarnation: incarnation, MembershipRevision: revision}
 	// Repeating the fixed development code with the same profile is expected
 	// during UI/e2e runs. Return the existing non-revoked member instead of
 	// surfacing a SQLite UNIQUE error; production Join remains single-use.
 	var existing Device
-	err = tx.QueryRowContext(ctx, "SELECT id,group_id,name,public_key,admin,revoked FROM devices WHERE id=?", d.ID).Scan(&existing.ID, &existing.GroupID, &existing.Name, &existing.PublicKey, &existing.Admin, &existing.Revoked)
+	err = scanDevice(tx.QueryRowContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.id=?", d.ID), &existing)
 	if err == nil {
 		if existing.Revoked || existing.GroupID != group || string(existing.PublicKey) != string(key) {
 			return Device{}, ErrInvitation
@@ -376,26 +477,57 @@ func (s *Control) JoinTestCode(ctx context.Context, name string, key []byte, gro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Device{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,admin) VALUES(?,?,?,?,1)", d.ID, d.GroupID, d.Name, d.PublicKey); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE groups SET revision=revision+1 WHERE id=?", group); err != nil {
+		return Device{}, err
+	}
+	if err = tx.QueryRowContext(ctx, "SELECT revision FROM groups WHERE id=?", group).Scan(&d.MembershipRevision); err != nil {
+		return Device{}, err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO devices(id,group_id,name,public_key,admin,incarnation) VALUES(?,?,?,?,1,?)", d.ID, d.GroupID, d.Name, d.PublicKey, d.Incarnation); err != nil {
 		return Device{}, fmt.Errorf("register device: %w", err)
 	}
 	return d, tx.Commit()
 }
-func (s *Control) Revoke(ctx context.Context, admin Device, id string) error {
-	current, err := s.Device(ctx, admin.ID)
-	if err != nil || !current.Admin || id == current.ID {
-		return ErrUnauthorized
+func (s *Control) Revoke(ctx context.Context, actor Device, request RevokeRequest) (uint64, error) {
+	if request.RequestID == "" || len(request.RequestID) > 128 || request.TargetID == "" || request.TargetID == actor.ID || request.TargetIncarnation == "" || request.ExpectedRevision == 0 {
+		return 0, ErrUnauthorized
 	}
-	res, err := s.db.ExecContext(ctx, "UPDATE devices SET revoked=1 WHERE id=? AND group_id=? AND id<>?", id, current.GroupID, current.ID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	defer tx.Rollback()
+	var repeatedActor, repeatedTarget, repeatedIncarnation string
+	var repeatedRevision uint64
+	err = tx.QueryRowContext(ctx, "SELECT actor_id,target_id,target_incarnation,result_revision FROM membership_requests WHERE request_id=?", request.RequestID).Scan(&repeatedActor, &repeatedTarget, &repeatedIncarnation, &repeatedRevision)
+	if err == nil {
+		if repeatedActor == actor.ID && repeatedTarget == request.TargetID && repeatedIncarnation == request.TargetIncarnation {
+			return repeatedRevision, nil
+		}
+		return 0, ErrUnauthorized
 	}
-	if n != 1 {
-		return ErrUnauthorized
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
 	}
-	return nil
+	var currentActor, target Device
+	if err = scanDevice(tx.QueryRowContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.id=?", actor.ID), &currentActor); err != nil || currentActor.Revoked || currentActor.Incarnation != actor.Incarnation {
+		return 0, ErrUnauthorized
+	}
+	if err = scanDevice(tx.QueryRowContext(ctx, "SELECT d.id,d.group_id,d.name,d.public_key,d.admin,d.revoked,d.incarnation,g.revision FROM devices d JOIN groups g ON g.id=d.group_id WHERE d.id=?", request.TargetID), &target); err != nil || target.Revoked || target.GroupID != currentActor.GroupID || target.Incarnation != request.TargetIncarnation || target.MembershipRevision != request.ExpectedRevision {
+		return 0, ErrUnauthorized
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE devices SET revoked=1 WHERE id=? AND incarnation=? AND revoked=0", target.ID, target.Incarnation); err != nil {
+		return 0, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE groups SET revision=revision+1 WHERE id=?", currentActor.GroupID); err != nil {
+		return 0, err
+	}
+	var revision uint64
+	if err = tx.QueryRowContext(ctx, "SELECT revision FROM groups WHERE id=?", currentActor.GroupID).Scan(&revision); err != nil {
+		return 0, err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO membership_requests(request_id,actor_id,target_id,target_incarnation,result_revision,created_at) VALUES(?,?,?,?,?,?)", request.RequestID, actor.ID, target.ID, target.Incarnation, revision, time.Now().Unix()); err != nil {
+		return 0, err
+	}
+	return revision, tx.Commit()
 }

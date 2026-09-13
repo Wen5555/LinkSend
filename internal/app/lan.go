@@ -61,8 +61,16 @@ func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
 	}()
 	if peers, loadErr := identity.LoadTrust(s.cfg.DataDir); loadErr == nil {
 		for _, peer := range peers {
+			addresses := append([]string{}, peer.LANAddressHistory...)
 			if peer.LastLANAddress != "" {
-				_ = manager.ProbeAddress(peer.LastLANAddress)
+				addresses = append(addresses, peer.LastLANAddress)
+			}
+			seen := map[string]bool{}
+			for _, address := range addresses {
+				if !seen[address] {
+					_ = manager.ProbeAddress(address)
+					seen[address] = true
+				}
 			}
 		}
 	}
@@ -124,6 +132,17 @@ func (s *Service) ensureLANDiscovery() {
 }
 
 func (s *Service) receiveLANSession(ctx context.Context, incoming discovery.Incoming, directory string, cfg DirectConfig) {
+	readCtx, cancelRead := context.WithTimeout(ctx, 5*time.Second)
+	first, err := incoming.Session.Read(readCtx)
+	cancelRead()
+	if err != nil {
+		_ = incoming.Session.Close()
+		return
+	}
+	if first.Type == "lan_pair" && first.LANPair != nil {
+		s.handleIncomingLANPair(ctx, incoming, *first.LANPair)
+		return
+	}
 	if err := s.checkPeerAllowed(incoming.Peer.ID); err != nil {
 		_ = incoming.Session.Close()
 		return
@@ -131,7 +150,7 @@ func (s *Service) receiveLANSession(ctx context.Context, incoming discovery.Inco
 	cfg.knownInterface = incoming.Route.Interface
 	cfg.BindAddress = net.JoinHostPort(incoming.Route.LocalAddress, "0")
 	peer := signaling.Device{ID: incoming.Peer.ID, Name: incoming.Peer.Name, PublicKey: ed25519.PublicKey(incoming.Peer.PublicKey)}
-	session, err := s.acceptDirectOnSessionPeer(ctx, "", cfg, incoming.Session, &peer)
+	session, err := s.acceptDirectOnSessionPeer(ctx, "", cfg, &prefetchedSignalSession{directSignalSession: incoming.Session, first: &first}, &peer)
 	if err != nil {
 		_ = incoming.Session.Close()
 		return
@@ -202,6 +221,33 @@ func (s *Service) RefreshLANDiscovery() error {
 	manager := s.lanManager()
 	if manager == nil {
 		return errors.New("LAN_DISCOVERY_UNAVAILABLE: local discovery is not running")
+	}
+	return manager.Refresh()
+}
+
+// NetworkChanged is the backend entrypoint for OS network/sleep notifications
+// and snapshot polling. It invalidates future endpoint selection and refreshes
+// discovery without cancelling a healthy active QUIC task.
+func (s *Service) NetworkChanged(reason string) error {
+	switch reason {
+	case "network", "wake", "interface", "address", "route":
+	default:
+		return errors.New("INVALID_ARGUMENT: unknown network change reason")
+	}
+	s.recoveryMu.Lock()
+	if time.Since(s.lastNetworkChange) < 250*time.Millisecond {
+		s.recoveryMu.Unlock()
+		return nil
+	}
+	s.lastNetworkChange = time.Now()
+	s.recoveryMu.Unlock()
+	s.networkMu.Lock()
+	s.network = cachedNetworkSelection{}
+	s.networkMu.Unlock()
+	manager := s.lanManager()
+	if manager == nil {
+		s.ensureLANDiscovery()
+		return nil
 	}
 	return manager.Refresh()
 }

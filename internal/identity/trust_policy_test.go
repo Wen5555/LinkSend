@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func policyTestPeer(t *testing.T, name string) TrustedPeer {
@@ -213,7 +215,7 @@ func TestRevocationCannotBeRolledBackByAutomaticBackupRecovery(t *testing.T) {
 			case "missing":
 				err = os.Remove(path)
 			case "future schema":
-				err = os.WriteFile(path, []byte(`{"schema_version":2,"peers":[]}`), 0600)
+				err = os.WriteFile(path, []byte(`{"schema_version":3,"peers":[]}`), 0600)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -273,5 +275,54 @@ func TestConcurrentRevocationAndEnrollmentDoesNotLoseDenial(t *testing.T) {
 	peers, err := LoadTrust(dir)
 	if err != nil || len(peers) != count {
 		t.Fatalf("concurrent write lost unrelated pins: got=%d err=%v", len(peers), err)
+	}
+}
+
+func TestMembershipRejoinAdvancesGrantWithoutRestoringConsent(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("a", 32)
+	peer.LocalIncarnation = strings.Repeat("b", 32)
+	peer.MembershipRevision = 2
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	oldTaskStarted := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := SetAutoAccept(dir, peer.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := RevokeMembershipPeer(dir, peer.ID, peer.PeerIncarnation, "request-1", 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("old membership snapshot reopened authorization: %v", err)
+	}
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.MembershipRevision = 3
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal("verified new incarnation did not establish a fresh grant:", err)
+	}
+	peers, err := LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].AutoAccept || peers[0].GrantGeneration < 2 {
+		t.Fatalf("fresh relationship restored old consent or generation: %+v %v", peers, err)
+	}
+	if err = CheckTaskAuthorization(dir, peer.ID, oldTaskStarted); err == nil {
+		t.Fatal("task created under revoked grant was reusable")
+	}
+}
+
+func TestLocalBlockCannotBeClearedByMembershipSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	if err := RevokePeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.LocalIncarnation = strings.Repeat("d", 32)
+	peer.MembershipRevision = 99
+	if err := TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("membership cleared explicit local block: %v", err)
 	}
 }

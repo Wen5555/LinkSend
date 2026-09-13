@@ -752,6 +752,38 @@ func (a *App) ProbeLANAddress(address string) error {
 	return a.core.ProbeLANAddress(address)
 }
 
+func (a *App) PendingLANPairings() []linksendapp.LANPairRequestInfo {
+	if a.core == nil {
+		return nil
+	}
+	return a.core.PendingLANPairings()
+}
+
+func (a *App) RequestLANPair(deviceID string) (linksendapp.LANPairResult, error) {
+	if a.core == nil {
+		return linksendapp.LANPairResult{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.RequestLANPair(ctx, deviceID)
+}
+
+func (a *App) RespondLANPair(requestID string, accept bool) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.RespondLANPair(requestID, accept)
+}
+
+func (a *App) NetworkChanged(reason string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.NetworkChanged(reason)
+}
+
 func (a *App) OpenTaskDirectory(taskID string) error {
 	if a.core == nil {
 		return errBackendUnavailable

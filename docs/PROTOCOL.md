@@ -1,5 +1,15 @@
 # Protocol
 
+## 2026-09-13 membership_v2 与 LAN pairing 控制契约
+
+文件数据协议、QUIC ALPN 和 `protocol_version=1` 保持不变；成员授权控制面新增必需能力 `membership_version=2`。HTTP/WSS 客户端发送 `X-LinkSend-Membership: 2`，旧客户端对同意、列表、撤销和 WSS 得到 `VERSION_INCOMPATIBLE`，不能继续使用无 incarnation 的授权。
+
+控制库 schema 3 为每次有效入组生成不可复用的 128-bit `incarnation`，每个组维护单调 `membership_revision`。邀请码摘要绑定 inviter ID、组、inviter incarnation 和创建 revision；同身份同组消费重试保持幂等，fresh code 不提权。被撤销身份只有使用新有效码才获得新 incarnation；跨组 active identity 不静默切换。
+
+`DELETE /v1/devices/{id}` 的签名正文为 `{request_id,target_incarnation,expected_revision}`。服务端在一个事务内重验 actor 当前 incarnation、同组目标、目标 incarnation/revision 和 request ID，普通有效成员均可撤销组内其他设备；重复 request ID 返回原 revision，已撤销 actor 的迟到请求和跨组目标拒绝。提交后组内 WSS 断开并重新认证/同步，既有 QUIC 数据面不依赖 WSS 存活。
+
+LAN 添加使用刚通过签名公告和双向 TLS 1.3 验证的有界控制通道，交换签名 `lan_pair` request/accept|reject/commit/ack transcript。字段绑定双方 DeviceID、request ID、128-bit nonce、本机授权 generation 和不超过 60 秒的期限；拒绝、超时、断线或 transcript 不一致都不写 pin。成功只建立独立 LAN grant，`server_state=not_joined`，不伪称跨网络入组；文件正文仍只走经身份验证的 QUIC。
+
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
 
 E0-ADR-review-v1已在提案中明确：剪贴板事件绑定接收方预签发lease及原始单调deadline，迟到首帧/重传不得重获寿命；origin_sequence与Lamport分离。具体wire/schema仍待后续实现冻结，不修改现役V1消息。

@@ -19,7 +19,7 @@ func newTCPTestManager(t *testing.T, id *identity.Identity, name string) *Manage
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{cfg: Config{Identity: id, Name: name, AllowLoopback: true}, ctx: ctx, cancel: cancel, tcp: listener, port: listener.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 4), peers: map[string]*peerRecord{}, ifaces: map[int]interfaceRoute{}, joined: map[int]bool{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}}
+	m := &Manager{cfg: Config{Identity: id, Name: name, AllowLoopback: true}, ctx: ctx, cancel: cancel, tcp: listener, port: listener.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 4), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}}
 	m.tlsCfg, err = id.TLSServerConfig(m.allowedPeer)
 	if err != nil {
 		t.Fatal(err)
@@ -186,5 +186,39 @@ func TestManagersEstablishMutuallyPinnedLANControl(t *testing.T) {
 	wire, err := incoming.Session.Read(ctx)
 	if err != nil || wire.Type != "heartbeat" {
 		t.Fatalf("heartbeat wire=%+v err=%v", wire, err)
+	}
+}
+
+func TestRefreshClearsStaleRoutesWhenNoInterfaceRemains(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	excluded := make([]string, 0, len(interfaces))
+	for _, iface := range interfaces {
+		excluded = append(excluded, iface.Name)
+	}
+	m := &Manager{cfg: Config{Identity: id, Name: "test", ExcludedInterfaces: excluded}, ifaces: map[string]interfaceRoute{"stale": {}}, joined: map[int]*net.Interface{}, channelErrors: map[string]string{}}
+	if err = m.refreshInterfaces(); err == nil {
+		t.Fatal("refresh unexpectedly found an eligible interface")
+	}
+	if len(m.ifaces) != 0 || m.generation == 0 || m.channelErrors["interfaces"] == "" {
+		t.Fatalf("stale routes survived refresh: routes=%d generation=%d errors=%v", len(m.ifaces), m.generation, m.channelErrors)
+	}
+}
+
+func TestDirectedAnnouncementWithoutOnLinkRouteFails(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{cfg: Config{Identity: id, Name: "test", Port: DefaultPort}, ifaces: map[string]interfaceRoute{}, responseSlots: make(chan struct{}, 1)}
+	err = m.sendAnnouncement(true, &net.UDPAddr{IP: net.ParseIP("192.0.2.10"), Port: DefaultPort})
+	if err == nil {
+		t.Fatal("missing route was reported as a sent discovery packet")
 	}
 }

@@ -1,5 +1,13 @@
 # Security
 
+## 2026-09-13 E1成员代际与LAN同意实现
+
+本机 trust schema 2 将组 grant 绑定双方 incarnation、服务端 revision、本机 `grant_generation` 和 `granted_at`。组删除先原子移除 pin/免确认并写入带 request ID 的拒绝屏障及待同步 outbox，再取消目标任务，最后提交服务端幂等事务；服务不可达时本机拒绝与 outbox 保留。旧 revision或同一 incarnation不能清除屏障；只有可验证的新 incarnation 和更高 revision能建立新的组 grant，且不会恢复旧免确认或 LAN grant。显式本机 block 永不被成员同步解除。
+
+任务恢复和队列重试会比较任务创建时间与当前 grant 的 `granted_at`，从而拒绝删除前快照在重新配对后复活。发现、WSS、接收确认和 LAN 完成路径继续先检查拒绝屏障；授权文件损坏或未来 schema 仍按拒绝处理。
+
+Windows 上 `x/net/ipv4.ControlMessage` 不提供有效源地址选择，因此发现发送使用最多 32 个临时 source-bound UDP socket；每个 socket绑定具体本地 IPv4、发送后在同一 socket有界接收回复。Darwin/Linux 保留 pktinfo/cmsg。组播、广播、受限单播与 TLS 控制分别降级，单个 provider 失败不关闭其余路径；peer、route、响应表和握手 goroutine均有固定上限。
+
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
 
 E0-ADR-review-v1要求未来删除先使目标peer的全部既有组/LAN grant generation失效，禁止授权回退；新配对不恢复旧LAN/免确认/剪贴板。剪贴板提交门闩内重验授权、lease期限与OS/application generation。以上是待实现契约，不是当前M5安全能力声明。

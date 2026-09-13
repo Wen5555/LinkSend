@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/Wen5555/LinkSend/internal/content"
+	"github.com/Wen5555/LinkSend/internal/identity"
 	"math/rand/v2"
 	"path/filepath"
 	"strings"
@@ -532,6 +533,9 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 	}
 	if err = s.checkPeerAllowed(item.PeerID); err != nil {
 		return err
+	}
+	if err = identity.CheckTaskAuthorization(s.cfg.DataDir, item.PeerID, item.CreatedAt); err != nil {
+		return protocol.Wrap(protocol.AuthenticationFailed, "queue item belongs to an older peer authorization", err)
 	}
 	if item.TaskID != "" {
 		if task, ok := s.Task(item.TaskID); ok && task.CanResume {
