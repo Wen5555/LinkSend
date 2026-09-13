@@ -184,16 +184,19 @@ func TestLANPairingQueryRecoversReadyAfterTLSDisconnect(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	go func() {
-		for count := 0; count < 3; count++ {
-			select {
-			case incoming := <-bm.Incoming():
-				b.receiveLANSession(ctx, incoming, "", DirectConfig{})
-			case <-ctx.Done():
-				return
+	serveSessions := func(count int) {
+		go func() {
+			for index := 0; index < count; index++ {
+				select {
+				case incoming := <-bm.Incoming():
+					b.receiveLANSession(ctx, incoming, "", DirectConfig{})
+				case <-ctx.Done():
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
+	serveSessions(1)
 	first, peer, _, err := am.Dial(ctx, b.identity.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -226,6 +229,27 @@ func TestLANPairingQueryRecoversReadyAfterTLSDisconnect(t *testing.T) {
 		t.Fatalf("ready wire=%+v err=%v", wire, readErr)
 	}
 	_ = first.Close() // Fault injection: ready arrived, confirm did not.
+	faultServed := make(chan struct{})
+	go func() {
+		defer close(faultServed)
+		select {
+		case incoming := <-bm.Incoming():
+			defer incoming.Session.Close()
+			wire, readErr := incoming.Session.Read(ctx)
+			if readErr == nil && wire.LANPair != nil && wire.LANPair.Phase == "query" {
+				_ = incoming.Session.SendLANPair(ctx, newLANPairFrame("ready", requestID, nonce, b.identity.ID(), a.identity.ID(), 1, expires))
+			}
+		case <-ctx.Done():
+		}
+	}()
+	if recovered, _ := a.recoverLANPair(ctx, am, peer, requestID, nonce, 1, expires); recovered {
+		t.Fatal("recovery reported success after ready connection closed before done")
+	}
+	<-faultServed
+	if peers, loadErr := identity.LoadTrust(a.cfg.DataDir); loadErr != nil || len(peers) != 0 {
+		t.Fatalf("ready-only helper recovery enabled a local pin: %+v err=%v", peers, loadErr)
+	}
+	serveSessions(2)
 	second, _, _, err := am.Dial(ctx, b.identity.ID())
 	if err != nil {
 		t.Fatal(err)

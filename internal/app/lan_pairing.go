@@ -97,8 +97,8 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	}
 	defer session.Close()
 	if pending, ok, pendingErr := identity.PendingProvisionalLAN(s.cfg.DataDir, peerID); pendingErr == nil && ok {
-		if s.recoverLANPair(ctx, manager, peer, pending.RequestID, pending.Nonce, pending.Generation, pending.ExpiresAt.Unix()) {
-			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		if recovered, serverState := s.recoverLANPair(ctx, manager, peer, pending.RequestID, pending.Nonce, pending.Generation, pending.ExpiresAt.Unix()); recovered {
+			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
 		}
 	}
 	requestID, nonce := protocol.RandomID(), protocol.RandomID()
@@ -143,8 +143,8 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	}
 	wire, err = session.Read(ctx)
 	if err != nil {
-		if s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires) {
-			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		if recovered, serverState := s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires); recovered {
+			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
 		}
 		return LANPairResult{}, err
 	}
@@ -155,15 +155,17 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 		return LANPairResult{}, err
 	}
 	if err = session.SendLANPair(ctx, newLANPairFrame("confirm", requestID, nonce, s.identity.ID(), peerID, generation, expires)); err != nil {
-		if s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires) {
-			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		if recovered, serverState := s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires); recovered {
+			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
 		}
 		return LANPairResult{}, err
 	}
 	wire, err = session.Read(ctx)
 	if err != nil || wire.Type != "lan_pair" || wire.LANPair == nil || wire.LANPair.Phase != "done" || wire.LANPair.RequestID != requestID || wire.LANPair.Nonce != nonce {
-		if err != nil && s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires) {
-			return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: "pending"}, nil
+		if err != nil {
+			if recovered, serverState := s.recoverLANPair(ctx, manager, peer, requestID, nonce, generation, expires); recovered {
+				return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
+			}
 		}
 		return LANPairResult{}, protocol.Fail(protocol.InvalidMessage, "LAN pairing completion acknowledgement missing")
 	}
@@ -173,11 +175,16 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	if err = identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce); err != nil {
 		return LANPairResult{}, err
 	}
+	serverState := s.consumeLANCredential(ctx, session, peer.PublicKey, peerID, requestID, nonce)
+	return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
+}
+
+func (s *Service) consumeLANCredential(ctx context.Context, session *discovery.Session, peerKey []byte, peerID, requestID, nonce string) string {
 	serverState := "not_joined"
 	credentialCtx, cancelCredential := context.WithTimeout(ctx, 500*time.Millisecond)
 	credentialWire, credentialErr := session.Read(credentialCtx)
 	cancelCredential()
-	if credentialErr == nil && credentialWire.Type == "lan_pair" && credentialWire.LANPair != nil && credentialWire.LANPair.Phase == "credential" && credentialWire.LANPair.RequestID == requestID && credentialWire.LANPair.Nonce == nonce && credentialWire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()) == nil {
+	if credentialErr == nil && credentialWire.Type == "lan_pair" && credentialWire.LANPair != nil && credentialWire.LANPair.Phase == "credential" && credentialWire.LANPair.RequestID == requestID && credentialWire.LANPair.Nonce == nonce && credentialWire.LANPair.Verify(peerKey, s.identity.ID(), time.Now()) == nil {
 		if c, clientErr := s.client(); clientErr == nil {
 			if _, joinErr := c.Join(ctx, credentialWire.LANPair.Credential, s.name("")); joinErr == nil {
 				if devices, listErr := c.Devices(ctx); listErr == nil {
@@ -191,46 +198,47 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 			}
 		}
 	}
-	return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
+	return serverState
 }
 
-func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager, peer discovery.Device, requestID, nonce string, generation uint64, expires int64) bool {
+func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager, peer discovery.Device, requestID, nonce string, generation uint64, expires int64) (bool, string) {
 	if time.Now().Unix() >= expires {
-		return false
+		return false, ""
 	}
 	session, _, _, err := manager.Dial(ctx, peer.ID)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	defer session.Close()
 	if err = session.SendLANPair(ctx, newLANPairFrame("query", requestID, nonce, s.identity.ID(), peer.ID, generation, expires)); err != nil {
-		return false
+		return false, ""
 	}
 	wire, err := session.Read(ctx)
 	if err != nil || wire.Type != "lan_pair" || wire.LANPair == nil || wire.LANPair.RequestID != requestID || wire.LANPair.Nonce != nonce || wire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()) != nil {
-		return false
+		return false, ""
 	}
 	if wire.LANPair.Phase == "done" {
 		if status, _ := identity.LANPairStatus(s.cfg.DataDir, peer.ID, requestID, nonce); status != "done" {
 			if identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce) != nil {
-				return false
+				return false, ""
 			}
 		}
-		return true
+		return true, s.consumeLANCredential(ctx, session, peer.PublicKey, peer.ID, requestID, nonce)
 	}
 	if wire.LANPair.Phase != "ready" {
-		return false
-	}
-	if status, _ := identity.LANPairStatus(s.cfg.DataDir, peer.ID, requestID, nonce); status != "done" {
-		if identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce) != nil {
-			return false
-		}
+		return false, ""
 	}
 	if err = session.SendLANPair(ctx, newLANPairFrame("confirm", requestID, nonce, s.identity.ID(), peer.ID, generation, expires)); err != nil {
-		return false
+		return false, ""
 	}
 	wire, err = session.Read(ctx)
-	return err == nil && wire.Type == "lan_pair" && wire.LANPair != nil && wire.LANPair.Phase == "done" && wire.LANPair.RequestID == requestID && wire.LANPair.Nonce == nonce && wire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()) == nil
+	if err != nil || wire.Type != "lan_pair" || wire.LANPair == nil || wire.LANPair.Phase != "done" || wire.LANPair.RequestID != requestID || wire.LANPair.Nonce != nonce || wire.LANPair.Verify(peer.PublicKey, s.identity.ID(), time.Now()) != nil {
+		return false, ""
+	}
+	if identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce) != nil {
+		return false, ""
+	}
+	return true, s.consumeLANCredential(ctx, session, peer.PublicKey, peer.ID, requestID, nonce)
 }
 
 func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.Incoming, request signaling.LANPairFrame) {
