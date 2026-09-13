@@ -39,6 +39,7 @@ export interface DesktopPreferences {
     "excluded_interfaces": string[] | null;
     "stun_urls": string[] | null;
     "receive_directory": string;
+    "conflict_policy": string;
     "device_name": string;
     "background": BackgroundOptions;
 }

@@ -49,7 +49,27 @@ func (a *App) SaveDeviceProfile(profile coreapp.DeviceProfile) (coreapp.DevicePr
 	if err := a.workspaceAvailable(); err != nil {
 		return coreapp.DeviceProfile{}, err
 	}
-	return a.core.SaveDeviceProfile(profile)
+	previousPolicy := ""
+	if profiles, err := a.core.DeviceProfiles(); err == nil {
+		for _, saved := range profiles {
+			if saved.PeerID == profile.PeerID {
+				previousPolicy = saved.ConflictPolicy
+				break
+			}
+		}
+	}
+	saved, err := a.core.SaveDeviceProfile(profile)
+	if err != nil {
+		return coreapp.DeviceProfile{}, err
+	}
+	if previousPolicy != saved.ConflictPolicy {
+		if directory := a.Preferences().ReceiveDirectory; directory != "" {
+			if err = a.core.StartInbox(directory, a.directConfig()); err != nil {
+				return saved, err
+			}
+		}
+	}
+	return saved, nil
 }
 func (a *App) Enqueue(request coreapp.EnqueueRequest) (coreapp.QueueItem, error) {
 	if err := a.workspaceAvailable(); err != nil {

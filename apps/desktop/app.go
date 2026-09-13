@@ -21,6 +21,7 @@ import (
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -56,6 +57,7 @@ type DesktopPreferences struct {
 	ExcludedInterfaces []string          `json:"excluded_interfaces"`
 	STUNURLs           []string          `json:"stun_urls"`
 	ReceiveDirectory   string            `json:"receive_directory"`
+	ConflictPolicy     string            `json:"conflict_policy"`
 	DeviceName         string            `json:"device_name"`
 	Background         BackgroundOptions `json:"background"`
 }
@@ -331,6 +333,21 @@ func (a *App) showQuitWarning(message string) {
 
 func (a *App) directConfig() linksendapp.DirectConfig {
 	prefs := a.Preferences()
+	conflictPolicy := transfer.ConflictPolicy(prefs.ConflictPolicy)
+	if conflictPolicy != transfer.ConflictKeepBoth && conflictPolicy != transfer.ConflictSkip && conflictPolicy != transfer.ConflictError {
+		conflictPolicy = transfer.ConflictKeepBoth
+	}
+	devicePolicies := make(map[string]transfer.ConflictPolicy)
+	if a.core != nil {
+		if profiles, err := a.core.DeviceProfiles(); err == nil {
+			for _, profile := range profiles {
+				policy := transfer.ConflictPolicy(profile.ConflictPolicy)
+				if policy == transfer.ConflictKeepBoth || policy == transfer.ConflictSkip || policy == transfer.ConflictError {
+					devicePolicies[profile.PeerID] = policy
+				}
+			}
+		}
+	}
 	stun := make([]string, 0)
 	rawSTUN := firstNonEmpty(os.Getenv("LINKSEND_STUN"), strings.Join(prefs.STUNURLs, ","), "stun:stun.oooai.de:3478")
 	for _, value := range strings.Split(rawSTUN, ",") {
@@ -340,7 +357,7 @@ func (a *App) directConfig() linksendapp.DirectConfig {
 	}
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), prefs.BindAddress)
-	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
+	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute, ReceiveConflictPolicy: conflictPolicy, DeviceConflictPolicies: devicePolicies}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -512,6 +529,7 @@ func (a *App) SavePreferencesSection(section string, expectedRevision uint64, pa
 		next.DeviceName = patch.DeviceName
 	case "receive":
 		next.ReceiveDirectory = patch.ReceiveDirectory
+		next.ConflictPolicy = patch.ConflictPolicy
 	case "network":
 		next.ServerURL = patch.ServerURL
 		next.BindAddress = patch.BindAddress
@@ -543,7 +561,14 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	next.ExcludedInterfaces = normalizedList(next.ExcludedInterfaces)
 	next.STUNURLs = normalizedList(next.STUNURLs)
 	next.ReceiveDirectory = strings.TrimSpace(next.ReceiveDirectory)
+	next.ConflictPolicy = strings.TrimSpace(next.ConflictPolicy)
 	next.DeviceName = strings.TrimSpace(next.DeviceName)
+	if next.ConflictPolicy == "" {
+		next.ConflictPolicy = string(transfer.ConflictKeepBoth)
+	}
+	if next.ConflictPolicy != string(transfer.ConflictKeepBoth) && next.ConflictPolicy != string(transfer.ConflictSkip) && next.ConflictPolicy != string(transfer.ConflictError) {
+		return errors.New("INVALID_CONFIG: unknown receive conflict policy")
+	}
 	if next.ServerURL != "" {
 		u, err := url.Parse(next.ServerURL)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "wss" && u.Scheme != "http" && u.Scheme != "ws") {
@@ -580,7 +605,7 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
 	a.prefsMu.Unlock()
-	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
+	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.ConflictPolicy != next.ConflictPolicy || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
 	if updateReceiver && receiverChanged && a.core != nil && next.ReceiveDirectory != "" {
 		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {
 			return err
@@ -859,6 +884,13 @@ func (a *App) RemoveDevice(deviceID string) error {
 		ctx = context.Background()
 	}
 	return a.core.Revoke(ctx, deviceID)
+}
+
+func (a *App) UnblockDevice(deviceID string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.UnblockPeer(deviceID)
 }
 
 func (a *App) NetworkChanged(reason string) error {

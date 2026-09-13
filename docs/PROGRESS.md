@@ -1,11 +1,18 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E2-C1 集中审查修复候选（待复审）
+
+- 主发送动作移到有界文件列表之前；完整 App 外壳 960×640、已选 LAN-only 目标和两个文件时按钮位于视口内、启用且点击回执成功。
+- 同名策略支持全局持久化与设备覆盖继承，任务库迁至 schema 7；普通确认和免确认均使用有效策略，活动/恢复计划不变。设置改为字段级 dirty 合并，保存一个分类不丢其他分类草稿。
+- LAN 请求确认提升到应用级；请求结果区分 joined/switch_required/pending/not_joined，切组提供配对码后续；LAN-only 不再误报离线，删除记录可显式允许重新添加。
+- 存储页恢复旧版内容草稿的查看/取消入口，并可直达待发送管理；不恢复新建内容入口、不自动续发、不删除接收文件。根 `go test ./...`、`go vet ./...`、desktop `GOWORK=off` test/vet/build、前端 typecheck/lint/61 tests/build和Wails production通过；新候选CI待提交后运行。
+
 ## 2026-09-13 E2桌面接收、设置与四视图候选（待复审）
 
 - U1：新增绑定 attempt/revision 的 Go 一次接收命令，默认 `keep_both`，计划/空间/授权/持久化完成后才同意；恢复仍沿用原计划，免确认保存失败不反转本次接收。
 - U5/U7：设置改为六个用途分类，偏好增加 revision 和分类局部 CAS；设备专属目录留空继承全局。主导航收敛为传输、记录、设备、设置，长列表使用单主滚动区与局部有界滚动。
 - U4：传输页移除文字、链接、图片手动创作入口；旧队列升级/重启后保持 `needs_attention`，不会自动续发。自动剪贴板仍属于 E4，本轮未开始。
-- 针对性 Go、前端 typecheck/lint/58 tests/build 已通过；Playwright production preview 覆盖 1100×720、960×640、125%/150%、深色、reduced motion 和键盘焦点，0 console error。准确 Wails 包与双机 UI 未运行，网络事实继续引用 E1，不把浏览器预览当网络结果。见 [默认接收](evidence/DESKTOP-E2-DEFAULT-RECEIVE.md)、[设置](evidence/DESKTOP-E2-SETTINGS.md)、[旧内容](evidence/DESKTOP-E2-LEGACY-CONTENT.md)、[布局](evidence/DESKTOP-E2-LAYOUT.md)。
+- 针对性 Go、前端 typecheck/lint/58 tests/build 已通过；Playwright production preview 覆盖 1100×720、960×640、CSS小可用区、深色、reduced motion 和键盘焦点；原生125%/150% DPI未运行，0 console error。准确 Wails 包与双机 UI 未运行，网络事实继续引用 E1，不把浏览器预览当网络结果。见 [默认接收](evidence/DESKTOP-E2-DEFAULT-RECEIVE.md)、[设置](evidence/DESKTOP-E2-SETTINGS.md)、[旧内容](evidence/DESKTOP-E2-LEGACY-CONTENT.md)、[布局](evidence/DESKTOP-E2-LAYOUT.md)。
 
 ## 2026-09-13 E1物理LAN最小闭环（PARTIAL）
 

@@ -173,6 +173,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .view-switch button.active { color: var(--text); background: var(--surface); box-shadow: 0 2px 9px rgba(0,0,0,.08); }
 .view-switch span { margin-left: 4px; color: var(--subtle); font-size: 10px; }
 .bounded-view { margin-top: 18px; max-height: calc(100vh - 205px); overflow-y: auto; }
+.compact-file-list { min-height: 72px; max-height: 150px; overflow-y: auto; margin-top: 14px; }
+.compact-file-list .empty-picker { min-height: 58px; }
 .bounded-view .tasks-section { margin-top: 0; }
 .settings-shell { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 22px; padding-top: 26px; }
 .settings-nav { position: sticky; top: 26px; align-self: start; display: grid; gap: 4px; }
@@ -198,6 +200,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .nearby-row strong, .nearby-row small { display: block; overflow-wrap: anywhere; }
 .nearby-row strong { font-size: 12px; }
 .nearby-row small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.legacy-content { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.legacy-content-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.legacy-content-row strong, .legacy-content-row small { display: block; overflow-wrap: anywhere; }
+.legacy-content-row strong { font-size: 12px; }
+.legacy-content-row small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .incoming-device-state { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
 .incoming-destination { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; }
 .incoming-destination span { color: var(--muted); font-size: 11px; }
@@ -230,4 +237,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .view-switch { background: rgba(28,28,30,.88); }
   .settings-nav button:hover, .settings-nav button.active, .view-switch button.active { background: rgba(58,58,60,.92); }
   .receive-plan-modal .modal-actions { background: linear-gradient(transparent, rgba(44,44,46,.98) 28%); }
+}
+@media (max-height: 600px) {
+  .topbar { min-height: 68px; }
+  .topbar .eyebrow { display: none; }
+  .topbar h1 { font-size: 23px; }
+  .page-stack, .settings-shell { padding-top: 12px; }
+  .banner { margin-top: 8px; padding-block: 7px; }
+  .settings-nav { top: 8px; }
+  .surface { padding-block: 20px; }
+  .section-heading { margin-bottom: 14px; }
+  .compact-file-list { max-height: 92px; }
+}
+@media (max-width: 720px) and (max-height: 600px) {
+  .brand { display: none; }
+  .sidebar { padding-block: 7px; }
+  .nav-item { min-height: 40px; }
+  .settings-shell { padding-top: 6px; }
+  .settings-nav { padding-bottom: 5px; }
 }

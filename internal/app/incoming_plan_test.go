@@ -191,6 +191,19 @@ func TestDefaultAcceptanceReportsPreferenceFailureWithoutReversingAcceptance(t *
 	}
 }
 
+func TestAutomaticReceiveUsesDeviceConflictPolicyThenGlobalDefault(t *testing.T) {
+	cfg := DirectConfig{ReceiveConflictPolicy: transfer.ConflictError, DeviceConflictPolicies: map[string]transfer.ConflictPolicy{"peer": transfer.ConflictSkip}}
+	if got := receivePolicyForPeer(cfg, "peer"); got != transfer.ConflictSkip {
+		t.Fatalf("device policy ignored: %s", got)
+	}
+	if got := receivePolicyForPeer(cfg, "other"); got != transfer.ConflictError {
+		t.Fatalf("global policy ignored: %s", got)
+	}
+	if got := receivePolicyForPeer(DirectConfig{}, "other"); got != transfer.ConflictKeepBoth {
+		t.Fatalf("safe default changed: %s", got)
+	}
+}
+
 func TestIncomingPlanDirectoryAndDurabilityBeforeAcceptanceOverRealQUIC(t *testing.T) {
 	for _, failSide := range []string{"receiver", "sender"} {
 		t.Run(failSide, func(t *testing.T) {

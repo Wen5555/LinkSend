@@ -7,7 +7,13 @@
 - 1100×720 传输首屏：[截图](assets/e2/e2-transfer-1100x720.png)，SHA256 `5814b30a582275a2dc23d747e97cf0d170f11ed86941b9d7b0e571c98a97a2fc`。
 - 960×640 设置：[截图](assets/e2/e2-settings-960x640.png)，SHA256 `aa07d7f95d191bcfd1a781d5d423d797c4515d13b7519ab30573585dbca10020`。
 - 960×640 深色并启用 reduced motion：[截图](assets/e2/e2-settings-dark-reduced-960x640.png)，SHA256 `c753232965b0bede424e20b70e16dfec17de31296eaed1ea04bc15e0f67c9974`。
-- 将 960×640 分别折算为 125% 的 768×512 和 150% 的 640×427 CSS 可用区；两者 `documentElement.scrollWidth == innerWidth`、四个主导航均存在：[125%](assets/e2/e2-transfer-960x640-at-125-percent.png)、[150%](assets/e2/e2-settings-960x640-at-150-percent.png)。
-- 键盘 Tab 后活动元素为“文件接收”设置分类按钮，截图显示 `:focus-visible` 焦点圈。150% 检查注入长中文本用于溢出检查；移动布局隐藏侧栏 profile，页面无水平溢出。
+- 768×512、640×427 只是 CSS 小可用区压力测试，不能等同 Windows 原生 125%/150% DPI：[768×512](assets/e2/e2-transfer-960x640-at-125-percent.png)、[640×427](assets/e2/e2-settings-960x640-at-150-percent.png)。本轮 Playwright `deviceScaleFactor=1`；准确 Wails 客户区与系统 DPI 仍 NOT RUN。
+- 键盘 Tab 后活动元素为“文件接收”设置分类按钮，截图显示 `:focus-visible` 焦点圈。
+
+## cdb9577 审查修复后的真实组件渲染
+
+临时 harness 只提供确定的设备、草稿和查询数据，直接渲染生产组件；harness 已删除且不进入产品。完整 App 外壳 960×640、已选目标和两个文件时，主“发送文件”按钮 bounding box 为 `x=323,y=438,width=359,height=42`，`visible=true`、`disabled=false`，点击回执 `clicked:enqueue`；见[完整外壳截图](assets/e2/e2-c1-full-shell-selected-960x640.png)，SHA256 `ece4919c0769897ee532efddcaf7f6abcd196f2bb7cf26fc54467f6e6cfa2594`。1100×720 结果见[组件截图](assets/e2/e2-c1-transfer-selected-1100x720.png)。
+
+接收弹窗 960×640 的主按钮位于视口内、启用并取得初始焦点，点击回执 `clicked:accept-default-receive`；见[接收截图](assets/e2/e2-c1-receive-dialog-960x640.png)。应用级 LAN 弹窗在非设备页数据下显示且“添加设备”获得焦点，切组结果提供可点击后续；见[全局确认](assets/e2/e2-c1-lan-global-prompt-960x640.png)和[切组后续](assets/e2/e2-c1-lan-switch-followup-960x640.png)。设备页区分 LAN 可达、附近未配对和已删除设备，局部滚动后“允许重新添加”取得点击回执；见[设备页](assets/e2/e2-c1-devices-readd-action-1100x720.png)。
 
 浏览器预览不执行后端传输，不能替代 Wails 准确包或网络结果。真实文件数据面沿用 E1 的独立证据；本轮准确 Windows/macOS 包的缩放与原生键盘矩阵仍 NOT RUN。

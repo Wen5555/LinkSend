@@ -8,14 +8,18 @@ import type { CommandRunner } from './hooks/useDesktop';
 import { TransferPage } from './pages/TransferPage';
 import { Queue } from './components/Queue';
 import { TaskList } from './components/Tasks';
+import { LANPairPrompt } from './components/LANPairPrompt';
 import { deviceName, movedQueueIDs } from './presentation';
 import { EnqueueIdentity } from './workspace-cache';
+import { mergePreferences, mergeSavedPreferences } from './pages/SettingsPage';
+import { lanPairServerMessage } from './pages/DevicesPage';
+import type { DesktopPreferences } from '../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
 
 vi.mock('../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => ({}));
 
 const run: CommandRunner = async () => true;
 const device: DeviceInfo = { id: 'peer', name: '对方远端名称', group_id: '', public_key_hex: '', admin: false, online: true, trusted: true, always_accept: false, nearby: false, blocked: false, relationship: 'group_paired', service_state: 'membership_synced', lan_control_state: 'unavailable', connection_state: 'not_connected',
-  profile: { peer_id: 'peer', alias: '我的电脑', my_device: true, pinned: true, position: 1, receive_directory: '', last_used_at: '', revision: 1 } };
+  profile: { peer_id: 'peer', alias: '我的电脑', my_device: true, pinned: true, position: 1, receive_directory: '', conflict_policy: '', last_used_at: '', revision: 1 } };
 const task: TaskSnapshot = {
   id: 'task', task_id: 'task', attempt_id: 'attempt', direction: 'send', peer_id: 'peer', state: 'transferring', phase: 'transferring',
   processed_bytes: 0, started_at: '', updated_at: '', sent_bytes: 0, received_bytes: 0, retransmitted_bytes: 0, verified_bytes: 0,
@@ -43,6 +47,17 @@ describe('workspace operation surfaces', () => {
     expect(markup).toContain('勾选等待后可加入队列');
     expect(markup).toMatch(/<button class="primary full send-button" disabled="">发送文件<\/button>/);
   });
+  it('treats a LAN-only peer as reachable and mounts LAN consent outside the devices page', () => {
+    const lan = { ...device, online: false, nearby: true };
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [lan], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
+    expect(markup).not.toContain('对方暂时离线');
+    expect(markup).toMatch(/<button class="primary full send-button">发送文件<\/button>/);
+    const client = createQueryClient();
+    client.setQueryData(['lan-pair-pending'], [{ request_id: 'request', peer_id: 'peer', peer_name: '另一视图中的设备', expires_at: '' }]);
+    const prompt = renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(LANPairPrompt, { run, op: '', available: true })));
+    expect(prompt).toContain('另一视图中的设备 想添加此设备');
+    expect(prompt).toContain('添加设备');
+  });
   it('shows restart confirmation separately from actual running transfer states', () => {
     const markup = renderToStaticMarkup(createElement(Queue, { items: [queueItem('pending', 'needs_attention')], devices: [device], paused: false, run, op: '', available: true }));
     expect(markup).toContain('确认继续');
@@ -53,5 +68,27 @@ describe('workspace operation surfaces', () => {
     expect(deviceName(device)).toBe('我的电脑');
     expect(deviceName({ ...device, name: '远端改名' })).toBe('我的电脑');
     expect(movedQueueIDs([queueItem('a', 'queued'), queueItem('running', 'running'), queueItem('b', 'waiting_peer')], 'b', -1)).toEqual(['b', 'a']);
+  });
+  it('preserves dirty category input while rebasing clean settings fields', () => {
+    const current: DesktopPreferences = { format_version: 1, revision: 2, device_name: '正在输入', receive_directory: 'C:\\old', conflict_policy: 'keep_both', server_url: 'https://old.example', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], background: { close_mode: '', notifications: false, prevent_sleep: false } };
+    const latest: DesktopPreferences = { ...current, revision: 3, device_name: '后台名称', receive_directory: 'C:\\new', server_url: 'https://new.example' };
+    const merged = mergePreferences(current, latest, new Set(['device_name' as const]));
+    expect(merged.device_name).toBe('正在输入');
+    expect(merged.receive_directory).toBe('C:\\new');
+    expect(merged.server_url).toBe('https://new.example');
+    const sameSection = mergePreferences({ ...current, conflict_policy: 'skip' }, latest, new Set(['conflict_policy' as const]));
+    expect(sameSection.conflict_policy).toBe('skip');
+    expect(sameSection.receive_directory).toBe('C:\\new');
+    const savedReceive = { ...latest, revision: 4, conflict_policy: 'skip' };
+    const afterSave = mergeSavedPreferences({ ...current, device_name: '未保存名称', conflict_policy: 'skip' }, savedReceive, new Set(['device_name' as const, 'conflict_policy' as const]), 'receive');
+    expect(afterSave.preferences.device_name).toBe('未保存名称');
+    expect(afterSave.preferences.conflict_policy).toBe('skip');
+    expect([...afterSave.dirty]).toEqual(['device_name']);
+  });
+  it('maps every LAN pairing completion state to an actionable result', () => {
+    expect(lanPairServerMessage('joined')).toContain('同步完成');
+    expect(lanPairServerMessage('switch_required')).toContain('配对码');
+    expect(lanPairServerMessage('pending')).toContain('服务恢复');
+    expect(lanPairServerMessage('not_joined')).toContain('局域网信任');
   });
 });

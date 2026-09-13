@@ -165,10 +165,15 @@ describe('content validation and native boundary presentation', () => {
   it('defaults snapshot retention off and explains preservation of received user files', () => {
     const client = createQueryClient();
     client.setQueryData(['content', 'settings'], { retain_sent_snapshots: false });
-    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(ContentSettings, { run, op: '', available: true })));
+    client.setQueryData(['content', 'legacy'], [{ id: 'legacy', snapshot: { id: 'snapshot', kind: 'text', size: 18, digest: 'a'.repeat(64), media_type: 'text/plain', created_at: '2026-09-13T00:00:00Z' }, revision: 1, state: 'draft', created_at: '2026-09-13T00:00:00Z' }]);
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(ContentSettings, { run, op: '', available: true, onOpenQueue: vi.fn() })));
     expect(markup).not.toContain('checked=""');
     expect(markup).toContain('发送快照');
     expect(markup).toContain('已经清理的内容不能从历史重发');
     expect(markup).not.toContain('删除收到的文件');
+    expect(markup).toContain('旧版内容草稿');
+    expect(markup).toContain('取消并删除草稿');
+    expect(markup).toContain('这里不能创建或发送新内容');
+    expect(markup).toContain('管理已排队的旧版内容');
   });
 });

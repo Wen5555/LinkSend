@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 6
+const taskStoreSchema = 7
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -139,6 +139,17 @@ func historyDB(path string) (*sql.DB, error) {
 		}
 		if !hasGeneration {
 			if _, err = tx.Exec("ALTER TABLE send_queue ADD COLUMN authorization_generation INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return rollback(err)
+			}
+		}
+	}
+	if schema < 7 {
+		hasPolicy, columnErr := tableHasColumn(tx, "device_profiles", "conflict_policy")
+		if columnErr != nil {
+			return rollback(columnErr)
+		}
+		if !hasPolicy {
+			if _, err = tx.Exec("ALTER TABLE device_profiles ADD COLUMN conflict_policy TEXT NOT NULL DEFAULT ''"); err != nil {
 				return rollback(err)
 			}
 		}

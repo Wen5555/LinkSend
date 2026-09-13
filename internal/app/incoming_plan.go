@@ -81,6 +81,13 @@ type AcceptIncomingDefaultResult struct {
 // must bind the visible attempt and revision; plan creation, directory/space
 // checks, durable persistence and the acceptance decision remain in Go.
 func (s *Service) AcceptIncomingDefault(id, attemptID string, revision uint64, remember bool) (AcceptIncomingDefaultResult, error) {
+	return s.AcceptIncomingWithPolicy(id, attemptID, revision, remember, transfer.ConflictKeepBoth)
+}
+
+func (s *Service) AcceptIncomingWithPolicy(id, attemptID string, revision uint64, remember bool, policy transfer.ConflictPolicy) (AcceptIncomingDefaultResult, error) {
+	if policy != transfer.ConflictKeepBoth && policy != transfer.ConflictSkip && policy != transfer.ConflictError {
+		return AcceptIncomingDefaultResult{}, transfer.ErrPlanInvalid
+	}
 	done, err := s.beginProfileWork()
 	if err != nil {
 		return AcceptIncomingDefaultResult{}, err
@@ -99,7 +106,7 @@ func (s *Service) AcceptIncomingDefault(id, attemptID string, revision uint64, r
 	if err != nil {
 		return AcceptIncomingDefaultResult{}, err
 	}
-	preview, err := s.previewIncomingPlan(id, IncomingPlanRequest{ExpectedRevision: revision, ConflictPolicy: transfer.ConflictKeepBoth}, true)
+	preview, err := s.previewIncomingPlan(id, IncomingPlanRequest{ExpectedRevision: revision, ConflictPolicy: policy}, true)
 	if err != nil {
 		return AcceptIncomingDefaultResult{}, err
 	}
@@ -438,7 +445,9 @@ func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attempt
 			return *plan, nil
 		}
 		if autoAccept {
-			if err := s.decideTask(t.snapshot().ID, true); err != nil {
+			snap := t.snapshot()
+			policy := receivePolicyForPeer(t.cfg, snap.PeerID)
+			if _, err := s.AcceptIncomingWithPolicy(snap.ID, snap.AttemptID, snap.Revision, false, policy); err != nil {
 				return transfer.ReceivePlan{}, err
 			}
 		}
@@ -486,6 +495,17 @@ func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attempt
 		}
 		t.progress(attemptID, p)
 	}}
+}
+
+func receivePolicyForPeer(cfg DirectConfig, peerID string) transfer.ConflictPolicy {
+	policy := cfg.ReceiveConflictPolicy
+	if configured := cfg.DeviceConflictPolicies[peerID]; configured == transfer.ConflictKeepBoth || configured == transfer.ConflictSkip || configured == transfer.ConflictError {
+		policy = configured
+	}
+	if policy != transfer.ConflictKeepBoth && policy != transfer.ConflictSkip && policy != transfer.ConflictError {
+		return transfer.ConflictKeepBoth
+	}
+	return policy
 }
 
 func (t *taskRecord) recordSelectionAccepted(attemptID string, selection transfer.Selection, summary transfer.PlanSummary) error {

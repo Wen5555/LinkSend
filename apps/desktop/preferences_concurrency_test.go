@@ -3,6 +3,9 @@ package main
 import (
 	"sync"
 	"testing"
+
+	coreapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 func TestPreferencesConcurrentSaveAndSnapshotDoNotAlias(t *testing.T) {
@@ -30,6 +33,20 @@ func TestPreferencesConcurrentSaveAndSnapshotDoNotAlias(t *testing.T) {
 	workers.Wait()
 	if got := a.Preferences(); len(got.InterfacePriority) != 1 || got.InterfacePriority[0] != "original" {
 		t.Fatalf("snapshot mutated persisted preferences: %+v", got)
+	}
+}
+
+func TestReceiveConflictPolicyUsesDeviceOverrideThenGlobalDefault(t *testing.T) {
+	peer := "peer"
+	profiles := []coreapp.DeviceProfile{{PeerID: peer, ConflictPolicy: string(transfer.ConflictSkip)}}
+	if got := receiveConflictPolicy(string(transfer.ConflictError), peer, profiles); got != transfer.ConflictSkip {
+		t.Fatalf("device override ignored: %s", got)
+	}
+	if got := receiveConflictPolicy(string(transfer.ConflictError), "another", profiles); got != transfer.ConflictError {
+		t.Fatalf("global policy ignored: %s", got)
+	}
+	if got := receiveConflictPolicy("invalid", "another", nil); got != transfer.ConflictKeepBoth {
+		t.Fatalf("safe default changed: %s", got)
 	}
 }
 

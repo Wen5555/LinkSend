@@ -10,11 +10,11 @@ import { deviceName, fileName } from '../presentation';
 import { Queue } from '../components/Queue';
 import { TaskList } from '../components/Tasks';
 
-type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; inbox?: InboxStatus; preferences?: DesktopPreferences; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean };
+type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; inbox?: InboxStatus; preferences?: DesktopPreferences; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean; initialView?: 'send' | 'queue' | 'active' };
 
-export function TransferPage({ workspace, devices, identityID, inbox, preferences, run, op, controlRun, controlOp, enqueueIdentity, available }: Props) {
+export function TransferPage({ workspace, devices, identityID, inbox, preferences, run, op, controlRun, controlOp, enqueueIdentity, available, initialView = 'send' }: Props) {
   const [waitForPeer, setWaitForPeer] = useState(false);
-  const [view, setView] = useState<'send' | 'queue' | 'active'>('send');
+  const [view, setView] = useState<'send' | 'queue' | 'active'>(initialView);
   const draft = workspace?.draft;
   const paths = draft?.paths ?? [];
   const preview = useQuery({ queryKey: ['draft-preview', draft?.revision], enabled: available && !!draft?.paths?.length,
@@ -45,10 +45,10 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
         <label className="field-label">发送给<select value={draft?.peer_id ?? ''} disabled={disabled} onChange={event => saveDraft({ peer_id: event.target.value })}><option value="">选择设备</option>{draft?.peer_id && !peers.some(device => device.id === draft.peer_id) && <option value={draft.peer_id}>{selected ? deviceName(selected) : '已保存的目标'} · 当前不可发送</option>}{peers.map(device => <option key={device.id} value={device.id}>{deviceName(device)} · {device.nearby ? '附近' : device.online ? '在线' : '离线'}</option>)}</select></label>
         {selected && <div className="peer-inline"><span className="avatar small">{deviceName(selected)[0]}</span><div><strong>{deviceName(selected)}</strong><small>{selected.blocked ? '已屏蔽，请在设备页解除后重新建立信任' : selected.trusted ? '已信任 · 接收权限由对方决定' : '附近新设备 · 对方确认并完成传输后建立信任'}</small></div></div>}
         <div className="picker-row"><button className="secondary" disabled={disabled} onClick={() => void run('pick-files', async () => { const picked = await Backend.PickFiles(); if (picked?.length && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, ...picked])] }); })}>＋ 选择文件</button><button className="secondary" disabled={disabled} onClick={() => void run('pick-folder', async () => { const path = await Backend.PickSourceDirectory(); if (path && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, path])] }); })}>＋ 选择文件夹</button></div>
-        <div className="file-list">{paths.length ? paths.map(path => <div className="file-row" key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>选择文件或文件夹</strong><small>切换目标会保留选择；取消选择窗口不会清空草稿。</small></div>}</div>
         <label className="queue-wait"><input type="checkbox" checked={waitForPeer} disabled={disabled} onChange={event => setWaitForPeer(event.target.checked)} /><span>对方离线时，留在队列中等待</span></label>
-        {selected && !selected.online && !waitForPeer && <p className="queue-notice">对方暂时离线。勾选等待后可加入队列，也可以稍后再发。</p>}
+        {selected && !selected.online && !selected.nearby && !waitForPeer && <p className="queue-notice">对方暂时离线。勾选等待后可加入队列，也可以稍后再发。</p>}
         <button className="primary full send-button" disabled={disabled || !draft?.peer_id || !paths.length || !selected || selected.blocked || (!selected.online && !selected.nearby && !waitForPeer)} onClick={enqueue}>{op === 'enqueue' ? '正在核对内容并加入…' : '发送文件'}</button>
+        <div className="file-list compact-file-list">{paths.length ? paths.map(path => <div className="file-row" key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>尚未选择文件</strong><small>选择窗口取消后不会清空已有草稿。</small></div>}</div>
         <p className="hint">可将文件或目录拖到这里；系统入口只加入草稿。当前传输不会阻止加入下一项，重启后需确认继续。</p>
         {preview.data && preview.data.revision === draft?.revision && <p className="hint">{preview.data.complete ? '' : '已统计 '} {preview.data.files} 个文件 · {preview.data.directories} 个目录 · {(preview.data.bytes / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB{preview.data.problem && ` · ${preview.data.problem}`}</p>}
         {draft && <small className="draft-status">{draft.updated_at ? `草稿已保存 · ${new Date(draft.updated_at).toLocaleTimeString()}` : '选择内容后保存草稿'}</small>}

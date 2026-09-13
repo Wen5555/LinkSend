@@ -354,6 +354,10 @@ export function TrustDevice(deviceID: string, fingerprint: string): $Cancellable
     return $Call.ByID(4070375595, deviceID, fingerprint);
 }
 
+export function UnblockDevice(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(2627139005, deviceID);
+}
+
 export function UnblockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(493225303, id);
 }

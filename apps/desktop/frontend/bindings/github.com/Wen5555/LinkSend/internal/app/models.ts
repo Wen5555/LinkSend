@@ -94,6 +94,7 @@ export interface DeviceProfile {
     "pinned": boolean;
     "position": number;
     "receive_directory": string;
+    "conflict_policy": string;
     "last_used_at": string;
     "revision": number;
 }

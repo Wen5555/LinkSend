@@ -32,7 +32,9 @@ type DirectConfig struct {
 	AllowLoopback                   bool
 	CheckTimeout                    time.Duration
 	WaitTimeout                     time.Duration // receiver only: time allowed for an incoming request
-	onPhase                         func(string)  // local application observation; never serialized
+	ReceiveConflictPolicy           transfer.ConflictPolicy
+	DeviceConflictPolicies          map[string]transfer.ConflictPolicy
+	onPhase                         func(string) // local application observation; never serialized
 	onSession                       func(string, string)
 	onEvidence                      func(DirectEvidence)
 	onChunkSent                     func(transfer.ChunkTransmission)

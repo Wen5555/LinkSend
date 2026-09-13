@@ -5,8 +5,8 @@ import type { CommandRunner } from '../hooks/useDesktop';
 import { contentError } from './ContentComposer';
 import './ContentComposer.css';
 
-type Props = { run: CommandRunner; op: string; available: boolean };
-export function ContentSettings({ run, op, available }: Props) {
+type Props = { run: CommandRunner; op: string; available: boolean; onOpenQueue?: () => void };
+export function ContentSettings({ run, op, available, onOpenQueue }: Props) {
   const client = useQueryClient();
   const [confirmCleanup, setConfirmCleanup] = useState(false);
   const [error, setError] = useState('');
@@ -14,14 +14,22 @@ export function ContentSettings({ run, op, available }: Props) {
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
   const settings = useQuery({ queryKey: ['content', 'settings'], enabled: available, retry: false, queryFn: () => Backend.ContentSettings() });
-  const disabled = !available || !!op || busy || !settings.data;
+  const drafts = useQuery({ queryKey: ['content', 'legacy'], enabled: available, retry: false, queryFn: () => Backend.ContentDrafts() });
+  const actionDisabled = !available || !!op || busy;
+  const disabled = actionDisabled || !settings.data;
   const execute = async (key: string, action: () => Promise<void>) => {
-    if (disabled || active.current) return;
+    if (actionDisabled || active.current) return;
     active.current = true; setBusy(true); setError(''); setNotice('');
     try { await run(key, action, undefined, cause => setError(contentError(cause))); }
     finally { active.current = false; setBusy(false); }
   };
   return <section className="content-settings" aria-label="内容快照设置">
+    <div className="legacy-content"><div className="section-heading compact"><h3>旧版内容草稿</h3><span className="task-count">{drafts.data?.length ?? 0}</span></div><p className="content-note">仅用于处理升级前留下的文字、链接或图片草稿；这里不能创建或发送新内容。</p>
+      {!drafts.data?.length && <p className="queue-empty">没有待处理的旧版内容草稿。</p>}
+      {(drafts.data ?? []).map(draft => <div className="legacy-content-row" key={draft.id}><div><strong>{draft.snapshot.kind === 'image' ? '旧版图片草稿' : draft.snapshot.kind === 'url' ? '旧版链接草稿' : '旧版文字草稿'}</strong><small>{draft.snapshot.size.toLocaleString()} B · 创建于 {new Date(draft.created_at).toLocaleString()}</small></div><button className="ghost danger" disabled={actionDisabled} onClick={() => void execute(`discard-content-${draft.id}`, async () => { await Backend.DiscardContentDraft(draft.id, draft.revision); await drafts.refetch(); setNotice('旧版内容草稿已取消；收到的文件未受影响。'); })}>取消并删除草稿</button></div>)}
+      {onOpenQueue && <button className="secondary" onClick={onOpenQueue}>管理已排队的旧版内容</button>}
+      {drafts.isError && <p className="content-error" role="alert">{contentError(drafts.error)} <button className="ghost" onClick={() => void drafts.refetch()}>重试读取草稿</button></p>}
+    </div>
     <h3>发送内容的保留与清理</h3>
     <label className="queue-wait"><input type="checkbox" checked={settings.data?.retain_sent_snapshots ?? false} disabled={disabled} onChange={event => { const retain = event.target.checked; void execute('content-settings', async () => {
       await Backend.SetContentSettings({ retain_sent_snapshots: retain });

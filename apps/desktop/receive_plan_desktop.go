@@ -1,6 +1,9 @@
 package main
 
-import coreapp "github.com/Wen5555/LinkSend/internal/app"
+import (
+	coreapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/transfer"
+)
 
 func (a *App) IncomingFiles(id string, request coreapp.IncomingFilesRequest) (coreapp.IncomingFilesPage, error) {
 	if err := a.workspaceAvailable(); err != nil {
@@ -27,5 +30,28 @@ func (a *App) AcceptIncomingDefault(id, attemptID string, revision uint64, remem
 	if err := a.workspaceAvailable(); err != nil {
 		return coreapp.AcceptIncomingDefaultResult{}, err
 	}
-	return a.core.AcceptIncomingDefault(id, attemptID, revision, remember)
+	peerID := ""
+	profiles := []coreapp.DeviceProfile(nil)
+	if task, ok := a.core.Task(id); ok {
+		peerID = task.PeerID
+		if saved, profileErr := a.core.DeviceProfiles(); profileErr == nil {
+			profiles = saved
+		}
+	}
+	policy := receiveConflictPolicy(a.Preferences().ConflictPolicy, peerID, profiles)
+	return a.core.AcceptIncomingWithPolicy(id, attemptID, revision, remember, policy)
+}
+
+func receiveConflictPolicy(global, peerID string, profiles []coreapp.DeviceProfile) transfer.ConflictPolicy {
+	policy := transfer.ConflictPolicy(global)
+	if policy != transfer.ConflictKeepBoth && policy != transfer.ConflictSkip && policy != transfer.ConflictError {
+		policy = transfer.ConflictKeepBoth
+	}
+	for _, profile := range profiles {
+		configured := transfer.ConflictPolicy(profile.ConflictPolicy)
+		if profile.PeerID == peerID && (configured == transfer.ConflictKeepBoth || configured == transfer.ConflictSkip || configured == transfer.ConflictError) {
+			return configured
+		}
+	}
+	return policy
 }
