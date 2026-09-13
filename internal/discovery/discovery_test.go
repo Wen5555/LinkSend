@@ -222,3 +222,18 @@ func TestDirectedAnnouncementWithoutOnLinkRouteFails(t *testing.T) {
 		t.Fatal("missing route was reported as a sent discovery packet")
 	}
 }
+
+func TestStableInterfaceSnapshotDoesNotAdvanceGenerationAndMemoryOutlivesAnnouncement(t *testing.T) {
+	iface := &net.Interface{Index: 7, Name: "test", Flags: net.FlagUp | net.FlagMulticast}
+	_, network, _ := net.ParseCIDR("192.168.8.0/24")
+	route := interfaceRoute{iface: iface, address: net.ParseIP("192.168.8.10").To4(), network: network}
+	left := map[string]interfaceRoute{"7|192.168.8.10|192.168.8.0/24": route}
+	if !sameInterfaceRoutes(left, map[string]interfaceRoute{"7|192.168.8.10|192.168.8.0/24": route}) {
+		t.Fatal("stable interface snapshot looked changed")
+	}
+	m := &Manager{peers: map[string]*peerRecord{"peer": {routes: map[string]Route{"old": {LastSeen: time.Now().Add(-peerLifetime - time.Second)}}}}, remembered: map[string]rememberedProbe{"192.168.8.20": {next: time.Now()}}}
+	m.expirePeers()
+	if len(m.peers) != 0 || len(m.remembered) != 1 {
+		t.Fatalf("announcement cleanup removed persistent remembered provider state: peers=%v remembered=%v", m.peers, m.remembered)
+	}
+}

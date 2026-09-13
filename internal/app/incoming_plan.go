@@ -241,7 +241,7 @@ func (s *Service) acceptReceivePlan(id string, revision uint64, digest string) e
 		t.mu.Unlock()
 		return err
 	}
-	if err = s.checkPeerAllowed(t.snap.PeerID); err != nil {
+	if err = s.checkTaskGrant(t.snap); err != nil {
 		t.mu.Unlock()
 		return err
 	}

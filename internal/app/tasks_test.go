@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
@@ -75,7 +76,12 @@ func TestTaskAcceptanceDecisionAndRepeat(t *testing.T) {
 	}
 	t.Cleanup(svc.Shutdown)
 	_, cancel := context.WithCancel(context.Background())
-	task, err := svc.tasks.create(TaskSnapshot{Direction: "receive", PeerID: strings.Repeat("a", 64)}, cancel)
+	peer, _ := identity.Generate()
+	if err = identity.TrustPairedPeer(svc.cfg.DataDir, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	task, err := svc.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.ID(), AuthorizationGeneration: generation}, cancel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +116,11 @@ func TestTaskBusyAndRetryCreatesNewID(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed.finish("failed", errors.New("source failed"))
-	failed.peerID, failed.paths, failed.cfg = strings.Repeat("a", 64), []string{"missing"}, DirectConfig{}
+	peer, _ := identity.Generate()
+	if err = identity.TrustPairedPeer(svc.cfg.DataDir, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	failed.peerID, failed.paths, failed.cfg = peer.ID(), []string{"missing"}, DirectConfig{}
 	// A retry is a fresh task with a distinct local ID; its invalid source then fails independently.
 	retried, err := svc.RetryTask(failed.snap.ID)
 	if err != nil {

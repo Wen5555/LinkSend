@@ -194,6 +194,18 @@ func (s *Service) Bootstrap(ctx context.Context, token, name string) (DeviceInfo
 	return s.device(d), err
 }
 
+func (s *Service) InitializeMembership(ctx context.Context, name string) (DeviceInfo, error) {
+	c, err := s.client()
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	d, err := c.Initialize(ctx, s.name(name))
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	return s.device(d), nil
+}
+
 func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, error) {
 	done, workErr := s.beginProfileWork()
 	if workErr != nil {
@@ -209,6 +221,44 @@ func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, err
 		return DeviceInfo{}, err
 	}
 	devices, err := c.Devices(ctx)
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	if err = s.syncPairedDevices(devices); err != nil {
+		return DeviceInfo{}, err
+	}
+	return s.device(d), nil
+}
+
+func (s *Service) SwitchMembership(ctx context.Context, token, name string) (DeviceInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return DeviceInfo{}, workErr
+	}
+	defer done()
+	c, err := s.client()
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	devices, err := c.Devices(ctx)
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	var current signaling.Device
+	for _, device := range devices {
+		if device.ID == s.identity.ID() {
+			current = device
+			break
+		}
+	}
+	if current.ID == "" {
+		return DeviceInfo{}, errors.New("UNPAIRED: current membership required for explicit switch")
+	}
+	d, err := c.SwitchGroup(ctx, token, s.name(name), current)
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	devices, err = c.Devices(ctx)
 	if err != nil {
 		return DeviceInfo{}, err
 	}
@@ -320,6 +370,19 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	if len(out) == 0 && serverErr != nil {
 		return nil, serverErr
 	}
+	connected := map[string]bool{}
+	for _, task := range s.Tasks() {
+		if task.PeerID != "" && task.SessionID != "" && !isTerminal(task.State) {
+			connected[task.PeerID] = true
+		}
+	}
+	for index := range out {
+		if connected[out[index].ID] {
+			out[index].ConnectionState = "connected"
+		} else if out[index].ConnectionState == "" {
+			out[index].ConnectionState = "not_connected"
+		}
+	}
 	return s.decorateDevices(out), nil
 }
 
@@ -358,18 +421,11 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 	if local.ID == "" {
 		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 local incarnation missing")
 	}
+	snapshot := make([]identity.TrustedPeer, 0, len(devices))
 	for _, d := range devices {
-		if d.ID == s.identity.ID() {
-			continue
-		}
-		if err := identity.TrustMembershipPeer(s.cfg.DataDir, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey, GroupID: d.GroupID, PeerIncarnation: d.Incarnation, LocalIncarnation: local.Incarnation, MembershipRevision: d.MembershipRevision}); err != nil {
-			if errors.Is(err, identity.ErrPeerDenied) {
-				continue
-			}
-			return err
-		}
+		snapshot = append(snapshot, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey, GroupID: d.GroupID, PeerIncarnation: d.Incarnation, LocalIncarnation: local.Incarnation, MembershipRevision: d.MembershipRevision})
 	}
-	return nil
+	return identity.ApplyMembershipSnapshot(s.cfg.DataDir, s.identity.ID(), snapshot)
 }
 
 // Membership reports only evidence returned by the authenticated server. A
@@ -477,6 +533,27 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 		}
 	}
 	if peer.ID == "" {
+		denied, loadErr := identity.LoadDeniedPeers(s.cfg.DataDir)
+		if loadErr != nil {
+			return loadErr
+		}
+		for _, prior := range denied {
+			if prior.ID != deviceID {
+				continue
+			}
+			if !prior.PendingSync {
+				return nil
+			}
+			c, clientErr := s.client()
+			if clientErr != nil {
+				return clientErr
+			}
+			revision, retryErr := c.RevokeMembership(ctx, deviceID, prior.TargetIncarnation, prior.SeenRevision, prior.RequestID)
+			if retryErr != nil {
+				return retryErr
+			}
+			return identity.MarkMembershipRevokeSynced(s.cfg.DataDir, deviceID, prior.RequestID, revision)
+		}
 		return errors.New("UNPAIRED: current membership grant required")
 	}
 	if peer.GrantKind != "group" || len(peer.PeerIncarnation) != 32 || peer.MembershipRevision == 0 {

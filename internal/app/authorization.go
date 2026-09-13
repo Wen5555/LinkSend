@@ -1,17 +1,51 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 )
+
+func (s *Service) currentAuthorizationGeneration(peerID string) (uint64, error) {
+	generation, err := identity.AuthorizationGeneration(s.cfg.DataDir, peerID)
+	if err == nil {
+		return generation, nil
+	}
+	c, clientErr := s.client()
+	if clientErr != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	devices, clientErr := c.Devices(ctx)
+	if clientErr != nil {
+		return 0, err
+	}
+	if clientErr = s.syncPairedDevices(devices); clientErr != nil {
+		return 0, clientErr
+	}
+	return identity.AuthorizationGeneration(s.cfg.DataDir, peerID)
+}
 
 // checkPeerAllowed is shared by LAN, signaling, consent and restart recovery.
 // A read failure is an authorization failure, never permission to re-pair.
 func (s *Service) checkPeerAllowed(peerID string) error {
 	if err := identity.CheckPeerAllowed(s.cfg.DataDir, peerID); err != nil {
 		return protocol.Wrap(protocol.AuthenticationFailed, "local peer authorization denied", err)
+	}
+	return nil
+}
+
+func (s *Service) checkTaskGrant(snapshot TaskSnapshot) error {
+	if err := s.checkPeerAllowed(snapshot.PeerID); err != nil {
+		return err
+	}
+	generation, err := identity.AuthorizationGeneration(s.cfg.DataDir, snapshot.PeerID)
+	if err != nil || snapshot.AuthorizationGeneration == 0 || generation != snapshot.AuthorizationGeneration {
+		return protocol.Wrap(protocol.AuthenticationFailed, "task belongs to an older peer authorization", err)
 	}
 	return nil
 }

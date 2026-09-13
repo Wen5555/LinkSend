@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/discovery"
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/signaling"
@@ -68,7 +70,7 @@ func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
 			seen := map[string]bool{}
 			for _, address := range addresses {
 				if !seen[address] {
-					_ = manager.ProbeAddress(address)
+					_ = manager.RememberAddress(address)
 					seen[address] = true
 				}
 			}
@@ -78,10 +80,19 @@ func (s *Service) startLANDiscovery(directory string, cfg DirectConfig) {
 
 func (s *Service) runLANDiscovery(ctx context.Context, runtime *lanRuntime) {
 	defer close(runtime.done)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	lastNetwork := networkSnapshotKey()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			current := networkSnapshotKey()
+			if current != "" && current != lastNetwork {
+				lastNetwork = current
+				_ = s.NetworkChanged("network")
+			}
 		case incoming, ok := <-runtime.manager.Incoming():
 			if !ok {
 				return
@@ -107,6 +118,14 @@ func (s *Service) runLANDiscovery(ctx context.Context, runtime *lanRuntime) {
 			}()
 		}
 	}
+}
+
+func networkSnapshotKey() string {
+	addresses, err := connectivity.DiscoverInterfaceAddresses(true)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", addresses)
 }
 
 func (s *Service) ensureLANDiscovery() {

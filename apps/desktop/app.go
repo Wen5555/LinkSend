@@ -708,6 +708,34 @@ func (a *App) JoinGroup(token, name string) (linksendapp.DeviceInfo, error) {
 	return a.core.Join(ctx, token, name)
 }
 
+func (a *App) InitializeMembership(name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.InitializeMembership(ctx, name)
+}
+
+func (a *App) SwitchMembership(token, name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.SwitchMembership(ctx, token, name)
+}
+
 // PairDevice is the user-facing alias for the simplified pairing-code flow.
 // JoinGroup remains for CLI/binding compatibility with existing clients.
 func (a *App) PairDevice(code, name string) (linksendapp.DeviceInfo, error) {

@@ -19,20 +19,21 @@ import (
 )
 
 type QueueItem struct {
-	ID            string            `json:"id"`
-	RequestID     string            `json:"request_id"`
-	PeerID        string            `json:"peer_id"`
-	SourceSummary string            `json:"source_summary"`
-	State         string            `json:"state"`
-	Position      int64             `json:"position"`
-	TaskID        string            `json:"task_id"`
-	ExpiresAt     string            `json:"expires_at"`
-	Revision      uint64            `json:"revision"`
-	CreatedAt     string            `json:"created_at"`
-	UpdatedAt     string            `json:"updated_at"`
-	LastError     string            `json:"last_error"`
-	WaitForPeer   bool              `json:"wait_for_peer"`
-	Content       *content.Snapshot `json:"content,omitempty"`
+	ID                      string            `json:"id"`
+	RequestID               string            `json:"request_id"`
+	PeerID                  string            `json:"peer_id"`
+	SourceSummary           string            `json:"source_summary"`
+	State                   string            `json:"state"`
+	Position                int64             `json:"position"`
+	TaskID                  string            `json:"task_id"`
+	ExpiresAt               string            `json:"expires_at"`
+	Revision                uint64            `json:"revision"`
+	CreatedAt               string            `json:"created_at"`
+	UpdatedAt               string            `json:"updated_at"`
+	LastError               string            `json:"last_error"`
+	WaitForPeer             bool              `json:"wait_for_peer"`
+	Content                 *content.Snapshot `json:"content,omitempty"`
+	AuthorizationGeneration uint64            `json:"authorization_generation,omitempty"`
 }
 
 type EnqueueRequest struct {
@@ -60,12 +61,12 @@ type queueManager struct {
 	done          chan struct{}
 }
 
-const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer`
+const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer,authorization_generation`
 
 func scanQueue(row interface{ Scan(...any) error }) (queueRecord, error) {
 	var item queueRecord
 	var paths string
-	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer)
+	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer, &item.AuthorizationGeneration)
 	if err == nil {
 		err = json.Unmarshal([]byte(paths), &item.paths)
 		item.SourceSummary = sourceSummary(item.paths)
@@ -134,6 +135,10 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	if err = s.checkPeerAllowed(request.PeerID); err != nil {
 		return QueueItem{}, err
 	}
+	authorizationGeneration, err := s.currentAuthorizationGeneration(request.PeerID)
+	if err != nil {
+		return QueueItem{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+	}
 	paths, err := queuePaths(request.Paths)
 	if err != nil {
 		return QueueItem{}, err
@@ -147,7 +152,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	s.queue.mu.Unlock()
 	if err == nil {
 		saved, _ := json.Marshal(existing.paths)
-		if existing.PeerID != request.PeerID || string(saved) != string(encoded) || existing.WaitForPeer != request.WaitForPeer {
+		if existing.PeerID != request.PeerID || string(saved) != string(encoded) || existing.WaitForPeer != request.WaitForPeer || existing.AuthorizationGeneration != authorizationGeneration {
 			return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
 		}
 		var contentCount int
@@ -224,7 +229,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		state = "waiting_peer"
 	}
 	id := protocol.RandomID()
-	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer)
+	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?,?) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer, authorizationGeneration)
 	if err != nil {
 		return QueueItem{}, err
 	}
@@ -376,7 +381,8 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 			_ = s.setQueueState(item.ID, "expired", "QUEUE_EXPIRED")
 			continue
 		}
-		if s.checkPeerAllowed(item.PeerID) != nil {
+		generation, generationErr := identity.AuthorizationGeneration(s.cfg.DataDir, item.PeerID)
+		if s.checkPeerAllowed(item.PeerID) != nil || generationErr != nil || generation != item.AuthorizationGeneration {
 			_ = s.setQueueState(item.ID, "needs_attention", "PEER_BLOCKED")
 			continue
 		}
@@ -408,7 +414,8 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 			_ = s.setQueueState(item.ID, "expired", "QUEUE_EXPIRED")
 			continue
 		}
-		if s.checkPeerAllowed(item.PeerID) != nil {
+		generation, generationErr := identity.AuthorizationGeneration(s.cfg.DataDir, item.PeerID)
+		if s.checkPeerAllowed(item.PeerID) != nil || generationErr != nil || generation != item.AuthorizationGeneration {
 			_ = s.setQueueState(item.ID, "needs_attention", "PEER_BLOCKED")
 			continue
 		}
@@ -534,8 +541,9 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 	if err = s.checkPeerAllowed(item.PeerID); err != nil {
 		return err
 	}
-	if err = identity.CheckTaskAuthorization(s.cfg.DataDir, item.PeerID, item.CreatedAt); err != nil {
-		return protocol.Wrap(protocol.AuthenticationFailed, "queue item belongs to an older peer authorization", err)
+	currentGeneration, generationErr := identity.AuthorizationGeneration(s.cfg.DataDir, item.PeerID)
+	if generationErr != nil || item.AuthorizationGeneration == 0 || currentGeneration != item.AuthorizationGeneration {
+		return protocol.Wrap(protocol.AuthenticationFailed, "queue item belongs to an older peer authorization", generationErr)
 	}
 	if item.TaskID != "" {
 		if task, ok := s.Task(item.TaskID); ok && task.CanResume {

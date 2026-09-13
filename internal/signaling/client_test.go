@@ -185,3 +185,65 @@ func TestRejectInsecureNonLoopback(t *testing.T) {
 		t.Fatal("accepted insecure non-loopback signaling URL")
 	}
 }
+
+func TestLANConsentCredentialIsBoundToTargetIdentity(t *testing.T) {
+	_, h := testServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	targetID, _ := identity.Generate()
+	memberID, _ := identity.Generate()
+	target := testClient(t, h.URL, targetID)
+	member := testClient(t, h.URL, memberID)
+	joinedMember, err := member.Bootstrap(ctx, "01234567890123456789012345678901", "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestID, nonce, expires := protocol.RandomID(), protocol.RandomID(), time.Now().Add(time.Minute).Unix()
+	request := LANPairFrame{Version: 2, Phase: "request", RequestID: requestID, Nonce: nonce, Sender: targetID.ID(), Recipient: memberID.ID(), Generation: 1, IssuedAt: time.Now().Unix(), ExpiresAt: expires}
+	request.Signature = targetID.Sign(request.SigningBytes())
+	approval := LANPairFrame{Version: 2, Phase: "accept", RequestID: requestID, Nonce: nonce, Sender: memberID.ID(), Recipient: targetID.ID(), Generation: 1, IssuedAt: time.Now().Unix(), ExpiresAt: expires}
+	approval.Signature = memberID.Sign(approval.SigningBytes())
+	credential, err := member.CreateLANCredential(ctx, targetID.PublicKey(), request, approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinedTarget, err := target.Join(ctx, credential.Token, "target")
+	if err != nil || joinedTarget.GroupID != joinedMember.GroupID {
+		t.Fatalf("bound credential join failed: %+v %v", joinedTarget, err)
+	}
+	otherID, _ := identity.Generate()
+	if _, err = testClient(t, h.URL, otherID).Join(ctx, credential.Token, "other"); protocol.ErrorCode(err) != protocol.PairingCodeUsed && protocol.ErrorCode(err) != protocol.PairingIdentityConflict {
+		t.Fatalf("credential was usable by another identity: %v", err)
+	}
+}
+
+func TestClientExplicitMembershipSwitchBindsCurrentIncarnation(t *testing.T) {
+	_, h := testServer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	aID, _ := identity.Generate()
+	xID, _ := identity.Generate()
+	a := testClient(t, h.URL, aID)
+	x := testClient(t, h.URL, xID)
+	current, err := a.Initialize(ctx, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = x.Initialize(ctx, "x"); err != nil {
+		t.Fatal(err)
+	}
+	invitation, err := x.CreateInvitation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.Join(ctx, invitation.Token, "a"); protocol.ErrorCode(err) != protocol.PairingIdentityConflict {
+		t.Fatalf("implicit cross-group switch result=%v", err)
+	}
+	switched, err := a.SwitchGroup(ctx, invitation.Token, "a", current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if switched.GroupID == current.GroupID || switched.Incarnation == current.Incarnation {
+		t.Fatalf("switch did not replace relationship: old=%+v new=%+v", current, switched)
+	}
+}

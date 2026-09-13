@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,5 +167,44 @@ func TestResumeRevokedPeerDoesNotStartAnotherAttempt(t *testing.T) {
 	after, ok := f.a.Task(paused.ID)
 	if !ok || after.AttemptID != paused.AttemptID || after.Revision != paused.Revision || after.SentBytes != paused.SentBytes || after.State != "paused" {
 		t.Fatalf("denied resume modified the task: before=%+v after=%+v", paused, after)
+	}
+}
+
+func TestLateTaskConsentCannotUseNewMembershipGeneration(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()}); if err != nil { t.Fatal(err) }; defer svc.Shutdown()
+	peer, _ := identity.Generate()
+	grant := identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey(), GroupID: "group", PeerIncarnation: strings.Repeat("a",32), LocalIncarnation: strings.Repeat("b",32), MembershipRevision: 1}
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil { t.Fatal(err) }
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	stale := TaskSnapshot{PeerID: peer.ID(), AuthorizationGeneration: generation}
+	if err = identity.RevokeMembershipPeer(svc.cfg.DataDir, peer.ID(), grant.PeerIncarnation, "remove", 1); err != nil { t.Fatal(err) }
+	grant.PeerIncarnation = strings.Repeat("c",32); grant.MembershipRevision = 2
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil { t.Fatal(err) }
+	if err = svc.checkTaskGrant(stale); protocol.ErrorCode(err) != protocol.AuthenticationFailed { t.Fatalf("stale task generation was accepted: %v", err) }
+}
+
+func TestLateTaskDecisionCannotUseNewRelationshipGeneration(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Shutdown()
+	peer, _ := identity.Generate()
+	grant := identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey(), GroupID: "group", PeerIncarnation: strings.Repeat("1", 32), LocalIncarnation: strings.Repeat("2", 32), MembershipRevision: 1}
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	snapshot := TaskSnapshot{PeerID: peer.ID(), AuthorizationGeneration: generation}
+	if err = identity.RevokeMembershipPeer(svc.cfg.DataDir, peer.ID(), grant.PeerIncarnation, "remove", 1); err != nil {
+		t.Fatal(err)
+	}
+	grant.PeerIncarnation = strings.Repeat("3", 32)
+	grant.MembershipRevision = 2
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.checkTaskGrant(snapshot); protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("old task generation was accepted: %v", err)
 	}
 }

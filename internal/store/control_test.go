@@ -50,7 +50,7 @@ INSERT INTO schema_version(version) VALUES(1);`); err != nil {
 	}
 	defer control.Close()
 	var version int
-	if err = control.db.QueryRow("SELECT version FROM schema_version").Scan(&version); err != nil || version != 3 {
+	if err = control.db.QueryRow("SELECT version FROM schema_version").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("schema version=%d err=%v", version, err)
 	}
 	rows, err := control.db.Query("PRAGMA table_info(invitations)")
@@ -69,7 +69,7 @@ INSERT INTO schema_version(version) VALUES(1);`); err != nil {
 		}
 		columns[name] = true
 	}
-	if !columns["used_by"] || !columns["used_at"] {
+	if !columns["used_by"] || !columns["used_at"] || !columns["target_id"] {
 		t.Fatalf("migration columns missing: %#v", columns)
 	}
 }
@@ -274,5 +274,47 @@ func TestMembershipV2RejectsStaleActorAndCrossGroupTarget(t *testing.T) {
 	}
 	if _, err = s.Revoke(ctx, b, RevokeRequest{RequestID: "cross-group", TargetID: otherID.ID(), TargetIncarnation: incarnation, ExpectedRevision: 1}); !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("cross-group revoke result=%v", err)
+	}
+}
+
+func TestSignedInitializationAndExplicitCrossGroupSwitch(t *testing.T) {
+	ctx := context.Background()
+	s, err := OpenControl(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	aID, _ := identity.Generate()
+	xID, _ := identity.Generate()
+	a, err := s.Initialize(ctx, "a", aID.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := s.Initialize(ctx, "a-again", aID.PublicKey())
+	if err != nil || repeated.GroupID != a.GroupID || repeated.Incarnation != a.Incarnation {
+		t.Fatalf("initialization not idempotent: %+v %v", repeated, err)
+	}
+	x, err := s.Initialize(ctx, "x", xID.PublicKey())
+	if err != nil || x.GroupID == a.GroupID {
+		t.Fatalf("initialization selected existing group: %+v %v", x, err)
+	}
+	oldInvite, _, err := s.Invitation(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetInvite, _, err := s.Invitation(ctx, x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Join(ctx, targetInvite, "a", aID.PublicKey()); !errors.Is(err, ErrInvitationConflict) {
+		t.Fatalf("silent cross-group switch result=%v", err)
+	}
+	switched, err := s.JoinWithSwitch(ctx, targetInvite, "a", aID.PublicKey(), &SwitchExpectation{CurrentGroup: a.GroupID, CurrentIncarnation: a.Incarnation, CurrentRevision: a.MembershipRevision})
+	if err != nil || switched.GroupID != x.GroupID || switched.Incarnation == a.Incarnation {
+		t.Fatalf("explicit switch failed: %+v %v", switched, err)
+	}
+	newPeer, _ := identity.Generate()
+	if _, err = s.Join(ctx, oldInvite, "late", newPeer.PublicKey()); !errors.Is(err, ErrInvitationInvalid) {
+		t.Fatalf("old-group inviter credential survived switch: %v", err)
 	}
 }

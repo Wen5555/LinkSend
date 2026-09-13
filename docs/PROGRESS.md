@@ -1,5 +1,12 @@
 # LinkSend implementation progress
 
+## 2026-09-13 E1第二候选与C1审查修复（待复审）
+
+- 修复C1六组问题：完整成员快照撤销第三方消失成员且拒绝revision回滚；组/LAN双关系不互相覆盖，旧LAN generation不能附着新关系；schema1本机block在授权读取前迁移；任务/恢复/queue/迟到确认绑定真实授权generation，任务库升级schema6。
+- LAN同意改为持久provisional的commit/ready/confirm/done并支持query恢复，pending上限64；服务端凭双方签名transcript签发target-bound 60秒凭证。新增空组签名初始化和显式跨组原子切换，控制库升级schema4。
+- 发现按同index地址变化退组重入、稳定刷新不增generation、失效UDP socket有界重建、持久记忆地址持续退避探测；LAN runtime每5秒以真实接口地址快照触发恢复，目录连接状态来自活动session。原生OS事件低延迟回调、IPv6/mDNS及物理矩阵仍准确保留为未完成。
+- 第二候选实际通过根 `go test ./...`、`go vet ./...`、`GOWORK=off go test ./...`、`git diff --check`；桌面独立模块 `GOWORK=off go test/go vet/go build ./...`；前端 typecheck、lint、58项测试和production build。当前隔离工作树未找到 `wails3.exe`，本候选本地Wails production build为NOT RUN；由阶段提交的GitHub CI继续验证跨平台构建。Node实际为24.19.0，低于项目声明的`^24.21.0`并产生engine warning，未造成上述命令失败。
+
 ## 2026-09-13 E1设备与发现后端第一候选（待总控审查）
 
 - E1-01/02：成员控制面升级为 `membership_version=2` 与数据库schema 3，加入随机incarnation、组revision、邀请码代际绑定和普通成员幂等撤销事务；本机trust schema 2先持久拒绝/outbox并推进grant generation，旧快照、跨组、迟到actor、旧客户端与删后旧码负例通过。

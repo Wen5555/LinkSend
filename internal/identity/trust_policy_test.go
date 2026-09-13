@@ -326,3 +326,90 @@ func TestLocalBlockCannotBeClearedByMembershipSnapshot(t *testing.T) {
 		t.Fatalf("membership cleared explicit local block: %v", err)
 	}
 }
+
+func TestSchemaOneDeniedPeerRemainsExplicitLocalBlockDuringSync(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	legacy := TrustFile{SchemaVersion: 1, Peers: []TrustedPeer{}, DeniedPeers: []DeniedPeer{{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC()}}}
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, "trust.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("e", 32)
+	peer.LocalIncarnation = strings.Repeat("f", 32)
+	peer.MembershipRevision = 2
+	if err = TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("schema1 local block was cleared: %v", err)
+	}
+}
+
+func TestCompleteMembershipSnapshotRevokesMissingPeerAndRejectsRollback(t *testing.T) {
+	dir := t.TempDir()
+	local := policyTestPeer(t, "local")
+	b := policyTestPeer(t, "b")
+	c := policyTestPeer(t, "c")
+	localInc := strings.Repeat("1", 32)
+	makePeer := func(peer TrustedPeer, incarnation string, revision uint64) TrustedPeer {
+		peer.GroupID = "group"
+		peer.PeerIncarnation = incarnation
+		peer.LocalIncarnation = localInc
+		peer.MembershipRevision = revision
+		return peer
+	}
+	initial := []TrustedPeer{makePeer(local, localInc, 1), makePeer(b, strings.Repeat("2", 32), 1), makePeer(c, strings.Repeat("3", 32), 1)}
+	if err := ApplyMembershipSnapshot(dir, local.ID, initial); err != nil {
+		t.Fatal(err)
+	}
+	removed := []TrustedPeer{makePeer(local, localInc, 2), makePeer(c, strings.Repeat("3", 32), 2)}
+	if err := ApplyMembershipSnapshot(dir, local.ID, removed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AuthorizationGeneration(dir, b.ID); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("missing peer remained authorized: %v", err)
+	}
+	if err := ApplyMembershipSnapshot(dir, local.ID, initial); err == nil {
+		t.Fatal("older complete snapshot rolled membership back")
+	}
+	rejoined := append(removed, makePeer(b, strings.Repeat("4", 32), 3))
+	for index := range rejoined {
+		rejoined[index].MembershipRevision = 3
+	}
+	if err := ApplyMembershipSnapshot(dir, local.ID, rejoined); err != nil {
+		t.Fatal(err)
+	}
+	if generation, err := AuthorizationGeneration(dir, b.ID); err != nil || generation < 2 {
+		t.Fatalf("verified rejoin did not create new generation: %d %v", generation, err)
+	}
+}
+
+func TestLateLANCommitCannotAttachToNewMembershipGeneration(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("a", 32)
+	peer.LocalIncarnation = strings.Repeat("b", 32)
+	peer.MembershipRevision = 1
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	oldGeneration, _ := LANPairGeneration(dir, peer.ID)
+	if err := RevokeMembershipPeer(dir, peer.ID, peer.PeerIncarnation, "remove", 1); err != nil {
+		t.Fatal(err)
+	}
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.MembershipRevision = 2
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	if err := CommitLANPeer(dir, TrustedPeer{ID: peer.ID, Name: peer.Name, PublicKey: peer.PublicKey}, oldGeneration); err == nil {
+		t.Fatal("late LAN commit reused old generation")
+	}
+	peers, err := LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].GroupID != "group" || peers[0].GrantKind != "group" {
+		t.Fatalf("late LAN commit damaged group grant: %+v %v", peers, err)
+	}
+}

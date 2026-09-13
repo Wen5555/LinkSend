@@ -54,11 +54,11 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E0-04 | 待审查 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 执行中 | 总控接受2342009原型IO修补；服务4097与文件交接仍未通过，见MAC-SAFEIO证据 |
 | E0-05 | 验收通过 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 仅ADR语义：总控E0-safeio-close-v1接受11c44df；具体API/schema/实现及兼容测试仍待E1/E4 |
 
-| E1-01 | 待审查 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | schema3/incarnation/revision/旧端拒绝候选；空组初始化与显式跨组切换未闭合 |
-| E1-02 | 待审查 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | 本机屏障/outbox/幂等撤销及负例候选；真实离线重启补同步未实机 |
-| E1-03 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | TLS签名同意/拒绝零pin候选；服务凭证、ack查询与物理双机未闭合 |
-| E1-04 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 多地址/独立降级/Windows源绑定候选；IPv6/mDNS/物理矩阵未闭合 |
-| E1-05 | 待审查 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录与不取消健康task候选；准确包双向/网络切换/睡眠/双NAT未闭合 |
+| E1-01 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | schema4/incarnation/revision/旧端拒绝、空组初始化、显式跨组切换候选 |
+| E1-02 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | 完整快照、本机屏障/outbox、generation绑定和幂等撤销候选；真实离线重启补同步未实机 |
+| E1-03 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | provisional/query、服务target凭证及拒绝零pin候选；物理双机未闭合 |
+| E1-04 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 多地址/独立降级/Windows源绑定/socket重建/记忆重试；IPv6/mDNS/物理矩阵未闭合 |
+| E1-05 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录、5秒网络快照与不取消健康task候选；原生OS事件、准确包矩阵未闭合 |
 | E2-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E2-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |

@@ -260,13 +260,30 @@ type TrustedPeer struct {
 	GrantGeneration    uint64    `json:"grant_generation,omitempty"`
 	GrantKind          string    `json:"grant_kind,omitempty"`
 	GrantedAt          time.Time `json:"granted_at,omitempty"`
+	LANRequestID       string    `json:"lan_request_id,omitempty"`
 }
 type TrustFile struct {
-	SchemaVersion int           `json:"schema_version,omitempty"`
-	Peers         []TrustedPeer `json:"peers"`
-	DeniedPeers   []DeniedPeer  `json:"denied_peers,omitempty"`
+	SchemaVersion       int                   `json:"schema_version,omitempty"`
+	Peers               []TrustedPeer         `json:"peers"`
+	DeniedPeers         []DeniedPeer          `json:"denied_peers,omitempty"`
+	MembershipSnapshots []MembershipSnapshot  `json:"membership_snapshots,omitempty"`
+	ProvisionalLAN      []ProvisionalLANGrant `json:"provisional_lan,omitempty"`
 }
 
+type ProvisionalLANGrant struct {
+	RequestID  string      `json:"request_id"`
+	Nonce      string      `json:"nonce"`
+	Peer       TrustedPeer `json:"peer"`
+	Generation uint64      `json:"generation"`
+	State      string      `json:"state"`
+	ExpiresAt  time.Time   `json:"expires_at"`
+}
+
+type MembershipSnapshot struct {
+	GroupID          string `json:"group_id"`
+	LocalIncarnation string `json:"local_incarnation"`
+	Revision         uint64 `json:"revision"`
+}
 type DeniedPeer struct {
 	ID                      string    `json:"id"`
 	Name                    string    `json:"name,omitempty"`
@@ -338,15 +355,40 @@ func LANPairGeneration(dir, peerID string) (uint64, error) {
 	return 1, nil
 }
 
-func CommitLANPeer(dir string, peer TrustedPeer, expectedGeneration uint64) error {
-	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || expectedGeneration == 0 || !validLANAddress(peer.LastLANAddress) {
-		return authenticationError("invalid LAN pairing grant")
+func AuthorizationGeneration(dir, peerID string) (uint64, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return 0, err
 	}
+	if err = checkPeerAllowed(f, peerID); err != nil {
+		return 0, err
+	}
+	for _, peer := range f.Peers {
+		if peer.ID == peerID {
+			return max(uint64(1), peer.GrantGeneration), nil
+		}
+	}
+	return 0, authenticationError("current peer grant missing")
+}
+
+func CommitLANPeer(dir string, peer TrustedPeer, expectedGeneration uint64) error {
 	trustMu.Lock()
 	defer trustMu.Unlock()
 	f, err := loadTrustFile(dir)
 	if err != nil {
 		return err
+	}
+	if err = commitLANPeerFile(&f, peer, expectedGeneration); err != nil {
+		return err
+	}
+	return saveTrust(dir, f)
+}
+
+func commitLANPeerFile(f *TrustFile, peer TrustedPeer, expectedGeneration uint64) error {
+	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || expectedGeneration == 0 || !validLANAddress(peer.LastLANAddress) {
+		return authenticationError("invalid LAN pairing grant")
 	}
 	for index := 0; index < len(f.DeniedPeers); index++ {
 		denied := f.DeniedPeers[index]
@@ -366,19 +408,27 @@ func CommitLANPeer(dir string, peer TrustedPeer, expectedGeneration uint64) erro
 		if !bytes.Equal(existing.PublicKey, peer.PublicKey) {
 			return authenticationError("peer key changed")
 		}
+		if expectedGeneration != existing.GrantGeneration {
+			return authenticationError("stale LAN grant generation")
+		}
 		peer.GrantGeneration = existing.GrantGeneration
 		peer.AutoAccept = existing.AutoAccept
 		peer.GrantedAt = existing.GrantedAt
-		peer.GrantKind = "lan"
+		if existing.GrantKind == "group" || existing.GrantKind == "group+lan" {
+			peer.GroupID, peer.PeerIncarnation, peer.LocalIncarnation, peer.MembershipRevision = existing.GroupID, existing.PeerIncarnation, existing.LocalIncarnation, existing.MembershipRevision
+			peer.GrantKind = "group+lan"
+		} else {
+			peer.GrantKind = "lan"
+		}
 		f.Peers[index] = peer
-		return saveTrust(dir, f)
+		return nil
 	}
 	peer.AutoAccept = false
 	peer.GrantKind = "lan"
 	peer.GrantGeneration = expectedGeneration
 	peer.GrantedAt = time.Now().UTC()
 	f.Peers = append(f.Peers, peer)
-	return saveTrust(dir, f)
+	return nil
 }
 
 func checkPeerAllowed(f TrustFile, peerID string) error {
@@ -463,7 +513,7 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 	}
 	seen := map[string]bool{}
 	for _, p := range f.Peers {
-		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) || len(p.LANAddressHistory) > 8 || p.GrantKind != "" && p.GrantKind != "group" && p.GrantKind != "lan" {
+		if len(p.PublicKey) != 32 || DeviceID(p.PublicKey) != p.ID || seen[p.ID] || !validLANAddress(p.LastLANAddress) || len(p.LANAddressHistory) > 8 || p.GrantKind != "" && p.GrantKind != "group" && p.GrantKind != "lan" && p.GrantKind != "group+lan" {
 			return TrustFile{}, errors.New("invalid trust file")
 		}
 		for _, address := range p.LANAddressHistory {
@@ -479,7 +529,147 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 		}
 		seen[denied.ID] = true
 	}
+	for index := range f.MembershipSnapshots {
+		snapshot := f.MembershipSnapshots[index]
+		if snapshot.GroupID == "" || len(snapshot.LocalIncarnation) != 32 || snapshot.Revision == 0 {
+			return TrustFile{}, errors.New("invalid membership snapshot")
+		}
+	}
+	if len(f.ProvisionalLAN) > 64 {
+		return TrustFile{}, errors.New("too many provisional LAN grants")
+	}
+	for _, grant := range f.ProvisionalLAN {
+		if len(grant.RequestID) != 32 || len(grant.Nonce) != 32 || grant.Generation == 0 || grant.ExpiresAt.IsZero() || len(grant.Peer.PublicKey) != 32 || DeviceID(grant.Peer.PublicKey) != grant.Peer.ID {
+			return TrustFile{}, errors.New("invalid provisional LAN grant")
+		}
+	}
+	if f.SchemaVersion == 1 {
+		for index := range f.DeniedPeers {
+			f.DeniedPeers[index].LocalBlock = true
+			f.DeniedPeers[index].AuthorizationGeneration = 1
+		}
+		for index := range f.Peers {
+			if f.Peers[index].GrantGeneration == 0 {
+				f.Peers[index].GrantGeneration = 1
+			}
+			if f.Peers[index].GrantKind == "" {
+				f.Peers[index].GrantKind = "group"
+			}
+		}
+	}
 	return f, nil
+}
+
+func BeginProvisionalLAN(dir string, grant ProvisionalLANGrant) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	active := f.ProvisionalLAN[:0]
+	for _, existing := range f.ProvisionalLAN {
+		if existing.ExpiresAt.After(now) {
+			active = append(active, existing)
+		}
+	}
+	f.ProvisionalLAN = active
+	for _, existing := range f.ProvisionalLAN {
+		if existing.RequestID == grant.RequestID {
+			if existing.Peer.ID == grant.Peer.ID && existing.Nonce == grant.Nonce && existing.Generation == grant.Generation {
+				return nil
+			}
+			return authenticationError("LAN pairing request conflict")
+		}
+	}
+	if len(f.ProvisionalLAN) >= 64 || !grant.ExpiresAt.After(now) || grant.ExpiresAt.After(now.Add(60*time.Second)) {
+		return errors.New("LAN_PAIR_RESOURCE_LIMIT")
+	}
+	current := uint64(1)
+	for _, peer := range f.Peers {
+		if peer.ID == grant.Peer.ID {
+			current = peer.GrantGeneration
+		}
+	}
+	for _, denied := range f.DeniedPeers {
+		if denied.ID == grant.Peer.ID {
+			if denied.LocalBlock {
+				return ErrPeerDenied
+			}
+			current = denied.AuthorizationGeneration
+		}
+	}
+	if current != grant.Generation {
+		return authenticationError("stale LAN grant generation")
+	}
+	grant.Peer.AutoAccept = false
+	grant.Peer.LANRequestID = grant.RequestID
+	grant.Peer.GrantKind = "lan"
+	grant.Peer.GrantGeneration = grant.Generation
+	f.ProvisionalLAN = append(f.ProvisionalLAN, grant)
+	return saveTrust(dir, f)
+}
+
+func LANPairStatus(dir, peerID, requestID, nonce string) (string, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, peer := range f.Peers {
+		if peer.ID == peerID && peer.LANRequestID == requestID {
+			return "done", nil
+		}
+	}
+	for _, grant := range f.ProvisionalLAN {
+		if grant.Peer.ID == peerID && grant.RequestID == requestID && grant.Nonce == nonce && grant.ExpiresAt.After(time.Now().UTC()) {
+			return "ready", nil
+		}
+	}
+	return "unknown", nil
+}
+
+func CommitProvisionalLAN(dir, requestID, nonce string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index, grant := range f.ProvisionalLAN {
+		if grant.RequestID != requestID || grant.Nonce != nonce {
+			continue
+		}
+		if !grant.ExpiresAt.After(time.Now().UTC()) {
+			f.ProvisionalLAN = append(f.ProvisionalLAN[:index], f.ProvisionalLAN[index+1:]...)
+			_ = saveTrust(dir, f)
+			return errors.New("LAN_PAIR_EXPIRED")
+		}
+		if err = commitLANPeerFile(&f, grant.Peer, grant.Generation); err != nil {
+			return err
+		}
+		f.ProvisionalLAN = append(f.ProvisionalLAN[:index], f.ProvisionalLAN[index+1:]...)
+		return saveTrust(dir, f)
+	}
+	return errors.New("LAN_PAIR_REQUEST_NOT_FOUND")
+}
+
+func CancelProvisionalLAN(dir, requestID string) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index, grant := range f.ProvisionalLAN {
+		if grant.RequestID == requestID {
+			f.ProvisionalLAN = append(f.ProvisionalLAN[:index], f.ProvisionalLAN[index+1:]...)
+			return saveTrust(dir, f)
+		}
+	}
+	return nil
 }
 
 func validPeerID(peerID string) bool {
@@ -560,14 +750,21 @@ func trustPeer(dir string, peer TrustedPeer) error {
 // newer verified incarnation may clear only a group-removal barrier; an
 // explicit local block is never cleared by server state.
 func TrustMembershipPeer(dir string, peer TrustedPeer) error {
-	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || peer.GroupID == "" || len(peer.PeerIncarnation) != 32 || len(peer.LocalIncarnation) != 32 || peer.MembershipRevision == 0 {
-		return authenticationError("invalid membership_v2 grant")
-	}
 	trustMu.Lock()
 	defer trustMu.Unlock()
 	f, err := loadTrustFile(dir)
 	if err != nil {
 		return err
+	}
+	if err = applyMembershipPeer(&f, peer); err != nil {
+		return err
+	}
+	return saveTrust(dir, f)
+}
+
+func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
+	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || peer.GroupID == "" || len(peer.PeerIncarnation) != 32 || len(peer.LocalIncarnation) != 32 || peer.MembershipRevision == 0 {
+		return authenticationError("invalid membership_v2 grant")
 	}
 	generation := uint64(1)
 	for index := 0; index < len(f.DeniedPeers); index++ {
@@ -603,15 +800,103 @@ func TrustMembershipPeer(dir string, peer TrustedPeer) error {
 			peer.LastLANAddress = ""
 			peer.GrantGeneration = max(generation, existing.GrantGeneration+1)
 		}
-		peer.GrantKind = "group"
+		if existing.GrantKind == "lan" || existing.GrantKind == "group+lan" {
+			peer.GrantKind = "group+lan"
+		} else {
+			peer.GrantKind = "group"
+		}
 		f.Peers[index] = peer
-		return saveTrust(dir, f)
+		return nil
 	}
 	peer.AutoAccept = false
 	peer.GrantKind = "group"
 	peer.GrantGeneration = generation
 	peer.GrantedAt = time.Now().UTC()
 	f.Peers = append(f.Peers, peer)
+	return nil
+}
+
+// ApplyMembershipSnapshot atomically advances one complete authenticated group
+// snapshot and revokes every formerly grouped peer missing from the new revision.
+func ApplyMembershipSnapshot(dir, localID string, peers []TrustedPeer) error {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if len(peers) == 0 {
+		return authenticationError("empty membership snapshot")
+	}
+	var groupID, localInc string
+	var revision uint64
+	present := map[string]bool{}
+	for _, peer := range peers {
+		if groupID == "" {
+			groupID, localInc, revision = peer.GroupID, peer.LocalIncarnation, peer.MembershipRevision
+		}
+		if peer.GroupID != groupID || peer.LocalIncarnation != localInc || peer.MembershipRevision != revision {
+			return authenticationError("inconsistent membership snapshot")
+		}
+		present[peer.ID] = true
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	for index := range f.MembershipSnapshots {
+		snapshot := &f.MembershipSnapshots[index]
+		if snapshot.GroupID == groupID {
+			if revision < snapshot.Revision || localInc != snapshot.LocalIncarnation && revision <= snapshot.Revision {
+				return authenticationError("stale membership snapshot")
+			}
+			snapshot.Revision, snapshot.LocalIncarnation = revision, localInc
+			goto snapshotReady
+		}
+	}
+	f.MembershipSnapshots = append(f.MembershipSnapshots, MembershipSnapshot{GroupID: groupID, LocalIncarnation: localInc, Revision: revision})
+snapshotReady:
+	for index := len(f.Peers) - 1; index >= 0; index-- {
+		peer := f.Peers[index]
+		if peer.GroupID == "" || peer.GroupID == groupID {
+			continue
+		}
+		if peer.GrantKind == "group+lan" {
+			f.Peers[index].GroupID, f.Peers[index].PeerIncarnation, f.Peers[index].LocalIncarnation, f.Peers[index].MembershipRevision, f.Peers[index].GrantKind, f.Peers[index].AutoAccept = "", "", "", 0, "lan", false
+			continue
+		}
+		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, SeenRevision: revision}
+		f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
+		already := false
+		for _, existing := range f.DeniedPeers {
+			if existing.ID == denied.ID {
+				already = true
+			}
+		}
+		if !already {
+			f.DeniedPeers = append(f.DeniedPeers, denied)
+		}
+	}
+	for index := len(f.Peers) - 1; index >= 0; index-- {
+		peer := f.Peers[index]
+		if peer.ID == localID || peer.GroupID != groupID || present[peer.ID] {
+			continue
+		}
+		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, SeenRevision: revision}
+		f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
+		already := false
+		for _, existing := range f.DeniedPeers {
+			if existing.ID == denied.ID {
+				already = true
+			}
+		}
+		if !already {
+			f.DeniedPeers = append(f.DeniedPeers, denied)
+		}
+	}
+	for _, peer := range peers {
+		if peer.ID != localID {
+			if err = applyMembershipPeer(&f, peer); err != nil && !errors.Is(err, ErrPeerDenied) {
+				return err
+			}
+		}
+	}
 	return saveTrust(dir, f)
 }
 

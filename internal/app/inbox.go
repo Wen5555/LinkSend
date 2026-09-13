@@ -314,13 +314,18 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		return false
 	}
 	ctx, cancel := context.WithCancel(inboxCtx)
+	authorizationGeneration, generationErr := s.currentAuthorizationGeneration(peer.PeerID)
+	if generationErr != nil {
+		cancel()
+		return false
+	}
 	s.operationMu.Lock()
 	if s.isClosing() {
 		s.operationMu.Unlock()
 		cancel()
 		return false
 	}
-	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory}, cancel)
+	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory, AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		s.operationMu.Unlock()
 		cancel()

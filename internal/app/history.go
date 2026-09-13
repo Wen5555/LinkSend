@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 5
+const taskStoreSchema = 6
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -130,6 +130,17 @@ func historyDB(path string) (*sql.DB, error) {
 	if schema < 5 {
 		if err = migrateContentMetadata(tx); err != nil {
 			return rollback(err)
+		}
+	}
+	if schema < 6 {
+		hasGeneration, columnErr := tableHasColumn(tx, "send_queue", "authorization_generation")
+		if columnErr != nil {
+			return rollback(columnErr)
+		}
+		if !hasGeneration {
+			if _, err = tx.Exec("ALTER TABLE send_queue ADD COLUMN authorization_generation INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return rollback(err)
+			}
 		}
 	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {

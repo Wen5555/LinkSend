@@ -91,6 +91,7 @@ type LANPairFrame struct {
 	IssuedAt   int64  `json:"issued_at"`
 	ExpiresAt  int64  `json:"expires_at"`
 	Signature  []byte `json:"signature"`
+	Credential string `json:"credential,omitempty"`
 }
 
 func (f LANPairFrame) SigningBytes() []byte {
@@ -99,7 +100,8 @@ func (f LANPairFrame) SigningBytes() []byte {
 		Phase, RequestID, Nonce, Sender, Recipient string
 		Generation                                 uint64 `json:"grant_generation"`
 		IssuedAt, ExpiresAt                        int64
-	}{f.Version, f.Phase, f.RequestID, f.Nonce, f.Sender, f.Recipient, f.Generation, f.IssuedAt, f.ExpiresAt})
+		Credential                                 string
+	}{f.Version, f.Phase, f.RequestID, f.Nonce, f.Sender, f.Recipient, f.Generation, f.IssuedAt, f.ExpiresAt, f.Credential})
 	return protocol.AuthBytes("LINKSEND-LAN-PAIR", "/membership/v2", f.Sender, f.Nonce, f.IssuedAt, body)
 }
 
@@ -108,9 +110,12 @@ func (f LANPairFrame) Verify(public ed25519.PublicKey, expectedRecipient string,
 		return protocol.Fail(protocol.AuthenticationFailed, "invalid LAN pairing transcript")
 	}
 	switch f.Phase {
-	case "request", "accept", "reject", "commit", "ack":
+	case "request", "accept", "reject", "commit", "ready", "confirm", "done", "query", "credential":
 	default:
 		return protocol.Fail(protocol.InvalidMessage, "invalid LAN pairing phase")
+	}
+	if f.Credential != "" && (f.Phase != "credential" || len(f.Credential) != 43) {
+		return protocol.Fail(protocol.InvalidMessage, "invalid LAN pairing credential")
 	}
 	return nil
 }
@@ -257,18 +262,30 @@ func readLimitedJSON(r io.Reader, limit int) ([]byte, error) {
 }
 
 type registration struct {
-	Token     string `json:"token"`
-	Name      string `json:"name"`
-	PublicKey []byte `json:"public_key"`
-	Signature []byte `json:"signature"`
+	Token              string `json:"token"`
+	Name               string `json:"name"`
+	PublicKey          []byte `json:"public_key"`
+	Signature          []byte `json:"signature"`
+	CurrentGroup       string `json:"current_group,omitempty"`
+	CurrentIncarnation string `json:"current_incarnation,omitempty"`
+	CurrentRevision    uint64 `json:"current_revision,omitempty"`
+	ConfirmSwitch      bool   `json:"confirm_switch,omitempty"`
 }
 
-func (c *Client) register(ctx context.Context, p, token, name string) (Device, error) {
+func (c *Client) register(ctx context.Context, p, token, name string, current *Device) (Device, error) {
 	if token == "" || name == "" || len(name) > 128 {
 		return Device{}, protocol.Fail(protocol.InvalidMessage, "registration token and name are required")
 	}
 	req := registration{Token: token, Name: name, PublicKey: c.identity.PublicKey()}
-	req.Signature = c.identity.Sign(protocol.AuthBytes(http.MethodPost, p, base64.RawStdEncoding.EncodeToString(req.PublicKey), req.Token, 0, []byte(req.Name)))
+	if current != nil {
+		req.CurrentGroup, req.CurrentIncarnation, req.CurrentRevision, req.ConfirmSwitch = current.GroupID, current.Incarnation, current.MembershipRevision, true
+	}
+	proof, _ := json.Marshal(struct {
+		Name, CurrentGroup, CurrentIncarnation string
+		CurrentRevision                        uint64
+		ConfirmSwitch                          bool
+	}{req.Name, req.CurrentGroup, req.CurrentIncarnation, req.CurrentRevision, req.ConfirmSwitch})
+	req.Signature = c.identity.Sign(protocol.AuthBytes(http.MethodPost, p, base64.RawStdEncoding.EncodeToString(req.PublicKey), req.Token, 0, proof))
 	body, err := json.Marshal(req)
 	if err != nil {
 		return Device{}, err
@@ -301,11 +318,22 @@ func (c *Client) register(ctx context.Context, p, token, name string) (Device, e
 }
 
 func (c *Client) Bootstrap(ctx context.Context, token, name string) (Device, error) {
-	return c.register(ctx, "/v1/bootstrap", token, name)
+	return c.register(ctx, "/v1/bootstrap", token, name, nil)
+}
+
+func (c *Client) Initialize(ctx context.Context, name string) (Device, error) {
+	return c.register(ctx, "/v1/membership/init", "initialize", name, nil)
 }
 
 func (c *Client) Join(ctx context.Context, token, name string) (Device, error) {
-	return c.register(ctx, "/v1/pairing/join", token, name)
+	return c.register(ctx, "/v1/pairing/join", token, name, nil)
+}
+
+func (c *Client) SwitchGroup(ctx context.Context, token, name string, current Device) (Device, error) {
+	if err := current.Validate(); err != nil || current.ID != c.identity.ID() {
+		return Device{}, protocol.Fail(protocol.InvalidMessage, "current membership required for switch")
+	}
+	return c.register(ctx, "/v1/pairing/join", token, name, &current)
 }
 
 func (c *Client) CreateInvitation(ctx context.Context) (Invitation, error) {
@@ -334,6 +362,30 @@ func (c *Client) CreateInvitation(ctx context.Context) (Invitation, error) {
 	if invitation.Remaining <= 0 || invitation.Remaining > 15*time.Minute {
 		return Invitation{}, protocol.Fail(protocol.InvalidMessage, "invalid invitation lifetime")
 	}
+	return invitation, nil
+}
+
+func (c *Client) CreateLANCredential(ctx context.Context, targetPublicKey ed25519.PublicKey, request, approval LANPairFrame) (Invitation, error) {
+	body, err := json.Marshal(struct {
+		TargetPublicKey []byte       `json:"target_public_key"`
+		Request         LANPairFrame `json:"request"`
+		Approval        LANPairFrame `json:"approval"`
+	}{targetPublicKey, request, approval})
+	if err != nil {
+		return Invitation{}, err
+	}
+	resp, err := c.signedRequest(ctx, http.MethodPost, "/v1/pairing/lan-credentials", body)
+	if err != nil {
+		return Invitation{}, err
+	}
+	var invitation Invitation
+	if err = decodeSuccess(resp, &invitation); err != nil {
+		return Invitation{}, err
+	}
+	if !validPairingCode(invitation.Token) || invitation.TTLSeconds <= 0 || invitation.TTLSeconds > 60 {
+		return Invitation{}, protocol.Fail(protocol.InvalidMessage, "invalid LAN credential response")
+	}
+	invitation.Remaining = time.Duration(invitation.TTLSeconds) * time.Second
 	return invitation, nil
 }
 

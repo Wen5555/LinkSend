@@ -112,30 +112,37 @@ type peerRecord struct {
 }
 
 type Manager struct {
-	cfg           Config
-	ctx           context.Context
-	cancel        context.CancelFunc
-	udp           net.PacketConn
-	packet        *ipv4.PacketConn
-	tcp           net.Listener
-	tlsCfg        *tls.Config
-	port          int
-	incoming      chan Incoming
-	wg            sync.WaitGroup
-	acceptWG      sync.WaitGroup
-	close         sync.Once
-	writeMu       sync.Mutex
-	refreshMu     sync.Mutex
-	mu            sync.RWMutex
-	peers         map[string]*peerRecord
-	ifaces        map[string]interfaceRoute
-	joined        map[int]*net.Interface
-	replays       map[string]time.Time
-	lastResp      map[string]time.Time
-	acceptSlots   chan struct{}
-	responseSlots chan struct{}
-	generation    uint64
-	channelErrors map[string]string
+	cfg            Config
+	ctx            context.Context
+	cancel         context.CancelFunc
+	udp            net.PacketConn
+	packet         *ipv4.PacketConn
+	tcp            net.Listener
+	tlsCfg         *tls.Config
+	port           int
+	incoming       chan Incoming
+	wg             sync.WaitGroup
+	acceptWG       sync.WaitGroup
+	close          sync.Once
+	writeMu        sync.Mutex
+	refreshMu      sync.Mutex
+	mu             sync.RWMutex
+	peers          map[string]*peerRecord
+	ifaces         map[string]interfaceRoute
+	joined         map[int]*net.Interface
+	joinSignatures map[int]string
+	replays        map[string]time.Time
+	lastResp       map[string]time.Time
+	acceptSlots    chan struct{}
+	responseSlots  chan struct{}
+	generation     uint64
+	channelErrors  map[string]string
+	remembered     map[string]rememberedProbe
+}
+
+type rememberedProbe struct {
+	next    time.Time
+	backoff time.Duration
 }
 
 func Start(cfg Config) (*Manager, error) {
@@ -163,7 +170,7 @@ func Start(cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("LAN multicast listen: %w", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: ipv4.NewPacketConn(udp), tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}}
+	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: ipv4.NewPacketConn(udp), tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, joinSignatures: map[int]string{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}, remembered: map[string]rememberedProbe{}}
 	m.tlsCfg, err = cfg.Identity.TLSServerConfig(m.allowedPeer)
 	if err != nil {
 		m.Close()
@@ -271,6 +278,24 @@ func (m *Manager) ProbeAddress(raw string) error {
 	return m.sendAnnouncementOnRoute(true, &net.UDPAddr{IP: ip, Port: m.cfg.Port}, nil)
 }
 
+func (m *Manager) RememberAddress(raw string) error {
+	address, err := netip.ParseAddr(strings.TrimSpace(raw))
+	if err != nil || !address.Is4() || address.IsUnspecified() || address.IsMulticast() || address.IsLoopback() && !m.cfg.AllowLoopback {
+		return protocol.Fail(protocol.LANProbeInvalid, "invalid remembered LAN address")
+	}
+	key := address.String()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.remembered[key]; !ok && len(m.remembered) >= 64 {
+		return errors.New("LAN remembered address limit reached")
+	}
+	if m.remembered == nil {
+		m.remembered = map[string]rememberedProbe{}
+	}
+	m.remembered[key] = rememberedProbe{next: time.Now()}
+	return nil
+}
+
 func (m *Manager) Peers() []Device {
 	now := time.Now()
 	m.mu.RLock()
@@ -375,18 +400,27 @@ func (m *Manager) refreshInterfaces() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	presentIndexes := map[int]*net.Interface{}
+	signatures := map[int]string{}
 	for _, route := range next {
 		presentIndexes[route.iface.Index] = route.iface
+		signatures[route.iface.Index] += "|" + route.address.String() + "/" + route.network.String()
+	}
+	if m.joinSignatures == nil {
+		m.joinSignatures = map[int]string{}
 	}
 	for index, previous := range m.joined {
-		if _, ok := presentIndexes[index]; !ok {
+		if _, ok := presentIndexes[index]; !ok || m.joinSignatures[index] != signatures[index] {
 			_ = m.packet.LeaveGroup(previous, &net.UDPAddr{IP: multicastIP})
 			delete(m.joined, index)
+			delete(m.joinSignatures, index)
 		}
 	}
 	if len(next) == 0 {
+		changed := len(m.ifaces) != 0
 		m.ifaces = map[string]interfaceRoute{}
-		m.generation++
+		if changed {
+			m.generation++
+		}
 		m.channelErrors["interfaces"] = "no_eligible_address"
 		m.channelErrors["multicast"] = "no_eligible_address"
 		return errors.New("LAN discovery found no eligible IPv4 interface")
@@ -399,10 +433,14 @@ func (m *Manager) refreshInterfaces() error {
 				continue
 			}
 			m.joined[index] = routeIface
+			m.joinSignatures[index] = signatures[index]
 		}
 	}
+	changed := !sameInterfaceRoutes(m.ifaces, next)
 	m.ifaces = next
-	m.generation++
+	if changed {
+		m.generation++
+	}
 	if joinFailures > 0 || len(m.joined) == 0 {
 		m.channelErrors["multicast"] = "join_degraded"
 	} else {
@@ -410,6 +448,18 @@ func (m *Manager) refreshInterfaces() error {
 	}
 	delete(m.channelErrors, "interfaces")
 	return nil
+}
+
+func sameInterfaceRoutes(left, right map[string]interfaceRoute) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key := range left {
+		if _, ok := right[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Manager) announceLoop() {
@@ -431,9 +481,39 @@ func (m *Manager) announceLoop() {
 			_ = m.refreshInterfaces()
 			_ = m.sendAnnouncement(true, nil)
 			m.probeKnownPeers()
+			m.probeRememberedAddresses()
 		case <-cleanup.C:
 			m.expirePeers()
 		}
+	}
+}
+
+func (m *Manager) probeRememberedAddresses() {
+	now := time.Now()
+	var due []string
+	m.mu.RLock()
+	for address, state := range m.remembered {
+		if !state.next.After(now) {
+			due = append(due, address)
+		}
+	}
+	m.mu.RUnlock()
+	for _, address := range due {
+		err := m.ProbeAddress(address)
+		m.mu.Lock()
+		state := m.remembered[address]
+		if err == nil {
+			if state.backoff == 0 {
+				state.backoff = 4 * time.Second
+			} else {
+				state.backoff = min(state.backoff*2, time.Minute)
+			}
+		} else {
+			state.backoff = min(max(state.backoff, 5*time.Second)*2, time.Minute)
+		}
+		state.next = now.Add(state.backoff)
+		m.remembered[address] = state
+		m.mu.Unlock()
 	}
 }
 
@@ -474,6 +554,9 @@ func (m *Manager) readLoop() {
 				case <-m.ctx.Done():
 					return
 				}
+				if consecutiveErrors >= 32 && m.rebuildUDPSocket() == nil {
+					consecutiveErrors = 0
+				}
 			}
 			continue
 		}
@@ -508,6 +591,42 @@ func (m *Manager) readLoop() {
 			_ = m.sendAnnouncementOnRoute(false, destination, &route)
 		}
 	}
+}
+
+func (m *Manager) rebuildUDPSocket() error {
+	if m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	if m.udp != nil {
+		_ = m.udp.Close()
+	}
+	udp, err := net.ListenPacket("udp4", net.JoinHostPort(net.IPv4zero.String(), fmt.Sprint(m.cfg.Port)))
+	if err != nil {
+		return err
+	}
+	if m.ctx.Err() != nil {
+		_ = udp.Close()
+		return m.ctx.Err()
+	}
+	packet := ipv4.NewPacketConn(udp)
+	_ = packet.SetControlMessage(ipv4.FlagInterface, true)
+	_ = packet.SetMulticastTTL(1)
+	_ = packet.SetMulticastLoopback(false)
+	_ = enableBroadcast(udp)
+	m.mu.Lock()
+	m.udp, m.packet = udp, packet
+	m.joined = map[int]*net.Interface{}
+	m.joinSignatures = map[int]string{}
+	m.mu.Unlock()
+	if err = m.refreshInterfaces(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	delete(m.channelErrors, "receive")
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *Manager) networkGeneration() uint64 {
@@ -875,10 +994,14 @@ func (s *Session) SendHeartbeat(ctx context.Context) error {
 }
 
 func (s *Session) SendLANPair(ctx context.Context, frame signaling.LANPairFrame) error {
-	if s.identity == nil || frame.Sender != s.identity.ID() || frame.Recipient != s.peer.ID || len(frame.Signature) != 0 {
+	if s.identity == nil || frame.Sender != s.identity.ID() || frame.Recipient != s.peer.ID {
 		return protocol.Fail(protocol.AuthenticationFailed, "outbound LAN pairing identity invalid")
 	}
-	frame.Signature = s.identity.Sign(frame.SigningBytes())
+	if len(frame.Signature) == 0 {
+		frame.Signature = s.identity.Sign(frame.SigningBytes())
+	} else if frame.Verify(s.identity.PublicKey(), s.peer.ID, time.Now()) != nil {
+		return protocol.Fail(protocol.AuthenticationFailed, "outbound LAN pairing signature invalid")
+	}
 	return s.write(ctx, signaling.Wire{Type: "lan_pair", LANPair: &frame})
 }
 
