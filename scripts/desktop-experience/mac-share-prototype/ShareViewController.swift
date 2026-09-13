@@ -22,13 +22,18 @@ final class ShareViewController: NSViewController {
         // of its single small fixture; it never sends to any device.
         DispatchQueue.main.async { [weak self] in self?.capture() }
     }
+    private func failRequest(_ text: String, code: Int) {
+        message.stringValue = text
+        extensionContext?.cancelRequest(withError: NSError(domain: "LinkSendShare", code: code,
+            userInfo: [NSLocalizedDescriptionKey: text]))
+    }
     @objc private func capture() {
         guard !started else { return }
         started = true
         NSLog("E0_CAPTURE_ENTER")
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.com.linksend.e0.share") else {
-            message.stringValue = "App Group 容器不可用；需要有效签名与授权。"
+            failRequest("App Group 容器不可用；需要有效签名与授权。", code: 1)
             return
         }
         NSLog("E0_CONTAINER_READY")
@@ -51,7 +56,7 @@ final class ShareViewController: NSViewController {
               let type = provider.registeredTypeIdentifiers.first(where: {
                   UTType($0)?.conforms(to: .data) == true
               }) else {
-            message.stringValue = "原型仅接受一个小测试文件。"
+            failRequest("原型仅接受一个小测试文件。", code: 2)
             return
         }
         let fileURL = provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
@@ -94,7 +99,9 @@ final class ShareViewController: NSViewController {
                     "type": type, "file_url": fileURL, "cleanup_retained": retained]
                 try? JSONSerialization.data(withJSONObject: failure, options: .prettyPrinted)
                     .write(to: container.appendingPathComponent(request + "-failed.json"), options: .atomic)
-                DispatchQueue.main.async { self?.message.stringValue = "原型失败：" + error.localizedDescription }
+                DispatchQueue.main.async {
+                    self?.failRequest("原型失败：" + error.localizedDescription, code: 3)
+                }
             }
         }
         if fileURL {

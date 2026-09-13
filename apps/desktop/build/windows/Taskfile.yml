@@ -52,6 +52,9 @@ tasks:
         vars:
           ARCH: '{{.ARCH}}'
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"'
+      - task: build:share-target
+        vars:
+          ARCH: '{{.ARCH}}'
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
@@ -62,6 +65,19 @@ tasks:
       GOOS: windows
       CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
       GOARCH: '{{.ARCH | default ARCH}}'
+
+  build:share-target:
+    summary: Builds the native Windows Share Target adapter
+    platforms: [windows]
+    cmds:
+      - >-
+        dotnet publish native-share/windows/LinkSend.ShareTarget.csproj -c Release
+        -r {{if eq (.ARCH | default ARCH) "amd64"}}win-x64{{else}}win-arm64{{end}}
+        --self-contained true -p:PublishSingleFile=true -p:DebugType=None
+        -o "{{.BIN_DIR}}/native-share/windows"
+      - powershell -NoProfile -Command "New-Item -ItemType Directory -Force '{{.BIN_DIR}}/native-share/windows/Assets' | Out-Null"
+      - powershell -NoProfile -Command "Copy-Item -Force 'native-share/windows/AppxManifest.xml' '{{.BIN_DIR}}/native-share/windows/AppxManifest.xml'"
+      - powershell -NoProfile -Command "Copy-Item -Force 'build/appicon.png' '{{.BIN_DIR}}/native-share/windows/Assets/Logo.png'"
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)
@@ -125,9 +141,9 @@ tasks:
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_LINKSEND_SHARE_DIR="{{.ROOT_DIR}}\{{.BIN_DIR}}\native-share\windows" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
         {{else}}
-        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_LINKSEND_SHARE_DIR="{{.ROOT_DIR}}/{{.BIN_DIR}}/native-share/windows" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
         {{end}}
     vars:
       ARCH: '{{.ARCH | default ARCH}}'

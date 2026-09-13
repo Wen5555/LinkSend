@@ -1011,7 +1011,11 @@ func (a *App) Devices() ([]linksendapp.DeviceInfo, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.core.Devices(ctx)
+	devices, err := a.core.Devices(ctx)
+	if err == nil {
+		a.nativeEntryError(publishNativeShareDevices(a.dataDir, devices))
+	}
+	return devices, err
 }
 
 func (a *App) Membership() linksendapp.MembershipStatus {

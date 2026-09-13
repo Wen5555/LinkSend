@@ -1,0 +1,16 @@
+# E3 Windows Share Target 源码候选
+
+日期：2026-09-14。范围 E3-01；当前为未签名源码候选，真实系统安装/激活为 **NOT RUN**。
+
+`apps/desktop/native-share/windows` 是正式 `windows.shareTarget` 适配器，不复用 E0 fixture-copy 原型。它从 `ShareTargetActivatedEventArgs.ShareOperation` 读取 `StorageItems`，展示 Go 发布的真实已配对设备别名；选择后逐项用 WinRT 打开授权、拒绝文件夹及无持久绝对路径的临时/云端项目，再把路径元数据写入当前用户 LinkSend profile。它不复制文件正文，不打开身份、SQLite 或网络连接。
+
+本机交接记录为 schema 2，固定字段 `request_id/peer_id/paths/wait_for_peer/source`。请求文件名绑定 32 位小写十六进制 request ID；同内容重试幂等，不同内容冲突。记录刷盘并原子改名后才 `ReportDataRetrieved/ReportCompleted`，随后用 `--native-share-background` 唤起 Wails owner；Go 仍重新验证设备授权并写入现有队列。
+
+实际运行：
+
+- `dotnet build -c Release`：PASS，0 warning/0 error。
+- `dotnet run -c Release -- --self-test`：`PASS share_target_journal`，覆盖真实文件写入、设备快照读取、同请求重放与冲突。
+- Taskfile 等价的 self-contained `dotnet publish -r win-x64 -p:PublishSingleFile=true`：PASS；未签名适配器 SHA256 `152396e89ba63c9b4ab441cf740fb21d6ea0dc88736a53ba1640fb6b73cbe241`，仅作源码构建证据。
+- desktop `go test ./...`、`go vet ./...`、`go build ./...`：PASS；包含 schema 2 journal、损坏保留、容量、并发和设备快照测试。
+
+`AppxManifest.xml` 使用产品身份 `LinkSend.Desktop`、宿主 `LinkSend.exe` 与独立 `LinkSend.ShareTarget.exe`，支持任意文件类型的 `StorageItems`。用户明确没有 Windows 签名证书并暂缓签名，因此 identity package 构建签名、安装、Explorer/系统共享激活、升级和卸载均为 NOT RUN；E0 自签失败不复用为本轮结果。无绝对路径的云端/虚拟文件目前明确失败，仍是 E3-01 后续功能缺口。

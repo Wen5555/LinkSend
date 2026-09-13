@@ -1,5 +1,11 @@
 # LinkSend implementation progress
 
+## 2026-09-14 E3 原生共享源码候选（待审查）
+
+- Windows 正式 Share Target 使用 `ShareOperation/StorageItems` 显示真实已配对设备小面板，只持久交接 broker 可打开的绝对路径，不复制正文；无绝对路径的临时/云端项目明确失败。Go 发布最小设备快照并消费 schema 2 journal，以 request ID 幂等后进入现有授权队列。
+- macOS 正式 Share Extension 使用 `com.linksend.desktop.share`/`group.com.linksend.desktop`；原位文件交接只读 security-scoped bookmark，系统临时表示才在回调内接管。旧 E0 4097 已定位为无 Team ID 导致 App Group 被拒绝且失败分支未 cancel；失败分支现全部终结 request。
+- Windows .NET Release build/self-test、desktop test/vet/build PASS。真实 Mac arm64 完成 plist、provider/store 4 项测试、appex 源码构建及 Go/Objective-C desktop test/vet/build；extension SHA256 `fb9d17affcdc43f189c75c3d3dde1a04db9ff6c9a8973ffa6e379970e1f6182b`。用户没有两平台证书并明确暂缓签名，系统安装、App Group 生效、系统激活、升级卸载准确保持 NOT RUN，不开发假身份绕过。
+
 ## 2026-09-13 E2-C1 集中审查修复候选（待复审）
 
 - 主发送动作移到有界文件列表之前；完整 App 外壳 960×640、已选 LAN-only 目标和两个文件时按钮位于视口内、启用且点击回执成功。

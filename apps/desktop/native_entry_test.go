@@ -30,6 +30,17 @@ func TestNativeArgumentsPreserveUnicodeSpacesAndWorkingDirectory(t *testing.T) {
 	}
 }
 
+func TestNativeShareWakeURLIsNarrow(t *testing.T) {
+	if !isNativeShareWakeURL("linksend-share://handoff/0123456789abcdef0123456789abcdef") {
+		t.Fatal("valid wake URL rejected")
+	}
+	for _, value := range []string{"linksend-share://handoff/../other", "linksend-share://handoff/ABCDEF0123456789ABCDEF0123456789", "https://example.test/handoff/0123456789abcdef0123456789abcdef"} {
+		if isNativeShareWakeURL(value) {
+			t.Fatal("accepted invalid wake URL", value)
+		}
+	}
+}
+
 func TestNativeArgumentsRejectEntireOversizedOrInvalidSelection(t *testing.T) {
 	root := t.TempDir()
 	for _, paths := range [][]string{

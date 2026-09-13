@@ -106,6 +106,7 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+    File /r "${ARG_LINKSEND_SHARE_DIR}\*.*"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

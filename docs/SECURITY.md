@@ -1,4 +1,12 @@
 # Security
+## 2026-09-14 E3 原生共享交接
+
+系统共享适配器只能读取 Go 最近发布的已授权设备 ID、用户别名和可达性，不得到公钥、token、信令凭据或数据库。选择结果不直接授予权限：v2 本机交接记录持久化 `request_id/peer_id/paths/bookmarks/source`，Go 消费后仍调用现有 `Enqueue` 重验 peer grant generation，并以同一 request ID 做数据库幂等。记录提交失败、损坏、未来或同 ID 不同内容时保留证据且不发送；正文不进入 JSON、JavaScript、WSS 或第三方服务。
+
+Windows Share Target 只接受 `StorageItems` 中能由 broker 打开且具有绝对本地路径的普通文件；当前版本明确拒绝只有临时/云端表示的项目，不用默认复制大型文件伪造持久授权。macOS 原位表示生成只读 security-scoped bookmark，由 Go 进程解析并在进程期有界持有；临时表示必须在 `NSItemProvider` 回调返回前复制到本请求独占目录。取消和全部失败分支终结系统 request，不能留下 4097 式悬挂。
+
+正式 macOS App Group 要求签名 Team ID，Windows package identity 也要求可信签名。用户当前没有两平台证书并明确暂缓签名，因此源码保留真实 entitlement/manifest，不开发不受支持的假 App Group，也不把 ad-hoc/未安装包记为原生验收通过。
+
 ## 2026-09-13 E2-C1 设置与授权补充
 
 同名策略只影响新建接收计划，优先级为设备覆盖、全局设置、`keep_both` 安全默认；恢复计划不可被新设置改写。设备覆盖随 schema 7 revision CAS 保存。删除后的设备仍保持拒绝，只有用户点击“允许重新添加”才清除本机 block，且不会自动恢复旧 pin 或免确认。

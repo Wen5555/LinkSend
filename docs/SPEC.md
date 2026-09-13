@@ -1,4 +1,6 @@
 # LinkSend protocol V1 implementation specification
+2026-09-14 E3 源码候选：Windows `windows.shareTarget` 与 macOS `com.apple.share-services` 使用原生小面板选择真实已配对设备。两端把有界路径/bookmark 元数据以本机 `request_id` 持久交给 Go，Go 再经现有授权代际和幂等队列派发；文件正文不经 JavaScript、信令或本地 IPC。macOS 只在系统给出临时表示时于回调期限内复制，原位文件使用 security-scoped bookmark。正式 App Group 和 Windows package identity 的签名安装实测按用户要求暂缓，不将无签名注册或模拟交接记为通过；文件 wire 仍为 V1。
+
 2026-09-13 E2-C1 修复：默认同名策略可全局保存并按设备覆盖继承，桌面任务库 schema 7；设置按字段保留 dirty 输入。LAN 同意为应用级弹窗并处理跨组后续，旧内容草稿恢复管理入口，主发送动作在小客户区保持可见。文件 wire 与 E1 网络结论不变。
 
 2026-09-13 E2候选：桌面普通接收由 Go 基于 task/attempt/revision 原子生成并持久化默认 `keep_both` 计划，高级选收按需展开；设置使用分类局部 revision 保存，设备接收目录可继承全局；UI 固定为传输、记录、设备、设置四视图。文字/链接/图片的手动创作入口已从传输页移除，旧队列仍需显式确认继续。该变更没有增加文件信令/IPC/中继路径，也不提前实现 E4 自动剪贴板。

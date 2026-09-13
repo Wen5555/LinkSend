@@ -102,24 +102,43 @@ func (a *App) startNativeEntries() {
 				return
 			}
 			var draft coreapp.SendDraft
-			count, err := consumeFileActivations(a.dataDir, func(paths []string) error {
+			showDraft := false
+			count := 0
+			var consumeErr error
+			consume := func(activation fileActivation) error {
 				if err := a.workspaceAvailable(); err != nil {
 					return err
 				}
-				var err error
-				draft, err = a.core.MergeDraftPaths(paths, "")
-				return err
-			})
-			if err != nil || count > 0 {
-				a.nativeEntryError(err)
+				if activation.Version == 2 {
+					resolved, err := resolveNativeShareActivation(activation)
+					if err != nil {
+						return err
+					}
+					_, err = a.core.Enqueue(coreapp.EnqueueRequest{RequestID: resolved.RequestID, PeerID: resolved.PeerID, Paths: resolved.Paths, WaitForPeer: resolved.WaitForPeer})
+					return err
+				}
+				showDraft = true
+				var mergeErr error
+				draft, mergeErr = a.core.MergeDraftPaths(activation.Paths, "")
+				return mergeErr
 			}
-			if count > 0 {
+			for _, root := range nativeShareRoots(a.dataDir) {
+				consumed, err := consumeActivations(root, consume)
+				count += consumed
+				if err != nil && consumeErr == nil {
+					consumeErr = err
+				}
+			}
+			if consumeErr != nil || count > 0 {
+				a.nativeEntryError(consumeErr)
+			}
+			if count > 0 && showDraft {
 				a.entries.mu.Lock()
 				a.entries.status.DraftRevision = draft.Revision
 				a.entries.status.Revision++
 				a.entries.mu.Unlock()
 			}
-			if count > 0 || activate {
+			if count > 0 && showDraft || activate {
 				a.showEntryWindow()
 			}
 		}
@@ -183,6 +202,7 @@ func (a *App) closeNativeEntries() {
 	for _, close := range cleanup {
 		close()
 	}
+	closeNativeShareAccess()
 }
 
 func (a *App) ConfigureSendTo(enabled bool) error {

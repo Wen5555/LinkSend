@@ -1,5 +1,9 @@
 # Architecture
 
+2026-09-14 E3 原生共享采用“短生命周期系统适配器 → 本机提交日志 → 唯一 Go owner”结构。Windows Share Target 与 Mac Share Extension 自己显示设备小面板；Go 将最多 256 个已授权设备的 `id/name/reachable` 快照发布到当前用户目录或正式 App Group。适配器提交 schema 2 记录后才向系统报告完成；Go 原子消费记录，调用现有幂等 `Enqueue`，提交数据库后删除记录。崩溃发生在入队与删除之间时，同一 request ID 重放只返回原队列项。
+
+macOS App Group 同时承载设备快照、请求元数据和仅在临时表示场景生成的 owned 文件。原位文件以 security-scoped bookmark 交给宿主，宿主解析后保持 scope；Windows 当前只交接 broker 已验证且有绝对路径的普通文件。两端都不通过适配器 IPC 传正文。后台唤起分别使用受包身份约束的宿主进程和注册 URL；失败时请求仍已持久化，下次 LinkSend 启动继续消费。正式签名安装与冷启动结果仍需 E3/E5 准确包验证。
+
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
 
 E0-ADR-review-v1提案将剪贴板并行解码与唯一原生提交owner分开：origin sequence用于来源去重，Lamport用于因果排序，OS generation加应用revision门闩防止两个候选共用过时检查。lease由接收端单调期限管理；不以应用锁声称macOS全系统剪贴板CAS已实现。

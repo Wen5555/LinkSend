@@ -1,0 +1,225 @@
+import Foundation
+import UniformTypeIdentifiers
+import Darwin
+
+struct ShareDevice: Codable {
+    let id: String
+    let name: String
+    let reachable: Bool
+}
+
+private struct DeviceSnapshot: Codable {
+    let version: Int
+    let revision: UInt64
+    let devices: [ShareDevice]
+}
+
+private struct ShareRequest: Codable {
+    let version: Int
+    let request_id: String
+    let peer_id: String
+    let paths: [String]
+    let bookmarks: [String]
+    let wait_for_peer: Bool
+    let source: String
+}
+
+private struct PreparedSource {
+    let path: String
+    let bookmark: String
+}
+
+enum ShareStoreError: LocalizedError {
+    case groupUnavailable, devicesUnavailable, invalidSelection, unsupportedItem, sourceUnavailable
+    case requestConflict, storageFull
+
+    var errorDescription: String? {
+        switch self {
+        case .groupUnavailable: return "LinkSend 共享容器不可用。此功能需要正式签名的 App Group。"
+        case .devicesUnavailable: return "没有可用的已配对设备。请先打开 LinkSend 完成配对。"
+        case .invalidSelection: return "目标设备已失效，请刷新后重试。"
+        case .unsupportedItem: return "这次共享包含当前版本无法安全接管的项目。"
+        case .sourceUnavailable: return "源文件授权已失效，请从来源应用重新共享。"
+        case .requestConflict: return "系统重复使用了不同的共享请求，请重新发起。"
+        case .storageFull: return "待处理共享已满，请打开 LinkSend 处理后重试。"
+        }
+    }
+}
+
+final class ShareStore {
+    static let groupID = "group.com.linksend.desktop"
+    static let maximumItems = 1024
+    private let manager = FileManager.default
+    let container: URL
+
+    init(container override: URL? = nil) throws {
+        guard let container = override ?? manager.containerURL(forSecurityApplicationGroupIdentifier: Self.groupID) else {
+            throw ShareStoreError.groupUnavailable
+        }
+        self.container = container
+    }
+
+    func devices() throws -> [ShareDevice] {
+        let url = container.appendingPathComponent("native-share-v1/devices.json")
+        let data = try readBounded(url, maximum: 256 * 1024)
+        let snapshot = try JSONDecoder().decode(DeviceSnapshot.self, from: data)
+        guard snapshot.version == 1 else { throw ShareStoreError.devicesUnavailable }
+        let devices = snapshot.devices.filter { !$0.id.isEmpty && !$0.name.isEmpty }
+        guard !devices.isEmpty else { throw ShareStoreError.devicesUnavailable }
+        return Array(devices.prefix(256))
+    }
+
+    func prepare(_ providers: [NSItemProvider], requestID: String,
+                 completion: @escaping (Result<([String], [String]), Error>) -> Void) {
+        guard !providers.isEmpty, providers.count <= Self.maximumItems else {
+            completion(.failure(ShareStoreError.unsupportedItem)); return
+        }
+        let owned = container.appendingPathComponent("share-owned-v1/" + requestID, isDirectory: true)
+        do { try manager.createDirectory(at: owned, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]) }
+        catch { completion(.failure(error)); return }
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var results = Array<PreparedSource?>(repeating: nil, count: providers.count)
+        var firstError: Error?
+        var ownedBytes: Int64 = 0
+        let maximumOwnedBytes: Int64 = 16 * 1024 * 1024 * 1024
+        for (index, provider) in providers.enumerated() {
+            let hasFileURL = provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+            guard let type = provider.registeredTypeIdentifiers.first(where: {
+                $0 != UTType.fileURL.identifier && UTType($0)?.conforms(to: .data) == true
+            }) ?? provider.registeredTypeIdentifiers.first(where: {
+                UTType($0)?.conforms(to: .data) == true
+            }) else {
+                lock.lock(); if firstError == nil { firstError = ShareStoreError.unsupportedItem }; lock.unlock()
+                continue
+            }
+            group.enter()
+            let receive: (URL?, Bool, Error?) -> Void = { url, inPlace, error in
+                defer { group.leave() }
+                do {
+                    guard let url else { throw error ?? ShareStoreError.sourceUnavailable }
+                    let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+                    guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                        throw ShareStoreError.unsupportedItem
+                    }
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    let prepared: PreparedSource
+                    if inPlace {
+                        let bookmark = try url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                            includingResourceValuesForKeys: nil, relativeTo: nil)
+                        prepared = PreparedSource(path: url.path, bookmark: bookmark.base64EncodedString())
+                    } else {
+                        guard let fileSize = values.fileSize, fileSize >= 0 else { throw ShareStoreError.sourceUnavailable }
+                        lock.lock()
+                        let nextBytes = ownedBytes + Int64(fileSize)
+                        if nextBytes <= maximumOwnedBytes { ownedBytes = nextBytes }
+                        lock.unlock()
+                        guard nextBytes <= maximumOwnedBytes else { throw ShareStoreError.storageFull }
+                        let target = owned.appendingPathComponent(String(format: "%04d-", index) + url.lastPathComponent)
+                        try self.copyTemporaryRepresentation(from: url, to: target, expectedSize: values.fileSize)
+                        prepared = PreparedSource(path: target.path, bookmark: "")
+                    }
+                    lock.lock(); results[index] = prepared; lock.unlock()
+                } catch {
+                    lock.lock(); if firstError == nil { firstError = error }; lock.unlock()
+                }
+            }
+            if hasFileURL {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                    let fileURL = self.decodeFileURL(item)
+                    receive(fileURL, true, error)
+                }
+            } else {
+                provider.loadInPlaceFileRepresentation(forTypeIdentifier: type, completionHandler: receive)
+            }
+        }
+        group.notify(queue: .main) {
+            if let error = firstError {
+                try? self.manager.removeItem(at: owned)
+                completion(.failure(error)); return
+            }
+            let prepared = results.compactMap { $0 }
+            guard prepared.count == providers.count else {
+                completion(.failure(ShareStoreError.sourceUnavailable)); return
+            }
+            completion(.success((prepared.map(\.path), prepared.map(\.bookmark))))
+        }
+    }
+
+    func cleanup(requestID: String) {
+        guard requestID.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil else { return }
+        try? manager.removeItem(at: container.appendingPathComponent("share-owned-v1/" + requestID))
+    }
+
+    func persist(requestID: String, peerID: String, paths: [String], bookmarks: [String]) throws {
+        guard requestID.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
+              !peerID.isEmpty, paths.count == bookmarks.count else { throw ShareStoreError.invalidSelection }
+        let directory = container.appendingPathComponent("desktop-activations-v1", isDirectory: true)
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        let lockURL = directory.appendingPathComponent(".lock")
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+        defer { flock(descriptor, LOCK_UN); close(descriptor) }
+        let lockDeadline = Date(timeIntervalSinceNow: 2)
+        while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+            guard errno == EWOULDBLOCK, Date() < lockDeadline else {
+                throw POSIXError(.init(rawValue: errno) ?? .EIO)
+            }
+            usleep(10_000)
+        }
+        let existing = try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        guard existing.count <= 128,
+              existing.filter({ $0.pathExtension == "json" }).count < 64 else {
+            throw ShareStoreError.storageFull
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(ShareRequest(version: 2, request_id: requestID, peer_id: peerID,
+            paths: paths, bookmarks: bookmarks, wait_for_peer: true, source: "macos_share"))
+        guard data.count <= 1024 * 1024 else { throw ShareStoreError.storageFull }
+        let final = directory.appendingPathComponent(requestID + ".json")
+        if manager.fileExists(atPath: final.path) {
+            if try readBounded(final, maximum: 1024 * 1024) == data { return }
+            throw ShareStoreError.requestConflict
+        }
+        let temporary = directory.appendingPathComponent(requestID + ".pending")
+        try data.write(to: temporary, options: .withoutOverwriting)
+        let file = try FileHandle(forWritingTo: temporary)
+        try file.synchronize(); try file.close()
+        try manager.moveItem(at: temporary, to: final)
+    }
+
+    private func copyTemporaryRepresentation(from source: URL, to target: URL, expectedSize: Int?) throws {
+        guard !manager.fileExists(atPath: target.path) else { throw ShareStoreError.requestConflict }
+        try manager.copyItem(at: source, to: target)
+        let values = try target.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true,
+              expectedSize == nil || values.fileSize == expectedSize else {
+            try? manager.removeItem(at: target)
+            throw ShareStoreError.sourceUnavailable
+        }
+    }
+
+    private func decodeFileURL(_ item: NSSecureCoding?) -> URL? {
+        if let url = item as? URL { return url }
+        if let url = item as? NSURL { return url as URL }
+        if let data = item as? Data, let value = String(data: data, encoding: .utf8) {
+            return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        if let value = item as? String {
+            return URL(string: value) ?? URL(fileURLWithPath: value)
+        }
+        return nil
+    }
+
+    private func readBounded(_ url: URL, maximum: Int) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let data = try handle.read(upToCount: maximum + 1) ?? Data()
+        guard data.count <= maximum else { throw ShareStoreError.storageFull }
+        return data
+    }
+}

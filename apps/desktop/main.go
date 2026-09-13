@@ -51,7 +51,8 @@ func main() {
 	}
 	// Hidden must be part of native window creation: on macOS a runtime-ready
 	// Hide can race the initial orderFront and AppKit's last-window policy.
-	startHidden := slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && loadPreferences(dataDir).Background.CloseMode == "background"
+	nativeShareWake := slices.Contains(os.Args[1:], "--native-share-background") || slices.ContainsFunc(os.Args[1:], isNativeShareWakeURL)
+	startHidden := nativeShareWake || slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && loadPreferences(dataDir).Background.CloseMode == "background"
 	host := application.New(application.Options{
 		SingleInstance: single,
 		Name:           "LinkSend",
@@ -100,7 +101,7 @@ func main() {
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
 		slog.Info("desktop runtime ready")
 		desktop.runtimeEntriesReady()
-		if startHidden && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
+		if startHidden && !nativeShareWake && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
 			// A missing tray must not leave the application unreachable.
 			window.Show()
 		}
