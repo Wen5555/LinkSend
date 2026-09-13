@@ -34,40 +34,41 @@ type Config struct {
 }
 
 type Service struct {
-	profileLock       *profileLock
-	cfg               Config
-	identity          *identity.Identity
-	signal            *signaling.Client
-	mu                sync.RWMutex
-	trustMu           sync.Mutex
-	tasks             *taskManager
-	inbox             inboxManager
-	networkMu         sync.Mutex
-	network           cachedNetworkSelection
-	lanMu             sync.RWMutex
-	lan               *lanRuntime
-	lanError          string
-	operationMu       sync.Mutex
-	closing           atomic.Bool
-	lanLifecycleMu    sync.Mutex
-	listenerWorkers   sync.WaitGroup
-	shutdownOnce      sync.Once
-	shutdownDone      chan struct{}
-	store             *desktopStore
-	storeErr          error
-	queue             queueManager
-	changes           changeHub
-	epoch             string
-	workCtx           context.Context
-	workCancel        context.CancelFunc
-	content           contentManager
-	lanPair           lanPairCoordinator
-	recoveryMu        sync.Mutex
-	lastNetworkChange time.Time
-	directPoolMu      sync.Mutex
-	directPool        map[string]*pooledPeerSession
-	directPoolLocks   map[string]*sync.Mutex
-	directPoolWG      sync.WaitGroup
+	profileLock             *profileLock
+	cfg                     Config
+	identity                *identity.Identity
+	signal                  *signaling.Client
+	mu                      sync.RWMutex
+	trustMu                 sync.Mutex
+	tasks                   *taskManager
+	inbox                   inboxManager
+	networkMu               sync.Mutex
+	network                 cachedNetworkSelection
+	lanMu                   sync.RWMutex
+	lan                     *lanRuntime
+	lanError                string
+	operationMu             sync.Mutex
+	closing                 atomic.Bool
+	lanLifecycleMu          sync.Mutex
+	listenerWorkers         sync.WaitGroup
+	shutdownOnce            sync.Once
+	shutdownDone            chan struct{}
+	store                   *desktopStore
+	storeErr                error
+	queue                   queueManager
+	changes                 changeHub
+	epoch                   string
+	workCtx                 context.Context
+	workCancel              context.CancelFunc
+	content                 contentManager
+	lanPair                 lanPairCoordinator
+	recoveryMu              sync.Mutex
+	lastNetworkChange       time.Time
+	directPoolMu            sync.Mutex
+	directPool              map[string]*pooledPeerSession
+	directPoolLocks         map[string]*sync.Mutex
+	directPoolWG            sync.WaitGroup
+	directPoolBeforePublish func(string)
 }
 
 type cachedNetworkSelection struct {

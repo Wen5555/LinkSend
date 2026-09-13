@@ -13,7 +13,6 @@ import (
 	"github.com/Wen5555/LinkSend/internal/signaling"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 	"github.com/Wen5555/LinkSend/internal/transport"
-	quic "github.com/quic-go/quic-go"
 )
 
 // InboxStatus describes the persistent receiver without creating a visible
@@ -363,8 +362,7 @@ func (s *Service) receiveIncomingStream(inboxCtx context.Context, peer *PeerSess
 	if runErr != nil {
 		handleTaskRunError(t, attemptID, ctx, runErr)
 		cancel()
-		var streamErr *quic.StreamError
-		return errors.Is(runErr, context.Canceled) || protocol.ErrorCode(runErr) == protocol.Cancelled || errors.As(runErr, &streamErr)
+		return reusablePeerStreamResult(runErr)
 	}
 	t.completeTransfer(attemptID, result, peer.SessionID)
 	cancel()

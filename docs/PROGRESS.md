@@ -563,6 +563,7 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 
 - peer ID + authorization generation 绑定的短期池复用同一认证 QUIC；两端都有入站 stream owner，连续正向和原始响应方反向文件保持同一 session_id。
 - 每 peer 仍限制一个活动文件发送流；传输中取消只终止当前 stream，下一文件可在同一连接完成。授权撤销、连接错误、3 秒空闲、空闲网络变化与 Shutdown 关闭池中连接；活动连接由真实 path watcher 决定。
+- C2 将 closing 判定、pool map 发布和 worker `WaitGroup.Add` 收敛到同一全局门闩；dial/adopt 在发布前遇到 Shutdown 会关闭连接且不留下 profile owner。远端 stream reset、接收拒绝只结束当前流；未协商复用的旧端恢复单操作 `CloseAfterTerminal` 收尾并在下一文件新建会话。
 
 ## 2026-09-14 E4-02 自动剪贴板权限候选
 

@@ -45,6 +45,7 @@ type DirectConfig struct {
 	contentSnapshot                 *content.Snapshot
 	contentAllowFallback            bool
 	contentForceFile                bool
+	disableSessionReuse             bool
 	contentTaskID                   string
 	contentAttemptID                string
 	expectedAuthorizationGeneration uint64
@@ -321,7 +322,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	cfg.phase("session_prepare")
 	sessionID := protocol.RandomID()
 	cfg.session(sessionID, peer.ID)
-	request, err := protocol.NewEnvelope("connect_request", s.identity.ID(), peer.ID, sessionID, firstGeneration, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: true})
+	request, err := protocol.NewEnvelope("connect_request", s.identity.ID(), peer.ID, sessionID, firstGeneration, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: !cfg.disableSessionReuse})
 	if err != nil {
 		return nil, err
 	}

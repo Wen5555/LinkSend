@@ -26,3 +26,5 @@ Windows amd64、i9-13980HX 的 100 次写结果：persistent 为 2.024/2.076/2.0
 真实 Pion ICE + quic-go 定向测试 TestPairingCodePersistentInboxAndAlwaysAccept 与 TestCancelledStreamKeepsAuthenticatedSessionForNextFile 普通 5 轮、race 2 轮 PASS。该结果为本机双实例 loopback，物理 Windows/Mac 双向流仍需另行验证。
 
 C1修复：每条入站流统一解析设备接收目录覆盖；同key连接建立/发布使用串行锁，活动连接不被迟到dial/adopt替换；PeerSession控制字段通过takeControl互斥且serve goroutine由Service WaitGroup回收。session_reuse在双方ICE描述中显式协商，旧端缺字段保持单操作关闭。设备目录、双向复用、传输中stream取消、旧字段兼容、撤销与idle回收定向测试通过；相关race测试2轮通过。
+
+C2修复：pool map发布、closing判定和serve worker注册在同一`directPoolMu`生命周期门闩内，Shutdown关门后dial/adopt不能迟到发布或执行`WaitGroup.Add`。可控发布前屏障使用真实ICE+QUIC连接分别覆盖dial与inbound adopt，并在Shutdown后验证pool为空且Windows数据库可重命名。远端stream reset、显式拒收属于单流结果，健康连接继续承载下一文件；连接级错误仍关闭会话。缺少`session_reuse`的真实连续两文件均完成且使用不同session ID，成功路径恢复原`CloseAfterTerminal`收尾。

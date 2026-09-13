@@ -270,6 +270,235 @@ func TestCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T) {
 	}
 }
 
+func TestLegacyCapabilityUsesFreshSessionForImmediateNextFile(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second, disableSessionReuse: true}
+	if err := f.b.SetAlwaysAccept(f.aID.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.b.InboxStatus().Listening }, "legacy inbox not ready")
+	send := func(name string) TaskSnapshot {
+		path := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(path, []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+		task, err := f.a.StartSend(f.bID.ID(), []string{path}, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, 10*time.Second, func() bool {
+			got, ok := f.a.Task(task.ID)
+			return ok && got.State == "completed"
+		}, "legacy transfer did not complete")
+		got, _ := f.a.Task(task.ID)
+		return got
+	}
+	first := send("legacy-first.txt")
+	second := send("legacy-second.txt")
+	if first.SessionID == "" || second.SessionID == "" || first.SessionID == second.SessionID {
+		t.Fatalf("unnegotiated peer was incorrectly pooled: first=%s second=%s", first.SessionID, second.SessionID)
+	}
+}
+
+func TestRejectedStreamKeepsAuthenticatedSessionForNextFile(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.StartInbox(filepath.Join(t.TempDir(), "sender-inbox"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "inboxes not ready")
+	firstPath := filepath.Join(t.TempDir(), "rejected.txt")
+	if err := os.WriteFile(firstPath, []byte("reject this stream"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := f.a.StartSend(f.bID.ID(), []string{firstPath}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstIncoming string
+	waitFor(t, 10*time.Second, func() bool {
+		for _, task := range f.b.Tasks() {
+			if task.Direction == "receive" && task.State == "awaiting_acceptance" {
+				firstIncoming = task.ID
+				return true
+			}
+		}
+		return false
+	}, "rejected stream did not reach consent")
+	firstConnected, _ := f.a.Task(first.ID)
+	if err := f.b.RejectTask(firstIncoming); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		got, ok := f.a.Task(first.ID)
+		return ok && isTerminal(got.State)
+	}, "sender did not finish rejected stream")
+	secondPath := filepath.Join(t.TempDir(), "after-reject.txt")
+	if err := os.WriteFile(secondPath, []byte("connection survives rejection"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.a.StartSend(f.bID.ID(), []string{secondPath}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var secondIncoming string
+	waitFor(t, 10*time.Second, func() bool {
+		for _, task := range f.b.Tasks() {
+			if task.ID != firstIncoming && task.Direction == "receive" && task.State == "awaiting_acceptance" {
+				secondIncoming = task.ID
+				return true
+			}
+		}
+		return false
+	}, "second stream did not reach consent after rejection")
+	pending, _ := f.b.Task(secondIncoming)
+	if _, err := f.b.AcceptIncomingDefault(secondIncoming, pending.AttemptID, pending.Revision, false); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 10*time.Second, func() bool {
+		got, ok := f.a.Task(second.ID)
+		return ok && got.State == "completed"
+	}, "second stream did not complete after rejection")
+	secondDone, _ := f.a.Task(second.ID)
+	if firstConnected.SessionID == "" || secondDone.SessionID != firstConnected.SessionID {
+		firstDone, _ := f.a.Task(first.ID)
+		f.a.directPoolMu.Lock()
+		aPools := len(f.a.directPool)
+		var aPoolID string
+		for _, pooled := range f.a.directPool {
+			aPoolID = pooled.peer.SessionID
+		}
+		f.a.directPoolMu.Unlock()
+		f.b.directPoolMu.Lock()
+		bPools := len(f.b.directPool)
+		var bPoolID string
+		for _, pooled := range f.b.directPool {
+			bPoolID = pooled.peer.SessionID
+		}
+		f.b.directPoolMu.Unlock()
+		t.Fatalf("stream rejection closed healthy session: first=%s second=%s first_state=%s first_error=%s/%s pools=%d/%d pool_ids=%s/%s", firstConnected.SessionID, secondDone.SessionID, firstDone.State, firstDone.ErrorCode, firstDone.ErrorMessage, aPools, bPools, aPoolID, bPoolID)
+	}
+}
+
+func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.StartInbox(filepath.Join(t.TempDir(), "sender-inbox"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "inboxes not ready")
+	chunkSent, releaseChunk := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	sendCfg := cfg
+	sendCfg.onChunkSent = func(transfer.ChunkTransmission) {
+		once.Do(func() { close(chunkSent) })
+		<-releaseChunk
+	}
+	path := filepath.Join(t.TempDir(), "remote-cancel.bin")
+	if err := os.WriteFile(path, make([]byte, 2*transfer.DefaultChunkSize+1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := transfer.Prepare(t.Context(), []string{path}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	type directSendResult struct {
+		result DirectTransferResult
+		err    error
+	}
+	firstResult := make(chan directSendResult, 1)
+	go func() {
+		result, sendErr := f.a.SendPreparedWithHooksDetailed(context.Background(), f.bID.ID(), prepared, sendCfg, transfer.SendHooks{ChunkSent: sendCfg.onChunkSent})
+		firstResult <- directSendResult{result: result, err: sendErr}
+	}()
+	var incoming string
+	waitFor(t, 10*time.Second, func() bool {
+		for _, task := range f.b.Tasks() {
+			if task.Direction == "receive" && task.State == "awaiting_acceptance" {
+				incoming = task.ID
+				return true
+			}
+		}
+		return false
+	}, "remote cancellation stream did not reach consent")
+	pending, _ := f.b.Task(incoming)
+	if _, err := f.b.AcceptIncomingDefault(incoming, pending.AttemptID, pending.Revision, false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-chunkSent:
+	case <-time.After(10 * time.Second):
+		t.Fatal("first chunk was not sent")
+	}
+	if err := f.b.CancelTask(incoming); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool {
+		got, ok := f.b.Task(incoming)
+		return ok && isTerminal(got.State)
+	}, "receiver did not cancel its stream")
+	close(releaseChunk)
+	var cancelled directSendResult
+	select {
+	case cancelled = <-firstResult:
+		if cancelled.err == nil {
+			t.Fatal("remote stream cancellation returned success")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("sender did not observe remote stream cancellation")
+	}
+	nextPath := filepath.Join(t.TempDir(), "after-remote-cancel.txt")
+	if err := os.WriteFile(nextPath, []byte("healthy after remote reset"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	nextPrepared, err := transfer.Prepare(t.Context(), []string{nextPath}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nextPrepared.Close()
+	nextResult := make(chan directSendResult, 1)
+	go func() {
+		result, sendErr := f.a.SendPreparedWithHooksDetailed(context.Background(), f.bID.ID(), nextPrepared, cfg, transfer.SendHooks{})
+		nextResult <- directSendResult{result: result, err: sendErr}
+	}()
+	var nextIncoming string
+	waitFor(t, 10*time.Second, func() bool {
+		for _, task := range f.b.Tasks() {
+			if task.ID != incoming && task.Direction == "receive" && task.State == "awaiting_acceptance" {
+				nextIncoming = task.ID
+				return true
+			}
+		}
+		return false
+	}, "next stream did not reach consent after remote reset")
+	nextPending, _ := f.b.Task(nextIncoming)
+	if _, err := f.b.AcceptIncomingDefault(nextIncoming, nextPending.AttemptID, nextPending.Revision, false); err != nil {
+		t.Fatal(err)
+	}
+	var completed directSendResult
+	select {
+	case completed = <-nextResult:
+		if completed.err != nil {
+			t.Fatal("next stream failed after remote reset:", completed.err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("next stream did not complete after remote reset")
+	}
+	if cancelled.result.Evidence.SessionID == "" || completed.result.Evidence.SessionID != cancelled.result.Evidence.SessionID {
+		t.Fatalf("remote stream reset closed healthy session: first=%s next=%s", cancelled.result.Evidence.SessionID, completed.result.Evidence.SessionID)
+	}
+}
+
 func TestStaleInboxBindReportsNoCandidatesWithoutSignalingTimeout(t *testing.T) {
 	f := newDirectFixtureServices(t)
 	t.Cleanup(f.a.Shutdown)
