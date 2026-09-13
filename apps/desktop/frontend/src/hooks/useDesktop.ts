@@ -89,7 +89,7 @@ export function useDesktop() {
   return { enabled, workspace, devices, shell, preferences, configuration, refresh };
 }
 
-export type CommandRunner = (key: string, action: () => Promise<unknown>, message?: string, onError?: (error: unknown) => void) => Promise<boolean>;
+export type CommandRunner = (key: string, action: () => Promise<unknown>, message?: string, onError?: (error: unknown) => void | Promise<void>) => Promise<boolean>;
 type Command = { key: string; action: () => Promise<unknown> };
 
 export function useCommand(refresh: () => Promise<void>, lanes: CommandLanes, lane: string) {
@@ -115,7 +115,7 @@ export function useCommand(refresh: () => Promise<void>, lanes: CommandLanes, la
       return true;
     } catch (cause) {
       if (latestRun.current === runID) setError(humanizeBackendError(cause));
-      onError?.(cause);
+      await onError?.(cause);
       return false;
     } finally { release(); }
   }, [mutateAsync, refresh, lanes, lane]);

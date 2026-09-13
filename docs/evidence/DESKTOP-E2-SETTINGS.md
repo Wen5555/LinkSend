@@ -11,3 +11,5 @@
 全局同名策略现可持久化 `keep_both|skip|error`，默认仍为 `keep_both`；设备 profile schema 7 增加可留空继承的覆盖字段。普通确认和免确认接收都解析设备覆盖→全局→安全默认，已有活动/恢复任务继续使用既有计划。
 
 设置编辑按字段记录 dirty。后台新 revision 只更新未编辑字段，dirty 输入原样保留并要求显式合并；保存一个分类只清该分类字段，其他分类草稿继续保留，旧 props revision 不会回滚新响应。Playwright 实际输入名称与 `skip` 后模拟后台 revision，二者均保留且保存被门闩阻止，见[截图](assets/e2/e2-c1-settings-dirty-960x640.png)。Go CAS、schema6→7 备份迁移和前端字段级合并均有回归。
+
+集中复审补充覆盖真实组件的 deferred-save 生命周期：提交后当前分类输入、下拉和分类切换保持禁用直至后端响应，避免响应覆盖等待期间的新输入。只有 `PREFERENCES_REVISION_CONFLICT` 会重新读取 `Preferences`，以最新 revision 更新未编辑字段并保留 dirty 输入，再由用户确认重试；普通校验和 I/O 错误保持现有输入并继续显示真实错误，不进入 revision 合并提示。前端 64 项测试通过。

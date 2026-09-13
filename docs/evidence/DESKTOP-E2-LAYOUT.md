@@ -12,7 +12,7 @@
 
 ## cdb9577 审查修复后的真实组件渲染
 
-临时 harness 只提供确定的设备、草稿和查询数据，直接渲染生产组件；harness 已删除且不进入产品。完整 App 外壳 960×640、已选目标和两个文件时，主“发送文件”按钮 bounding box 为 `x=323,y=438,width=359,height=42`，`visible=true`、`disabled=false`，点击回执 `clicked:enqueue`；见[完整外壳截图](assets/e2/e2-c1-full-shell-selected-960x640.png)，SHA256 `ece4919c0769897ee532efddcaf7f6abcd196f2bb7cf26fc54467f6e6cfa2594`。1100×720 结果见[组件截图](assets/e2/e2-c1-transfer-selected-1100x720.png)。
+临时 harness 只提供确定的设备、草稿和查询数据，直接渲染生产组件；harness 已删除且不进入产品。完整 App 外壳 960×640、已选目标和两个文件时，主“发送文件”按钮 bounding box 为 `x=259,y=527,width=631,height=42`，`visible=true`、`disabled=false`，点击回执 `clicked:enqueue`；见[完整外壳截图](assets/e2/e2-c1-full-shell-selected-960x640.png)，SHA256 `ece4919c0769897ee532efddcaf7f6abcd196f2bb7cf26fc54467f6e6cfa2594`。1100×720 结果见[组件截图](assets/e2/e2-c1-transfer-selected-1100x720.png)。
 
 接收弹窗 960×640 的主按钮位于视口内、启用并取得初始焦点，点击回执 `clicked:accept-default-receive`；见[接收截图](assets/e2/e2-c1-receive-dialog-960x640.png)。应用级 LAN 弹窗在非设备页数据下显示且“添加设备”获得焦点，切组结果提供可点击后续；见[全局确认](assets/e2/e2-c1-lan-global-prompt-960x640.png)和[切组后续](assets/e2/e2-c1-lan-switch-followup-960x640.png)。设备页区分 LAN 可达、附近未配对和已删除设备，局部滚动后“允许重新添加”取得点击回执；见[设备页](assets/e2/e2-c1-devices-readd-action-1100x720.png)。
 

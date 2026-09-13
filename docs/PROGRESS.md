@@ -3,9 +3,9 @@
 ## 2026-09-13 E2-C1 集中审查修复候选（待复审）
 
 - 主发送动作移到有界文件列表之前；完整 App 外壳 960×640、已选 LAN-only 目标和两个文件时按钮位于视口内、启用且点击回执成功。
-- 同名策略支持全局持久化与设备覆盖继承，任务库迁至 schema 7；普通确认和免确认均使用有效策略，活动/恢复计划不变。设置改为字段级 dirty 合并，保存一个分类不丢其他分类草稿。
+- 同名策略支持全局持久化与设备覆盖继承，任务库迁至 schema 7；普通确认和免确认均使用有效策略，活动/恢复计划不变。设置改为字段级 dirty 合并，保存期间锁定当前分类；CAS 冲突会读取后端最新 revision 并保留 dirty 输入，普通校验/I/O 错误不进入合并流程。
 - LAN 请求确认提升到应用级；请求结果区分 joined/switch_required/pending/not_joined，切组提供配对码后续；LAN-only 不再误报离线，删除记录可显式允许重新添加。
-- 存储页恢复旧版内容草稿的查看/取消入口，并可直达待发送管理；不恢复新建内容入口、不自动续发、不删除接收文件。根 `go test ./...`、`go vet ./...`、desktop `GOWORK=off` test/vet/build、前端 typecheck/lint/61 tests/build和Wails production通过；新候选CI待提交后运行。
+- 存储页恢复旧版内容草稿的查看/取消入口，并可直达待发送管理；不恢复新建内容入口、不自动续发、不删除接收文件。根 `go test ./...`、`go vet ./...`、desktop `GOWORK=off` test/vet/build、前端 typecheck/lint/64 tests/build和Wails production通过；新候选CI待提交后运行。
 
 ## 2026-09-13 E2桌面接收、设置与四视图候选（待复审）
 
