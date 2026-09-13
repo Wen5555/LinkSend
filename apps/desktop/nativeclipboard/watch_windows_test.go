@@ -31,11 +31,12 @@ func TestWindowsClipboardListenerUsesNativeWindowSubclass(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stop()
+	expectedSequence, _, _ := getSequence.Call()
 	sendMessage.Call(hwnd, wmClipboardUpdate, 0, 0)
 	select {
 	case change := <-changes:
-		if change.Sequence == 0 {
-			t.Fatal("native callback omitted clipboard sequence")
+		if change.Sequence != uint64(uint32(expectedSequence)) {
+			t.Fatalf("native callback sequence = %d, want %d", change.Sequence, uint32(expectedSequence))
 		}
 	case <-time.After(time.Second):
 		t.Fatal("WM_CLIPBOARDUPDATE did not reach subclass callback")
