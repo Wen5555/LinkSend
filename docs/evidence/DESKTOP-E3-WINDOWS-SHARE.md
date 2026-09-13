@@ -32,3 +32,7 @@ Go 对清理失败保留 journal，主界面列出未入队请求并提供明确
 放弃未入队请求与后台消费使用同一 consumeMu 串行边界，并在释放来源前查询持久队列列；一旦 request_id 已存在于队列，用户必须在发送队列取消，不能再由系统共享错误入口删除。owned 清理或 journal 删除失败仍保留可恢复记录。
 
 Windows 临时来源改为 1 MiB 流式接管，按实际读取字节执行累计上限，源增长也不能越过 16 GiB；写入采用 WriteThrough、FlushAsync 和 Flush(true)，失败删除未完成文件。面板先静默唤醒 owner 并等待最多 2 秒的新鲜设备快照；超时显示状态未知及刷新入口，不把旧快照当离线。Mac 同样先后台启动 owner，再读取设备并提供刷新。Mac 定向作业 /tmp/codex-ssh/linksend-e3-c3-mac-swift-20260913T172620Z PASS。
+
+## E3-C4 已有目标保护
+
+CopyOwnedAsync 只有在本次 CreateNew 成功后才清理目标；同名已有文件导致创建失败时保持原内容不变。App 入口测试覆盖 pending 快照后 request 已进入持久队列，再点击放弃会收到 ALREADY_QUEUED 且 journal 保留。dotnet self-test 与 desktop Go tests PASS。

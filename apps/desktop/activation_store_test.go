@@ -4,8 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+
+	coreapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/identity"
 )
 
 func TestActivationJournalConcurrentProducersAndRestart(t *testing.T) {
@@ -228,6 +232,43 @@ func TestDiscardNativeShareRemovesUnqueuedRequest(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")); !os.IsNotExist(err) {
 		t.Fatal("discard left request journal", err)
+	}
+}
+
+func TestDiscardNativeShareRejectsRequestQueuedAfterPendingSnapshot(t *testing.T) {
+	profile, source := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "file.txt")
+	if err := os.WriteFile(path, []byte("share"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := fileActivation{RequestID: "55555555555555555555555555555555", PeerID: "", Paths: []string{path}, Source: "windows_share", WaitForPeer: true}
+	peer, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.PeerID = peer.ID()
+	if err = identity.TrustPairedPeer(profile, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	if err = stageShareActivation(profile, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	core, err := coreapp.New(coreapp.Config{DataDir: profile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(core.Shutdown)
+	if _, err = core.Enqueue(coreapp.EnqueueRequest{RequestID: request.RequestID, PeerID: request.PeerID, Paths: request.Paths, WaitForPeer: true}); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp()
+	app.dataDir, app.core = profile, core
+	if err = app.DiscardNativeShare(request.RequestID); err == nil || !strings.Contains(err.Error(), "ALREADY_QUEUED") {
+		t.Fatal("queued request was discarded:", err)
+
+	}
+	if _, err = os.Stat(filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")); err != nil {
+		t.Fatal("queued request lost source journal", err)
 	}
 }
 

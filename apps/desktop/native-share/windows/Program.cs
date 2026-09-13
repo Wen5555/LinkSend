@@ -187,10 +187,12 @@ internal static class Program
 
     internal static async Task<ulong> CopyOwnedAsync(Stream input, string target, ulong current, ulong maximum)
     {
+        var created = false;
         try
         {
             using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 1024 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough);
+            created = true;
             var buffer = new byte[1024 * 1024];
             while (true)
             {
@@ -207,7 +209,8 @@ internal static class Program
         }
         catch
         {
-            try { File.Delete(target); } catch { }
+            if (created)
+                try { File.Delete(target); } catch { }
             throw;
         }
     }
@@ -250,6 +253,14 @@ internal static class SelfTest
             }
             catch (InvalidOperationException error) when (error.Message.Contains("16 GiB")) { }
             if (File.Exists(bounded)) throw new Exception("COPY_CLEANUP_TEST_FAILED");
+            File.WriteAllText(bounded, "keep");
+            try
+            {
+                Program.CopyOwnedAsync(new MemoryStream(new byte[1]), bounded, 0, 4).GetAwaiter().GetResult();
+                throw new Exception("COPY_EXISTING_TEST_FAILED");
+            }
+            catch (IOException) { }
+            if (File.ReadAllText(bounded) != "keep") throw new Exception("COPY_EXISTING_CHANGED");
             var request = new ShareRequest(2, "0123456789abcdef0123456789abcdef", "peer", [source], true, "windows_share");
             ShareJournal.Persist(root, request); ShareJournal.Persist(root, request);
             try { ShareJournal.Persist(root, request with { peer_id = "other" }); throw new Exception("CONFLICT_TEST_FAILED"); }
