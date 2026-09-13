@@ -572,3 +572,4 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 当前候选只建立本机权限和原生变化监听边界；正文读取、lease wire、跨端同步与接收写入仍待 E4-03。
 - Windows 使用 `AddClipboardFormatListener` + `SetWindowSubclass`，回调只合并 sequence 和 text/link/image 格式标志；macOS 每 250ms 比较 `NSPasteboard.changeCount` 并只查询 types。仅存在 enabled grant 时注册，全部关闭、撤销、睡眠、锁屏或退出时停止；唤醒/解锁从新基线恢复，不补发停用期间变化。
 - C1 将 grant 升级到 schema 9 并绑定当前可信配对 generation；启用提交与撤销共用门闩，清理失败或重新配对都不能复活旧 generation。watcher 由单一 owner 串行 start/stop，分别跟踪睡眠、锁屏和用户暂停；Windows 注册时记录 OS sequence 基线并以 latest-only 合并变化。
+- C2 将锁屏/睡眠状态送入独立可靠队列，不受阻塞的 NetworkChanged 或网络 burst 推迟；保留事件顺序并独立合并网络通知。owner 在 Shutdown 先关注册门闩，迟到 RPC/workspace refresh 不能重启 watcher；并发 refresh 只注册一次。

@@ -9,6 +9,7 @@
 - 桌面只在至少一个 grant enabled 时启动 watcher。Windows 使用 `AddClipboardFormatListener` 与 `SetWindowSubclass`；macOS 使用 `NSPasteboard.changeCount`。回调只报告 sequence 和格式类别。
 - 睡眠、锁屏、撤销、全部 grant 关闭和 Shutdown 停止 watcher 并清空变化基线；恢复后从当前系统 sequence 开始，不补发停用期间变化。
 - 启用与撤销共享 grant 提交门闩；watcher start/stop 由单一 owner 串行。睡眠、锁屏、用户暂停分别记账，wake 不会解除仍存在的锁屏或用户暂停。Windows 容量1队列淘汰旧变化并保留最新 sequence，注册基线与迟到旧通知不产生事件。
+- 系统生命周期使用独立可靠 FIFO，网络恢复通道只保留一个待处理通知；即使 NetworkChanged 被阻塞且连续收到网络 burst，lock/sleep/wake 仍按顺序到达 watcher owner。Shutdown 先关闭 owner 注册门闩，再注销 watcher；20 路并发 refresh 只创建一个注册，关门后同样的迟到 refresh 不再注册。
 
 ## 实际验证
 

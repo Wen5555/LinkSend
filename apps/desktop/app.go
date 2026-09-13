@@ -55,6 +55,8 @@ type App struct {
 	clipboardSleeping   bool
 	clipboardLocked     bool
 	clipboardUserPaused bool
+	clipboardClosed     bool
+	clipboardWatchStart func() (func(), error)
 }
 
 type DesktopPreferences struct {
@@ -168,7 +170,7 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
-	a.stopClipboardWatch()
+	a.closeClipboardOwner()
 	a.stopNativeSystemEvents()
 	if a.cancel != nil {
 		a.cancel()

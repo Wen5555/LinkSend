@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	coreapp "github.com/Wen5555/LinkSend/internal/app"
@@ -44,6 +46,45 @@ func TestClipboardWatcherFollowsScopedGrantAndRevocation(t *testing.T) {
 	}
 	if status := app.ClipboardWatcher(); status.Enabled || status.Active {
 		t.Fatalf("revocation retained watcher: %+v", status)
+	}
+}
+
+func TestClipboardWatcherSingleOwnerClosesRegistrationGate(t *testing.T) {
+	dir := t.TempDir()
+	core, err := coreapp.New(coreapp.Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Shutdown()
+	peer, _ := identity.Generate()
+	if err = identity.TrustPairedPeer(dir, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = core.SetClipboardGrant(t.Context(), coreapp.ClipboardGrantPatch{PeerID: peer.ID(), Direction: "send", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp()
+	app.ctx = context.Background()
+	app.core = core
+	var starts, stops atomic.Int32
+	app.clipboardWatchStart = func() (func(), error) { starts.Add(1); return func() { stops.Add(1) }, nil }
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); app.refreshClipboardWatch() }()
+	}
+	wg.Wait()
+	if starts.Load() != 1 || !app.ClipboardWatcher().Active {
+		t.Fatalf("registrations=%d status=%+v", starts.Load(), app.ClipboardWatcher())
+	}
+	app.closeClipboardOwner()
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); app.refreshClipboardWatch() }()
+	}
+	wg.Wait()
+	if starts.Load() != 1 || stops.Load() != 1 || app.ClipboardWatcher().Active {
+		t.Fatalf("closed owner restarted: starts=%d stops=%d status=%+v", starts.Load(), stops.Load(), app.ClipboardWatcher())
 	}
 }
 

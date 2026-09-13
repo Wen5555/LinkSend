@@ -13,19 +13,23 @@ import (
 // before they enter the core recovery gate. A capacity of one coalesces bursts;
 // the core performs the final 250 ms debounce.
 type nativeSystemEventPump struct {
-	mu     sync.Mutex
-	cancel context.CancelFunc
-	done   chan struct{}
-	events chan string
-	stops  []func()
-	closed bool
+	mu            sync.Mutex
+	cancel        context.CancelFunc
+	done          chan struct{}
+	events        chan string
+	criticalWake  chan struct{}
+	criticalQueue []string
+	stops         []func()
+	closed        bool
 }
 
-func newNativeSystemEventPump(parent context.Context, deliver func(string)) *nativeSystemEventPump {
+func newNativeSystemEventPump(parent context.Context, deliver func(string), critical ...func(string)) *nativeSystemEventPump {
 	ctx, cancel := context.WithCancel(parent)
-	p := &nativeSystemEventPump{cancel: cancel, done: make(chan struct{}), events: make(chan string, 16)}
+	p := &nativeSystemEventPump{cancel: cancel, done: make(chan struct{}), events: make(chan string, 1), criticalWake: make(chan struct{}, 1)}
+	var workers sync.WaitGroup
+	workers.Add(1)
 	go func() {
-		defer close(p.done)
+		defer workers.Done()
 		for {
 			select {
 			case <-ctx.Done():
@@ -35,6 +39,31 @@ func newNativeSystemEventPump(parent context.Context, deliver func(string)) *nat
 			}
 		}
 	}()
+	if len(critical) > 0 && critical[0] != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-p.criticalWake:
+					for {
+						p.mu.Lock()
+						if len(p.criticalQueue) == 0 {
+							p.mu.Unlock()
+							break
+						}
+						reason := p.criticalQueue[0]
+						p.criticalQueue = p.criticalQueue[1:]
+						p.mu.Unlock()
+						critical[0](reason)
+					}
+				}
+			}
+		}()
+	}
+	go func() { workers.Wait(); close(p.done) }()
 	return p
 }
 
@@ -43,6 +72,17 @@ func (p *nativeSystemEventPump) notify(reason string) {
 	if p.closed {
 		p.mu.Unlock()
 		return
+	}
+	if reason == "sleep" || reason == "wake" || reason == "lock" || reason == "unlock" {
+		p.criticalQueue = append(p.criticalQueue, reason)
+		select {
+		case p.criticalWake <- struct{}{}:
+		default:
+		}
+		if reason == "lock" || reason == "unlock" {
+			p.mu.Unlock()
+			return
+		}
 	}
 	select {
 	case p.events <- reason:
@@ -87,6 +127,10 @@ func (a *App) startNativeSystemEvents() {
 		return
 	}
 	pump := newNativeSystemEventPump(a.ctx, func(reason string) {
+		if err := a.core.NetworkChanged(reason); err != nil {
+			slog.Warn("native network recovery event failed", "reason", reason, "error", err)
+		}
+	}, func(reason string) {
 		switch reason {
 		case "sleep":
 			a.setClipboardSuspended("sleep", true)
@@ -96,11 +140,6 @@ func (a *App) startNativeSystemEvents() {
 			a.setClipboardSuspended("lock", true)
 		case "unlock":
 			a.setClipboardSuspended("lock", false)
-		}
-		if reason != "lock" && reason != "unlock" {
-			if err := a.core.NetworkChanged(reason); err != nil {
-				slog.Warn("native network recovery event failed", "reason", reason, "error", err)
-			}
 		}
 	})
 	a.nativeEvents = pump
