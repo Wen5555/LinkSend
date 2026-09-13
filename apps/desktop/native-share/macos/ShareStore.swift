@@ -11,6 +11,7 @@ struct ShareDevice: Codable {
 private struct DeviceSnapshot: Codable {
     let version: Int
     let revision: UInt64
+    let generated_at: String
     let devices: [ShareDevice]
 }
 
@@ -59,12 +60,26 @@ final class ShareStore {
         self.container = container
     }
 
+    static func resolveWaitForPeer(reachable: Bool, confirmed: Bool) throws -> Bool {
+        if !reachable && !confirmed { throw ShareStoreError.invalidSelection }
+        return !reachable && confirmed
+    }
+
+    func isAccepted(requestID: String) -> Bool {
+        manager.fileExists(atPath: container.appendingPathComponent(
+            "native-share-v1/accepted/" + requestID).path)
+    }
+
     func devices() throws -> [ShareDevice] {
         let url = container.appendingPathComponent("native-share-v1/devices.json")
         let data = try readBounded(url, maximum: 256 * 1024)
         let snapshot = try JSONDecoder().decode(DeviceSnapshot.self, from: data)
         guard snapshot.version == 1 else { throw ShareStoreError.devicesUnavailable }
-        let devices = snapshot.devices.filter { !$0.id.isEmpty && !$0.name.isEmpty }
+        let generated = ISO8601DateFormatter().date(from: snapshot.generated_at)
+        let fresh = generated.map { Date().timeIntervalSince($0) <= 60 } ?? false
+        let devices = snapshot.devices.filter { !$0.id.isEmpty && !$0.name.isEmpty }.map {
+            ShareDevice(id: $0.id, name: $0.name, reachable: fresh && $0.reachable)
+        }
         guard !devices.isEmpty else { throw ShareStoreError.devicesUnavailable }
         return Array(devices.prefix(256))
     }
@@ -85,7 +100,6 @@ final class ShareStore {
         var ownedBytes: Int64 = 0
         let maximumOwnedBytes: Int64 = 16 * 1024 * 1024 * 1024
         for (index, provider) in providers.enumerated() {
-            let hasFileURL = provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
             guard let type = provider.registeredTypeIdentifiers.first(where: {
                 $0 != UTType.fileURL.identifier && UTType($0)?.conforms(to: .data) == true
             }) ?? provider.registeredTypeIdentifiers.first(where: {
@@ -126,14 +140,10 @@ final class ShareStore {
                     lock.lock(); if firstError == nil { firstError = error }; lock.unlock()
                 }
             }
-            if hasFileURL {
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
-                    let fileURL = self.decodeFileURL(item)
-                    receive(fileURL, true, error)
-                }
-            } else {
-                provider.loadInPlaceFileRepresentation(forTypeIdentifier: type, completionHandler: receive)
-            }
+            // The advertised fileURL UTI says what the value is, not how long
+            // its authorization survives the provider callback. The API's
+            // actual inPlace result decides bookmark versus owned copy.
+            provider.loadInPlaceFileRepresentation(forTypeIdentifier: type, completionHandler: receive)
         }
         group.notify(queue: .main) {
             if let error = firstError {
@@ -153,7 +163,8 @@ final class ShareStore {
         try? manager.removeItem(at: container.appendingPathComponent("share-owned-v1/" + requestID))
     }
 
-    func persist(requestID: String, peerID: String, paths: [String], bookmarks: [String]) throws {
+    func persist(requestID: String, peerID: String, paths: [String], bookmarks: [String],
+                 waitForPeer: Bool = false) throws {
         guard requestID.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil,
               !peerID.isEmpty, paths.count == bookmarks.count else { throw ShareStoreError.invalidSelection }
         let directory = container.appendingPathComponent("desktop-activations-v1", isDirectory: true)
@@ -178,7 +189,7 @@ final class ShareStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(ShareRequest(version: 2, request_id: requestID, peer_id: peerID,
-            paths: paths, bookmarks: bookmarks, wait_for_peer: true, source: "macos_share"))
+            paths: paths, bookmarks: bookmarks, wait_for_peer: waitForPeer, source: "macos_share"))
         guard data.count <= 1024 * 1024 else { throw ShareStoreError.storageFull }
         let final = directory.appendingPathComponent(requestID + ".json")
         if manager.fileExists(atPath: final.path) {
@@ -194,25 +205,32 @@ final class ShareStore {
 
     private func copyTemporaryRepresentation(from source: URL, to target: URL, expectedSize: Int?) throws {
         guard !manager.fileExists(atPath: target.path) else { throw ShareStoreError.requestConflict }
-        try manager.copyItem(at: source, to: target)
+        guard manager.createFile(atPath: target.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            throw ShareStoreError.sourceUnavailable
+        }
+        do {
+            let input = try FileHandle(forReadingFrom: source)
+            let output = try FileHandle(forWritingTo: target)
+            defer { try? input.close(); try? output.close() }
+            var copied: Int64 = 0
+            while true {
+                let chunk = try input.read(upToCount: 1024 * 1024) ?? Data()
+                if chunk.isEmpty { break }
+                copied += Int64(chunk.count)
+                guard copied <= 16 * 1024 * 1024 * 1024 else { throw ShareStoreError.storageFull }
+                try output.write(contentsOf: chunk)
+            }
+            try output.synchronize()
+        } catch {
+            try? manager.removeItem(at: target)
+            throw error
+        }
         let values = try target.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true,
               expectedSize == nil || values.fileSize == expectedSize else {
             try? manager.removeItem(at: target)
             throw ShareStoreError.sourceUnavailable
         }
-    }
-
-    private func decodeFileURL(_ item: NSSecureCoding?) -> URL? {
-        if let url = item as? URL { return url }
-        if let url = item as? NSURL { return url as URL }
-        if let data = item as? Data, let value = String(data: data, encoding: .utf8) {
-            return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        if let value = item as? String {
-            return URL(string: value) ?? URL(fileURLWithPath: value)
-        }
-        return nil
     }
 
     private func readBounded(_ url: URL, maximum: Int) throws -> Data {

@@ -103,10 +103,10 @@ Section
 
     !insertmacro wails.webview2runtime
 
-    SetOutPath $INSTDIR
-
     !insertmacro wails.files
+    SetOutPath "$INSTDIR\native-share\windows"
     File /r "${ARG_LINKSEND_SHARE_DIR}\*.*"
+    SetOutPath $INSTDIR
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
@@ -133,6 +133,7 @@ Section "uninstall"
     # Preserve profile, received files and WebView data on uninstall.
 
     Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    RMDir /r "$INSTDIR\native-share\windows"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"

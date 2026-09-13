@@ -3,10 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"time"
 
@@ -81,12 +79,7 @@ func writeNativeShareDevices(rootPath string, data []byte) error {
 	}
 	defer root.Close()
 	if existing, openErr := root.Open("devices.json"); openErr == nil {
-		defer existing.Close()
-		var current, next nativeShareDeviceSnapshot
-		if json.NewDecoder(io.LimitReader(existing, 256*1024+1)).Decode(&current) == nil && json.Unmarshal(data, &next) == nil &&
-			current.Version == next.Version && reflect.DeepEqual(current.Devices, next.Devices) {
-			return nil
-		}
+		existing.Close()
 	} else if !errors.Is(openErr, os.ErrNotExist) {
 		return openErr
 	}
@@ -109,4 +102,33 @@ func writeNativeShareDevices(rootPath string, data []byte) error {
 		return err
 	}
 	return syncActivationDirectory(root)
+}
+
+func publishNativeShareReceipt(rootPath, requestID string) error {
+	if !activationName.MatchString(requestID + ".json") {
+		return errors.New("SYSTEM_SHARE_INVALID: receipt request ID")
+	}
+	directory := filepath.Join(rootPath, "native-share-v1", "accepted")
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return err
+	}
+	path := filepath.Join(directory, requestID)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.WriteString("queued\n")
+	if writeErr == nil {
+		writeErr = file.Sync()
+	}
+	if closeErr := file.Close(); writeErr == nil {
+		writeErr = closeErr
+	}
+	return writeErr
+}
+
+func removeNativeShareReceipt(rootPath, requestID string) {
+	if activationName.MatchString(requestID + ".json") {
+		_ = os.Remove(filepath.Join(rootPath, "native-share-v1", "accepted", requestID))
+	}
 }

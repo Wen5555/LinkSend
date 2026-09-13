@@ -41,6 +41,19 @@ func TestNativeShareWakeURLIsNarrow(t *testing.T) {
 	}
 }
 
+func TestNativeShareWakeDoesNotOverrideVisibleActivation(t *testing.T) {
+	a := NewApp()
+	a.wakeEntries(false)
+	if show := <-a.entries.wake; show {
+		t.Fatal("background native share requested a visible window")
+	}
+	a.wakeEntries(false)
+	a.wakeEntries(true)
+	if show := <-a.entries.wake; !show {
+		t.Fatal("visible activation was lost behind a background wake")
+	}
+}
+
 func TestNativeArgumentsRejectEntireOversizedOrInvalidSelection(t *testing.T) {
 	root := t.TempDir()
 	for _, paths := range [][]string{

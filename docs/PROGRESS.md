@@ -1,3 +1,9 @@
+# 2026-09-14 E3-C1 原生共享审查修复
+
+- 原生共享来源 journal 与 queue request 生命周期绑定：入队后保留 bookmark/owned source，重启幂等恢复；completed/cancelled/expired 后按请求释放 security scope、临时文件和 journal。失败请求隔离，不阻塞后续记录。
+- 后台共享唤起不显示主窗口；macOS LaunchServices URL 进入 Wails ApplicationOpenedWithFile consumer。设备快照由后台每 15 秒发布，两端读端按 60 秒 TTL 降级陈旧可达状态。
+- 两端选择设备不自动提交；离线等待必须单独确认，并提供添加设备入口。Windows 临时/虚拟 StorageFile 必要时持久复制；macOS 依据真实 inPlace 回调决定 bookmark 或同步复制。
+- 本机 desktop Go tests、.NET build/self-test 通过；Mac Swift 定向作业 /tmp/codex-ssh/linksend-e3-c1-mac-swift-r2-20260913T165721Z 通过。签名安装与系统激活仍按用户要求 NOT RUN。
 # LinkSend implementation progress
 
 ## 2026-09-14 E3 原生共享源码候选（待审查）

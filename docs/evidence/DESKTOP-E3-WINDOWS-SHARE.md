@@ -13,4 +13,10 @@
 - Taskfile 等价的 self-contained `dotnet publish -r win-x64 -p:PublishSingleFile=true`：PASS；未签名适配器 SHA256 `152396e89ba63c9b4ab441cf740fb21d6ea0dc88736a53ba1640fb6b73cbe241`，仅作源码构建证据。
 - desktop `go test ./...`、`go vet ./...`、`go build ./...`：PASS；包含 schema 2 journal、损坏保留、容量、并发和设备快照测试。
 
-`AppxManifest.xml` 使用产品身份 `LinkSend.Desktop`、宿主 `LinkSend.exe` 与独立 `LinkSend.ShareTarget.exe`，支持任意文件类型的 `StorageItems`。用户明确没有 Windows 签名证书并暂缓签名，因此 identity package 构建签名、安装、Explorer/系统共享激活、升级和卸载均为 NOT RUN；E0 自签失败不复用为本轮结果。无绝对路径的云端/虚拟文件目前明确失败，仍是 E3-01 后续功能缺口。
+`AppxManifest.xml` 使用产品身份 `LinkSend.Desktop`、宿主 `LinkSend.exe` 与独立 `LinkSend.ShareTarget.exe`，支持任意文件类型的 `StorageItems`。用户明确没有 Windows 签名证书并暂缓签名，因此 identity package 构建签名、安装、Explorer/系统共享激活、升级和卸载均为 NOT RUN；E0 自签失败不复用为本轮结果。
+
+## E3-C1 审查修复
+
+设备快照现在由 Go 后台每 15 秒发布，Share Target 按 60 秒 TTL 将陈旧可达状态降级为离线。列表加载和目标选择不会入队，离线等待必须另行勾选，并提供“添加设备”入口。普通持久本地文件保持零复制；没有稳定本地路径的临时/虚拟 StorageFile 才复制到本请求独占的 share-owned-v1 目录。
+
+schema 2 journal 入队后继续保留，进程重启会重新验证来源并幂等重放；只有 queue 为 completed/cancelled/expired 时才删除 journal 和 owned 临时源。单个坏来源或撤销目标保留为可见错误，不再阻塞后续请求。后台 share 唤起不显示主窗。NSIS 将 Share Target 放入安装器独占子目录，卸载只递归删除该目录。

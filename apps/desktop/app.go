@@ -100,7 +100,7 @@ type DesktopStatus struct {
 var errBackendUnavailable = errors.New("BACKEND_UNAVAILABLE: desktop core is not initialized")
 
 func NewApp() *App {
-	return &App{entries: &desktopEntries{wake: make(chan struct{}, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}, background: &desktopBackground{}}
+	return &App{entries: &desktopEntries{wake: make(chan bool, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}, background: &desktopBackground{}}
 }
 
 // attachRuntime is called by the Wails 3 host before Run. Keeping the host

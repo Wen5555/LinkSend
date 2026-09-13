@@ -8,4 +8,5 @@ func resolveNativeShareActivation(activation fileActivation) (fileActivation, er
 	return activation, nil
 }
 
-func closeNativeShareAccess() {}
+func closeNativeShareAccess()             {}
+func releaseNativeShareActivation(string) {}

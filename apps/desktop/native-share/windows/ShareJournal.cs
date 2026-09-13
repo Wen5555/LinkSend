@@ -12,6 +12,16 @@ internal sealed record ShareRequest(int version, string request_id, string peer_
 internal static class ShareJournal
 {
     internal const int MaximumItems = 1024;
+
+    internal static bool ResolveWaitForPeer(bool reachable, bool confirmed)
+    {
+        if (!reachable && !confirmed)
+            throw new InvalidOperationException("OFFLINE_WAIT_CONFIRMATION_REQUIRED");
+        return !reachable && confirmed;
+    }
+
+    internal static bool IsAccepted(string profileRoot, string requestID) =>
+        File.Exists(Path.Combine(profileRoot, "native-share-v1", "accepted", requestID));
     internal static string ProfileRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LinkSend");
 
@@ -27,8 +37,11 @@ internal static class ShareJournal
             ?? throw new InvalidDataException("DEVICE_SNAPSHOT_INVALID");
         if (snapshot.version != 1 || snapshot.devices.Count > 256)
             throw new InvalidDataException("DEVICE_SNAPSHOT_VERSION");
+        var fresh = DateTimeOffset.TryParse(snapshot.generated_at, out var generated)
+            && DateTimeOffset.UtcNow - generated.ToUniversalTime() <= TimeSpan.FromMinutes(1);
         return snapshot.devices.Where(device => !string.IsNullOrWhiteSpace(device.id)
-            && !string.IsNullOrWhiteSpace(device.name)).ToList();
+            && !string.IsNullOrWhiteSpace(device.name))
+            .Select(device => device with { reachable = fresh && device.reachable }).ToList();
     }
 
     internal static void Persist(string profileRoot, ShareRequest request)

@@ -9,6 +9,7 @@ package main
 char *linksendShareContainerPath(void);
 char *linksendResolveShareBookmark(const char *requestID, const char *bookmark);
 void linksendReleaseShareAccess(void);
+void linksendReleaseShareRequest(const char *requestID);
 */
 import "C"
 
@@ -61,3 +62,9 @@ func resolveNativeShareActivation(activation fileActivation) (fileActivation, er
 }
 
 func closeNativeShareAccess() { C.linksendReleaseShareAccess() }
+
+func releaseNativeShareActivation(requestID string) {
+	request := C.CString(requestID)
+	defer C.free(unsafe.Pointer(request))
+	C.linksendReleaseShareRequest(request)
+}

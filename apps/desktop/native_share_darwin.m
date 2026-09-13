@@ -55,3 +55,15 @@ void linksendReleaseShareAccess(void) {
         linksendScopedShareURLs = nil;
     }
 }
+
+void linksendReleaseShareRequest(const char *requestID) {
+    if (!requestID) return;
+    @autoreleasepool {
+        NSString *request = [NSString stringWithUTF8String:requestID];
+        @synchronized([NSFileManager class]) {
+            NSDictionary<NSString *, NSURL *> *requestURLs = linksendScopedShareURLs[request];
+            for (NSURL *url in requestURLs.allValues) [url stopAccessingSecurityScopedResource];
+            [linksendScopedShareURLs removeObjectForKey:request];
+        }
+    }
+}

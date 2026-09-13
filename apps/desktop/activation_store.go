@@ -18,6 +18,7 @@ const maxPendingActivations = 64
 
 var activationName = regexp.MustCompile(`^[0-9a-f]{32}\.json$`)
 var errActivationBusy = errors.New("SYSTEM_ENTRY_BUSY: another entry is being saved; retry shortly")
+var errActivationRetained = errors.New("SYSTEM_SHARE_RETAINED")
 
 type fileActivation struct {
 	Version     int      `json:"version"`
@@ -125,7 +126,6 @@ func stageShareActivation(dataDir string, activation fileActivation, workingDir 
 	}
 	activation.Version = 2
 	activation.Paths = normalized
-	activation.WaitForPeer = true
 	if activation.Source != "windows_share" && activation.Source != "macos_share" {
 		return errors.New("SYSTEM_SHARE_INVALID: source kind")
 	}
@@ -249,7 +249,14 @@ func consumeActivations(dataDir string, consume func(fileActivation) error) (int
 			}
 			activation.Paths = paths
 			if err := consume(activation); err != nil {
-				return err
+				if errors.Is(err, errActivationRetained) {
+					count++
+					continue
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 			if err := root.Remove(entry.Name()); err != nil {
 				return err
@@ -264,6 +271,47 @@ func consumeActivations(dataDir string, consume func(fileActivation) error) (int
 		return firstErr
 	})
 	return count, err
+}
+
+func reapShareActivations(dataDir string, terminal map[string]bool) (int, error) {
+	removed := 0
+	err := withActivationStore(dataDir, func(root *os.Root) error {
+		entries, err := activationEntries(root)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			requestID := strings.TrimSuffix(entry.Name(), ".json")
+			if !activationName.MatchString(entry.Name()) || !terminal[requestID] {
+				continue
+			}
+			file, err := root.Open(entry.Name())
+			if err != nil {
+				return err
+			}
+			data, readErr := io.ReadAll(io.LimitReader(file, maxNativeEntryBytes+1))
+			file.Close()
+			var activation fileActivation
+			if readErr != nil || json.Unmarshal(data, &activation) != nil || activation.Version != 2 || activation.RequestID != requestID {
+				continue
+			}
+			if err := root.Remove(entry.Name()); err != nil {
+				return err
+			}
+			removed++
+			releaseNativeShareActivation(requestID)
+			removeNativeShareReceipt(dataDir, requestID)
+			owned := filepath.Join(dataDir, "share-owned-v1", requestID)
+			if info, statErr := os.Lstat(owned); statErr == nil && info.Mode()&os.ModeSymlink == 0 {
+				_ = os.RemoveAll(owned)
+			}
+		}
+		if removed > 0 {
+			return syncActivationDirectory(root)
+		}
+		return nil
+	})
+	return removed, err
 }
 
 func consumeFileActivations(dataDir string, merge func([]string) error) (int, error) {

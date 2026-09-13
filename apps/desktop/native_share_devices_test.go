@@ -41,7 +41,7 @@ func TestNativeShareDevicesContainOnlySafeSelectionData(t *testing.T) {
 		t.Fatal("atomic replacement failed:", err)
 	}
 	repeated, err := os.ReadFile(filepath.Join(profile, "native-share-v1", "devices.json"))
-	if err != nil || !bytes.Equal(data, repeated) {
-		t.Fatal("unchanged device snapshot was rewritten", err)
+	if err != nil || bytes.Equal(data, repeated) {
+		t.Fatal("snapshot freshness was not refreshed", err)
 	}
 }

@@ -22,7 +22,7 @@ type DesktopEntryStatus struct {
 
 type desktopEntries struct {
 	mu      sync.Mutex
-	wake    chan struct{}
+	wake    chan bool
 	done    chan struct{}
 	status  DesktopEntryStatus
 	cleanup []func()
@@ -58,10 +58,21 @@ func (a *App) DesktopEntries() DesktopEntryStatus {
 	return a.entries.status
 }
 
-func (a *App) wakeEntries() {
+func (a *App) wakeEntries(showWindow ...bool) {
+	show := len(showWindow) == 0 || showWindow[0]
 	select {
-	case a.entries.wake <- struct{}{}:
+	case a.entries.wake <- show:
 	default:
+		if show {
+			select {
+			case <-a.entries.wake:
+			default:
+			}
+			select {
+			case a.entries.wake <- true:
+			default:
+			}
+		}
 	}
 }
 
@@ -89,22 +100,42 @@ func (a *App) startNativeEntries() {
 		defer close(a.entries.done)
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
+		lastDevicePublish := time.Time{}
 		for {
 			activate := false
 			select {
 			case <-a.ctx.Done():
 				return
-			case <-a.entries.wake:
-				activate = true
+			case activate = <-a.entries.wake:
 			case <-ticker.C:
 			}
 			if a.ctx.Err() != nil {
 				return
 			}
+			if time.Since(lastDevicePublish) >= 15*time.Second {
+				if devices, err := a.core.Devices(a.ctx); err == nil {
+					if publishErr := publishNativeShareDevices(a.dataDir, devices); publishErr != nil {
+						a.nativeEntryError(publishErr)
+					}
+					lastDevicePublish = time.Now()
+				}
+			}
 			var draft coreapp.SendDraft
 			showDraft := false
 			count := 0
 			var consumeErr error
+			if workspace, err := a.core.Workspace(); err == nil {
+				terminal := make(map[string]bool)
+				for _, item := range workspace.Queue {
+					switch item.State {
+					case "completed", "cancelled", "expired":
+						terminal[item.RequestID] = true
+					}
+				}
+				for _, root := range nativeShareRoots(a.dataDir) {
+					_, _ = reapShareActivations(root, terminal)
+				}
+			}
 			consume := func(activation fileActivation) error {
 				if err := a.workspaceAvailable(); err != nil {
 					return err
@@ -115,7 +146,15 @@ func (a *App) startNativeEntries() {
 						return err
 					}
 					_, err = a.core.Enqueue(coreapp.EnqueueRequest{RequestID: resolved.RequestID, PeerID: resolved.PeerID, Paths: resolved.Paths, WaitForPeer: resolved.WaitForPeer})
-					return err
+					if err != nil {
+						return err
+					}
+					for _, root := range nativeShareRoots(a.dataDir) {
+						if err := publishNativeShareReceipt(root, resolved.RequestID); err != nil {
+							return err
+						}
+					}
+					return errActivationRetained
 				}
 				showDraft = true
 				var mergeErr error

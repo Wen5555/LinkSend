@@ -109,13 +109,81 @@ func TestShareActivationJournalIsPersistentAndIdempotent(t *testing.T) {
 	seen := 0
 	n, err := consumeActivations(profile, func(saved fileActivation) error {
 		seen++
-		if saved.Version != 2 || saved.RequestID != request.RequestID || saved.PeerID != request.PeerID || saved.Source != "windows_share" || !saved.WaitForPeer || len(saved.Paths) != 1 || saved.Paths[0] != path {
+		if saved.Version != 2 || saved.RequestID != request.RequestID || saved.PeerID != request.PeerID || saved.Source != "windows_share" || saved.WaitForPeer || len(saved.Paths) != 1 || saved.Paths[0] != path {
 			t.Fatalf("wrong share activation: %+v", saved)
 		}
 		return nil
 	})
 	if err != nil || n != 1 || seen != 1 {
 		t.Fatal(n, seen, err)
+	}
+}
+
+func TestActivationJournalFailureDoesNotStarveLaterRequest(t *testing.T) {
+	profile, source := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "file.txt")
+	if err := os.WriteFile(path, []byte("share"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	bad := fileActivation{RequestID: "00000000000000000000000000000000", PeerID: "revoked", Paths: []string{path}, Source: "windows_share"}
+	good := fileActivation{RequestID: "11111111111111111111111111111111", PeerID: "trusted", Paths: []string{path}, Source: "windows_share"}
+	if err := stageShareActivation(profile, bad, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := stageShareActivation(profile, good, ""); err != nil {
+		t.Fatal(err)
+	}
+	seenGood := false
+	n, err := consumeActivations(profile, func(saved fileActivation) error {
+		if saved.PeerID == "revoked" {
+			return errors.New("PEER_BLOCKED")
+		}
+		seenGood = true
+		return nil
+	})
+	if n != 1 || err == nil || !seenGood {
+		t.Fatalf("count=%d err=%v seenGood=%v", n, err, seenGood)
+	}
+	if _, statErr := os.Stat(filepath.Join(profile, "desktop-activations-v1", bad.RequestID+".json")); statErr != nil {
+		t.Fatal("failed request was not preserved", statErr)
+	}
+}
+
+func TestShareActivationRetainedUntilTerminalReap(t *testing.T) {
+	profile, source := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "file.txt")
+	if err := os.WriteFile(path, []byte("share"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := fileActivation{RequestID: "22222222222222222222222222222222", PeerID: "peer", Paths: []string{path}, Source: "windows_share"}
+	if err := stageShareActivation(profile, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	owned := filepath.Join(profile, "share-owned-v1", request.RequestID)
+	if err := os.MkdirAll(owned, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := consumeActivations(profile, func(fileActivation) error { return errActivationRetained }); err != nil || n != 1 {
+		t.Fatalf("retained intake: %d %v", n, err)
+	}
+	entry := filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")
+	if _, err := os.Stat(entry); err != nil {
+		t.Fatal("source authorization journal was removed before terminal state", err)
+	}
+	if err := publishNativeShareReceipt(profile, request.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := reapShareActivations(profile, map[string]bool{request.RequestID: true}); err != nil || n != 1 {
+		t.Fatalf("terminal reap: %d %v", n, err)
+	}
+	if _, err := os.Stat(entry); !os.IsNotExist(err) {
+		t.Fatal("terminal journal retained", err)
+	}
+	if _, err := os.Stat(owned); !os.IsNotExist(err) {
+		t.Fatal("owned temporary source retained", err)
+	}
+	if _, err := os.Stat(filepath.Join(profile, "native-share-v1", "accepted", request.RequestID)); !os.IsNotExist(err) {
+		t.Fatal("accepted receipt retained", err)
 	}
 }
 

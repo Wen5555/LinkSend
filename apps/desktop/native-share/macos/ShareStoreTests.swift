@@ -12,6 +12,16 @@ enum ShareStoreTests {
             .write(to: root.appendingPathComponent("native-share-v1/devices.json"))
         let store = try ShareStore(container: root)
         guard try store.devices().first?.id == "peer" else { fatalError("device snapshot") }
+        guard try ShareStore.resolveWaitForPeer(reachable: true, confirmed: false) == false else {
+            fatalError("online wait")
+        }
+        do {
+            _ = try ShareStore.resolveWaitForPeer(reachable: false, confirmed: false)
+            fatalError("offline confirmation")
+        } catch ShareStoreError.invalidSelection {}
+        guard try ShareStore.resolveWaitForPeer(reachable: false, confirmed: true) else {
+            fatalError("offline wait")
+        }
         let request = "0123456789abcdef0123456789abcdef"
         let source = root.appendingPathComponent("fixture.txt")
         try Data("fixture".utf8).write(to: source)
