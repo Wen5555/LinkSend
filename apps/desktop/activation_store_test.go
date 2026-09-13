@@ -223,9 +223,7 @@ func TestDiscardNativeShareRemovesUnqueuedRequest(t *testing.T) {
 	if err := stageShareActivation(profile, request, ""); err != nil {
 		t.Fatal(err)
 	}
-	app := NewApp()
-	app.dataDir = profile
-	if err := app.DiscardNativeShare(request.RequestID); err != nil {
+	if err := discardNativeShare(profile, request.RequestID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")); !os.IsNotExist(err) {

@@ -1,3 +1,8 @@
+## 2026-09-14 E3-C3 共享接管竞态与刷新
+
+- 放弃请求与 Enqueue 共用串行边界，队列已有 request_id 时拒绝并要求在队列取消；资源清理失败继续保留 journal。
+- Windows 按实际读取字节流式复制临时源，源增长受 16 GiB 总预算约束，WriteThrough + Flush(true)，失败清理半成品。
+- 两端打开共享面板先静默唤醒 owner；Windows 等待新鲜快照超时后显示状态未知和刷新入口。Mac 定向编译与测试作业 /tmp/codex-ssh/linksend-e3-c3-mac-swift-20260913T172620Z PASS。
 ## 2026-09-14 E3-C2 原生共享闭环
 
 - 修正 Windows package root/manifest/wake 路径；在线目标按钮直接提交，离线等待显式确认；失败可重试。临时来源采用 16 GiB 实际累计限额、长度校验、Flush(true) 与失败清理。

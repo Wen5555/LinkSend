@@ -27,6 +27,24 @@ internal static class ShareJournal
 
     internal static List<ShareDevice> ReadDevices(string profileRoot)
     {
+        var snapshot = ReadSnapshot(profileRoot);
+        var fresh = SnapshotFresh(snapshot);
+        return snapshot.devices.Where(device => !string.IsNullOrWhiteSpace(device.id)
+            && !string.IsNullOrWhiteSpace(device.name))
+            .Select(device => device with { reachable = fresh && device.reachable }).ToList();
+    }
+
+    internal static bool DevicesFresh(string profileRoot) => SnapshotFresh(ReadSnapshot(profileRoot));
+
+    private static bool SnapshotFresh(DeviceSnapshot snapshot)
+    {
+        if (!DateTimeOffset.TryParse(snapshot.generated_at, out var generated)) return false;
+        var age = DateTimeOffset.UtcNow - generated.ToUniversalTime();
+        return age >= TimeSpan.FromSeconds(-5) && age <= TimeSpan.FromMinutes(1);
+    }
+
+    private static DeviceSnapshot ReadSnapshot(string profileRoot)
+    {
         var path = Path.Combine(profileRoot, "native-share-v1", "devices.json");
         if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidDataException("DEVICE_SNAPSHOT_REPARSE_POINT");
@@ -37,11 +55,7 @@ internal static class ShareJournal
             ?? throw new InvalidDataException("DEVICE_SNAPSHOT_INVALID");
         if (snapshot.version != 1 || snapshot.devices.Count > 256)
             throw new InvalidDataException("DEVICE_SNAPSHOT_VERSION");
-        var fresh = DateTimeOffset.TryParse(snapshot.generated_at, out var generated)
-            && DateTimeOffset.UtcNow - generated.ToUniversalTime() <= TimeSpan.FromMinutes(1);
-        return snapshot.devices.Where(device => !string.IsNullOrWhiteSpace(device.id)
-            && !string.IsNullOrWhiteSpace(device.name))
-            .Select(device => device with { reachable = fresh && device.reachable }).ToList();
+        return snapshot;
     }
 
     internal static void Persist(string profileRoot, ShareRequest request)

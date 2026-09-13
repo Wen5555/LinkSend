@@ -26,3 +26,9 @@ schema 2 journal 入队后继续保留，进程重启会重新验证来源并幂
 Windows 安装器恢复同一 package root，manifest、宿主和 Share Target 路径一致；卸载显式删除安装器拥有的 Share Target 文件和 Logo。在线设备按钮直接提交，离线目标仍需勾选确认；错误不会调用 ReportError 锁死面板。临时目录/Temporary 属性或无稳定路径的 StorageFile 强制复制，累计上限 16 GiB，复制后校验长度并 Flush(true)，入队前失败会清理 owned 目录。
 
 Go 对清理失败保留 journal，主界面列出未入队请求并提供明确放弃入口。Mac 使用 NSWorkspace.openApplication(arguments: --native-share-background, activates: false) 覆盖冷启动，解析带小数秒的 RFC3339Nano；provider 调用并发上限 4，按实际复制 chunk 扣 16 GiB 总预算。定向 Mac 作业 /tmp/codex-ssh/linksend-e3-c2-mac-swift-20260913T171611Z 通过。
+
+## E3-C3 正确性补丁
+
+放弃未入队请求与后台消费使用同一 consumeMu 串行边界，并在释放来源前查询持久队列列；一旦 request_id 已存在于队列，用户必须在发送队列取消，不能再由系统共享错误入口删除。owned 清理或 journal 删除失败仍保留可恢复记录。
+
+Windows 临时来源改为 1 MiB 流式接管，按实际读取字节执行累计上限，源增长也不能越过 16 GiB；写入采用 WriteThrough、FlushAsync 和 Flush(true)，失败删除未完成文件。面板先静默唤醒 owner 并等待最多 2 秒的新鲜设备快照；超时显示状态未知及刷新入口，不把旧快照当离线。Mac 同样先后台启动 owner，再读取设备并提供刷新。Mac 定向作业 /tmp/codex-ssh/linksend-e3-c3-mac-swift-20260913T172620Z PASS。

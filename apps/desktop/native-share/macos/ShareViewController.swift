@@ -6,6 +6,7 @@ final class ShareViewController: NSViewController {
     private let status = NSTextField(wrappingLabelWithString: "正在读取已配对设备…")
     private let sendButton = NSButton(title: "发送", target: nil, action: nil)
     private let addDeviceButton = NSButton(title: "添加设备…", target: nil, action: nil)
+    private let refreshButton = NSButton(title: "刷新", target: nil, action: nil)
     private let waitOffline = NSButton(checkboxWithTitle: "设备离线时等待其上线", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
     private var devices: [ShareDevice] = []
@@ -24,21 +25,46 @@ final class ShareViewController: NSViewController {
         status.frame = NSRect(x: 24, y: 66, width: 372, height: 46)
         cancelButton.target = self; cancelButton.action = #selector(cancel)
         addDeviceButton.target = self; addDeviceButton.action = #selector(addDevice)
+        refreshButton.target = self; refreshButton.action = #selector(loadDevices)
         addDeviceButton.frame = NSRect(x: 24, y: 20, width: 110, height: 34)
+        refreshButton.frame = NSRect(x: 140, y: 20, width: 68, height: 34)
         cancelButton.frame = NSRect(x: 214, y: 20, width: 86, height: 34)
         sendButton.target = self; sendButton.action = #selector(send)
         sendButton.keyEquivalent = "\r"
         sendButton.isEnabled = false
         sendButton.frame = NSRect(x: 310, y: 20, width: 86, height: 34)
-        for control in [title, devicePicker, waitOffline, status, addDeviceButton, cancelButton, sendButton] { view.addSubview(control) }
+        for control in [title, devicePicker, waitOffline, status, addDeviceButton, refreshButton, cancelButton, sendButton] { view.addSubview(control) }
         loadDevices()
     }
 
-    private func loadDevices() {
+    @objc private func loadDevices() {
         do {
             let store = try ShareStore()
+            self.store = store
+            status.stringValue = "正在唤醒 LinkSend 并刷新设备状态…"
+            let app = Bundle.main.bundleURL
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            configuration.arguments = ["--native-share-background"]
+            NSWorkspace.shared.openApplication(at: app, configuration: configuration) { [weak self] _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self?.showDevices(store)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard self?.devices.isEmpty == true else { return }
+                self?.status.stringValue = "设备状态尚未刷新。请确认 LinkSend 后台已启动，然后点击“刷新”。"
+            }
+        } catch {
+            status.stringValue = "设备状态暂不可用。请打开 LinkSend 后点击“刷新”。"
+        }
+    }
+
+    private func showDevices(_ store: ShareStore) {
+        do {
             let devices = try store.devices()
-            self.store = store; self.devices = devices
+            self.devices = devices
             devicePicker.removeAllItems()
             for device in devices {
                 devicePicker.addItem(withTitle: device.name + (device.reachable ? "" : "（离线，加入队列）"))
@@ -51,9 +77,7 @@ final class ShareViewController: NSViewController {
             sendButton.isEnabled = count > 0
             waitOffline.isEnabled = devices.first.map { !$0.reachable } ?? false
             waitOffline.state = .off
-        } catch {
-            finish(error: error)
-        }
+        } catch { status.stringValue = "设备状态尚未刷新。请确认 LinkSend 后台已启动，然后点击“刷新”。" }
     }
 
     @objc private func cancel() {

@@ -79,7 +79,10 @@ final class ShareStore {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let generated = formatter.date(from: snapshot.generated_at)
             ?? ISO8601DateFormatter().date(from: snapshot.generated_at)
-        let fresh = generated.map { Date().timeIntervalSince($0) <= 60 } ?? false
+        let fresh = generated.map {
+            let age = Date().timeIntervalSince($0)
+            return age >= -5 && age <= 60
+        } ?? false
         let devices = snapshot.devices.filter { !$0.id.isEmpty && !$0.name.isEmpty }.map {
             ShareDevice(id: $0.id, name: $0.name, reachable: fresh && $0.reachable)
         }

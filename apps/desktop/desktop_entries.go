@@ -29,12 +29,13 @@ type NativeSharePending struct {
 }
 
 type desktopEntries struct {
-	mu      sync.Mutex
-	wake    chan bool
-	done    chan struct{}
-	status  DesktopEntryStatus
-	cleanup []func()
-	closed  bool
+	mu        sync.Mutex
+	consumeMu sync.Mutex
+	wake      chan bool
+	done      chan struct{}
+	status    DesktopEntryStatus
+	cleanup   []func()
+	closed    bool
 }
 
 func desktopProfileDirectory() string {
@@ -133,6 +134,7 @@ func (a *App) startNativeEntries() {
 			count := 0
 			var consumeErr error
 			pending := make(map[string]NativeSharePending)
+			a.entries.consumeMu.Lock()
 			if workspace, err := a.core.Workspace(); err == nil {
 				terminal := make(map[string]bool)
 				for _, item := range workspace.Queue {
@@ -179,6 +181,7 @@ func (a *App) startNativeEntries() {
 					consumeErr = err
 				}
 			}
+			a.entries.consumeMu.Unlock()
 			if consumeErr != nil || count > 0 {
 				a.nativeEntryError(consumeErr)
 			}
@@ -210,8 +213,27 @@ func (a *App) DiscardNativeShare(requestID string) error {
 	if !activationName.MatchString(requestID + ".json") {
 		return errors.New("SYSTEM_SHARE_INVALID: request ID")
 	}
+	a.entries.consumeMu.Lock()
+	defer a.entries.consumeMu.Unlock()
+	workspace, err := a.core.Workspace()
+	if err != nil {
+		return err
+	}
+	for _, item := range workspace.Queue {
+		if item.RequestID == requestID {
+			return errors.New("SYSTEM_SHARE_ALREADY_QUEUED: 请在发送队列中取消该任务")
+		}
+	}
+	if err := discardNativeShare(a.dataDir, requestID); err != nil {
+		return err
+	}
+	a.wakeEntries(false)
+	return nil
+}
+
+func discardNativeShare(dataDir, requestID string) error {
 	removed := 0
-	for _, root := range nativeShareRoots(a.dataDir) {
+	for _, root := range nativeShareRoots(dataDir) {
 		n, err := reapShareActivations(root, map[string]bool{requestID: true})
 		if err != nil {
 			return err
@@ -221,7 +243,6 @@ func (a *App) DiscardNativeShare(requestID string) error {
 	if removed == 0 {
 		return errors.New("SYSTEM_SHARE_NOT_FOUND")
 	}
-	a.wakeEntries(false)
 	return nil
 }
 
