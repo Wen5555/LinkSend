@@ -4,7 +4,7 @@
 
 macOS App Group 同时承载设备快照、请求元数据和仅在临时表示场景生成的 owned 文件。原位文件以 security-scoped bookmark 交给宿主，宿主解析后保持 scope；Windows 当前只交接 broker 已验证且有绝对路径的普通文件。两端都不通过适配器 IPC 传正文。后台唤起分别使用受包身份约束的宿主进程和注册 URL；失败时请求仍已持久化，下次 LinkSend 启动继续消费。正式签名安装与冷启动结果仍需 E3/E5 准确包验证。
 
-2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
+2026-09-14 E4-03：自动剪贴板 wire、原生读写和授权交集已有源码候选；实现与验证边界见 [E4行为证据](evidence/DESKTOP-E4-CLIPBOARD-BEHAVIOR.md)。
 
 E0-ADR-review-v1提案将剪贴板并行解码与唯一原生提交owner分开：origin sequence用于来源去重，Lamport用于因果排序，OS generation加应用revision门闩防止两个候选共用过时检查。lease由接收端单调期限管理；不以应用锁声称macOS全系统剪贴板CAS已实现。
 
@@ -47,6 +47,10 @@ WSS 信令：设备/会话/候选
 逻辑任务在恢复过程中保留 `task_id`，每次执行创建新 `attempt_id`，每次连接创建新 `session_id`，ICE generation 只在该 session 内有效；完整任务快照通过单调 `revision` 防止旧回调覆盖。公开状态为 Preparing、AwaitingAcceptance、Transferring、Verifying、Paused、Recovering、Completed、Rejected、Cancelled、Failed。Completed 要求接收端唯一块验证、提交成功以及 completed/confirmed 双边终态完成。
 
 E4 的 direct session owner 以 peer ID 和双方当前授权 generation 为键短时保留已认证 QUIC。一个文件任务对应一个双向 stream；连接两端都保持 AcceptStream owner，因此最初的响应方可以在同一连接上发起反向文件流。取消或 reset 只回收该 stream；授权撤销、路径/连接失败、3 秒空闲、空闲网络快照变化或进程退出关闭池中连接；活动连接只在真实 path watcher 失效时关闭。每 peer 仍至多一个活动文件发送流，不开放无界并发。复用要求 connect_request 与 connect_response 双方显式声明 session_reuse，任一端未声明时沿用单操作连接关闭。
+
+同一复用连接另有唯一的剪贴板单向流 owner，与文件双向流 owner 并行。接收方续签 lease，发送方只在持有对方有效 lease 且本机 send grant、对方 receive grant 对应时读取一次原生剪贴板并发送。正文到达后先锁定 header 候选和原始 deadline，再占用全局两个 receive slot 之一读取/验证正文；最终 Commit 在状态机锁内重验 application revision 与 OS generation，并在 grant→trust 的一致锁序下重验 peer generation 和 receive grant，最后调用平台 CAS 写入。单流失败或过期不关闭文件连接；只要任一剪贴板方向 ready，3 秒文件空闲回收不会关闭连接。暂停或全部方向失效会恢复空闲回收。
+
+桌面 watcher 使用容量 1 的 latest-only 变化队列，发送 owner 串行处理；本机一次复制只准备一个 origin 事件，再绑定各 peer lease。首次启动、授权变更、每 5 秒和变化到达前会尝试为已授权 peer 建立认证会话，不创建文件 Task。会话建立后的 lease 以当前系统 generation 为 baseline，因此离线或尚未建连期间的旧复制不会补发。
 
 QUIC 成功终态使用 `completed → confirmed → confirmed_ack` 显式闭环，并兼容旧端以 EOF/application code 0 表示已读确认。终态完成后标准 QUIC close 仍发送，但 quic-go draining 和 endpoint 回收在后台进行；任何非零 close、reset、deadline 或普通传输阶段的 close 都不能转换为成功。响应端在发送 `connect_response` 前先注册固定身份的 QUIC listener，避免首个 Initial 因监听窗口尚未建立而等待 PTO 重传。
 

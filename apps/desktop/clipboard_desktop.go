@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"runtime"
+	"time"
 
 	"github.com/Wen5555/LinkSend/apps/desktop/nativeclipboard"
 	coreapp "github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -41,7 +43,17 @@ func (a *App) SetClipboardGrant(patch coreapp.ClipboardGrantPatch) (coreapp.Clip
 		return coreapp.ClipboardGrant{}, err
 	}
 	a.refreshClipboardWatch()
+	go a.ensureClipboardSessions()
 	return grant, nil
+}
+
+func (a *App) ensureClipboardSessions() {
+	if a.ctx == nil || a.core == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
 }
 
 func (a *App) ClipboardWatcher() ClipboardWatchStatus {
@@ -117,6 +129,63 @@ func (a *App) recordClipboardChange(change nativeclipboard.Change) {
 		a.clipboardLast = change
 	}
 	a.clipboardMu.Unlock()
+	if a.clipboardChanges != nil {
+		select {
+		case a.clipboardChanges <- change:
+		default:
+			select {
+			case <-a.clipboardChanges:
+			default:
+			}
+			select {
+			case a.clipboardChanges <- change:
+			default:
+			}
+		}
+	}
+}
+
+func (a *App) startClipboardDelivery() {
+	if a.clipboardChanges != nil || a.ctx == nil || a.core == nil {
+		return
+	}
+	a.clipboardChanges = make(chan nativeclipboard.Change, 1)
+	a.clipboardDone = make(chan struct{})
+	go func() {
+		defer close(a.clipboardDone)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+		_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
+		cancel()
+		for {
+			select {
+			case <-a.ctx.Done():
+				return
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+				_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
+				cancel()
+			case change := <-a.clipboardChanges:
+				ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+				_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
+				cancel()
+				kinds := make([]clipboardsync.Kind, 0, 3)
+				if change.Link || change.Text {
+					kinds = append(kinds, clipboardsync.Link)
+				}
+				if change.Image {
+					kinds = append(kinds, clipboardsync.Image)
+				}
+				if change.Text {
+					kinds = append(kinds, clipboardsync.Text)
+				}
+				if len(kinds) > 0 {
+					_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: kinds})
+				}
+			}
+		}
+	}()
 }
 
 func (a *App) stopClipboardWatch() {
@@ -162,6 +231,9 @@ func (a *App) setClipboardSuspended(reason string, suspended bool) {
 	a.clipboardLast = nativeclipboard.Change{}
 	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused
 	a.clipboardMu.Unlock()
+	if a.core != nil {
+		a.core.ResetClipboard(paused, nativeclipboard.Generation())
+	}
 	if paused {
 		a.stopClipboardWatchOwned()
 	} else {
@@ -169,9 +241,14 @@ func (a *App) setClipboardSuspended(reason string, suspended bool) {
 	}
 }
 
-func (a *App) SetClipboardPaused(paused bool) { a.setClipboardSuspended("user", paused) }
-func (a *App) pauseClipboardWatch()           { a.setClipboardSuspended("sleep", true) }
-func (a *App) resumeClipboardWatch()          { a.setClipboardSuspended("sleep", false) }
+func (a *App) SetClipboardPaused(paused bool) {
+	a.setClipboardSuspended("user", paused)
+	if a.background != nil && a.background.tray != nil {
+		a.background.tray.SetClipboardPaused(paused)
+	}
+}
+func (a *App) pauseClipboardWatch()  { a.setClipboardSuspended("sleep", true) }
+func (a *App) resumeClipboardWatch() { a.setClipboardSuspended("sleep", false) }
 
 func (a *App) closeClipboardOwner() {
 	a.clipboardOwnerMu.Lock()
@@ -180,5 +257,8 @@ func (a *App) closeClipboardOwner() {
 	a.clipboardClosed = true
 	a.clipboardLast = nativeclipboard.Change{}
 	a.clipboardMu.Unlock()
+	if a.core != nil {
+		a.core.ResetClipboard(true, nativeclipboard.Generation())
+	}
 	a.stopClipboardWatchOwned()
 }

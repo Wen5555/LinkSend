@@ -1,4 +1,4 @@
-2026-09-14 E4会话与权限候选：同peer和authorization generation的QUIC文件连接仅在双方显式session_reuse时复用独立文件流，旧端维持单操作关闭；入站复用流继续应用设备接收目录覆盖。自动剪贴板权限默认关闭并按peer/方向/类型分别使用revision CAS；正文与lease wire仍待E4-03。
+2026-09-14 E4-03源码候选：同peer和authorization generation的认证QUIC会话在双方显式session_reuse时并行承载文件双向流和自动剪贴板单向流；旧端维持单操作关闭。自动剪贴板权限默认关闭并按peer/方向/text|link|image分别使用revision CAS；接收方预签10秒lease，`LSCB01`有界wire、OS generation CAS、origin sequence/Lamport、防回环、两路接收资源上限和独立托盘暂停已接线。loopback QUIC、Windows隔离原生写入测试与Mac命名pasteboard只证明对应边界，物理Win↔Mac用户剪贴板仍留E5。
 
 # LinkSend protocol V1 implementation specification
 2026-09-14 E3 源码候选：Windows `windows.shareTarget` 与 macOS `com.apple.share-services` 使用原生小面板选择真实已配对设备。两端把有界路径/bookmark 元数据以本机 `request_id` 持久交给 Go，Go 再经现有授权代际和幂等队列派发；文件正文不经 JavaScript、信令或本地 IPC。macOS 只在系统给出临时表示时于回调期限内复制，原位文件使用 security-scoped bookmark。正式 App Group 和 Windows package identity 的签名安装实测按用户要求暂缓，不将无签名注册或模拟交接记为通过；文件 wire 仍为 V1。

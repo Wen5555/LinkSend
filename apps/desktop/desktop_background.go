@@ -110,6 +110,9 @@ func (a *App) attachBackground(host *application.App, window *application.Webvie
 				}
 			}()
 		},
+		PauseClipboard: func(paused bool) {
+			go a.SetClipboardPaused(paused)
+		},
 		Quit: func() { host.Quit() },
 	})
 	b.status.TrayAvailable = b.tray != nil

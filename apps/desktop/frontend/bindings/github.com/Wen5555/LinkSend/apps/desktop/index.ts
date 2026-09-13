@@ -9,6 +9,7 @@ export {
 export type {
     BackgroundOptions,
     BackgroundStatus,
+    ClipboardWatchStatus,
     DesktopEntryStatus,
     DesktopPreferences,
     DesktopStatus,

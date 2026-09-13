@@ -1,5 +1,13 @@
 # Protocol
 
+## 2026-09-14 E4 自动剪贴板 wire
+
+只有双方在连接请求与响应中显式声明 `session_reuse` 时，已认证 QUIC 会话才接受自动剪贴板单向流。每条单向流以 ASCII magic `LSCB01`、4-byte big-endian JSON header 长度、最多 8 KiB header 和可选原始 payload 组成；消息类型仅为 `lease` 或 `event`。文件双向流和原 V1 文件帧不变，剪贴板正文不进入 WSS、信令、JavaScript IPC、HTTP 或第三方中继。
+
+接收方为指定 peer identity、QUIC session ID、authorization generation 和允许的 `text|link|image` 集合预签发 lease。lease 从接收方签发时起固定有效 10 秒，每 7 秒可签发新的独立 lease；续租不会延长旧 event。每个 peer/session 每方向最多保留两个 lease，重连、暂停、睡眠、锁屏、撤销、generation 变化和 Shutdown 清除旧 lease。event 必须在正文读取前通过 lease、session、generation、类型、origin、origin sequence、Lamport、digest 和首帧期限检查；正文读取 deadline 继续使用该原始 lease deadline，读完后再次验证 digest、应用 revision、系统剪贴板 generation、授权和稳定全序。
+
+文字和链接正文最多 64 KiB，图片 PNG 最多 32 MiB；header 声明长度、实际长度、UTF-8/URL/PNG 与图片尺寸在对应层复核。一个本机复制事件 fan-out 给多个 peer 时复用同一 origin sequence 与 Lamport，各 peer 的 lease 不同，因此 event digest 不同。接收写入成功后的原生通知只按新 OS generation 与 payload digest 抑制一次；用户随后复制相同内容产生的新 generation 仍可发送。当前实现每个会话分别串行发送，接收正文/解码全局最多两路。
+
 ## 2026-09-13 membership_v2 与 LAN pairing 控制契约
 
 文件数据协议、QUIC ALPN 和 `protocol_version=1` 保持不变；成员授权控制面新增必需能力 `membership_version=2`。HTTP/WSS 客户端发送 `X-LinkSend-Membership: 2`，旧客户端对同意、列表、撤销和 WSS 得到 `VERSION_INCOMPATIBLE`，不能继续使用无 incarnation 的授权。

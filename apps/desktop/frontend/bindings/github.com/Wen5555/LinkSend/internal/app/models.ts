@@ -20,6 +20,24 @@ export interface AcceptIncomingDefaultResult {
     "message"?: string;
 }
 
+export interface ClipboardGrant {
+    "peer_id": string;
+    "direction": string;
+    "kind": string;
+    "enabled": boolean;
+    "revision": number;
+    "updated_at": string;
+    "authorization_generation": number;
+}
+
+export interface ClipboardGrantPatch {
+    "peer_id": string;
+    "direction": string;
+    "kind": string;
+    "enabled": boolean;
+    "expected_revision": number;
+}
+
 export interface ContentActionResult {
     "task_id": string;
     "action": string;

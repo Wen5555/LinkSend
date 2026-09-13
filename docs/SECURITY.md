@@ -25,7 +25,7 @@ Windows Share Target 只接受 `StorageItems` 中能由 broker 打开且具有�
 
 Windows 上 `x/net/ipv4.ControlMessage` 不提供有效源地址选择，因此发现发送使用最多 32 个临时 source-bound UDP socket；每个 socket绑定具体本地 IPv4、发送后在同一 socket有界接收回复。Darwin/Linux 保留 pktinfo/cmsg。组播、广播、受限单播与 TLS 控制分别降级，单个 provider 失败不关闭其余路径；peer、route、响应表和握手 goroutine均有固定上限。
 
-2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
+2026-09-14 E4-03：自动剪贴板正文只通过固定身份的 TLS 1.3 QUIC 传输；权限、lease、generation、原生 CAS 与资源边界已有源码和自动测试候选，物理双机用户剪贴板仍未验收。
 
 E0-ADR-review-v1要求未来删除先使目标peer的全部既有组/LAN grant generation失效，禁止授权回退；新配对不恢复旧LAN/免确认/剪贴板。剪贴板提交门闩内重验授权、lease期限与OS/application generation。以上是待实现契约，不是当前M5安全能力声明。
 
@@ -93,3 +93,9 @@ M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、�
 任务库 schema 9 按 peer、authorization generation、方向（send/receive）和内容类型（text/link/image）分别保存 revision CAS 授权。没有记录或代际不匹配等同关闭；新配对、解除阻止或重新加入不会继承旧授权。启用前重新验证当前可信 peer grant，启用提交与撤销使用同一门闩；本机阻止、成员移除或授权 generation 变化使旧授权立即失效，即使清理行失败也不能恢复。该表只保存权限和时间戳，不保存剪贴板正文、图片或系统格式数据。
 
 原生监听器默认不注册。Windows `WM_CLIPBOARDUPDATE` 回调和 macOS `changeCount` 轮询只生成本机 sequence 与格式类别，不在系统回调中打开剪贴板、解码图片、访问文件 URL 或进入 JavaScript。睡眠、锁屏、撤销及退出会注销监听并清空最近变化基线；唤醒或解锁只观察后续变化。
+
+正文事件必须同时满足双方按方向和类型启用的授权交集，并绑定固定 peer、当前 authorization generation、当前 QUIC session 和接收方预签的 10 秒 lease。首帧、完整正文和最终原生写入都不能越过签发时的 deadline；续租不能给旧事件续命。撤销与最终写入采用相同的 grant→trust 锁顺序，因此撤销提交后不能跨过最终 gate 落板。暂停、锁屏、睡眠、重连或 generation 变化会清空 lease 和 readiness。
+
+event digest 覆盖 lease ID、origin device/boot/sequence、Lamport、类型、发送端 OS generation、正文长度与正文。接收方在读取大正文前验证 header，并在读取后再次验证 digest、状态 revision、OS generation 和稳定顺序。Windows 使用本应用有效 HWND 打开剪贴板，在分配和验证数据后执行 generation CAS、deadline 复核、`EmptyClipboard` 与 `SetClipboardData`；macOS 在解码后紧邻 mutation 复核 `changeCount` 与 deadline，但 NSPasteboard 不提供跨进程原子 CAS，仍存在检查与写入之间的系统级窄竞态。该限制必须保留在验收记录中。
+
+文字/链接 64 KiB、PNG 32 MiB，并复用 40MP/尺寸和 URL/UTF-8 校验。header 最多 8 KiB，每方向最多两个 lease，全局最多两个接收正文/解码槽；正文只驻留受限内存，不写入临时文件。最坏情况下两个 32 MiB 图片正文及解码对象可同时存在，因此物理平台内存矩阵仍需 E5 测量。原生回写通知按 generation 与 payload digest 仅抑制一次，防止回环同时允许用户真实重复复制相同内容。

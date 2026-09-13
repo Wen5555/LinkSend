@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
-import type { DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
+import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
 import { formatPairingCodeInput, shouldClearPairingCode } from '../connection';
 import { deviceName } from '../presentation';
@@ -57,7 +57,34 @@ function DeviceRow({ device, run, op, available }: { device: DeviceInfo; run: Co
 function DeviceEditor({ device, run, op }: { device: DeviceInfo; run: CommandRunner; op: string }) {
   const [profile, setProfile] = useState<DeviceProfile>({ ...device.profile, peer_id: device.id });
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [clipboardGrants, setClipboardGrants] = useState<Record<string, ClipboardGrant>>({});
+  const [clipboardLoading, setClipboardLoading] = useState(true);
+  const [clipboardError, setClipboardError] = useState('');
   const update = (patch: Partial<DeviceProfile>) => setProfile(current => ({ ...current, ...patch }));
+  useEffect(() => {
+    let current = true;
+    setClipboardLoading(true);
+    setClipboardError('');
+    void Backend.ClipboardGrants(device.id).then(grants => {
+      if (current) setClipboardGrants(Object.fromEntries((grants ?? []).map(grant => [`${grant.direction}/${grant.kind}`, grant])));
+    }).catch(cause => {
+      if (current) setClipboardError(String(cause));
+    }).finally(() => {
+      if (current) setClipboardLoading(false);
+    });
+    return () => { current = false; };
+  }, [device.id]);
+  const setClipboardGrant = (direction: 'send' | 'receive', kind: 'text' | 'link' | 'image', enabled: boolean) => {
+    const key = `${direction}/${kind}`, current = clipboardGrants[key];
+    void run(`clipboard-${device.id}-${direction}-${kind}`, async () => {
+      const saved = await Backend.SetClipboardGrant({ peer_id: device.id, direction, kind, enabled, expected_revision: current?.revision ?? 0 });
+      setClipboardGrants(previous => ({ ...previous, [key]: saved }));
+      setClipboardError('');
+    }, enabled ? '自动剪贴板权限已开启' : '自动剪贴板权限已关闭', cause => {
+      setClipboardError(String(cause));
+      void Backend.ClipboardGrants(device.id).then(grants => setClipboardGrants(Object.fromEntries((grants ?? []).map(grant => [`${grant.direction}/${grant.kind}`, grant]))));
+    });
+  };
   return <div className="device-editor"><form onSubmit={event => {
     event.preventDefault();
     void run(`profile-${device.id}`, async () => setProfile(await Backend.SaveDeviceProfile(profile)), '设备偏好已保存');
@@ -71,7 +98,10 @@ function DeviceEditor({ device, run, op }: { device: DeviceInfo; run: CommandRun
     {device.profile.revision !== profile.revision && <p className="queue-notice">设备偏好已在后台更新。保存冲突时，请收起后重新打开设置。</p>}
     <button className="primary" disabled={!!op}>保存设备偏好</button>
   </form>
-    <div className="device-permissions"><label className="remember-choice"><input type="checkbox" checked={device.always_accept && !device.blocked} disabled={!!op || !device.trusted || device.blocked} onChange={event => {
+    <div className="device-permissions"><section className="clipboard-permissions" aria-labelledby={`clipboard-${device.id}`}><div><strong id={`clipboard-${device.id}`}>自动剪贴板</strong><p className="field-help">只同步启用的方向与类型。双方对应方向均开启且在线后生效；离线、锁屏或暂停期间的内容不会补发。</p></div>
+      {clipboardLoading ? <p className="field-help">正在读取权限…</p> : <div className="clipboard-grant-grid">{(['send', 'receive'] as const).map(direction => <fieldset key={direction}><legend>{direction === 'send' ? '发送给此设备' : '接收此设备内容'}</legend>{([['text', '文字'], ['link', '链接'], ['image', '图片']] as const).map(([kind, label]) => { const grant = clipboardGrants[`${direction}/${kind}`]; return <label key={kind}><input type="checkbox" checked={grant?.enabled ?? false} disabled={!!op || !device.trusted || device.blocked} onChange={event => setClipboardGrant(direction, kind, event.target.checked)} />{label}</label>; })}</fieldset>)}</div>}
+      {clipboardError && <p className="field-help error-text" role="alert">权限读取或保存失败，请重试。</p>}
+    </section><label className="remember-choice"><input type="checkbox" checked={device.always_accept && !device.blocked} disabled={!!op || !device.trusted || device.blocked} onChange={event => {
       const enabled = event.target.checked;
       void run(`consent-${device.id}`, () => Backend.SetAlwaysAccept(device.id, enabled), enabled ? '已开启此设备免确认接收' : '已恢复每次接收确认');
     }} /><span><strong>免确认接收</strong><small>与收藏和“我的设备”标签独立，仍验证设备身份与文件完整性。</small></span></label>

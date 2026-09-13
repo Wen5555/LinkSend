@@ -37,7 +37,7 @@
 | E3-02 | U6 | E3 | E0-04；E1-01/02/03/04/05 | Mac 正式扩展与设备面板 | App Group/进程身份、临时表示接管/bookmark、后台唯一 owner、真实设备 | evidence/DESKTOP-E3-MAC-SHARE.md |
 | E3-03 | U6 | E3 | E3-01/02 | 双平台准确包与安装生命周期 | 准确身份与签名/权限；冷启动/后台/主窗打开/连续共享/扩展退出继续发送；安装升级卸载 | evidence/DESKTOP-E3-NATIVE-PACKAGES.md |
 | E4-01 | U4/支撑 | E4 | E0-05 | profile 存储所有权、会话与调度 | 先测量再收敛；提交屏障、认证会话复用、流级取消、有界文件和剪贴板调度 | evidence/DESKTOP-E4-STORAGE-SESSIONS.md |
-| E4-02 | U4 | E4 | E4-01 | 权限、原生监听/写入、能力协商 | 默认关闭；按设备/方向/类型双端授权；Windows AddClipboardFormatListener、Mac changeCount；正文不经 JS/WSS | evidence/DESKTOP-E4-CLIPBOARD-NATIVE.md |
+| E4-02 | U4 | E4 | E4-01 | 权限、原生监听/写入、能力协商 | 默认关闭；按设备/方向/类型双端授权；Windows AddClipboardFormatListener、Mac changeCount；正文不经 JS/WSS | evidence/DESKTOP-E4-CLIPBOARD.md |
 | E4-03 | U4 | E4 | E4-02 | 自动同步状态机、资源与托盘 | 文本/链接/图片、防回环；origin sequence与Lamport分离、串行落板revision门闩；预签发lease拒绝首帧/整图/重传晚到，续期不续旧事件、重连旧lease无效；快复制/离线不补发/锁屏/撤销/限额/暂存回收/托盘暂停 | evidence/DESKTOP-E4-CLIPBOARD-BEHAVIOR.md |
 | E5-01 | U1–U7 | E5 | E1–E4 全部待总控验收完成 | 同提交候选联合验收 | 七项联合、文件/恢复/异常、旧版升级/混合版本、网络与原生实机矩阵；准确包 hash/来源/OS | evidence/DESKTOP-E5-ACCEPTANCE.md |
 | E5-02 | U1–U7 | E5 | E5-01 | 工程文档、PR/CI、产物与部署回执 | 最终工作分支 PR/CI、包来源、部署/备份/回滚证据齐全；只有总控判定全部达标后结束 Goal | evidence/DESKTOP-E5-DELIVERY.md |
@@ -66,15 +66,15 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E3-01 | 源码验收通过 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | c205b12 CI运行中 | 原生目标动作、临时来源接管、持久授权/回收与错误隔离已验收；签名激活暂缓 |
 | E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | c205b12 CI运行中 | bookmark/临时表示、冷启动与持久生命周期源码验收；签名/App Group实机暂缓 |
 | E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
-| E4-01 | 执行中 | 存储/会话PASS | 定向/race PASS | NOT RUN | NOT RUN | 待候选CI | 单一SQLite pool、双向QUIC复用和流取消候选；公平调度继续 |
-| E4-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E4-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
+| E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
+| E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 待E4-03候选CI | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
+| E4-03 | 待审查 | PASS | 定向/race/前端PASS | Win源码与隔离测试待CI、Mac命名pasteboard PASS | loopback QUIC PASS | 待候选CI | 无文件主动认证会话、双向文字、文件并存、期限/回环/限额和独立托盘暂停已接线；物理Win↔Mac未运行 |
 | E5-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E5-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 
 ## 执行边界与恢复入口
 
-- 当前批次为 E4-01 存储、会话与调度支撑；E3 源码范围已验收。签名相关由用户暂缓，准确包 DPI、双向网络和双机 UI 留 E5。
+- 当前批次为 E4-03 自动剪贴板行为候选；E1、E2、E3及E4-01/02的总控判定按上表保留。签名相关由用户暂缓，准确包 DPI、双向网络、双机 UI 与物理用户剪贴板留 E5。
 - 授权含阶段工作分支/PR、两平台项目依赖及隔离安装、香港 LinkSend 支持组件事务部署、荷兰构建与专属 namespace/container NAT。
 - 不合并 main、不正式 Release、不购买签名服务、不改宿主防火墙/路由/代理、不影响无关业务。
 - 远程全部使用 codex-ssh-manager resolve/probe/audit；2026-09-13 当前 Mac 地址为 `10.234.212.116`，保留登记 alias 与 host key 校验。复杂任务使用 durable job，断线先 resume/tail。

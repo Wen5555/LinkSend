@@ -57,6 +57,8 @@ type App struct {
 	clipboardUserPaused bool
 	clipboardClosed     bool
 	clipboardWatchStart func() (func(), error)
+	clipboardChanges    chan nativeclipboard.Change
+	clipboardDone       chan struct{}
 }
 
 type DesktopPreferences struct {
@@ -145,6 +147,11 @@ func (a *App) startup(ctx context.Context) {
 				return
 			}
 		}
+		if runtime.GOOS == "windows" && a.window != nil {
+			nativeclipboard.SetOwnerWindow(uintptr(a.window.NativeWindow()))
+		}
+		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Write: nativeclipboard.WritePayloadBefore})
+		a.startClipboardDelivery()
 		a.refreshClipboardWatch()
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
 			if explicitDataDir {
@@ -174,6 +181,9 @@ func (a *App) shutdown() {
 	a.stopNativeSystemEvents()
 	if a.cancel != nil {
 		a.cancel()
+	}
+	if a.clipboardDone != nil {
+		<-a.clipboardDone
 	}
 	if a.eventsDone != nil {
 		<-a.eventsDone

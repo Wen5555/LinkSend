@@ -17,6 +17,6 @@
 - macOS arm64（alias `mac-test-102342413`，macOS 26.5，Go 1.26.4）：独立命名 pasteboard 实际改变 `changeCount`，watcher 收到 text 类型且不修改 general pasteboard；desktop/nativeclipboard test、desktop test/vet/build 通过。保留作业：`/tmp/codex-ssh/linksend-e4-clipboard-watch-mac-r4-20260913T192325Z`。
 - macOS 链接器继续报告 SDK 26 object 与 deployment target 13/11 的既有 warning；命令退出码为 0。
 
-## 未完成
+## 后续状态
 
-本候选不读取或发送自动剪贴板正文。双端 grant 交集、短期 lease、事件 freshness、origin/application generation、接收端写入和文件/剪贴板公平调度仍属于 E4-03，不能把 watcher 触发当作跨设备同步通过。
+本文件固定 E4-02 权限与监听候选当时的证据边界。双端 grant 交集、短期 lease、事件 freshness、origin/application generation、接收端写入和文件/剪贴板并存已在后续 [E4-03 行为候选](DESKTOP-E4-CLIPBOARD-BEHAVIOR.md) 接线；物理 Win↔Mac 用户剪贴板仍未验收，不能用 watcher 或命名 pasteboard 结果替代。

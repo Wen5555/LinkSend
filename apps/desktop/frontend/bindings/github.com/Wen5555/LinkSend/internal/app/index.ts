@@ -3,6 +3,8 @@
 
 export type {
     AcceptIncomingDefaultResult,
+    ClipboardGrant,
+    ClipboardGrantPatch,
     ContentActionResult,
     ContentCleanupResult,
     ContentDraft,

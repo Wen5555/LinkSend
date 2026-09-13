@@ -62,6 +62,14 @@ export function CleanupInboxStaging(limit: number): $CancellablePromise<app$0.In
     return $Call.ByID(1036648570, limit);
 }
 
+export function ClipboardGrants(peerID: string): $CancellablePromise<app$0.ClipboardGrant[] | null> {
+    return $Call.ByID(1458346422, peerID);
+}
+
+export function ClipboardWatcher(): $CancellablePromise<$models.ClipboardWatchStatus> {
+    return $Call.ByID(638849827);
+}
+
 export function ConfigureAutostart(enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(2264165876, enabled);
 }
@@ -321,6 +329,14 @@ export function SetAlwaysAccept(deviceID: string, enabled: boolean): $Cancellabl
 
 export function SetBackgroundOptions(options: $models.BackgroundOptions): $CancellablePromise<void> {
     return $Call.ByID(3323717395, options);
+}
+
+export function SetClipboardGrant(patch: app$0.ClipboardGrantPatch): $CancellablePromise<app$0.ClipboardGrant> {
+    return $Call.ByID(3963166315, patch);
+}
+
+export function SetClipboardPaused(paused: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2288894013, paused);
 }
 
 export function SetContentSettings(settings: app$0.ContentSettings): $CancellablePromise<void> {

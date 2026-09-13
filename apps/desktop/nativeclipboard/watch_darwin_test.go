@@ -33,3 +33,19 @@ func TestDarwinNamedPasteboardChangeCountWatcher(t *testing.T) {
 		t.Fatal("NSPasteboard changeCount watcher did not report dedicated pasteboard mutation")
 	}
 }
+
+func TestDarwinNamedPasteboardOwnedWriteReadback(t *testing.T) {
+	name := fmt.Sprintf("com.linksend.native-test.write.%d", time.Now().UnixNano())
+	expected := namedPasteboardGeneration(name)
+	next, err := writeNamedPasteboardText(name, []byte("LinkSend named write"), expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, current, err := readNamedPasteboardText(name, next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "LinkSend named write" || current != next {
+		t.Fatalf("readback=%q generation=%d/%d", got, current, next)
+	}
+}

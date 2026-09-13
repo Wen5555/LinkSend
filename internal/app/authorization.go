@@ -77,13 +77,16 @@ func (s *Service) BlockPeer(peerID string) error {
 	if peerID == s.identity.ID() {
 		return errors.New("INVALID_ARGUMENT: cannot block this device")
 	}
+	s.clipboardGrantMu.Lock()
 	s.trustMu.Lock()
 	err := identity.RevokePeer(s.cfg.DataDir, peerID)
 	s.trustMu.Unlock()
 	if err != nil {
+		s.clipboardGrantMu.Unlock()
 		return err
 	}
-	grantErr := s.clearClipboardGrants(peerID)
+	grantErr := s.clearClipboardGrantsLocked(peerID)
+	s.clipboardGrantMu.Unlock()
 	s.closePooledSessions(peerID)
 	s.cancelPeerTasks(peerID)
 	return grantErr

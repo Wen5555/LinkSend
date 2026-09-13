@@ -75,6 +75,7 @@ func runNativeBackgroundHarness() error {
 				harnessErr = errors.New("native macOS notification service unavailable")
 			}
 			tray.SetQueuePaused(true)
+			tray.SetClipboardPaused(true)
 			time.Sleep(250 * time.Millisecond)
 			if err := inhibitor.Release(); err != nil {
 				harnessErr = err

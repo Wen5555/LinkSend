@@ -17,12 +17,14 @@ import (
 const directSessionIdleTTL = 3 * time.Second
 
 type pooledPeerSession struct {
-	peer       *PeerSession
-	generation uint64
-	inUse      bool
-	receiving  bool
-	serving    bool
-	timer      *time.Timer
+	peer                  *PeerSession
+	generation            uint64
+	inUse                 bool
+	receiving             bool
+	serving               bool
+	clipboardSendReady    bool
+	clipboardReceiveReady bool
+	timer                 *time.Timer
 }
 
 func directPoolKey(peerID string, generation uint64) string {
@@ -46,7 +48,11 @@ func (s *Service) startPooledPeerServerLocked(key string, pooled *pooledPeerSess
 	s.directPoolWG.Add(1)
 	go func() {
 		defer s.directPoolWG.Done()
-		s.servePooledPeer(key, pooled)
+		var owners sync.WaitGroup
+		owners.Add(2)
+		go func() { defer owners.Done(); s.servePooledPeer(key, pooled) }()
+		go func() { defer owners.Done(); s.serveClipboardPeer(pooled.peer) }()
+		owners.Wait()
 	}()
 }
 
@@ -204,19 +210,24 @@ func reusablePeerStreamResult(operationErr error) bool {
 }
 
 func (s *Service) schedulePoolIdleLocked(key string, pooled *pooledPeerSession) {
-	if pooled.inUse || pooled.receiving {
+	if pooled.inUse || pooled.receiving || pooled.clipboardSendReady || pooled.clipboardReceiveReady {
 		return
 	}
 	if pooled.timer != nil {
-		pooled.timer.Stop()
+		return
 	}
 	pooled.timer = time.AfterFunc(directSessionIdleTTL, func() {
 		s.directPoolMu.Lock()
 		current := s.directPool[key]
-		if current == pooled && !current.inUse && !current.receiving {
-			delete(s.directPool, key)
-		} else {
+		if current != pooled {
 			current = nil
+		} else {
+			current.timer = nil
+			if !current.inUse && !current.receiving && !current.clipboardSendReady && !current.clipboardReceiveReady {
+				delete(s.directPool, key)
+			} else {
+				current = nil
+			}
 		}
 		s.directPoolMu.Unlock()
 		if current != nil {

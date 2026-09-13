@@ -250,7 +250,9 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 					s.inbox.mu.Lock()
 					s.inbox.listening = false
 					s.inbox.mu.Unlock()
-					if s.receiveIncoming(ctx, peer, directory) {
+					if peer.SessionReuse {
+						s.adoptInboundPeerSession(peer)
+					} else if s.receiveIncoming(ctx, peer, directory) {
 						s.adoptInboundPeerSession(peer)
 					} else {
 						_ = peer.Close()

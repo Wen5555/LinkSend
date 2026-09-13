@@ -59,6 +59,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go mod verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:LINKSEND_TEST_CLIPBOARD_WRITE = "1"
           go test ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...

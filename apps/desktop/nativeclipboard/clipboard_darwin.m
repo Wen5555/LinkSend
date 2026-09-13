@@ -123,3 +123,42 @@ int linksendClipboardPNG(const char *name, void **output, size_t *size) {
         }
     }
 }
+
+int linksendClipboardReadText(const char *name, int link, uint64_t expected, void **output, size_t *size, uint64_t *current) {
+    *output = NULL; *size = 0;
+    @autoreleasepool { @try {
+        NSPasteboard *pasteboard = linksendPasteboard(name);
+        *current = (uint64_t)pasteboard.changeCount;
+        if (*current != expected) return 1;
+        NSPasteboardType type = link ? NSPasteboardTypeURL : NSPasteboardTypeString;
+        NSString *value = [pasteboard stringForType:type];
+        if (!value && link) value = [pasteboard stringForType:NSPasteboardTypeString];
+        NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];
+        if (!data || data.length == 0 || data.length > 65536) return 2;
+        if ((uint64_t)pasteboard.changeCount != expected) { *current = (uint64_t)pasteboard.changeCount; return 1; }
+        *output = malloc(data.length); if (!*output) return 2;
+        memcpy(*output, data.bytes, data.length); *size = data.length; return 0;
+    } @catch (NSException *exception) { (void)exception; return 2; } }
+}
+
+int linksendClipboardWritePayload(const char *name, int kind, const void *data, size_t size, uint64_t expected, uint64_t *current) {
+    @autoreleasepool { @try {
+        NSPasteboard *pasteboard = linksendPasteboard(name);
+        *current = (uint64_t)pasteboard.changeCount;
+        if (*current != expected) return 1;
+        if (!data || size == 0 || size > (32 * 1024 * 1024)) return 2;
+        [pasteboard clearContents];
+        BOOL ok = NO;
+        if (kind == 2) {
+            ok = [pasteboard setData:[NSData dataWithBytes:data length:size] forType:NSPasteboardTypePNG];
+        } else {
+            NSString *value = [[NSString alloc] initWithBytes:data length:size encoding:NSUTF8StringEncoding];
+            if (!value) return 2;
+            ok = [pasteboard setString:value forType:(kind == 1 ? NSPasteboardTypeURL : NSPasteboardTypeString)];
+            if (kind == 1 && ok) [pasteboard setString:value forType:NSPasteboardTypeString];
+            [value release];
+        }
+        *current = (uint64_t)pasteboard.changeCount;
+        return ok ? 0 : 2;
+    } @catch (NSException *exception) { (void)exception; return 2; } }
+}

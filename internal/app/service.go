@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/discovery"
 	"github.com/Wen5555/LinkSend/internal/identity"
@@ -71,6 +72,12 @@ type Service struct {
 	directPoolLocks            map[string]*sync.Mutex
 	directPoolWG               sync.WaitGroup
 	directPoolBeforePublish    func(string)
+	clipboardSync              *clipboardsync.State
+	clipboardAdapterMu         sync.RWMutex
+	clipboardAdapter           ClipboardAdapter
+	clipboardSendMu            sync.Mutex
+	clipboardReceiveSlots      chan struct{}
+	clipboardPaused            atomic.Bool
 }
 
 type cachedNetworkSelection struct {
@@ -164,7 +171,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession), directPoolLocks: make(map[string]*sync.Mutex)}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession), directPoolLocks: make(map[string]*sync.Mutex), clipboardSync: clipboardsync.New(id.ID(), nil), clipboardReceiveSlots: make(chan struct{}, 2)}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	keepHistory := false
 	defer func() {
@@ -423,6 +430,7 @@ func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Clie
 // successful pairing-service membership pins every returned device key. This
 // removes the manual fingerprint step while still rejecting later key changes.
 func (s *Service) syncPairedDevices(devices []signaling.Device) error {
+	s.clipboardGrantMu.Lock()
 	s.trustMu.Lock()
 	before, beforeErr := identity.LoadTrust(s.cfg.DataDir)
 	var local signaling.Device
@@ -434,6 +442,7 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 	}
 	if local.ID == "" {
 		s.trustMu.Unlock()
+		s.clipboardGrantMu.Unlock()
 		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 local incarnation missing")
 	}
 	snapshot := make([]identity.TrustedPeer, 0, len(devices))
@@ -444,8 +453,10 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 	after, afterErr := identity.LoadTrust(s.cfg.DataDir)
 	s.trustMu.Unlock()
 	if err != nil {
+		s.clipboardGrantMu.Unlock()
 		return err
 	}
+	var changed []string
 	if beforeErr == nil && afterErr == nil {
 		current := make(map[string]uint64, len(after))
 		for _, peer := range after {
@@ -453,11 +464,15 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		}
 		for _, peer := range before {
 			if generation, ok := current[peer.ID]; !ok || generation != peer.GrantGeneration {
-				_ = s.clearClipboardGrants(peer.ID)
-				s.closePooledSessions(peer.ID)
-				s.cancelPeerTasks(peer.ID)
+				_ = s.clearClipboardGrantsLocked(peer.ID)
+				changed = append(changed, peer.ID)
 			}
 		}
+	}
+	s.clipboardGrantMu.Unlock()
+	for _, peerID := range changed {
+		s.closePooledSessions(peerID)
+		s.cancelPeerTasks(peerID)
 	}
 	return nil
 }
@@ -601,12 +616,16 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 		return c.Revoke(ctx, deviceID)
 	}
 	requestID := protocol.RandomID()
+	s.clipboardGrantMu.Lock()
 	s.trustMu.Lock()
 	err = identity.RevokeMembershipPeer(s.cfg.DataDir, deviceID, peer.PeerIncarnation, requestID, peer.MembershipRevision)
 	s.trustMu.Unlock()
 	if err != nil {
+		s.clipboardGrantMu.Unlock()
 		return err
 	}
+	grantErr := s.clearClipboardGrantsLocked(deviceID)
+	s.clipboardGrantMu.Unlock()
 	for _, task := range s.Tasks() {
 		if task.PeerID == deviceID && !isTerminal(task.State) {
 			_ = s.CancelTask(task.ID)
@@ -614,16 +633,16 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 	}
 	c, err := s.client()
 	if err != nil {
-		return err
+		return errors.Join(err, grantErr)
 	}
 	revision, err := c.RevokeMembership(ctx, deviceID, peer.PeerIncarnation, peer.MembershipRevision, requestID)
 	if err != nil {
-		return err
+		return errors.Join(err, grantErr)
 	}
 	s.trustMu.Lock()
 	syncErr := identity.MarkMembershipRevokeSynced(s.cfg.DataDir, deviceID, requestID, revision)
 	s.trustMu.Unlock()
-	return syncErr
+	return errors.Join(syncErr, grantErr)
 }
 
 func (s *Service) Health(ctx context.Context) (protocol.Capabilities, error) {

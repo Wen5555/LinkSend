@@ -132,6 +132,10 @@ func (s *Service) clearClipboardGrants(peerID string) error {
 	}
 	s.clipboardGrantMu.Lock()
 	defer s.clipboardGrantMu.Unlock()
+	return s.clearClipboardGrantsLocked(peerID)
+}
+
+func (s *Service) clearClipboardGrantsLocked(peerID string) error {
 	_, err := s.store.db.Exec(`UPDATE clipboard_grants SET enabled=0,revision=revision+1,updated_at=? WHERE peer_id=?`, time.Now().UTC().Format(time.RFC3339Nano), peerID)
 	s.notifyChange()
 	return err
