@@ -28,6 +28,7 @@ export interface DesktopEntryStatus {
     "draft_revision": number;
     "send_to_supported": boolean;
     "finder_services": boolean;
+    "pending_shares"?: NativeSharePending[] | null;
 }
 
 export interface DesktopPreferences {
@@ -65,6 +66,11 @@ export interface EffectiveConfig {
     "stun_source": string;
     "needs_restart": boolean;
     "preferences_state": string;
+}
+
+export interface NativeSharePending {
+    "request_id": string;
+    "peer_id": string;
 }
 
 export interface NetworkInterfaceInfo {

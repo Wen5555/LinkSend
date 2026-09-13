@@ -295,16 +295,23 @@ func reapShareActivations(dataDir string, terminal map[string]bool) (int, error)
 			if readErr != nil || json.Unmarshal(data, &activation) != nil || activation.Version != 2 || activation.RequestID != requestID {
 				continue
 			}
+			owned := filepath.Join(dataDir, "share-owned-v1", requestID)
+			if info, statErr := os.Lstat(owned); statErr == nil {
+				if info.Mode()&os.ModeSymlink != 0 {
+					return errors.New("SYSTEM_SHARE_STORAGE: owned source is a symlink")
+				}
+				if err := os.RemoveAll(owned); err != nil {
+					return err
+				}
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				return statErr
+			}
+			releaseNativeShareActivation(requestID)
 			if err := root.Remove(entry.Name()); err != nil {
 				return err
 			}
-			removed++
-			releaseNativeShareActivation(requestID)
 			removeNativeShareReceipt(dataDir, requestID)
-			owned := filepath.Join(dataDir, "share-owned-v1", requestID)
-			if info, statErr := os.Lstat(owned); statErr == nil && info.Mode()&os.ModeSymlink == 0 {
-				_ = os.RemoveAll(owned)
-			}
+			removed++
 		}
 		if removed > 0 {
 			return syncActivationDirectory(root)

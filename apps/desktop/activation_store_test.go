@@ -187,6 +187,52 @@ func TestShareActivationRetainedUntilTerminalReap(t *testing.T) {
 	}
 }
 
+func TestShareActivationKeepsJournalWhenOwnedCleanupIsUnsafe(t *testing.T) {
+	profile, source, outside := t.TempDir(), t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "file.txt")
+	if err := os.WriteFile(path, []byte("share"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := fileActivation{RequestID: "33333333333333333333333333333333", PeerID: "peer", Paths: []string{path}, Source: "windows_share"}
+	if err := stageShareActivation(profile, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	ownedRoot := filepath.Join(profile, "share-owned-v1")
+	if err := os.MkdirAll(ownedRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(ownedRoot, request.RequestID)); err != nil {
+		t.Skip("symlink privilege unavailable:", err)
+	}
+	if n, err := reapShareActivations(profile, map[string]bool{request.RequestID: true}); err == nil || n != 0 {
+		t.Fatalf("unsafe cleanup accepted: %d %v", n, err)
+	}
+	entry := filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")
+	if _, err := os.Stat(entry); err != nil {
+		t.Fatal("journal removed before source cleanup", err)
+	}
+}
+
+func TestDiscardNativeShareRemovesUnqueuedRequest(t *testing.T) {
+	profile, source := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "file.txt")
+	if err := os.WriteFile(path, []byte("share"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := fileActivation{RequestID: "44444444444444444444444444444444", PeerID: "revoked", Paths: []string{path}, Source: "windows_share"}
+	if err := stageShareActivation(profile, request, ""); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp()
+	app.dataDir = profile
+	if err := app.DiscardNativeShare(request.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(profile, "desktop-activations-v1", request.RequestID+".json")); !os.IsNotExist(err) {
+		t.Fatal("discard left request journal", err)
+	}
+}
+
 func TestShareActivationJournalPreservesInvalidAndFailedRequests(t *testing.T) {
 	profile, source := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "file.txt")

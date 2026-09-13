@@ -75,7 +75,10 @@ final class ShareStore {
         let data = try readBounded(url, maximum: 256 * 1024)
         let snapshot = try JSONDecoder().decode(DeviceSnapshot.self, from: data)
         guard snapshot.version == 1 else { throw ShareStoreError.devicesUnavailable }
-        let generated = ISO8601DateFormatter().date(from: snapshot.generated_at)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let generated = formatter.date(from: snapshot.generated_at)
+            ?? ISO8601DateFormatter().date(from: snapshot.generated_at)
         let fresh = generated.map { Date().timeIntervalSince($0) <= 60 } ?? false
         let devices = snapshot.devices.filter { !$0.id.isEmpty && !$0.name.isEmpty }.map {
             ShareDevice(id: $0.id, name: $0.name, reachable: fresh && $0.reachable)
@@ -99,6 +102,7 @@ final class ShareStore {
         var firstError: Error?
         var ownedBytes: Int64 = 0
         let maximumOwnedBytes: Int64 = 16 * 1024 * 1024 * 1024
+        let providerSlots = DispatchSemaphore(value: 4)
         for (index, provider) in providers.enumerated() {
             guard let type = provider.registeredTypeIdentifiers.first(where: {
                 $0 != UTType.fileURL.identifier && UTType($0)?.conforms(to: .data) == true
@@ -110,7 +114,7 @@ final class ShareStore {
             }
             group.enter()
             let receive: (URL?, Bool, Error?) -> Void = { url, inPlace, error in
-                defer { group.leave() }
+                defer { providerSlots.signal(); group.leave() }
                 do {
                     guard let url else { throw error ?? ShareStoreError.sourceUnavailable }
                     let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
@@ -125,14 +129,14 @@ final class ShareStore {
                             includingResourceValuesForKeys: nil, relativeTo: nil)
                         prepared = PreparedSource(path: url.path, bookmark: bookmark.base64EncodedString())
                     } else {
-                        guard let fileSize = values.fileSize, fileSize >= 0 else { throw ShareStoreError.sourceUnavailable }
-                        lock.lock()
-                        let nextBytes = ownedBytes + Int64(fileSize)
-                        if nextBytes <= maximumOwnedBytes { ownedBytes = nextBytes }
-                        lock.unlock()
-                        guard nextBytes <= maximumOwnedBytes else { throw ShareStoreError.storageFull }
                         let target = owned.appendingPathComponent(String(format: "%04d-", index) + url.lastPathComponent)
-                        try self.copyTemporaryRepresentation(from: url, to: target, expectedSize: values.fileSize)
+                        try self.copyTemporaryRepresentation(from: url, to: target, expectedSize: values.fileSize) { bytes in
+                            lock.lock()
+                            defer { lock.unlock() }
+                            guard bytes <= maximumOwnedBytes - ownedBytes else { return false }
+                            ownedBytes += bytes
+                            return true
+                        }
                         prepared = PreparedSource(path: target.path, bookmark: "")
                     }
                     lock.lock(); results[index] = prepared; lock.unlock()
@@ -143,7 +147,10 @@ final class ShareStore {
             // The advertised fileURL UTI says what the value is, not how long
             // its authorization survives the provider callback. The API's
             // actual inPlace result decides bookmark versus owned copy.
-            provider.loadInPlaceFileRepresentation(forTypeIdentifier: type, completionHandler: receive)
+            DispatchQueue.global(qos: .userInitiated).async {
+                providerSlots.wait()
+                provider.loadInPlaceFileRepresentation(forTypeIdentifier: type, completionHandler: receive)
+            }
         }
         group.notify(queue: .main) {
             if let error = firstError {
@@ -203,7 +210,8 @@ final class ShareStore {
         try manager.moveItem(at: temporary, to: final)
     }
 
-    private func copyTemporaryRepresentation(from source: URL, to target: URL, expectedSize: Int?) throws {
+    private func copyTemporaryRepresentation(from source: URL, to target: URL, expectedSize: Int?,
+                                             reserve: (Int64) -> Bool) throws {
         guard !manager.fileExists(atPath: target.path) else { throw ShareStoreError.requestConflict }
         guard manager.createFile(atPath: target.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
             throw ShareStoreError.sourceUnavailable
@@ -217,7 +225,7 @@ final class ShareStore {
                 let chunk = try input.read(upToCount: 1024 * 1024) ?? Data()
                 if chunk.isEmpty { break }
                 copied += Int64(chunk.count)
-                guard copied <= 16 * 1024 * 1024 * 1024 else { throw ShareStoreError.storageFull }
+                guard reserve(Int64(chunk.count)) else { throw ShareStoreError.storageFull }
                 try output.write(contentsOf: chunk)
             }
             try output.synchronize()

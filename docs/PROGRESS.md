@@ -1,3 +1,8 @@
+## 2026-09-14 E3-C2 原生共享闭环
+
+- 修正 Windows package root/manifest/wake 路径；在线目标按钮直接提交，离线等待显式确认；失败可重试。临时来源采用 16 GiB 实际累计限额、长度校验、Flush(true) 与失败清理。
+- Mac 宿主冷启动使用 NSWorkspace 显式 --native-share-background，设备时间支持 RFC3339Nano，provider 并发限制 4 且按实际 chunk 计总预算。
+- owned 清理失败时保留 journal；未入队失败请求在主界面提供明确放弃入口。Mac 定向作业 /tmp/codex-ssh/linksend-e3-c2-mac-swift-20260913T171611Z PASS。
 # 2026-09-14 E3-C1 原生共享审查修复
 
 - 原生共享来源 journal 与 queue request 生命周期绑定：入队后保留 bookmark/owned source，重启幂等恢复；completed/cancelled/expired 后按请求释放 security scope、临时文件和 journal。失败请求隔离，不阻塞后续记录。

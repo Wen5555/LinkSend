@@ -65,7 +65,12 @@ export default function App() {
       {!desktop.enabled && <div className="banner error-banner" role="status"><p>桌面后端未连接。请启动 LinkSend 桌面应用；浏览器预览只显示界面，不执行传输。</p></div>}
       {desktop.enabled && loadError && <div className="banner error-banner" role="alert"><p>{humanizeBackendError(loadError)}</p><button className="ghost" onClick={() => void desktop.refresh()}>重试读取</button></div>}
       {desktop.enabled && desktop.workspace.isPending && <p className="loading-status" role="status">正在读取保存的草稿与队列…</p>}
-      {shell?.entries.error && <div className="banner error-banner" role="alert"><p>{shell.entries.error}</p></div>}
+      {shell?.entries.error && <div className="banner error-banner" role="alert"><p>{shell.entries.error}</p>
+        {(shell.entries.pending_shares ?? []).map(item => <button key={item.request_id} className="ghost danger" disabled={!!command.op}
+          onClick={() => void command.run(`discard-native-share-${item.request_id}`, async () => {
+            await Backend.DiscardNativeShare(item.request_id);
+          })}>放弃这次系统共享（{item.request_id.slice(0, 8)}）</button>)}
+      </div>}
       {command.error && <div className="banner error-banner" role="alert"><p>{command.error}</p><button onClick={command.clearError} aria-label="关闭错误提示">×</button></div>}
       {command.notice && <div className="banner notice-banner" role="status"><p>{command.notice}</p><button onClick={command.clearNotice} aria-label="关闭操作提示">×</button></div>}
       {control.error && <div className="banner error-banner" role="alert"><p>{control.error}</p><button onClick={control.clearError} aria-label="关闭传输控制错误">×</button></div>}

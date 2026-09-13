@@ -20,7 +20,8 @@ internal static class Program
         var application = new Application();
         var title = new TextBlock { Text = "使用 LinkSend 发送", FontSize = 20, FontWeight = FontWeights.SemiBold };
         var summary = new TextBlock { Text = "正在读取系统共享…", TextWrapping = TextWrapping.Wrap };
-        var devices = new ComboBox { MinWidth = 340, DisplayMemberPath = "Label" };
+        var devices = new StackPanel { MinWidth = 340 };
+        var deviceScroll = new ScrollViewer { Content = devices, MaxHeight = 100, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var waitOffline = new CheckBox { Content = "设备离线时等待其上线", IsChecked = false, IsEnabled = false };
         var send = new Button { Content = "发送", IsDefault = true, IsEnabled = false, MinWidth = 90 };
         var addDevice = new Button { Content = "添加设备…", MinWidth = 90 };
@@ -28,12 +29,14 @@ internal static class Program
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         buttons.Children.Add(addDevice); buttons.Children.Add(cancel); buttons.Children.Add(send);
         var panel = new StackPanel();
-        panel.Children.Add(title); panel.Children.Add(summary); panel.Children.Add(devices); panel.Children.Add(waitOffline); panel.Children.Add(buttons);
+        panel.Children.Add(title); panel.Children.Add(summary); panel.Children.Add(deviceScroll); panel.Children.Add(waitOffline); panel.Children.Add(buttons);
         var window = new Window { Title = "LinkSend", Width = 440, Height = 280,
             ResizeMode = ResizeMode.NoResize, Content = new Border { Padding = new Thickness(24), Child = panel } };
         ShareOperation? operation = null;
         IReadOnlyList<IStorageItem> items = [];
+        DeviceOption? selectedPeer = null;
         var requestID = Guid.NewGuid().ToString("N");
+        var requestPersisted = false;
         window.Loaded += async (_, _) =>
         {
             try
@@ -53,8 +56,21 @@ internal static class Program
                 var options = ShareJournal.ReadDevices(ShareJournal.ProfileRoot)
                     .Select(device => new DeviceOption(device.id, device.name, device.reachable)).ToList();
                 if (options.Count == 0) throw new InvalidOperationException("没有可用的已配对设备，请先打开 LinkSend 完成配对。");
-                devices.ItemsSource = options; devices.SelectedIndex = -1;
-                summary.Text = $"已选择 {items.Count} 个文件。选择目标后点击发送；离线等待必须单独确认。";
+                foreach (var option in options)
+                {
+                    var target = new Button { Content = option.Label, HorizontalContentAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 2, 0, 2) };
+                    target.Click += (_, _) =>
+                    {
+                        selectedPeer = option;
+                        waitOffline.IsEnabled = !option.Reachable;
+                        waitOffline.IsChecked = false;
+                        send.IsEnabled = true;
+                        if (option.Reachable) send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    };
+                    devices.Children.Add(target);
+                }
+                summary.Text = $"已选择 {items.Count} 个文件。在线设备可直接点击发送；离线等待必须单独确认。";
             }
             catch (Exception error) { Fail(operation, summary, error); }
         };
@@ -63,7 +79,7 @@ internal static class Program
             send.IsEnabled = false; cancel.IsEnabled = false; devices.IsEnabled = false;
             try
             {
-                if (operation is null || devices.SelectedItem is not DeviceOption peer)
+                if (operation is null || selectedPeer is not DeviceOption peer)
                     throw new InvalidOperationException("目标设备已失效，请重新共享。");
                 bool waitForPeer;
                 try { waitForPeer = ShareJournal.ResolveWaitForPeer(peer.Reachable, waitOffline.IsChecked == true); }
@@ -74,25 +90,35 @@ internal static class Program
                 var paths = new List<string>(items.Count);
                 var ownedDirectory = Path.Combine(ShareJournal.ProfileRoot, "share-owned-v1", requestID);
                 var index = 0;
+                ulong ownedBytes = 0;
                 foreach (var item in items.Cast<StorageFile>())
                 {
                     using var access = await item.OpenReadAsync();
-                    if (!string.IsNullOrWhiteSpace(item.Path) && Path.IsPathFullyQualified(item.Path)
-                        && File.Exists(item.Path))
+                    if (!NeedsOwnedCopy(item))
                     {
                         paths.Add(item.Path);
                     }
                     else
                     {
+                        if (access.Size > 16UL * 1024 * 1024 * 1024 - ownedBytes)
+                            throw new InvalidOperationException("临时来源总大小超过 16 GiB，请分批共享。");
+                        ownedBytes += access.Size;
                         Directory.CreateDirectory(ownedDirectory);
                         var owned = await StorageFolder.GetFolderFromPathAsync(ownedDirectory);
                         var copied = await item.CopyAsync(owned, $"{index:D4}-{item.Name}", NameCollisionOption.FailIfExists);
+                        var copiedInfo = new FileInfo(copied.Path);
+                        if ((ulong)copiedInfo.Length != access.Size)
+                            throw new IOException("临时来源复制后大小不一致。");
+                        using (var durable = new FileStream(copied.Path, FileMode.Open, FileAccess.ReadWrite,
+                            FileShare.Read, 64 * 1024, FileOptions.SequentialScan))
+                            durable.Flush(true);
                         paths.Add(copied.Path);
                     }
                     index++;
                 }
                 ShareJournal.Persist(ShareJournal.ProfileRoot, new ShareRequest(2, requestID, peer.ID,
                     paths, waitForPeer, "windows_share"));
+                requestPersisted = true;
                 operation.ReportDataRetrieved();
                 var woke = WakeLinkSend();
                 var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
@@ -106,14 +132,13 @@ internal static class Program
                     : "请求已保存；下次打开 LinkSend 时继续。";
                 window.Close();
             }
-            catch (Exception error) { Fail(operation, summary, error); cancel.IsEnabled = true; }
-        };
-        devices.SelectionChanged += (_, _) =>
-        {
-            var peer = devices.SelectedItem as DeviceOption;
-            send.IsEnabled = peer is not null;
-            waitOffline.IsEnabled = peer is { Reachable: false };
-            waitOffline.IsChecked = false;
+            catch (Exception error)
+            {
+                if (!requestPersisted)
+                    try { Directory.Delete(Path.Combine(ShareJournal.ProfileRoot, "share-owned-v1", requestID), true); } catch { }
+                summary.Text = error.Message;
+                cancel.IsEnabled = true; send.IsEnabled = true; devices.IsEnabled = true;
+            }
         };
         addDevice.Click += (_, _) =>
         {
@@ -130,6 +155,16 @@ internal static class Program
         if (!File.Exists(executable)) return false;
         return Process.Start(new ProcessStartInfo(executable, "--native-share-background") { UseShellExecute = false,
             WorkingDirectory = AppContext.BaseDirectory }) is not null;
+    }
+
+    internal static bool NeedsOwnedCopy(StorageFile item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Path) || !Path.IsPathFullyQualified(item.Path) || !File.Exists(item.Path))
+            return true;
+        var full = Path.GetFullPath(item.Path);
+        var temp = Path.GetFullPath(Path.GetTempPath());
+        return full.StartsWith(temp, StringComparison.OrdinalIgnoreCase)
+            || (File.GetAttributes(full) & System.IO.FileAttributes.Temporary) != 0;
     }
 
     private static void Fail(ShareOperation? operation, TextBlock status, Exception error)
@@ -160,6 +195,8 @@ internal static class SelfTest
             catch (InvalidOperationException error) when (error.Message == "OFFLINE_WAIT_CONFIRMATION_REQUIRED") { }
             if (!ShareJournal.ResolveWaitForPeer(false, true)) throw new Exception("OFFLINE_WAIT_TEST_FAILED");
             var source = Path.Combine(root, "file.txt"); File.WriteAllText(source, "fixture");
+            var temporary = StorageFile.GetFileFromPathAsync(source).AsTask().GetAwaiter().GetResult();
+            if (!Program.NeedsOwnedCopy(temporary)) throw new Exception("TEMPORARY_SOURCE_TEST_FAILED");
             var request = new ShareRequest(2, "0123456789abcdef0123456789abcdef", "peer", [source], true, "windows_share");
             ShareJournal.Persist(root, request); ShareJournal.Persist(root, request);
             try { ShareJournal.Persist(root, request with { peer_id = "other" }); throw new Exception("CONFLICT_TEST_FAILED"); }

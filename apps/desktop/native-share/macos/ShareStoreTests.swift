@@ -8,10 +8,15 @@ enum ShareStoreTests {
         defer { try? manager.removeItem(at: root) }
         try manager.createDirectory(at: root.appendingPathComponent("native-share-v1"),
             withIntermediateDirectories: true)
-        try Data("{\"version\":1,\"revision\":1,\"generated_at\":\"test\",\"devices\":[{\"id\":\"peer\",\"name\":\"测试设备\",\"reachable\":true}]}".utf8)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let generated = formatter.string(from: Date())
+        try Data("{\"version\":1,\"revision\":1,\"generated_at\":\"\(generated)\",\"devices\":[{\"id\":\"peer\",\"name\":\"测试设备\",\"reachable\":true}]}".utf8)
             .write(to: root.appendingPathComponent("native-share-v1/devices.json"))
         let store = try ShareStore(container: root)
-        guard try store.devices().first?.id == "peer" else { fatalError("device snapshot") }
+        guard let device = try store.devices().first, device.id == "peer", device.reachable else {
+            fatalError("fresh fractional device snapshot")
+        }
         guard try ShareStore.resolveWaitForPeer(reachable: true, confirmed: false) == false else {
             fatalError("online wait")
         }

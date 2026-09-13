@@ -20,3 +20,9 @@
 设备快照现在由 Go 后台每 15 秒发布，Share Target 按 60 秒 TTL 将陈旧可达状态降级为离线。列表加载和目标选择不会入队，离线等待必须另行勾选，并提供“添加设备”入口。普通持久本地文件保持零复制；没有稳定本地路径的临时/虚拟 StorageFile 才复制到本请求独占的 share-owned-v1 目录。
 
 schema 2 journal 入队后继续保留，进程重启会重新验证来源并幂等重放；只有 queue 为 completed/cancelled/expired 时才删除 journal 和 owned 临时源。单个坏来源或撤销目标保留为可见错误，不再阻塞后续请求。后台 share 唤起不显示主窗。NSIS 将 Share Target 放入安装器独占子目录，卸载只递归删除该目录。
+
+## E3-C2 审查修复
+
+Windows 安装器恢复同一 package root，manifest、宿主和 Share Target 路径一致；卸载显式删除安装器拥有的 Share Target 文件和 Logo。在线设备按钮直接提交，离线目标仍需勾选确认；错误不会调用 ReportError 锁死面板。临时目录/Temporary 属性或无稳定路径的 StorageFile 强制复制，累计上限 16 GiB，复制后校验长度并 Flush(true)，入队前失败会清理 owned 目录。
+
+Go 对清理失败保留 journal，主界面列出未入队请求并提供明确放弃入口。Mac 使用 NSWorkspace.openApplication(arguments: --native-share-background, activates: false) 覆盖冷启动，解析带小数秒的 RFC3339Nano；provider 调用并发上限 4，按实际复制 chunk 扣 16 GiB 总预算。定向 Mac 作业 /tmp/codex-ssh/linksend-e3-c2-mac-swift-20260913T171611Z 通过。

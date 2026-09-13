@@ -13,6 +13,7 @@ export type {
     DesktopPreferences,
     DesktopStatus,
     EffectiveConfig,
+    NativeSharePending,
     NetworkInterfaceInfo,
     PreferencesStatus
 } from "./models.js";

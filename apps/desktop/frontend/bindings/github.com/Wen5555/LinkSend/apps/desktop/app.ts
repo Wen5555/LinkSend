@@ -114,6 +114,10 @@ export function DiscardContentDraft(id: string, revision: number): $CancellableP
     return $Call.ByID(2495801629, id, revision);
 }
 
+export function DiscardNativeShare(requestID: string): $CancellablePromise<void> {
+    return $Call.ByID(3405804501, requestID);
+}
+
 export function EffectiveConfig(): $CancellablePromise<$models.EffectiveConfig> {
     return $Call.ByID(329529236);
 }

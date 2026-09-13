@@ -49,7 +49,8 @@ final class ShareViewController: NSViewController {
                 .flatMap { $0.attachments ?? [] }.count
             status.stringValue = "已选择 \(count) 个文件。选择目标后点击发送；离线等待必须单独确认。"
             sendButton.isEnabled = count > 0
-			destinationChanged()
+            waitOffline.isEnabled = devices.first.map { !$0.reachable } ?? false
+            waitOffline.state = .off
         } catch {
             finish(error: error)
         }
@@ -75,6 +76,9 @@ final class ShareViewController: NSViewController {
         let index = devicePicker.indexOfSelectedItem
         waitOffline.isEnabled = devices.indices.contains(index) && !devices[index].reachable
         waitOffline.state = .off
+        if devices.indices.contains(index), devices[index].reachable {
+            send()
+        }
     }
 
     @objc private func send() {
@@ -111,12 +115,15 @@ final class ShareViewController: NSViewController {
                         self.extensionContext?.completeRequest(returningItems: nil)
                     }
                 }
-                if let wake = URL(string: "linksend-share://handoff/" + requestID) {
-                    extensionContext?.open(wake, completionHandler: complete)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { complete(false) }
-                } else {
-                    complete(false)
+                let app = Bundle.main.bundleURL
+                    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                let configuration = NSWorkspace.OpenConfiguration()
+                configuration.activates = false
+                configuration.arguments = ["--native-share-background"]
+                NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
+                    complete(error == nil)
                 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { complete(false) }
             } catch {
                 store.cleanup(requestID: requestID)
                 finish(error: error)

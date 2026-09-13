@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,11 +15,17 @@ import (
 )
 
 type DesktopEntryStatus struct {
-	Revision        uint64 `json:"revision"`
-	Error           string `json:"error,omitempty"`
-	DraftRevision   uint64 `json:"draft_revision"`
-	SendToSupported bool   `json:"send_to_supported"`
-	FinderServices  bool   `json:"finder_services"`
+	Revision        uint64               `json:"revision"`
+	Error           string               `json:"error,omitempty"`
+	DraftRevision   uint64               `json:"draft_revision"`
+	SendToSupported bool                 `json:"send_to_supported"`
+	FinderServices  bool                 `json:"finder_services"`
+	PendingShares   []NativeSharePending `json:"pending_shares,omitempty"`
+}
+
+type NativeSharePending struct {
+	RequestID string `json:"request_id"`
+	PeerID    string `json:"peer_id"`
 }
 
 type desktopEntries struct {
@@ -124,6 +132,7 @@ func (a *App) startNativeEntries() {
 			showDraft := false
 			count := 0
 			var consumeErr error
+			pending := make(map[string]NativeSharePending)
 			if workspace, err := a.core.Workspace(); err == nil {
 				terminal := make(map[string]bool)
 				for _, item := range workspace.Queue {
@@ -143,10 +152,12 @@ func (a *App) startNativeEntries() {
 				if activation.Version == 2 {
 					resolved, err := resolveNativeShareActivation(activation)
 					if err != nil {
+						pending[activation.RequestID] = NativeSharePending{RequestID: activation.RequestID, PeerID: activation.PeerID}
 						return err
 					}
 					_, err = a.core.Enqueue(coreapp.EnqueueRequest{RequestID: resolved.RequestID, PeerID: resolved.PeerID, Paths: resolved.Paths, WaitForPeer: resolved.WaitForPeer})
 					if err != nil {
+						pending[activation.RequestID] = NativeSharePending{RequestID: activation.RequestID, PeerID: activation.PeerID}
 						return err
 					}
 					for _, root := range nativeShareRoots(a.dataDir) {
@@ -171,6 +182,17 @@ func (a *App) startNativeEntries() {
 			if consumeErr != nil || count > 0 {
 				a.nativeEntryError(consumeErr)
 			}
+			nextPending := make([]NativeSharePending, 0, len(pending))
+			for _, item := range pending {
+				nextPending = append(nextPending, item)
+			}
+			slices.SortFunc(nextPending, func(a, b NativeSharePending) int { return strings.Compare(a.RequestID, b.RequestID) })
+			a.entries.mu.Lock()
+			if !slices.Equal(a.entries.status.PendingShares, nextPending) {
+				a.entries.status.PendingShares = nextPending
+				a.entries.status.Revision++
+			}
+			a.entries.mu.Unlock()
 			if count > 0 && showDraft {
 				a.entries.mu.Lock()
 				a.entries.status.DraftRevision = draft.Revision
@@ -182,6 +204,25 @@ func (a *App) startNativeEntries() {
 			}
 		}
 	}()
+}
+
+func (a *App) DiscardNativeShare(requestID string) error {
+	if !activationName.MatchString(requestID + ".json") {
+		return errors.New("SYSTEM_SHARE_INVALID: request ID")
+	}
+	removed := 0
+	for _, root := range nativeShareRoots(a.dataDir) {
+		n, err := reapShareActivations(root, map[string]bool{requestID: true})
+		if err != nil {
+			return err
+		}
+		removed += n
+	}
+	if removed == 0 {
+		return errors.New("SYSTEM_SHARE_NOT_FOUND")
+	}
+	a.wakeEntries(false)
+	return nil
 }
 
 func (a *App) showEntryWindow() {

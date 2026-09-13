@@ -28,3 +28,9 @@
 扩展现在依据 loadInPlaceFileRepresentation 返回的真实 inPlace 值决定 bookmark 或临时接管，不再把 fileURL 类型等同于持久授权；临时表示按 1 MiB 块复制并同步。journal 随 queue request 保留，重启重新解析 bookmark，completed/cancelled/expired 后按 request 停止 security scope 并删除 journal 和 owned 临时源。单坏请求不会阻塞其他请求。
 
 宿主已接入 Wails ApplicationOpenedWithFile URL 事件；后台 handoff 不显示主窗。设备快照读端使用 60 秒 TTL，设备选择不自动提交，离线等待需独立勾选，并提供添加设备入口。Mac 定向作业 /tmp/codex-ssh/linksend-e3-c1-mac-swift-r2-20260913T165721Z 完成 ShareStore 四项测试和 extension Swift 编译；签名、注册和系统激活仍为 NOT RUN。
+
+## E3-C2 审查修复
+
+Windows 安装器恢复同一 package root，manifest、宿主和 Share Target 路径一致；卸载显式删除安装器拥有的 Share Target 文件和 Logo。在线设备按钮直接提交，离线目标仍需勾选确认；错误不会调用 ReportError 锁死面板。临时目录/Temporary 属性或无稳定路径的 StorageFile 强制复制，累计上限 16 GiB，复制后校验长度并 Flush(true)，入队前失败会清理 owned 目录。
+
+Go 对清理失败保留 journal，主界面列出未入队请求并提供明确放弃入口。Mac 使用 NSWorkspace.openApplication(arguments: --native-share-background, activates: false) 覆盖冷启动，解析带小数秒的 RFC3339Nano；provider 调用并发上限 4，按实际复制 chunk 扣 16 GiB 总预算。定向 Mac 作业 /tmp/codex-ssh/linksend-e3-c2-mac-swift-20260913T171611Z 通过。
