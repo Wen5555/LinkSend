@@ -67,6 +67,7 @@ func (s *Service) shutdownOwners() {
 	_ = s.stopInbox(true)
 	_ = s.stopLANDiscovery()
 	s.listenerWorkers.Wait()
+	s.closePooledSessions("")
 	s.tasks.workers.Wait()
 	s.content.mu.Lock()
 	if s.content.store != nil {

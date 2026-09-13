@@ -766,7 +766,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		prepared, peer, runErr := s.prepareAndConnect(ctx, peerID, base, cfg)
 		if runErr == nil && cfg.expectedSourceDigest != "" && queueSourceDigest(prepared.Manifest) != cfg.expectedSourceDigest {
 			_ = prepared.Close()
-			_ = peer.Close()
+			_ = s.releasePeerSession(peer, nil)
 			runErr = transfer.ErrChanged
 		}
 		if runErr == nil {
@@ -796,7 +796,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 				recovery.SentChunks = sentChunks
 			})
 			if indexErr := s.IndexInboxManifest(ctx, t.snapshot().ID, prepared.Manifest); indexErr != nil {
-				handleTaskRunError(t, attemptID, ctx, errors.Join(indexErr, peer.Close()))
+				handleTaskRunError(t, attemptID, ctx, s.releasePeerSession(peer, indexErr))
 				return
 			}
 			result, runErr = s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{
@@ -812,11 +812,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 					}
 				},
 			})
-			if runErr == nil {
-				runErr = s.closePeerAfterTransfer(peer)
-			} else {
-				runErr = errors.Join(runErr, peer.Close())
-			}
+			runErr = s.releasePeerSession(peer, runErr)
 		}
 		if runErr != nil {
 			handleTaskRunError(t, attemptID, ctx, runErr)

@@ -13,6 +13,7 @@ import (
 	"github.com/Wen5555/LinkSend/internal/signaling"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 	"github.com/Wen5555/LinkSend/internal/transport"
+	quic "github.com/quic-go/quic-go"
 )
 
 // InboxStatus describes the persistent receiver without creating a visible
@@ -251,7 +252,7 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 					s.inbox.listening = false
 					s.inbox.mu.Unlock()
 					if s.receiveIncoming(ctx, peer, directory) {
-						_ = s.closePeerAfterTransfer(peer)
+						s.adoptInboundPeerSession(peer)
 					} else {
 						_ = peer.Close()
 					}
@@ -313,6 +314,14 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		s.inbox.mu.Unlock()
 		return false
 	}
+	stream, err := peer.Data.Conn.AcceptStream(inboxCtx)
+	if err != nil {
+		return false
+	}
+	return s.receiveIncomingStream(inboxCtx, peer, directory, transport.WrapStream(stream))
+}
+
+func (s *Service) receiveIncomingStream(inboxCtx context.Context, peer *PeerSession, directory string, stream *transport.QUICStream) bool {
 	ctx, cancel := context.WithCancel(inboxCtx)
 	authorizationGeneration := peer.AuthorizationGeneration
 	if authorizationGeneration == 0 {
@@ -348,19 +357,14 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		applyDirectEvidence(v, peer.Evidence())
 	})
 
-	stream, err := peer.Data.Conn.AcceptStream(ctx)
-	if err != nil {
-		handleTaskRunError(t, attemptID, ctx, err)
-		cancel()
-		return false
-	}
 	options := s.taskReceiveOptions(ctx, t, attemptID, directory, nil, s.alwaysAccept(peer.PeerID))
 	options.Peer = peer.PeerID
-	result, runErr := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
+	result, runErr := transfer.ReceiveWithOptions(ctx, stream, options)
 	if runErr != nil {
 		handleTaskRunError(t, attemptID, ctx, runErr)
 		cancel()
-		return false
+		var streamErr *quic.StreamError
+		return errors.Is(runErr, context.Canceled) || protocol.ErrorCode(runErr) == protocol.Cancelled || errors.As(runErr, &streamErr)
 	}
 	t.completeTransfer(attemptID, result, peer.SessionID)
 	cancel()

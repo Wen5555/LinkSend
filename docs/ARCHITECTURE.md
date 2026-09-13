@@ -46,6 +46,8 @@ WSS 信令：设备/会话/候选
 
 逻辑任务在恢复过程中保留 `task_id`，每次执行创建新 `attempt_id`，每次连接创建新 `session_id`，ICE generation 只在该 session 内有效；完整任务快照通过单调 `revision` 防止旧回调覆盖。公开状态为 Preparing、AwaitingAcceptance、Transferring、Verifying、Paused、Recovering、Completed、Rejected、Cancelled、Failed。Completed 要求接收端唯一块验证、提交成功以及 completed/confirmed 双边终态完成。
 
+E4 的 direct session owner 以 peer ID 和双方当前授权 generation 为键短时保留已认证 QUIC。一个文件任务对应一个双向 stream；连接两端都保持 AcceptStream owner，因此最初的响应方可以在同一连接上发起反向文件流。取消或 reset 只回收该 stream；授权撤销、路径/连接失败、3 秒空闲、网络变化或进程退出关闭池中连接。每 peer 仍至多一个活动文件发送流，不开放无界并发。
+
 QUIC 成功终态使用 `completed → confirmed → confirmed_ack` 显式闭环，并兼容旧端以 EOF/application code 0 表示已读确认。终态完成后标准 QUIC close 仍发送，但 quic-go draining 和 endpoint 回收在后台进行；任何非零 close、reset、deadline 或普通传输阶段的 close 都不能转换为成功。响应端在发送 `connect_response` 前先注册固定身份的 QUIC listener，避免首个 Initial 因监听窗口尚未建立而等待 PTO 重传。
 
 任务控制状态优先于同一 attempt 的迟到进度：Pause/Cancel 建立调度屏障后，ACK 可以补齐计数，但不能重新开放 `CanPause`、覆盖 `pause_requested` 或把任务误终结为 Cancelled。接收准备和测试同步使用明确的后端 phase/checkpoint 事件，不依赖固定 sleep。

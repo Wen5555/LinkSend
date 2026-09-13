@@ -670,10 +670,7 @@ func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []
 	}
 	defer prepared.Close()
 	result, sendErr := s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{Progress: progress})
-	if sendErr == nil {
-		return result, s.closePeerAfterTransfer(peer)
-	}
-	return result, errors.Join(sendErr, peer.Close())
+	return result, s.releasePeerSession(peer, sendErr)
 }
 
 // SendPreparedDetailed reuses a caller-owned prepared manifest. Recovery uses
@@ -690,15 +687,12 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 		hooks.Progress(transfer.Progress{TransferID: prepared.Manifest.TransferID, State: "Preparing", Total: prepared.Manifest.TotalBytes()})
 	}
 	cfg.phase("connecting")
-	peer, err := s.connectWithOnlineGrace(ctx, peerID, cfg)
+	peer, err := s.acquirePeerSession(ctx, peerID, cfg)
 	if err != nil {
 		return DirectTransferResult{}, err
 	}
 	result, sendErr := s.sendPreparedOverPeer(ctx, peer, prepared, cfg, hooks)
-	if sendErr == nil {
-		return result, s.closePeerAfterTransfer(peer)
-	}
-	return result, errors.Join(sendErr, peer.Close())
+	return result, s.releasePeerSession(peer, sendErr)
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
@@ -745,7 +739,7 @@ func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []
 	}()
 	go func() {
 		cfg.phase("connecting")
-		peer, err := s.connectWithOnlineGrace(parallelCtx, peerID, cfg)
+		peer, err := s.acquirePeerSession(parallelCtx, peerID, cfg)
 		peerCh <- peerResult{peer: peer, err: err}
 	}()
 
@@ -768,7 +762,7 @@ func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []
 			_ = preparedResult.prepared.Close()
 		}
 		if connectedResult.peer != nil {
-			_ = connectedResult.peer.Close()
+			_ = s.releasePeerSession(connectedResult.peer, nil)
 		}
 		if preparedResult.err != nil && protocol.ErrorCode(preparedResult.err) != protocol.Cancelled {
 			return nil, nil, preparedResult.err

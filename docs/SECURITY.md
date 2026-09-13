@@ -82,3 +82,8 @@ diagnostics 采用允许列表，仅记录实际 base socket、接口、地址�
 计划 checkpoint 与 App PlanChanged 持久化回调都必须成功后才能接收正文或按新名称提交。恢复保持已接受集合与已持久名称；已提交文件/目录不允许重新命名，目录失效或身份变化需用户处理。实际 App/UI 和平台验收仍以证据表为准。
 
 M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、内容绑定和实际文件摘要，不能由前端路径或历史标签授权读取。未知 URL scheme 仅显示/复制为文字，打开动作每次限定 http/https；图片另存不覆盖。快照清理保护活动/恢复/队列/草稿及普通文件路径重叠引用，只释放本应用的引用命名空间，受控 Store 再检查持久 OS 文件身份与摘要，不删除接收用户文件。详情见 [ADR 0006](adr/0006-owned-content-lifecycle.md)。
+
+
+## E4 认证会话复用
+
+复用键包含固定 peer identity 与本机 authorization generation；每次打开文件流前重新读取当前授权，成员代际变化或本机阻止会关闭该 peer 的池中连接。0-RTT 仍关闭。取消只 reset 对应 QUIC stream；未知连接级错误、路径失效、空闲超时和退出关闭整个连接。复用不扩大文件路径或剪贴板权限。

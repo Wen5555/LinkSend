@@ -66,7 +66,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E3-01 | 源码验收通过 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | c205b12 CI运行中 | 原生目标动作、临时来源接管、持久授权/回收与错误隔离已验收；签名激活暂缓 |
 | E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | c205b12 CI运行中 | bookmark/临时表示、冷启动与持久生命周期源码验收；签名/App Group实机暂缓 |
 | E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
-| E4-01 | 执行中 | 存储owner PASS | 定向PASS | NOT RUN | NOT RUN | NOT RUN | 单一SQLite pool与benchmark完成；会话复用/流取消/公平调度继续 |
+| E4-01 | 执行中 | 存储/会话PASS | 定向/race PASS | NOT RUN | NOT RUN | 待候选CI | 单一SQLite pool、双向QUIC复用和流取消候选；公平调度继续 |
 | E4-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E4-03 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
 | E5-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |

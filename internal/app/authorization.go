@@ -83,6 +83,7 @@ func (s *Service) BlockPeer(peerID string) error {
 	if err != nil {
 		return err
 	}
+	s.closePooledSessions(peerID)
 	s.cancelPeerTasks(peerID)
 	return nil
 }

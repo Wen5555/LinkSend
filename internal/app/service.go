@@ -64,6 +64,8 @@ type Service struct {
 	lanPair           lanPairCoordinator
 	recoveryMu        sync.Mutex
 	lastNetworkChange time.Time
+	directPoolMu      sync.Mutex
+	directPool        map[string]*pooledPeerSession
 }
 
 type cachedNetworkSelection struct {
@@ -157,7 +159,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession)}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	keepHistory := false
 	defer func() {
@@ -446,6 +448,7 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		}
 		for _, peer := range before {
 			if generation, ok := current[peer.ID]; !ok || generation != peer.GrantGeneration {
+				s.closePooledSessions(peer.ID)
 				s.cancelPeerTasks(peer.ID)
 			}
 		}
