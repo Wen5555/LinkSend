@@ -53,9 +53,9 @@ pnpm run build
 
 Windows本机实际通过根模块完整`go test ./... -count=1`、`go vet ./...`、根`GOWORK=off go test ./... -count=1`，以及定向`go test -race ./internal/clipboardsync ./internal/app -run 'Clipboard|SessionReuseRequiresBilateralCapability' -count=1 -timeout 240s`。桌面独立模块`GOWORK=off go test -race ./... -count=1`、vet、build通过；前端typecheck、lint、66项测试和production build通过。Node 24.19.0/pnpm 11.19.0仍低于仓库声明的Node 24.21.0，仅产生既有engine warning。
 
-真实loopback Pion ICE + quic-go用例把A端本地generation保持1、B端对A的本地generation改为29，验证lease和event按方向通过且双向文字仍能写入；旧`session_reuse`而无`clipboard_sync`的envelope被判为unsupported。持续20次新复制期间文件任务完成；接收方占满两路receive slot后，32 MiB剪贴板正文在真实QUIC流上阻塞，发送方Shutdown在3秒上下文内关闭连接并等待worker退出。定向负例还覆盖origin冒充、permission revision篡改、关闭/重开后的旧lease和正文、解码验证期间并发撤权、无lease/unsupported watermark、latest-only取消和发送分块/节流预算。
+真实loopback Pion ICE + quic-go用例把A端本地generation保持1、B端对A的本地generation改为29，验证lease和event按方向通过且双向文字仍能写入；旧`session_reuse`而无`clipboard_sync`的envelope被判为unsupported。持续20次新复制期间文件任务完成；接收方占满两路receive slot后，32 MiB剪贴板正文在真实QUIC流上阻塞，后续20个事件仍只保留同peer固定worker的current和一个latest-only pending，发送方Shutdown在3秒上下文内主动reset流并等待worker退出。Ensure重入在已有轮次运行时立即合并，不排队等待同一peer连接锁。远端原生写入注入失败后，接收端peer状态实际显示`write_failed`；下一次真实QUIC事件写入成功后错误与等待码清除。定向负例还覆盖origin冒充、permission revision篡改、关闭/重开后的旧lease和正文、解码验证期间并发撤权、无lease/unsupported watermark、latest-only取消和发送分块/节流预算。
 
-macOS alias `mac-test-102342413` 的最终源码作业`/tmp/codex-ssh/linksend-e4-fix-mac-final-20260913T232901Z`使用Go 1.27.1/darwin arm64，根clipboardsync、定向app、desktop nativeclipboard race、完整desktop test和vet全部退出0。命名pasteboard测试实际覆盖普通文字不误当link、有效URL、PNG像素读写和`org.nspasteboard.ConcealedType`拒读，未触碰general clipboard。保留既有SDK 26 object与deployment target 13/11 linker warning。前一作业`/tmp/codex-ssh/linksend-e4-fix-mac-20260913T231151Z`在测试前因Windows补丁换行不匹配于`git apply --check`退出1；改用临时Git index打包tracked工作树后才得到上述通过结果，未把首次工具输入失败记为产品失败。
+macOS alias `mac-test-102342413` 的最终源码作业`/tmp/codex-ssh/linksend-e4-ab-mac-final-20260914T002102Z`使用Go 1.27.1/darwin arm64，根clipboardsync、定向app、desktop nativeclipboard race、完整desktop test和vet全部退出0。命名pasteboard测试实际覆盖普通文字不误当link、有效URL、PNG像素读写和`org.nspasteboard.ConcealedType`拒读，未触碰general clipboard。保留既有SDK 26 object与deployment target 13/11 linker warning。前一作业`/tmp/codex-ssh/linksend-e4-fix-mac-20260913T231151Z`在测试前因Windows补丁换行不匹配于`git apply --check`退出1；改用临时Git index打包tracked工作树后才得到上述通过结果，未把首次工具输入失败记为产品失败。
 
 ## 尚未完成
 

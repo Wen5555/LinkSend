@@ -6,7 +6,7 @@
 
 接收方为指定认证 peer identity、QUIC session ID、接收方本地authorization generation、允许的 `text|link|image` 及其receive permission revision预签发lease；event另携带发送方本地send permission revision，并把双方revision纳入digest。lease从接收方签发时起固定有效10秒，每7秒可签发新的独立lease；续租不会延长旧event。每个peer/session每方向最多保留两个lease，重连、暂停、睡眠、锁屏、撤销、permission revision变化、generation变化和Shutdown清除旧lease。event的`origin_id`必须等于TLS认证peer，且在正文读取前通过lease、session、方向对应generation、类型、origin sequence、Lamport、digest、permission revision和首帧期限检查；正文读取deadline继续使用原始lease期限，读完后再次验证digest、应用revision、系统剪贴板generation、暂停状态、当前授权和稳定全序。
 
-文字和链接正文最多64 KiB，图片PNG最多32 MiB；header声明长度、实际长度、UTF-8/URL/PNG与图片尺寸在对应层复核。所有真实系统变化先推进OS generation、origin sequence、Lamport和应用revision，即使没有lease、没有发送权限或格式不支持也不会留下可补发的旧复制。一个本机复制事件fan-out给多个peer时复用同一origin sequence与Lamport，各peer的lease不同，因此event digest不同。发送与接收正文各全局最多两路；发送每64 KiB复核connection context、deadline和latest-only状态并执行有界节流。接收写入成功后的原生通知只按新OS generation与payload digest抑制一次；用户随后复制相同内容产生的新generation仍可发送。
+文字和链接正文最多64 KiB，图片PNG最多32 MiB；header声明长度、实际长度、UTF-8/URL/PNG与图片尺寸在对应层复核。所有真实系统变化先推进OS generation、origin sequence、Lamport和应用revision，即使没有lease、没有发送权限或格式不支持也不会留下可补发的旧复制。一个本机复制事件fan-out给多个peer时复用同一origin sequence与Lamport，各peer的lease不同，因此event digest不同。每peer只有一个固定发送worker和一个latest-only pending，发送与接收正文各全局最多两路；等待slot、开流和发送都受原lease deadline与主动cancel约束，已打开流在新复制、暂停或撤权时reset。发送每64 KiB继续复核connection context、deadline和latest-only状态并执行有界节流。接收写入成功后的原生通知只按新OS generation与payload digest抑制一次；用户随后复制相同内容产生的新generation仍可发送。运行态仅保留每peer最新有限等待/错误码，成功后清除，不进入正文日志或持久历史。
 
 ## 2026-09-13 membership_v2 与 LAN pairing 控制契约
 

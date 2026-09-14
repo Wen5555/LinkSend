@@ -130,6 +130,73 @@ func TestClipboardSendSlotsAreBounded(t *testing.T) {
 	}
 }
 
+func TestClipboardEnsureIsSingleflight(t *testing.T) {
+	service, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Shutdown)
+	service.clipboardEnsureMu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- service.EnsureClipboardSessions(t.Context(), DirectConfig{}) }()
+	select {
+	case err = <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("overlapping clipboard Ensure call queued behind the active pass")
+	}
+	service.clipboardEnsureMu.Unlock()
+}
+
+func TestClipboardPeerSenderKeepsOnlyLatestPendingEvent(t *testing.T) {
+	sender := &clipboardPeerSender{wake: make(chan struct{}, 1)}
+	activeCtx, cancel := context.WithCancel(t.Context())
+	sender.current = &clipboardSendJob{event: clipboardsync.Event{OSGeneration: 1}}
+	sender.cancel = cancel
+	payload := make([]byte, clipboardsync.MaxImageBytes)
+	for generation := uint64(2); generation <= 100; generation++ {
+		sender.enqueue(&clipboardSendJob{event: clipboardsync.Event{OSGeneration: generation, Payload: payload}})
+	}
+	select {
+	case <-activeCtx.Done():
+	default:
+		t.Fatal("new clipboard event did not cancel the active event")
+	}
+	sender.mu.Lock()
+	pending := sender.pending
+	sender.mu.Unlock()
+	pendingGeneration := uint64(0)
+	if pending != nil {
+		pendingGeneration = pending.event.OSGeneration
+	}
+	if pendingGeneration != 100 || len(sender.wake) != 1 {
+		t.Fatalf("latest-only pending generation=%d wake=%d", pendingGeneration, len(sender.wake))
+	}
+}
+
+func TestClipboardRevocationActivelyCancelsMatchingSender(t *testing.T) {
+	service := &Service{clipboardSenders: make(map[string]*clipboardPeerSender), clipboardPeerRuntime: make(map[string]clipboardPeerRuntimeStatus)}
+	activeCtx, cancel := context.WithCancel(t.Context())
+	sender := &clipboardPeerSender{wake: make(chan struct{}, 1), cancel: cancel}
+	sender.current = &clipboardSendJob{peer: &PeerSession{PeerID: "peer"}, event: clipboardsync.Event{Kind: clipboardsync.Text}}
+	sender.pending = &clipboardSendJob{peer: &PeerSession{PeerID: "peer"}, event: clipboardsync.Event{Kind: clipboardsync.Text}}
+	service.clipboardSenders["peer/session"] = sender
+	service.cancelClipboardSends("peer", clipboardsync.Text)
+	select {
+	case <-activeCtx.Done():
+	default:
+		t.Fatal("revocation did not cancel active clipboard send")
+	}
+	sender.mu.Lock()
+	pending := sender.pending
+	sender.mu.Unlock()
+	if pending != nil {
+		t.Fatal("revocation retained pending clipboard payload")
+	}
+}
+
 func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testing.T) {
 	f := newDirectFixtureServices(t)
 	var err error
@@ -174,6 +241,7 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	var bGeneration atomic.Uint64
 	bGeneration.Store(1)
 	var sendLargeImage atomic.Bool
+	var failNextWrite atomic.Bool
 	written := make(chan []byte, 64)
 	reverseWritten := make(chan []byte, 1)
 	f.a.ConfigureClipboard(ClipboardAdapter{Generation: aGeneration.Load, Read: func(_ context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
@@ -196,6 +264,9 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	f.b.ConfigureClipboard(ClipboardAdapter{Generation: bGeneration.Load, Read: func(_ context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
 		return []byte("reverse clipboard text"), bGeneration.Load(), nil
 	}, Write: func(kind clipboardsync.Kind, payload []byte, expected uint64, _ time.Time) (uint64, error) {
+		if failNextWrite.CompareAndSwap(true, false) {
+			return 0, errors.New("injected native clipboard write failure")
+		}
 		if kind != clipboardsync.Text || expected != bGeneration.Load() {
 			return 0, clipboardsync.ErrConflict
 		}
@@ -263,8 +334,28 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	if peer.Data.Conn.Context().Err() != nil {
 		t.Fatal("clipboard-ready session was reclaimed by file idle timer")
 	}
+	failNextWrite.Store(true)
 	aGeneration.Store(2)
 	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 2, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
+		t.Fatal(err)
+	}
+	failureDeadline := time.Now().Add(3 * time.Second)
+	for failNextWrite.Load() && time.Now().Before(failureDeadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if failNextWrite.Load() {
+		t.Fatalf("injected clipboard write failure was not reached: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
+	}
+	waitFor(t, 3*time.Second, func() bool {
+		for _, status := range f.b.ClipboardPeerStatuses() {
+			if status.PeerID == f.aID.ID() && status.Error == "write_failed" {
+				return true
+			}
+		}
+		return false
+	}, "clipboard write failure was not visible in peer status")
+	aGeneration.Store(3)
+	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 3, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -273,8 +364,16 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 			t.Fatalf("payload=%q", got)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("clipboard event did not reach native commit owner")
+		t.Fatalf("clipboard event did not reach native commit owner: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
 	}
+	waitFor(t, 3*time.Second, func() bool {
+		for _, status := range f.b.ClipboardPeerStatuses() {
+			if status.PeerID == f.aID.ID() {
+				return status.Error == "" && status.Waiting == ""
+			}
+		}
+		return false
+	}, "successful clipboard transfer did not clear peer error")
 	if _, err := f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "receive", Kind: "text", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -305,10 +404,13 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 			t.Fatalf("reverse payload=%q", got)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("reverse clipboard did not commit")
+		t.Fatalf("reverse clipboard did not commit: sender=%+v receiver=%+v", f.b.ClipboardPeerStatuses(), f.a.ClipboardPeerStatuses())
 	}
 	chunkSent, releaseChunk := make(chan struct{}), make(chan struct{})
 	var once sync.Once
+	var releaseOnce sync.Once
+	releaseFile := func() { releaseOnce.Do(func() { close(releaseChunk) }) }
+	defer releaseFile()
 	fileCfg := cfg
 	fileCfg.onChunkSent = func(transfer.ChunkTransmission) { once.Do(func() { close(chunkSent) }); <-releaseChunk }
 	large := filepath.Join(t.TempDir(), "large.bin")
@@ -324,8 +426,8 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	case <-time.After(10 * time.Second):
 		t.Fatal("large file did not reach active chunk")
 	}
-	aGeneration.Store(4)
-	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 4, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
+	aGeneration.Store(5)
+	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 5, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -334,11 +436,11 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 			t.Fatal(string(got))
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("active file starved clipboard stream")
+		t.Fatalf("active file starved clipboard stream: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
 	}
 	clipboardLoadDone := make(chan error, 1)
 	go func() {
-		for generation := uint64(5); generation < 25; generation++ {
+		for generation := uint64(6); generation < 26; generation++ {
 			aGeneration.Store(generation)
 			if changeErr := f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: generation, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); changeErr != nil {
 				clipboardLoadDone <- changeErr
@@ -348,7 +450,7 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 		}
 		clipboardLoadDone <- nil
 	}()
-	close(releaseChunk)
+	releaseFile()
 	waitFor(t, 10*time.Second, func() bool { got, ok := f.a.Task(largeTask.ID); return ok && got.State == "completed" }, "file did not resume after clipboard event")
 	if err = <-clipboardLoadDone; err != nil {
 		t.Fatal("sustained clipboard load failed", err)
@@ -367,12 +469,24 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	f.b.clipboardReceiveSlots <- struct{}{}
 	f.b.clipboardReceiveSlots <- struct{}{}
 	sendLargeImage.Store(true)
-	aGeneration.Store(25)
-	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 25, Kinds: []clipboardsync.Kind{clipboardsync.Image}}); err != nil {
+	aGeneration.Store(26)
+	if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: 26, Kinds: []clipboardsync.Kind{clipboardsync.Image}}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, 3*time.Second, func() bool { return len(f.a.clipboardSendSlots) == 1 }, "large clipboard send did not start")
 	time.Sleep(100 * time.Millisecond)
+	for generation := uint64(27); generation < 47; generation++ {
+		aGeneration.Store(generation)
+		if err = f.a.ClipboardChanged(t.Context(), ClipboardChange{Generation: generation, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.a.clipboardDispatchMu.Lock()
+	senderCount := len(f.a.clipboardSenders)
+	f.a.clipboardDispatchMu.Unlock()
+	if senderCount != 1 {
+		t.Fatalf("clipboard dispatcher count=%d", senderCount)
+	}
 	shutdownCtx, stopShutdown := context.WithTimeout(context.Background(), 3*time.Second)
 	defer stopShutdown()
 	if err = f.a.ShutdownContext(shutdownCtx); err != nil {

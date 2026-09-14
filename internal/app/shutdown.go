@@ -38,6 +38,7 @@ func (s *Service) shutdownOwners() {
 	if s.workCancel != nil {
 		s.workCancel()
 	}
+	s.cancelClipboardSends("", "")
 	s.stopQueue()
 	// Set intent before cancelling parent listeners, including inbound tasks.
 	s.tasks.mu.RLock()

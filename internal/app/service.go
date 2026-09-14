@@ -75,6 +75,11 @@ type Service struct {
 	clipboardSync              *clipboardsync.State
 	clipboardAdapterMu         sync.RWMutex
 	clipboardAdapter           ClipboardAdapter
+	clipboardDispatchMu        sync.Mutex
+	clipboardSenders           map[string]*clipboardPeerSender
+	clipboardStatusMu          sync.Mutex
+	clipboardPeerRuntime       map[string]clipboardPeerRuntimeStatus
+	clipboardEnsureMu          sync.Mutex
 	clipboardSendSlots         chan struct{}
 	clipboardWorkers           sync.WaitGroup
 	clipboardReceiveSlots      chan struct{}
@@ -172,7 +177,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession), directPoolLocks: make(map[string]*sync.Mutex), clipboardSync: clipboardsync.New(id.ID(), nil), clipboardReceiveSlots: make(chan struct{}, 2), clipboardSendSlots: make(chan struct{}, 2)}
+	s := &Service{cfg: cfg, identity: id, tasks: newTaskManager(), profileLock: lock, directPool: make(map[string]*pooledPeerSession), directPoolLocks: make(map[string]*sync.Mutex), clipboardSync: clipboardsync.New(id.ID(), nil), clipboardSenders: make(map[string]*clipboardPeerSender), clipboardPeerRuntime: make(map[string]clipboardPeerRuntimeStatus), clipboardReceiveSlots: make(chan struct{}, 2), clipboardSendSlots: make(chan struct{}, 2)}
 	s.tasks.configureHistory(filepath.Join(cfg.DataDir, "task-history.sqlite"))
 	keepHistory := false
 	defer func() {

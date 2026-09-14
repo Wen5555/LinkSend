@@ -43,6 +43,8 @@ export interface ClipboardPeerStatus {
     "state": string;
     "send_ready": boolean;
     "receive_ready": boolean;
+    "waiting"?: string;
+    "error"?: string;
 }
 
 export interface ContentActionResult {

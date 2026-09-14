@@ -126,13 +126,14 @@ describe('SettingsPage save lifecycle', () => {
 
   it('saves the clipboard master switch and renders peer capability state', async () => {
     backend.SavePreferencesSection.mockResolvedValueOnce({ ...basePreferences, revision: 3, clipboard_enabled: true });
-    const { container, root } = renderSettings({ enabled: false, master_enabled: false, active: false, paused: true, pause_reason: 'master_disabled', last: { sequence: 0, text: false, link: false, image: false }, peers: [{ peer_id: 'peer-a', state: 'unsupported', send_ready: false, receive_ready: false }] });
+	const { container, root } = renderSettings({ enabled: false, master_enabled: false, active: false, paused: true, pause_reason: 'master_disabled', last: { sequence: 0, text: false, link: false, image: false }, peers: [{ peer_id: 'peer-a', state: 'unsupported', send_ready: false, receive_ready: false }, { peer_id: 'peer-b', state: 'ready', send_ready: true, receive_ready: true, error: 'write_failed' }] });
     roots.push(root);
     act(() => button(container, '自动剪贴板').click());
     const toggle = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
     act(() => toggle.click());
     expect(toggle.checked).toBe(true);
-    expect(container.textContent).toContain('对端不支持');
+	expect(container.textContent).toContain('对端不支持');
+	expect(container.textContent).toContain('写入系统剪贴板失败');
     await act(async () => button(container, '保存自动剪贴板设置').click());
     expect(backend.SavePreferencesSection).toHaveBeenCalledWith('clipboard', 2, expect.objectContaining({ clipboard_enabled: true }));
   });

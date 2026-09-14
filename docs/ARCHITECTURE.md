@@ -50,7 +50,9 @@ E4 的 direct session owner 以 peer ID 和本机当前授权 generation 为池�
 
 同一复用连接另有唯一的剪贴板单向流owner，与文件双向流owner并行。接收方按当前receive permission revision续签lease；发送方只在持有对方有效lease且本机send grant仍为相同revision时读取一次原生剪贴板并发送。正文到达后先锁定header候选和原始deadline，再占用全局两个receive slot之一读取正文；图片解码等纯验证在状态机锁外完成。最终Commit按grant→state一致锁序重验application revision、OS generation、peer generation、receive permission revision、暂停状态和deadline，最后调用平台CAS写入。单流失败或过期不关闭文件连接；只要任一剪贴板方向ready，3秒文件空闲回收不会关闭连接。暂停或全部方向失效会恢复空闲回收。
 
-桌面watcher使用容量1的latest-only变化队列；本机一次系统变化先推进唯一状态owner，再按可读格式准备一个origin事件并绑定各peer lease。发送worker异步执行、全局最多两路，每64 KiB复核新复制/暂停/撤权/连接/deadline并节流；会话Ensure按peer并行，变化交付不等待坏peer连接。首次启动、恢复、授权变更和每5秒尝试为已授权peer建立认证会话，不创建文件Task。会话建立后的lease以当前系统generation为baseline，因此离线、无权限、格式不支持或尚未建连期间的旧复制不会补发。
+桌面watcher使用容量1的latest-only变化队列；本机一次系统变化先推进唯一状态owner，再按可读格式准备一个origin事件并绑定各peer lease。每个peer只有一个固定发送worker、一个current和一个latest-only pending引用，发送全局最多两路；等待slot、`OpenUniStreamSync`和正文写入共同继承event lease deadline，新复制、暂停或撤权会调用当前job cancel并主动reset已打开的QUIC流。每64 KiB仍复核状态并节流。会话Ensure按peer并行且全局singleflight，周期触发不会在同一离线peer的连接互斥锁后积累；变化交付不等待坏peer连接。首次启动、恢复、授权变更和每5秒尝试为已授权peer建立认证会话，不创建文件Task。会话建立后的lease以当前系统generation为baseline，因此离线、无权限、格式不支持或尚未建连期间的旧复制不会补发。
+
+剪贴板运行状态只在内存中为每个peer保留最新的有限等待码或错误码，不保存正文、不写历史。等待slot/lease/connection/stream和发送/接收阶段可由设置页显示；读取、连接、传输、校验或原生写入失败显示稳定类别，下一次该peer实际成功提交或发送后清除。撤销全部grant会删除该peer状态。
 
 QUIC 成功终态使用 `completed → confirmed → confirmed_ack` 显式闭环，并兼容旧端以 EOF/application code 0 表示已读确认。终态完成后标准 QUIC close 仍发送，但 quic-go draining 和 endpoint 回收在后台进行；任何非零 close、reset、deadline 或普通传输阶段的 close 都不能转换为成功。响应端在发送 `connect_response` 前先注册固定身份的 QUIC listener，避免首个 Initial 因监听窗口尚未建立而等待 PTO 重传。
 

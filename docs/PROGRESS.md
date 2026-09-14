@@ -561,11 +561,11 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 历史交付勘误：较早的 Windows 便携包曾缺包内 SHA256/准确合并提交来源信息，不能视为满足本轮发布要求；本轮 ZIP 单独记录未提交来源并包含包内校验和。默认 Windows 身份数据目录通常为 `%APPDATA%\LinkSend`（`os.UserConfigDir()`），不是 `%LOCALAPPDATA%`。
 ## 2026-09-14 E4-03 集中修复候选
 
-- 所有真实本机变化先推进剪贴板状态owner；无lease、无发送权限、格式不支持和离线变化均不补发。发送改为异步两slot、64 KiB状态复核和节流，lease deadline约束QUIC写；新复制、暂停、撤权及Shutdown能淘汰或结束旧worker，Ensure按peer并行且变化交付不等待连接。
+- 所有真实本机变化先推进剪贴板状态owner；无lease、无发送权限、格式不支持和离线变化均不补发。每peer固定一个worker，只保留current和一个latest-only pending；等待两路全局slot、开流和64 KiB分块写都继承lease deadline。新复制、暂停、撤权及Shutdown主动cancel/reset旧流；Ensure按peer并行并以singleflight阻止周期调用在离线peer后积累。
 - 连接协商增加独立`clipboard_sync`；只声明旧`session_reuse`不会启动剪贴板owner。双方各自本地authorization generation可不同，真实loopback用例以1/29非对称代次验证双向文字。origin绑定认证peer，lease/event绑定双方permission revision；关闭/重开同一权限后旧lease/正文拒绝，无关方向不删除健康lease。
 - 图片解码/验证移出最终state锁；mutation前按grant→state锁序复核暂停、peer generation、receive revision、deadline和OS generation。macOS普通文字不误判link，命名pasteboard的文字、URL、PNG和concealed marker已在arm64通过；Windows读取明确exclude marker。Windows PNG跨应用粘贴仍按计划留E5。
-- 设置新增独立自动剪贴板分类、持久且默认关闭的总开关、读取/远端写入说明、临时暂停，以及ready/connecting/unsupported/pause/error状态。Wails bindings已重新生成。
-- Windows根完整test/vet/GOWORK=off test、定向race、桌面独立race/vet/build、前端typecheck/lint/66 tests/build通过。Mac最终作业`/tmp/codex-ssh/linksend-e4-fix-mac-final-20260913T232901Z`的根定向测试、nativeclipboard race、desktop完整test/vet通过；保留既有SDK 26/deployment target warning。物理Win↔Mac自动剪贴板、准确包锁屏/睡眠/网络切换仍留E5，未恢复E5部署。
+- 设置新增独立自动剪贴板分类、持久且默认关闭的总开关、读取/远端写入说明、临时暂停，以及ready/connecting/unsupported/pause/error状态。后端只在内存中保留每peer最新有限等待/错误码，真实远端原生写入失败可见，下一次成功清除，不记录正文或历史。Wails bindings已重新生成。
+- Windows根完整test/vet/GOWORK=off test、定向race、桌面独立race/vet/build、前端typecheck/lint/66 tests/build通过。Mac最终作业`/tmp/codex-ssh/linksend-e4-ab-mac-final-20260914T002102Z`的根定向测试、nativeclipboard race、desktop完整test/vet通过；保留既有SDK 26/deployment target warning。物理Win↔Mac自动剪贴板、准确包锁屏/睡眠/网络切换仍留E5，未恢复E5部署。
 
 ## 2026-09-14 E4-01 认证 QUIC 文件会话复用候选
 

@@ -23,6 +23,40 @@ type ClipboardPeerStatus struct {
 	State        string `json:"state"`
 	SendReady    bool   `json:"send_ready"`
 	ReceiveReady bool   `json:"receive_ready"`
+	Waiting      string `json:"waiting,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+type clipboardPeerRuntimeStatus struct {
+	Waiting string
+	Error   string
+}
+
+type clipboardSendJob struct {
+	peer  *PeerSession
+	lease clipboardsync.Lease
+	event clipboardsync.Event
+}
+
+type clipboardPeerSender struct {
+	mu      sync.Mutex
+	wake    chan struct{}
+	pending *clipboardSendJob
+	current *clipboardSendJob
+	cancel  context.CancelFunc
+}
+
+func (s *clipboardPeerSender) enqueue(job *clipboardSendJob) {
+	s.mu.Lock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.pending = job
+	s.mu.Unlock()
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
 }
 
 func clipboardMessageGenerationValid(peer *PeerSession, message clipboardsync.Message) bool {
@@ -41,8 +75,8 @@ func clipboardMessageGenerationValid(peer *PeerSession, message clipboardsync.Me
 
 func (s *Service) ClipboardPeerStatuses() []ClipboardPeerStatus {
 	s.directPoolMu.Lock()
-	defer s.directPoolMu.Unlock()
 	statuses := make([]ClipboardPeerStatus, 0, len(s.directPool))
+	seen := make(map[string]bool, len(s.directPool))
 	for _, pooled := range s.directPool {
 		if pooled.peer == nil {
 			continue
@@ -54,9 +88,59 @@ func (s *Service) ClipboardPeerStatuses() []ClipboardPeerStatus {
 			state = "connecting"
 		}
 		statuses = append(statuses, ClipboardPeerStatus{PeerID: pooled.peer.PeerID, State: state, SendReady: pooled.clipboardSendReady, ReceiveReady: pooled.clipboardReceiveReady})
+		seen[pooled.peer.PeerID] = true
 	}
+	s.directPoolMu.Unlock()
+	s.clipboardStatusMu.Lock()
+	for index := range statuses {
+		runtime := s.clipboardPeerRuntime[statuses[index].PeerID]
+		statuses[index].Waiting = runtime.Waiting
+		statuses[index].Error = runtime.Error
+	}
+	for peerID, runtime := range s.clipboardPeerRuntime {
+		if !seen[peerID] {
+			statuses = append(statuses, ClipboardPeerStatus{PeerID: peerID, State: "connecting", Waiting: runtime.Waiting, Error: runtime.Error})
+		}
+	}
+	s.clipboardStatusMu.Unlock()
 	sort.Slice(statuses, func(i, j int) bool { return statuses[i].PeerID < statuses[j].PeerID })
 	return statuses
+}
+
+func (s *Service) setClipboardPeerRuntime(peerID, waiting, statusError string) {
+	if peerID == "" {
+		return
+	}
+	s.clipboardStatusMu.Lock()
+	if waiting == "" && statusError == "" {
+		delete(s.clipboardPeerRuntime, peerID)
+	} else {
+		s.clipboardPeerRuntime[peerID] = clipboardPeerRuntimeStatus{Waiting: waiting, Error: statusError}
+	}
+	s.clipboardStatusMu.Unlock()
+}
+
+func (s *Service) clearClipboardPeerRuntime(peerID string) {
+	s.setClipboardPeerRuntime(peerID, "", "")
+}
+
+func (s *Service) setClipboardPeerWaiting(peerID, waiting string) {
+	if peerID == "" {
+		return
+	}
+	s.clipboardStatusMu.Lock()
+	status := s.clipboardPeerRuntime[peerID]
+	status.Waiting = waiting
+	if status.Waiting == "" && status.Error == "" {
+		delete(s.clipboardPeerRuntime, peerID)
+	} else {
+		s.clipboardPeerRuntime[peerID] = status
+	}
+	s.clipboardStatusMu.Unlock()
+}
+
+func (s *Service) setClipboardPeerError(peerID, statusError string) {
+	s.setClipboardPeerRuntime(peerID, "", statusError)
 }
 
 type ClipboardAdapter struct {
@@ -158,6 +242,7 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 	if err != nil {
 		return err
 	}
+	s.cancelClipboardSends("", "")
 	if len(change.Kinds) == 0 {
 		return nil
 	}
@@ -170,7 +255,7 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 	s.directPoolMu.Lock()
 	peers := make([]*PeerSession, 0, len(s.directPool))
 	for _, pooled := range s.directPool {
-		if pooled.peer != nil && pooled.peer.Data != nil {
+		if pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn != nil && pooled.peer.Data.Conn.Context().Err() == nil {
 			peers = append(peers, pooled.peer)
 		}
 	}
@@ -186,7 +271,11 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 				continue
 			}
 			grant, allowed := s.clipboardGrant(peer.PeerID, "send", kind, peer.AuthorizationGeneration)
-			if lease, ok := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, kind); ok && allowed {
+			lease, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, kind)
+			if allowed && !leased {
+				s.setClipboardPeerWaiting(peer.PeerID, "waiting_lease")
+			}
+			if leased && allowed {
 				targets = append(targets, struct {
 					peer     *PeerSession
 					lease    clipboardsync.Lease
@@ -199,6 +288,13 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 		}
 		payload, current, err := adapter.Read(ctx, kind, change.Generation)
 		if err != nil || current != change.Generation {
+			statusError := "read_failed"
+			if current != change.Generation {
+				statusError = "clipboard_changed"
+			}
+			for _, target := range targets {
+				s.setClipboardPeerError(target.peer.PeerID, statusError)
+			}
 			continue
 		}
 		base, err := s.clipboardSync.PrepareObserved(observation, kind, payload)
@@ -258,36 +354,161 @@ func (w clipboardGuardedWriter) Write(payload []byte) (int, error) {
 }
 
 func (s *Service) startClipboardSend(peer *PeerSession, lease clipboardsync.Lease, event clipboardsync.Event) {
+	if peer == nil || peer.Data == nil || peer.Data.Conn == nil {
+		return
+	}
+	key := peer.PeerID
 	s.operationMu.Lock()
 	if s.isClosing() {
 		s.operationMu.Unlock()
 		return
 	}
-	s.clipboardWorkers.Add(1)
+	s.clipboardDispatchMu.Lock()
+	sender := s.clipboardSenders[key]
+	if sender == nil {
+		sender = &clipboardPeerSender{wake: make(chan struct{}, 1)}
+		s.clipboardSenders[key] = sender
+		s.clipboardWorkers.Add(1)
+		go s.runClipboardSender(key, sender)
+	}
+	s.clipboardDispatchMu.Unlock()
 	s.operationMu.Unlock()
-	go func() {
-		defer s.clipboardWorkers.Done()
-		ctx := peer.Data.Conn.Context()
-		select {
-		case s.clipboardSendSlots <- struct{}{}:
-		case <-ctx.Done():
-			return
+	job := &clipboardSendJob{peer: peer, lease: lease, event: event}
+	sender.enqueue(job)
+	s.setClipboardPeerWaiting(peer.PeerID, "queued")
+}
+
+func (s *Service) runClipboardSender(key string, sender *clipboardPeerSender) {
+	defer s.clipboardWorkers.Done()
+	defer func() {
+		s.clipboardDispatchMu.Lock()
+		if s.clipboardSenders[key] == sender {
+			delete(s.clipboardSenders, key)
 		}
-		defer func() { <-s.clipboardSendSlots }()
-		deadline := lease.ExpiresAt()
-		stream, err := peer.Data.Conn.OpenUniStreamSync(ctx)
-		if err != nil {
-			return
-		}
-		_ = stream.SetWriteDeadline(deadline)
-		message := clipboardsync.Message{Type: "event", LeaseID: event.LeaseID, SessionID: peer.SessionID, Generation: peer.RemoteAuthorizationGeneration, OriginID: event.OriginID, Boot: event.Boot, OriginSeq: event.OriginSeq, Lamport: event.Lamport, Kind: event.Kind, Digest: event.Digest, OSGeneration: event.OSGeneration, SenderGrantRevision: event.SenderGrantRevision, ReceiverGrantRevision: event.ReceiverGrantRevision, PayloadBytes: uint32(len(event.Payload))}
-		writer := clipboardGuardedWriter{ctx: ctx, dst: stream, state: s.clipboardSync, event: event, deadline: deadline}
-		if err = clipboardsync.Write(writer, message, event.Payload); err != nil {
-			stream.CancelWrite(0)
-			return
-		}
-		_ = stream.Close()
+		s.clipboardDispatchMu.Unlock()
 	}()
+	serviceCtx := s.workCtx
+	if serviceCtx == nil {
+		serviceCtx = context.Background()
+	}
+	for {
+		select {
+		case <-serviceCtx.Done():
+			return
+		case <-sender.wake:
+		}
+		sender.mu.Lock()
+		job := sender.pending
+		sender.pending = nil
+		if job == nil {
+			sender.mu.Unlock()
+			continue
+		}
+		connectionCtx := job.peer.Data.Conn.Context()
+		jobCtx, cancel := context.WithDeadline(connectionCtx, job.lease.ExpiresAt())
+		stopServiceCancel := context.AfterFunc(serviceCtx, cancel)
+		sender.current, sender.cancel = job, cancel
+		sender.mu.Unlock()
+		err := s.sendClipboardJob(jobCtx, job)
+		stopServiceCancel()
+		cancel()
+		sender.mu.Lock()
+		current := sender.current == job
+		pending := sender.pending != nil
+		if current {
+			sender.current, sender.cancel = nil, nil
+		}
+		sender.mu.Unlock()
+		if !current {
+			continue
+		}
+		if pending {
+			s.setClipboardPeerWaiting(job.peer.PeerID, "queued")
+		} else if err == nil {
+			s.clearClipboardPeerRuntime(job.peer.PeerID)
+		} else if s.clipboardPaused.Load() || !s.clipboardSync.LocalCurrent(job.event) {
+			s.clearClipboardPeerRuntime(job.peer.PeerID)
+		} else if errors.Is(err, context.DeadlineExceeded) || !time.Now().Before(job.lease.ExpiresAt()) {
+			s.setClipboardPeerError(job.peer.PeerID, "send_timeout")
+		} else if connectionCtx.Err() != nil {
+			s.setClipboardPeerError(job.peer.PeerID, "connection_lost")
+		} else {
+			s.setClipboardPeerError(job.peer.PeerID, "send_failed")
+		}
+	}
+}
+
+func (s *Service) sendClipboardJob(ctx context.Context, job *clipboardSendJob) error {
+	s.setClipboardPeerWaiting(job.peer.PeerID, "waiting_slot")
+	select {
+	case s.clipboardSendSlots <- struct{}{}:
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+	defer func() { <-s.clipboardSendSlots }()
+	s.setClipboardPeerWaiting(job.peer.PeerID, "opening_stream")
+	stream, err := job.peer.Data.Conn.OpenUniStreamSync(ctx)
+	if err != nil {
+		return err
+	}
+	deadline := job.lease.ExpiresAt()
+	_ = stream.SetWriteDeadline(deadline)
+	done := make(chan struct{})
+	watcherDone := make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-ctx.Done():
+			stream.CancelWrite(0)
+		case <-done:
+		}
+	}()
+	s.setClipboardPeerWaiting(job.peer.PeerID, "sending")
+	message := clipboardsync.Message{Type: "event", LeaseID: job.event.LeaseID, SessionID: job.peer.SessionID, Generation: job.peer.RemoteAuthorizationGeneration, OriginID: job.event.OriginID, Boot: job.event.Boot, OriginSeq: job.event.OriginSeq, Lamport: job.event.Lamport, Kind: job.event.Kind, Digest: job.event.Digest, OSGeneration: job.event.OSGeneration, SenderGrantRevision: job.event.SenderGrantRevision, ReceiverGrantRevision: job.event.ReceiverGrantRevision, PayloadBytes: uint32(len(job.event.Payload))}
+	writer := clipboardGuardedWriter{ctx: ctx, dst: stream, state: s.clipboardSync, event: job.event, deadline: deadline}
+	err = clipboardsync.Write(writer, message, job.event.Payload)
+	close(done)
+	<-watcherDone
+	if err != nil {
+		stream.CancelWrite(0)
+		return err
+	}
+	return stream.Close()
+}
+
+func (s *Service) cancelClipboardSends(peerID string, kind clipboardsync.Kind) {
+	s.clipboardDispatchMu.Lock()
+	senders := make([]*clipboardPeerSender, 0, len(s.clipboardSenders))
+	for _, sender := range s.clipboardSenders {
+		senders = append(senders, sender)
+	}
+	s.clipboardDispatchMu.Unlock()
+	for _, sender := range senders {
+		sender.mu.Lock()
+		matches := func(job *clipboardSendJob) bool {
+			return job != nil && (peerID == "" || job.peer.PeerID == peerID) && (kind == "" || job.event.Kind == kind)
+		}
+		if matches(sender.pending) {
+			sender.pending = nil
+		}
+		if matches(sender.current) && sender.cancel != nil {
+			sender.cancel()
+		}
+		sender.mu.Unlock()
+	}
+}
+
+func (s *Service) clearClipboardWaiting() {
+	s.clipboardStatusMu.Lock()
+	for peerID, status := range s.clipboardPeerRuntime {
+		status.Waiting = ""
+		if status.Error == "" {
+			delete(s.clipboardPeerRuntime, peerID)
+		} else {
+			s.clipboardPeerRuntime[peerID] = status
+		}
+	}
+	s.clipboardStatusMu.Unlock()
 }
 
 func (s *Service) serveClipboardPeer(peer *PeerSession) {
@@ -366,31 +587,49 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 				stream.CancelRead(0)
 				continue
 			}
+			eventCtx, cancelEvent := context.WithDeadline(ctx, candidate.Deadline)
+			s.setClipboardPeerWaiting(peer.PeerID, "waiting_receive_slot")
 			select {
 			case s.clipboardReceiveSlots <- struct{}{}:
-			case <-ctx.Done():
+			case <-eventCtx.Done():
 				stream.CancelRead(0)
-				return
+				cancelEvent()
+				if ctx.Err() != nil {
+					return
+				}
+				s.setClipboardPeerError(peer.PeerID, "receive_timeout")
+				continue
 			}
 			func() {
+				defer cancelEvent()
 				defer func() { <-s.clipboardReceiveSlots }()
+				s.setClipboardPeerWaiting(peer.PeerID, "receiving")
 				_ = stream.SetReadDeadline(candidate.Deadline)
 				payload, readErr := clipboardsync.ReadPayload(stream, message)
 				stream.CancelRead(0)
 				if readErr != nil {
+					s.setClipboardPeerError(peer.PeerID, "receive_failed")
 					return
 				}
 				candidate, readErr = s.clipboardSync.AttachPayload(candidate, payload)
 				if readErr != nil {
+					s.setClipboardPeerError(peer.PeerID, "receive_invalid")
 					return
 				}
 				s.clipboardAdapterMu.RLock()
 				adapter := s.clipboardAdapter
 				s.clipboardAdapterMu.RUnlock()
 				if adapter.Write == nil {
+					s.setClipboardPeerError(peer.PeerID, "receive_failed")
 					return
 				}
-				_ = s.commitClipboardCandidate(peer, candidate, adapter)
+				if commitErr := s.commitClipboardCandidate(peer, candidate, adapter); commitErr != nil {
+					if !s.clipboardPaused.Load() {
+						s.setClipboardPeerError(peer.PeerID, "write_failed")
+					}
+					return
+				}
+				s.clearClipboardPeerRuntime(peer.PeerID)
 			}()
 		}
 	}
@@ -480,6 +719,8 @@ func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready b
 
 func (s *Service) ResetClipboard(paused bool, generation uint64) {
 	s.clipboardPaused.Store(paused)
+	s.cancelClipboardSends("", "")
+	s.clearClipboardWaiting()
 	s.clipboardSync.Reset(paused, generation)
 	s.directPoolMu.Lock()
 	for key, pooled := range s.directPool {
@@ -494,6 +735,10 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 	if s.clipboardPaused.Load() || s.isClosing() {
 		return nil
 	}
+	if !s.clipboardEnsureMu.TryLock() {
+		return nil
+	}
+	defer s.clipboardEnsureMu.Unlock()
 	s.clipboardGrantMu.Lock()
 	rows, err := s.store.db.Query(`SELECT DISTINCT peer_id,authorization_generation FROM clipboard_grants WHERE enabled=1`)
 	if err != nil {
@@ -518,7 +763,11 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 	if rowsErr != nil {
 		return rowsErr
 	}
-	results := make(chan error, len(targets))
+	type ensureResult struct {
+		peerID string
+		err    error
+	}
+	results := make(chan ensureResult, len(targets))
 	var workers sync.WaitGroup
 	for _, item := range targets {
 		item := item
@@ -531,25 +780,34 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 			healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
 			s.directPoolMu.Unlock()
 			if healthy {
+				s.setClipboardPeerWaiting(item.id, "")
 				return
 			}
+			s.setClipboardPeerWaiting(item.id, "connecting")
 			connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			peerCfg := cfg
 			peerCfg.expectedAuthorizationGeneration = item.generation
 			peer, connectErr := s.acquirePeerSession(connectCtx, item.id, peerCfg)
 			cancel()
 			if connectErr != nil {
-				results <- connectErr
+				s.setClipboardPeerError(item.id, "connection_failed")
+				results <- ensureResult{peerID: item.id, err: connectErr}
 				return
 			}
-			results <- s.releasePeerSession(peer, nil)
+			releaseErr := s.releasePeerSession(peer, nil)
+			if releaseErr != nil {
+				s.setClipboardPeerError(item.id, "connection_failed")
+			} else {
+				s.setClipboardPeerWaiting(item.id, "waiting_lease")
+			}
+			results <- ensureResult{peerID: item.id, err: releaseErr}
 		}()
 	}
 	workers.Wait()
 	close(results)
 	var result error
-	for err := range results {
-		result = errors.Join(result, err)
+	for item := range results {
+		result = errors.Join(result, item.err)
 	}
 	return result
 }
