@@ -28,9 +28,11 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 | 首次准确包启动 | PASS | WebView2 environment 和 desktop runtime ready；进程 6 秒后存活 |
 | 当前 DPI/窗口 | PASS | 120 DPI（125%）；窗口 1120×760，客户区 1105×721 |
 | 同 profile 二次启动 | PASS | 强制清理第一轮隔离进程后，第二轮尺寸、DPI、运行状态一致 |
-| 关闭行为 | PARTIAL | `CloseMainWindow` 返回 true，但 2 秒后窗口仍可见、进程仍在；两轮均由验收脚本强制清理，未冒充优雅退出 |
+| 关闭行为 | PASS | 首次关闭原生确认中选择“退出应用”，持久化 `close_mode=exit` 并 exit 0；同 profile 二次启动后关闭不再询问并 exit 0 |
 
-第一版验收脚本错误假设关闭主窗应在 10 秒内退出，实际返回 `WINDOWS_NATIVE_CLOSE_TIMEOUT`，候选进程仍稳定运行。修正后回执保存在 `.artifacts/e5-windows-package/result.json`。150% DPI、键盘与深色矩阵仍待运行。
+第一版验收脚本错误假设首次关闭主窗应直接退出，实际产品按设计等待“留在后台/退出应用/取消”原生选择并返回 `WINDOWS_NATIVE_CLOSE_TIMEOUT`。后续用 UI Automation 精确定位“退出应用”按钮；`InvokePattern` 和 SendKeys 两个脚本动作失败均清理测试进程，最终以该原生按钮 HWND 的 `BM_CLICK` 完成选择。成功回执在 `.artifacts/e5-windows-close/result.json`。两次正常退出各出现 Chromium `Failed to unregister class Chrome_WidgetWin_0 / Error=1412` stderr 警告，但进程 exit code 均为 0。
+
+准确包 5 次顺序启动基线均 exit 0：窗口句柄就绪 200.7–264.1 ms，中位数 230.5 ms；3 秒时 working set 中位数 47,894,528 bytes，private bytes 中位数 62,156,800 bytes，24–25 threads。该数据来自当前 Windows、热 WebView2/runtime 缓存和 loopback 拒绝信令，只作本机基线，不外推冷启动或其他硬件。回执在 `.artifacts/e5-windows-performance/result.json`。150% DPI、WebView 键盘可访问性与深色矩阵仍待运行。
 
 ## macOS arm64 准确包原生结果
 
@@ -52,7 +54,7 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 
 | 场景 | 状态 | 当前证据/限制 |
 |---|---|---|
-| Windows 准确包布局、版本、DPI、恢复 | PARTIAL | 包/版本、125% DPI、启动和强制收尾后的同 profile 二次启动 PASS；关闭行为、150%/键盘/深色待补 |
+| Windows 准确包布局、版本、DPI、恢复 | PARTIAL | 包/版本、125% DPI、启动/恢复、首次关闭选择与持久退出 PASS；150%/键盘/深色待补 |
 | Mac 准确包布局、启动、恢复 | PARTIAL | arm64 PASS；键盘操作、深色与缩放矩阵待运行 |
 | Windows→Mac 文件 | NOT RUN | 准确 Win 包已通过 V2 native share journal 实时消费进入 `waiting_peer`，只证明入口/入队；旧 LAN-only profile 未互见，未传正文 |
 | Mac→Windows 反向复用流 | NOT RUN | 不继承历史正向结论 |
