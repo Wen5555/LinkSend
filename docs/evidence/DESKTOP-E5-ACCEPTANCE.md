@@ -38,7 +38,7 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 
 延迟 Raw UIA 可读取 production WebView 的 `RootWebArea`、TextPattern、按钮角色及 DOM。独立 39 字中文设备名在 960×700 物理外窗中 `IsOffscreen=false`，边界 x=670–808，位于外窗 x=580–1540 内；传输按钮声明 `IsKeyboardFocusable=true`，准确包 exit 0。因此长名可访问性/有界性为 PASS，但不含像素截图。
 
-准确包键盘自动化仍为 UNRESOLVED：普通 UIA 初期只见 WebView 容器；Raw UIA 激活后虽能看到控件，对 renderer 建立焦点并分别用 PostMessage、真实键盘事件发送 4 次 Tab，FocusedElement 名称仍为 `|||`，无法证明 `传输→记录→设备→设置` 顺序。独立 desktop 不抢占用户前台，但 WebView2 在已有实例时先返回 `0x800700aa`，停止该隔离实例后虽启动成功，Raw UIA 仍不导出 DOM。所有失败尝试均清理测试进程；没有把浏览器 E2 键盘结果继承为准确包通过。当前 Windows 应用主题为 light；未修改用户主题或显示缩放，因此准确 150%/深色保持 NOT RUN。
+准确包键盘自动化仍为 UNRESOLVED：普通 UIA 初期只见 WebView 容器；Raw UIA 激活后虽能看到控件，对 renderer 建立焦点并分别用 PostMessage、真实键盘事件发送 4 次 Tab，FocusedElement 名称仍为 `|||`，无法证明 `传输→记录→设备→设置` 顺序。独立 desktop 不抢占用户前台，但 WebView2 在已有实例时先返回 `0x800700aa`，停止该隔离实例后虽启动成功，Raw UIA 仍不导出 DOM。所有失败尝试均清理测试进程；没有把浏览器 E2 键盘结果继承为准确包通过。随后一次只读输入环境核对显示：进程与 active console 均为 session 8，测试线程 desktop 为 `Default`，但 `OpenInputDesktop` 返回 `Screen-saver`，且无 LogonUI 锁定进程；真实键盘事件没有进入应用所在 input desktop。最小复测动作是用户退出屏保，使 input desktop 回到 `Default`，再只运行一次 Tab 顺序。准确 EXE 使用的 Wails beta.18 会把外部 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 覆写为编译期 `application.Options.Windows.AdditionalBrowserArgs`；该准确源码没有设置进程内调试参数，已有单次官方环境变量探针返回 `WEBVIEW2_CDP_NOT_AVAILABLE`，因此无法从该包取得 DOM 150% 内容缩放、暗色媒体查询或截图证据，也不再改用注入框架。当前 Windows 应用主题为 light；未修改用户主题或显示缩放，因此准确 150%/深色保持 NOT RUN。
 
 ## macOS arm64 准确包原生结果
 
@@ -100,7 +100,7 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 
 - 当前 `387b57c` server + 旧 M5 client：旧端 join exit 1，稳定码 `VERSION_INCOMPATIBLE`；当前端 `devices` exit 0，组内仍只有当前管理员，没有旧成员。
 - 旧 M5 server + 当前 `387b57c` client：当前端 join exit 1，稳定码 `AUTHENTICATION_FAILED`；旧端 `devices` exit 0，组内仍只有旧管理员，没有当前成员。
-- 结果证明版本门闩在两方向均阻止半加入/幽灵成员。它不证明旧新版能够混合传文件；当前产品的预期是拒绝不兼容 membership/control 版本并要求重新配对/升级。
+- 以上结果证明准确 `387b57c` 包在两方向均阻止半加入/幽灵成员，但当前端对旧服务的错误分类不准确。本次后续源码修复在 `Join`/跨组切换签名前读取 `/healthz`：使用真实 `d0c4a4b` rendezvous Windows 进程调用桌面 `PairDevice` 得到 `VERSION_INCOMPATIBLE: server capabilities incompatible`，前端映射为“当前信令服务版本过旧或能力不兼容，请升级服务端后重试”。进程级回执为 ignored `.artifacts/e5-current/legacy-m5-desktop-pair/result.json`；普通测试替身另证明不再调用旧 registration endpoint。修复后的重新打包、桌面升级和混合物理文件仍未运行。
 - 回执位于 ignored `.artifacts/e5-mixed-compat/{result.json,reverse/result.json}`。邀请和测试身份只存在隔离目录，不进入文档或 Git。
 
 ## 当前限制与下一步

@@ -10,7 +10,7 @@
 
 ## 2026-09-13 membership_v2 与 LAN pairing 控制契约
 
-文件数据协议、QUIC ALPN 和 `protocol_version=1` 保持不变；成员授权控制面新增必需能力 `membership_version=2`。HTTP/WSS 客户端发送 `X-LinkSend-Membership: 2`，旧客户端对同意、列表、撤销和 WSS 得到 `VERSION_INCOMPATIBLE`，不能继续使用无 incarnation 的授权。
+文件数据协议、QUIC ALPN 和 `protocol_version=1` 保持不变；成员授权控制面新增必需能力 `membership_version=2`。HTTP/WSS 客户端发送 `X-LinkSend-Membership: 2`，旧客户端对同意、列表、撤销和 WSS 得到 `VERSION_INCOMPATIBLE`，不能继续使用无 incarnation 的授权。新版客户端在提交加入或跨组切换签名前必须通过 `/healthz` 确认该能力；缺少 membership v2 的旧服务端返回 `VERSION_INCOMPATIBLE`，桌面明确要求升级服务端，不能把旧签名校验失败误报为配对码或设备凭据失败。
 
 控制库 schema 4 为每次有效入组生成不可复用的 128-bit `incarnation`，每个组维护单调 `membership_revision`。邀请码摘要绑定 inviter ID、组、inviter incarnation 和创建 revision；LAN短期凭证另绑定target DeviceID。同身份同组消费重试保持幂等，fresh code 不提权。被撤销身份只有使用新有效码才获得新 incarnation；跨组切换必须提交并签名当前group/incarnation/revision，旧组离开与新组加入在同一事务完成。
 

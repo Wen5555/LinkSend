@@ -326,12 +326,18 @@ func (c *Client) Initialize(ctx context.Context, name string) (Device, error) {
 }
 
 func (c *Client) Join(ctx context.Context, token, name string) (Device, error) {
+	if _, err := c.Health(ctx); err != nil {
+		return Device{}, err
+	}
 	return c.register(ctx, "/v1/pairing/join", token, name, nil)
 }
 
 func (c *Client) SwitchGroup(ctx context.Context, token, name string, current Device) (Device, error) {
 	if err := current.Validate(); err != nil || current.ID != c.identity.ID() {
 		return Device{}, protocol.Fail(protocol.InvalidMessage, "current membership required for switch")
+	}
+	if _, err := c.Health(ctx); err != nil {
+		return Device{}, err
 	}
 	return c.register(ctx, "/v1/pairing/join", token, name, &current)
 }

@@ -18,6 +18,7 @@ describe('connection evidence labels', () => {
     expect(humanizeBackendError('signaling HTTP 401: AUTHENTICATION_FAILED: request signature or membership invalid')).toContain('尚未完成配对');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: paired member required')).toContain('尚未完成配对');
     expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('权限模型不兼容');
+    expect(humanizeBackendError('VERSION_INCOMPATIBLE: server capabilities incompatible')).toContain('升级服务端');
   });
   it('formats current pairing codes without changing legacy invitations', () => {
     expect(formatPairingCodeInput('abcd efgh')).toBe('ABCD-EFGH');

@@ -2,7 +2,11 @@ package signaling
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,6 +14,38 @@ import (
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/server"
 )
+
+func TestJoinRejectsLegacyMembershipServerBeforeRegistration(t *testing.T) {
+	var registrations atomic.Int32
+	h := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status": "ok",
+				"capabilities": protocol.Capabilities{
+					ProtocolVersion: protocol.Version,
+					ProductVersion:  "0.5.0",
+					Transport:       "quic",
+				},
+			})
+			return
+		}
+		registrations.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(protocol.Error{Code: protocol.AuthenticationFailed, Detail: "registration proof invalid"})
+	}))
+	defer h.Close()
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = testClient(t, h.URL, id).Join(t.Context(), "ABCD-EFGH", "desktop")
+	if protocol.ErrorCode(err) != protocol.VersionIncompatible || !strings.Contains(err.Error(), "server capabilities incompatible") {
+		t.Fatalf("legacy server result=%v code=%s", err, protocol.ErrorCode(err))
+	}
+	if registrations.Load() != 0 {
+		t.Fatalf("legacy registration endpoint was called %d times", registrations.Load())
+	}
+}
 
 func testServer(t *testing.T) (*server.Server, *httptest.Server) {
 	t.Helper()
