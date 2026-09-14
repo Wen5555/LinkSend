@@ -34,7 +34,11 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 
 准确包 5 次顺序启动基线均 exit 0：窗口句柄就绪 200.7–264.1 ms，中位数 230.5 ms；3 秒时 working set 中位数 47,894,528 bytes，private bytes 中位数 62,156,800 bytes，24–25 threads。该数据来自当前 Windows、热 WebView2/runtime 缓存和 loopback 拒绝信令，只作本机基线，不外推冷启动或其他硬件。回执在 `.artifacts/e5-windows-performance/result.json`。150% DPI、WebView 键盘可访问性与深色矩阵仍待运行。
 
-125% DPI 下的 native min-size 检查也使用同一准确 EXE：请求 960×640 物理像素时实际窗口为 960×700、客户区 942×652；继续请求 600×400 时钳制为 900×700、客户区 882×652，等于 720×560 逻辑最小值按 1.25 缩放后的外窗下限。进程随后 exit 0。该检查只证明原生 DPI/min-size 约束和稳定退出，无法读取 production WebView DOM，因而不替代 150% 内容、中文长名、深色和键盘检查。
+125% DPI 下的 native min-size 检查也使用同一准确 EXE：请求 960×640 物理像素时实际窗口为 960×700、客户区 942×652；继续请求 600×400 时钳制为 900×700、客户区 882×652，等于 720×560 逻辑最小值按 1.25 缩放后的外窗下限。进程随后 exit 0。该检查只证明原生 DPI/min-size 约束和稳定退出，无法读取 production WebView DOM，因而不替代 150% 内容、深色和键盘检查。
+
+延迟 Raw UIA 可读取 production WebView 的 `RootWebArea`、TextPattern、按钮角色及 DOM。独立 39 字中文设备名在 960×700 物理外窗中 `IsOffscreen=false`，边界 x=670–808，位于外窗 x=580–1540 内；传输按钮声明 `IsKeyboardFocusable=true`，准确包 exit 0。因此长名可访问性/有界性为 PASS，但不含像素截图。
+
+准确包键盘自动化仍为 UNRESOLVED：普通 UIA 初期只见 WebView 容器；Raw UIA 激活后虽能看到控件，对 renderer 建立焦点并分别用 PostMessage、真实键盘事件发送 4 次 Tab，FocusedElement 名称仍为 `|||`，无法证明 `传输→记录→设备→设置` 顺序。独立 desktop 不抢占用户前台，但 WebView2 在已有实例时先返回 `0x800700aa`，停止该隔离实例后虽启动成功，Raw UIA 仍不导出 DOM。所有失败尝试均清理测试进程；没有把浏览器 E2 键盘结果继承为准确包通过。当前 Windows 应用主题为 light；未修改用户主题或显示缩放，因此准确 150%/深色保持 NOT RUN。
 
 ## macOS arm64 准确包原生结果
 
@@ -56,7 +60,7 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 
 | 场景 | 状态 | 当前证据/限制 |
 |---|---|---|
-| Windows 准确包布局、版本、DPI、恢复 | PARTIAL | 包/版本、125% DPI、启动/恢复、首次关闭选择与持久退出 PASS；150%/键盘/深色待补 |
+| Windows 准确包布局、版本、DPI、恢复 | PARTIAL | 包/版本、125% DPI、小窗/长名、启动/恢复、首次关闭选择与持久退出 PASS；键盘自动化 UNRESOLVED，150%/深色 NOT RUN |
 | Mac 准确包布局、启动、恢复 | PARTIAL | arm64 PASS；键盘操作、深色与缩放矩阵待运行 |
 | Windows→Mac 文件 | NOT RUN | 准确 Win 包已通过 V2 native share journal 实时消费进入 `waiting_peer`，只证明入口/入队；旧 LAN-only profile 未互见，未传正文 |
 | Mac→Windows 反向复用流 | NOT RUN | 不继承历史正向结论 |
@@ -104,6 +108,7 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 - Windows general clipboard fixture 返回 `CLIPBOARD_TEST_REQUIRES_EMPTY_DISPOSABLE_CLIPBOARD`。本轮未读取、清空或覆盖用户剪贴板内容。
 - 私有 window station 原型与准确包分列：命名 station 在当前令牌下返回 Win32 5；匿名 station 可创建 station/desktop/child，但子进程初始化 user32.dll 失败，现有 `nativeclipboard` 写读测试无法创建 HWND。general clipboard sequence 在全部尝试中保持 `3882`，没有修改日常板。该路线已经停止，不写成 Wails 包通过。
 - Windows Sandbox 可执行文件当前不存在；仅观察到 Hypervisor、`vmcompute` 与 HNS 已运行。没有启用系统功能或新建虚拟化环境。准确包系统剪贴板继续局部挂起，不阻塞文件、控制面和 NAT 验收。
+- Windows 当前已有 HKCU 0.5.0 M5 安装（EXE `e08d8dce...b67ff`）、HKLM 0.3.0 安装（`d99f4fd4...a9c85`）及用户/系统/桌面三个快捷方式。为避免覆盖真实卸载记录和快捷方式，本轮没有运行 `387b57c` installer；签名及依赖签名的系统安装/激活继续按用户决定暂缓。
 - 一次 CLI 只读意图的 `invite --help` 没有解析帮助标志，而在默认 profile 的服务端组创建了 10 分钟一次性邀请；没有本地 profile 写入，也没有设备使用该邀请加入。该邀请已于 `2026-09-14T02:00:23Z` 自动失效，未通过添加成员来“清理”这一错误。此项不计入桌面准确包通过范围。
 - Apple App Group 激活、Developer ID、公证、Windows package identity 和依赖签名的系统安装信任按用户决定继续暂缓；这不替代其余功能验收。
 - 香港升级后已新建 Windows 隔离 profile，并通过当前固定测试配对入口加入 schema 4 控制面；准确 Windows 包在该 profile 上有 1 个 listen、2 个 established 连接。Mac 动态地址随后连续 SSH timeout，尚未创建配套新 profile；恢复后再生成一次性邀请、加入当前组并执行准确包双向文件。剪贴板只在隔离条件或一次明确临时使用授权满足后开始。
