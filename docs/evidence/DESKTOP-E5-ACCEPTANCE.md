@@ -34,6 +34,8 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 
 准确包 5 次顺序启动基线均 exit 0：窗口句柄就绪 200.7–264.1 ms，中位数 230.5 ms；3 秒时 working set 中位数 47,894,528 bytes，private bytes 中位数 62,156,800 bytes，24–25 threads。该数据来自当前 Windows、热 WebView2/runtime 缓存和 loopback 拒绝信令，只作本机基线，不外推冷启动或其他硬件。回执在 `.artifacts/e5-windows-performance/result.json`。150% DPI、WebView 键盘可访问性与深色矩阵仍待运行。
 
+125% DPI 下的 native min-size 检查也使用同一准确 EXE：请求 960×640 物理像素时实际窗口为 960×700、客户区 942×652；继续请求 600×400 时钳制为 900×700、客户区 882×652，等于 720×560 逻辑最小值按 1.25 缩放后的外窗下限。进程随后 exit 0。该检查只证明原生 DPI/min-size 约束和稳定退出，无法读取 production WebView DOM，因而不替代 150% 内容、中文长名、深色和键盘检查。
+
 ## macOS arm64 准确包原生结果
 
 主机 alias `mac-test-102342413`，用户 `wen`，探测地址 `10.234.212.116`，Darwin 25.5.0 arm64。通过 `codex-ssh-manager` 完成 resolve、probe、audit；DMG 上传到隔离 `/tmp/codex-ssh` 路径，没有替换 `/Applications` 中的应用，也没有使用用户真实 profile 或 general pasteboard。
@@ -60,7 +62,7 @@ portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，
 | Mac→Windows 反向复用流 | NOT RUN | 不继承历史正向结论 |
 | 文本、链接、图片自动剪贴板 | NOT RUN | Windows general clipboard 当前非空；不读取或覆盖用户内容，等待隔离桌面/空 disposable clipboard |
 | 文件与剪贴板并存 | NOT RUN | 必须随物理双机剪贴板一起运行 |
-| 旧版升级与混合版本 | NOT RUN | 旧候选只可作为明确标记的对端，不得冒充当前包 |
+| 旧版升级与混合版本 | PARTIAL | `387b57c` 与 M5 `d0c4a4b` 双向控制面 join 均拒绝且无幽灵成员；仅 loopback CLI/server，桌面升级与物理文件未运行 |
 | 网络切换、睡眠/唤醒 | NOT RUN | 需保留实际接口和时间线 |
 | 香港候选控制面部署 | PASS | `387b57c` Linux amd64 候选已按事务部署，独立复核通过；DB schema 2→4 |
 | 荷兰隔离双 NAT | PASS | 两个独立 NAT、重叠私网和独立 WAN 完成 8 MiB QUIC；固定 UDP 映射，`relay=false` |
@@ -87,6 +89,15 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 - 该结果只证明明确的 endpoint-independent/固定 UDP 映射正例；不证明对称或 endpoint-dependent NAT 可穿透，也不改写历史 MASQUERADE-only `CHECK_TIMEOUT`。产品仍无 relay。
 - cleanup 后无 `linksend-lab-*` namespace、veth 或实验进程；身份、邀请、私钥、正文、数据库和接收目录均删除。宿主地址、路由、规则的规范化前后快照一致。
 - 脱敏包远端及下载后 SHA256 均为 `4be226d16a15e3a9b6bb854239fba9a3062cda0b32b5a594897dd98e7b2cb86b`，本地位于 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-nl-dual-nat-387b57c-sanitized.tar.gz`。
+
+## M5 混合控制面兼容
+
+旧端固定为干净 `d0c4a4b13ddc5bd7cd42c8f977d7aa6f7897ae06`，当前端固定为 `387b57c`；四个 Windows amd64 CLI/server 二进制均由独立 clean worktree 构建并记录 `vcs.modified=false`。两方向各使用独立 loopback rendezvous、独立数据库/profile 和单次邀请，不接触生产组。
+
+- 当前 `387b57c` server + 旧 M5 client：旧端 join exit 1，稳定码 `VERSION_INCOMPATIBLE`；当前端 `devices` exit 0，组内仍只有当前管理员，没有旧成员。
+- 旧 M5 server + 当前 `387b57c` client：当前端 join exit 1，稳定码 `AUTHENTICATION_FAILED`；旧端 `devices` exit 0，组内仍只有旧管理员，没有当前成员。
+- 结果证明版本门闩在两方向均阻止半加入/幽灵成员。它不证明旧新版能够混合传文件；当前产品的预期是拒绝不兼容 membership/control 版本并要求重新配对/升级。
+- 回执位于 ignored `.artifacts/e5-mixed-compat/{result.json,reverse/result.json}`。邀请和测试身份只存在隔离目录，不进入文档或 Git。
 
 ## 当前限制与下一步
 

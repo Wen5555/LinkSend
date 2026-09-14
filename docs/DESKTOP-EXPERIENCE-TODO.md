@@ -69,7 +69,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
-| E5-01 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 三平台包、Win 125%/关闭/启动基线、Mac arm64、HK schema4部署与NL固定映射双NAT PASS；准确包双向文件、剪贴板、网切/睡眠待运行 |
+| E5-01 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 三平台包、Win 125%小窗/关闭/启动基线、Mac arm64、HK schema4与NL固定映射双NAT PASS；M5双向控制拒绝PARTIAL，准确包文件/剪贴板/网切待运行 |
 | E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | E5来源、部署/备份/回退边界和脱敏NAT交付已记录；联合验收未完成 |
 
 ## 执行边界与恢复入口
