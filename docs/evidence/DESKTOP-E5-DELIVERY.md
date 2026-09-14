@@ -1,6 +1,6 @@
 # Desktop E5 交付记录
 
-日期：2026-09-14。当前候选提交：`387b57c76596975d0da61f01e060e0cc2940b0b5`。
+日期：2026-09-14。当前源码候选提交：`1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819`；完整准确包实机基线仍来自 `387b57c76596975d0da61f01e060e0cc2940b0b5`。
 
 ## GitHub 状态
 
@@ -9,12 +9,15 @@
 - core push `34792565801`、core PR `34792567181`、desktop push `34792565789`、desktop PR `34792567186` 均为 `success`。
 - packages run `34792565786` 的 `windows-amd64`、`macos-arm64`、`macos-amd64` 均为 `success`；准确 artifact ID 和摘要见 [E5 联合验收](DESKTOP-E5-ACCEPTANCE.md)。
 - Actions 仅有既有 Node 20 action runtime 被平台强制切换到 Node 24 的 warning；没有失败检查。
+- 兼容诊断增量 `1fa21b4` 的 core push `34802741501`、core PR `34802743668`、desktop push `34802741511`、desktop PR `34802743662` 和 packages `34802741572` 均为 `success`；PR/远端 head 一致。新三平台 artifact ID 与外层摘要已由 GitHub API 核对，下载在暂停命令后停止，包内核验待恢复。
 
 ## 当前交付边界
 
 `387b57c` 是 E4 源码验收通过后进入 E5 的固定候选。三平台 artifact 已下载并通过包内外摘要、BUILD-INFO、架构和 Windows ZIP 布局核验；arm64 DMG 已在物理 Mac 完成隔离启动与恢复检查，Windows portable 已完成 125% DPI 首次/二次启动、原生关闭选择持久化、5 次启动/内存基线和原生 min-size 钳制；M5/当前控制面双向拒绝已用 clean 二进制隔离验证。香港控制面和荷兰隔离双 NAT 已完成，准确包物理双向文件与系统剪贴板仍按 E5 事实矩阵推进。
 
 当前没有合并 `main`，也没有创建正式 Release。用户已经授权本目标中的阶段 push、事务部署和 prerelease；若后续候选因 E5 缺陷变化，所有包、摘要、部署来源和本页提交号必须一起刷新，不能沿用 `387b57c` 的包级结果。
+
+暂停收尾时无活跃本地或远程测试作业。packages run `34802741572` 的恢复下载目录为 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-ci-34802741572`，当前为空；下一次启动后下载三份 artifact 并执行 `scripts/verify-milestone-packages.ps1`。Mac 需唤醒或提供新地址，Windows 需退出 `Screen-saver` 后才复测原生 Tab，系统剪贴板需隔离可丢弃环境或明确临时覆盖条件；这些条件与逐项入口见 [E5 联合验收](DESKTOP-E5-ACCEPTANCE.md#暂停时外部条件与恢复矩阵)。
 
 ## 远程事务账本
 

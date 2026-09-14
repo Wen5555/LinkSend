@@ -19,6 +19,8 @@
 
 本地核验目录为 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-ci-34792565786`，不纳入仓库。三份 artifact 的实际外层摘要、解包结果、`BUILD-INFO.txt` 与 `SHA256SUMS.txt` 已逐项一致；仓库 `scripts/verify-milestone-packages.ps1` 退出 0，完整回执为该目录 `PACKAGE-VERIFICATION.json`。Windows ZIP 内只有预期四项，嵌入 EXE 为 23,926,784 bytes / `d45bfa4c...72bf`，ProductVersion `0.5.0`。
 
+后续兼容诊断源码候选为 `1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819`。其 core push/PR、desktop push/PR 与 packages run `34802741572` 全部成功，Draft PR #8 head 与远端分支一致。新 artifact 元数据为：Windows `10332650029` / `sha256:9d87a778...90b4f`，macOS arm64 `10331629840` / `sha256:5e66dd3d...eb68f`，macOS amd64 `10332155493` / `sha256:b12d4882...3fe5d`。用户要求暂停时下载已主动停止，监督目标目录为空；因此这些只证明 GitHub artifact 来源和外层摘要，尚未完成 `BUILD-INFO`、包内 `SHA256SUMS`、Windows ZIP/EXE 或 DMG 载荷复核。下述准确包实机结果继续只属于 `387b57c`。
+
 ## Windows amd64 准确包原生结果
 
 portable ZIP 解压到仓库 ignored `.artifacts/e5-windows-package/portable`，使用独立 `.artifacts/e5-windows-package/profile`。信令指向测试 loopback 拒绝端口；没有使用或修改正式 LinkSend profile。
@@ -112,3 +114,17 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 - 一次 CLI 只读意图的 `invite --help` 没有解析帮助标志，而在默认 profile 的服务端组创建了 10 分钟一次性邀请；没有本地 profile 写入，也没有设备使用该邀请加入。该邀请已于 `2026-09-14T02:00:23Z` 自动失效，未通过添加成员来“清理”这一错误。此项不计入桌面准确包通过范围。
 - Apple App Group 激活、Developer ID、公证、Windows package identity 和依赖签名的系统安装信任按用户决定继续暂缓；这不替代其余功能验收。
 - 香港升级后已新建 Windows 隔离 profile，并通过当前固定测试配对入口加入 schema 4 控制面；准确 Windows 包在该 profile 上有 1 个 listen、2 个 established 连接。Mac 动态地址随后连续 SSH timeout，尚未创建配套新 profile；恢复后再生成一次性邀请、加入当前组并执行准确包双向文件。剪贴板只在隔离条件或一次明确临时使用授权满足后开始。
+
+## 暂停时外部条件与恢复矩阵
+
+| 未完成项 | 当前事实 | 恢复所需条件 | 恢复入口/首个动作 |
+|---|---|---|---|
+| `1fa21b4` 三平台包内核验 | CI 与外层 artifact 摘要 PASS；下载目录为空 | 下一次启动命令 | 从 run `34802741572` 下载到 `e5-ci-34802741572`，运行 `verify-milestone-packages.ps1`，不得继承 `387b57c` 载荷摘要 |
+| Win→Mac 文件、Mac→Win 反向复用流 | 新 Windows 隔离 profile 已加入当前控制面；Mac 尚无配套 profile | Mac 唤醒或提供新地址，SSH input desktop 可用 | 用 `codex-ssh-manager` 解析 alias；确认新地址后再创建 10 分钟邀请并建立干净 Mac profile |
+| 系统文本/链接/图片剪贴板及文件并存 | Windows general clipboard 非空且未读取/覆盖；私有 WinSta 已判不可用 | 两端可丢弃隔离剪贴板，或用户明确临时允许覆盖 | 只运行一次准确包双向矩阵；不恢复 private WinSta/CDP 路线 |
+| Windows 原生 Tab 顺序 | 进程/console 在 session 8，但 input desktop 为 `Screen-saver` | 用户退出屏保，input desktop 回到 `Default` | 先只读确认 desktop 名，再运行一次真实 Tab 顺序；不以 DOM/CDP 替代 |
+| 150% DPI、深色 | 当前物理 125%/light；准确 EXE 无运行期 CDP 入口 | 可使用的真实 150% 显示环境与系统深色主题 | 运行准确包原生布局检查并记录实际 DPI/主题；不修改当前用户全局设置 |
+| 网络切换、睡眠/唤醒 | 源码/loopback 门闩通过，准确双机时间线未运行 | 双机同时在线且允许自然网络/睡眠事件 | 保留接口、session、任务 revision 与 hash 时间线，健康 QUIC 和重连结果分列 |
+| 签名安装/系统共享激活 | 用户已暂缓；现有 HKCU/HKLM 安装受保护 | 新的明确启动命令改变该决定并提供相应签名条件 | 不覆盖现有安装、快捷方式或卸载记录 |
+
+暂停时没有活跃本地下载、测试进程或远程实验 job。香港生产服务继续运行已验证的 `387b57c`/schema 4，荷兰 namespace 与敏感材料已清理；不得因恢复新包下载而重复部署或重做双 NAT。

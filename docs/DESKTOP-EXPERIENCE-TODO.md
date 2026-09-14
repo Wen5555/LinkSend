@@ -69,8 +69,8 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
-| E5-01 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 三平台包、Win 125%小窗/关闭/启动基线、Mac arm64、HK schema4与NL固定映射双NAT PASS；M5双向控制拒绝PARTIAL，准确包文件/剪贴板/网切待运行 |
-| E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | E5来源、部署/备份/回退边界和脱敏NAT交付已记录；联合验收未完成 |
+| E5-01 | 已暂停/待恢复 | PASS | PASS | PARTIAL | PARTIAL | PASS | `1fa21b4` 兼容诊断与全部CI通过；新artifact仅完成GitHub来源/外层摘要登记，下载和包内校验待恢复。`387b57c` 的Win/Mac/性能/HK/NL证据保留原范围；物理文件/剪贴板/网切仍待外部条件 |
+| E5-02 | 阶段已同步/待恢复 | PASS | PASS | PARTIAL | PARTIAL | PASS | Draft PR #8 head/CI与远端一致；暂停恢复入口、生产回退边界和外部条件矩阵已记录，未合并main/未发布 |
 
 ## 执行边界与恢复入口
 
@@ -81,4 +81,4 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 活跃远程作业：无。E5 Mac 准确包完成 jobs 为 `...004708Z` 与 `...004932Z`；HK 部署/独立复核为 `...014829Z` / `...014925Z`；NL 双NAT/独立复核为 `...022524Z` / `...022658Z`。Mac 当前 SSH timeout，未重复启动作业；签名安装由用户暂缓。
+- 活跃本地/远程作业：无。E5 Mac 准确包完成 jobs 为 `...004708Z` 与 `...004932Z`；HK 部署/独立复核为 `...014829Z` / `...014925Z`；NL 双NAT/独立复核为 `...022524Z` / `...022658Z`。Mac 当前 SSH timeout，未重复启动作业；HK 健康生产服务保持 `387b57c`/schema 4。暂停的 artifact 下载没有可续进程，恢复 handle 为 run `34802741572` 与本地空目录 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-ci-34802741572`。
