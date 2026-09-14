@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 var (
@@ -39,6 +41,7 @@ type DeviceProfile struct {
 	Pinned           bool   `json:"pinned"`
 	Position         int    `json:"position"`
 	ReceiveDirectory string `json:"receive_directory"`
+	ConflictPolicy   string `json:"conflict_policy"`
 	LastUsedAt       string `json:"last_used_at"`
 	Revision         uint64 `json:"revision"`
 }
@@ -54,7 +57,8 @@ type SendDraft struct {
 }
 
 type desktopStore struct {
-	db *sql.DB
+	db     *sql.DB
+	ownsDB bool
 }
 
 func openDesktopStore(path string) (*desktopStore, error) {
@@ -62,10 +66,22 @@ func openDesktopStore(path string) (*desktopStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &desktopStore{db: db, ownsDB: true}, nil
+}
+
+func desktopStoreFromDB(db *sql.DB) (*desktopStore, error) {
+	if db == nil {
+		return nil, errors.New("TASK_STORE_UNAVAILABLE")
+	}
 	return &desktopStore{db: db}, nil
 }
 
-func (s *desktopStore) Close() error { return s.db.Close() }
+func (s *desktopStore) Close() error {
+	if s.ownsDB {
+		return s.db.Close()
+	}
+	return nil
+}
 
 func migrateDesktopMetadata(tx *sql.Tx) error {
 	statements := []string{
@@ -76,6 +92,7 @@ func migrateDesktopMetadata(tx *sql.Tx) error {
 			pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0,1)),
 			position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
 			receive_directory TEXT NOT NULL DEFAULT '',
+			conflict_policy TEXT NOT NULL DEFAULT '',
 			last_used_at TEXT NOT NULL DEFAULT '',
 			revision INTEGER NOT NULL CHECK (revision > 0)
 		)`,
@@ -114,7 +131,7 @@ func migrateDesktopMetadata(tx *sql.Tx) error {
 	return nil
 }
 
-const deviceProfileColumns = `peer_id,alias,my_device,pinned,position,receive_directory,last_used_at,revision`
+const deviceProfileColumns = `peer_id,alias,my_device,pinned,position,receive_directory,conflict_policy,last_used_at,revision`
 
 type metadataScanner interface {
 	Scan(...any) error
@@ -122,7 +139,7 @@ type metadataScanner interface {
 
 func scanDeviceProfile(row metadataScanner) (DeviceProfile, error) {
 	var p DeviceProfile
-	err := row.Scan(&p.PeerID, &p.Alias, &p.MyDevice, &p.Pinned, &p.Position, &p.ReceiveDirectory, &p.LastUsedAt, &p.Revision)
+	err := row.Scan(&p.PeerID, &p.Alias, &p.MyDevice, &p.Pinned, &p.Position, &p.ReceiveDirectory, &p.ConflictPolicy, &p.LastUsedAt, &p.Revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrMetadataNotFound
 	}
@@ -166,11 +183,11 @@ func (s *desktopStore) SaveDeviceProfile(p DeviceProfile) (DeviceProfile, error)
 	defer tx.Rollback()
 	var result sql.Result
 	if p.Revision == 0 {
-		result, err = tx.Exec(`INSERT INTO device_profiles (`+deviceProfileColumns+`) VALUES(?,?,?,?,?,?,'',1)
-			ON CONFLICT(peer_id) DO NOTHING`, p.PeerID, p.Alias, p.MyDevice, p.Pinned, p.Position, p.ReceiveDirectory)
+		result, err = tx.Exec(`INSERT INTO device_profiles (`+deviceProfileColumns+`) VALUES(?,?,?,?,?,?,?,'',1)
+			ON CONFLICT(peer_id) DO NOTHING`, p.PeerID, p.Alias, p.MyDevice, p.Pinned, p.Position, p.ReceiveDirectory, p.ConflictPolicy)
 	} else {
-		result, err = tx.Exec(`UPDATE device_profiles SET alias=?,my_device=?,pinned=?,position=?,receive_directory=?,revision=revision+1
-			WHERE peer_id=? AND revision=?`, p.Alias, p.MyDevice, p.Pinned, p.Position, p.ReceiveDirectory, p.PeerID, p.Revision)
+		result, err = tx.Exec(`UPDATE device_profiles SET alias=?,my_device=?,pinned=?,position=?,receive_directory=?,conflict_policy=?,revision=revision+1
+			WHERE peer_id=? AND revision=?`, p.Alias, p.MyDevice, p.Pinned, p.Position, p.ReceiveDirectory, p.ConflictPolicy, p.PeerID, p.Revision)
 	}
 	if err != nil {
 		return DeviceProfile{}, err
@@ -237,6 +254,9 @@ func validateDeviceProfile(p *DeviceProfile) error {
 		if !info.IsDir() {
 			return fmt.Errorf("%w: receive destination is not a directory", ErrMetadataInvalid)
 		}
+	}
+	if p.ConflictPolicy != "" && p.ConflictPolicy != string(transfer.ConflictKeepBoth) && p.ConflictPolicy != string(transfer.ConflictSkip) && p.ConflictPolicy != string(transfer.ConflictError) {
+		return ErrMetadataInvalid
 	}
 	return nil
 }

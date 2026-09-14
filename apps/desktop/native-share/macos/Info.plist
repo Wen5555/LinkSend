@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.linksend.desktop.share</string>
+<key>CFBundleExecutable</key><string>LinkSendShareExtension</string>
+<key>CFBundleName</key><string>LinkSend</string>
+<key>CFBundleDisplayName</key><string>LinkSend</string>
+<key>CFBundlePackageType</key><string>XPC!</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleShortVersionString</key><string>0.5.0</string>
+<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>NSExtension</key><dict>
+<key>NSExtensionPointIdentifier</key><string>com.apple.share-services</string>
+<key>NSExtensionPrincipalClass</key><string>LinkSendShareViewController</string>
+<key>NSExtensionAttributes</key><dict><key>NSExtensionActivationRule</key><dict>
+<key>NSExtensionActivationSupportsFileWithMaxCount</key><integer>1024</integer>
+</dict></dict>
+</dict>
+</dict></plist>

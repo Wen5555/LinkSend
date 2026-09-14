@@ -274,3 +274,48 @@ func TestTaskHistoryWriteFailureRevokesPersistenceClaim(t *testing.T) {
 		t.Fatalf("persistence failure conflated independent recovery capabilities: %+v", diagnostics)
 	}
 }
+
+func BenchmarkTaskHistoryConnectionLifecycle(b *testing.B) {
+	run := func(b *testing.B, persistent bool) {
+		path := filepath.Join(b.TempDir(), "task-history.sqlite")
+		manager := newTaskManager()
+		manager.historyPath = path
+		if persistent {
+			db, err := historyDB(path)
+			if err != nil {
+				b.Fatal(err)
+			}
+			manager.historyDB = db
+			manager.historyOpenPath = path
+			b.Cleanup(func() { _ = manager.closeHistory() })
+		}
+		snap := TaskSnapshot{ID: "benchmark-task", TaskID: "benchmark-task", AttemptID: "benchmark-attempt", Direction: "send", PeerID: "peer"}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			snap.Revision = uint64(i + 1)
+			if err := manager.persistRecord(snap, taskRecovery{}); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+	b.Run("persistent", func(b *testing.B) { run(b, true) })
+	b.Run("reopen_each_write", func(b *testing.B) { run(b, false) })
+}
+
+func TestServiceUsesOneProfileHistoryPoolAndClosesIt(t *testing.T) {
+	dir := t.TempDir()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if service.store == nil || service.store.db != service.tasks.sharedHistoryDB() {
+		service.Shutdown()
+		t.Fatal("task history and desktop metadata use different SQLite pools")
+	}
+	service.Shutdown()
+	path := filepath.Join(dir, "task-history.sqlite")
+	moved := filepath.Join(dir, "closed.sqlite")
+	if err := os.Rename(path, moved); err != nil {
+		t.Fatal("profile SQLite pool remained open after shutdown:", err)
+	}
+}

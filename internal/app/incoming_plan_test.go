@@ -119,6 +119,91 @@ func TestIncomingSelectionOverRealQUIC(t *testing.T) {
 	}
 }
 
+func TestAcceptIncomingDefaultIsAttemptBoundAndKeepsBothOverRealQUIC(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	sourceDir := t.TempDir()
+	source := filepath.Join(sourceDir, "same.txt")
+	if err := os.WriteFile(source, []byte("new authenticated body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	existing := filepath.Join(target, "same.txt")
+	if err := os.WriteFile(existing, []byte("existing user body"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	receiver, err := f.b.StartReceive(f.aID.ID(), target, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitTask(t, f.b, receiver.ID, func(v TaskSnapshot) bool { return v.Phase == "waiting" })
+	sender, err := f.a.StartSend(f.bID.ID(), []string{source}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending := waitTask(t, f.b, receiver.ID, func(v TaskSnapshot) bool { return v.State == "awaiting_acceptance" })
+	if _, err = f.b.AcceptIncomingDefault(receiver.ID, "another-attempt", pending.Revision, false); err == nil {
+		t.Fatal("acceptance with another attempt succeeded")
+	}
+	if _, err = f.b.AcceptIncomingDefault(receiver.ID, pending.AttemptID, pending.Revision+1, false); err == nil {
+		t.Fatal("acceptance with a stale/future revision succeeded")
+	}
+	result, err := f.b.AcceptIncomingDefault(receiver.ID, pending.AttemptID, pending.Revision, false)
+	if err != nil || !result.Accepted || !result.PreferenceSaved {
+		t.Fatalf("default acceptance failed: result=%+v err=%v", result, err)
+	}
+	if _, err = f.b.AcceptIncomingDefault(receiver.ID, pending.AttemptID, pending.Revision, false); err == nil {
+		t.Fatal("double acceptance succeeded")
+	}
+	received := waitTask(t, f.b, receiver.ID, func(v TaskSnapshot) bool { return isTerminal(v.State) })
+	sent := waitTask(t, f.a, sender.ID, func(v TaskSnapshot) bool { return isTerminal(v.State) })
+	if received.State != "completed" || sent.State != "completed" || received.ReceivePlanDigest == "" {
+		t.Fatalf("default transfer failed: receiver=%+v sender=%+v", received, sent)
+	}
+	body, err := os.ReadFile(existing)
+	if err != nil || string(body) != "existing user body" {
+		t.Fatalf("existing file was replaced: %q %v", body, err)
+	}
+	matches, err := filepath.Glob(filepath.Join(target, "same*.txt"))
+	if err != nil || len(matches) != 2 {
+		t.Fatalf("keep-both did not create exactly one sibling: %v %v", matches, err)
+	}
+	var foundNew bool
+	for _, match := range matches {
+		body, readErr := os.ReadFile(match)
+		if readErr == nil && string(body) == "new authenticated body" {
+			foundNew = true
+		}
+	}
+	if !foundNew {
+		t.Fatalf("new body missing from keep-both result: %v", matches)
+	}
+}
+
+func TestDefaultAcceptanceReportsPreferenceFailureWithoutReversingAcceptance(t *testing.T) {
+	result := defaultAcceptanceResult(true, func() error { return errors.New("injected preference write failure") })
+	if !result.Accepted || result.PreferenceSaved || !strings.Contains(result.Message, "本次已接收") || !strings.Contains(result.Message, "未保存") {
+		t.Fatalf("preference failure changed the acceptance receipt: %+v", result)
+	}
+	result = defaultAcceptanceResult(false, func() error { t.Fatal("unexpected preference write"); return nil })
+	if !result.Accepted || !result.PreferenceSaved || result.Message != "" {
+		t.Fatalf("ordinary acceptance receipt is misleading: %+v", result)
+	}
+}
+
+func TestAutomaticReceiveUsesDeviceConflictPolicyThenGlobalDefault(t *testing.T) {
+	cfg := DirectConfig{ReceiveConflictPolicy: transfer.ConflictError, DeviceConflictPolicies: map[string]transfer.ConflictPolicy{"peer": transfer.ConflictSkip}}
+	if got := receivePolicyForPeer(cfg, "peer"); got != transfer.ConflictSkip {
+		t.Fatalf("device policy ignored: %s", got)
+	}
+	if got := receivePolicyForPeer(cfg, "other"); got != transfer.ConflictError {
+		t.Fatalf("global policy ignored: %s", got)
+	}
+	if got := receivePolicyForPeer(DirectConfig{}, "other"); got != transfer.ConflictKeepBoth {
+		t.Fatalf("safe default changed: %s", got)
+	}
+}
+
 func TestIncomingPlanDirectoryAndDurabilityBeforeAcceptanceOverRealQUIC(t *testing.T) {
 	for _, failSide := range []string{"receiver", "sender"} {
 		t.Run(failSide, func(t *testing.T) {

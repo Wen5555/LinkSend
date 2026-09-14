@@ -71,6 +71,64 @@ type IncomingPlanPreview struct {
 	SpaceEstimate   string               `json:"space_estimate"`
 }
 
+type AcceptIncomingDefaultResult struct {
+	Accepted        bool   `json:"accepted"`
+	PreferenceSaved bool   `json:"preference_saved"`
+	Message         string `json:"message,omitempty"`
+}
+
+// AcceptIncomingDefault is the ordinary one-click receive path. The caller
+// must bind the visible attempt and revision; plan creation, directory/space
+// checks, durable persistence and the acceptance decision remain in Go.
+func (s *Service) AcceptIncomingDefault(id, attemptID string, revision uint64, remember bool) (AcceptIncomingDefaultResult, error) {
+	return s.AcceptIncomingWithPolicy(id, attemptID, revision, remember, transfer.ConflictKeepBoth)
+}
+
+func (s *Service) AcceptIncomingWithPolicy(id, attemptID string, revision uint64, remember bool, policy transfer.ConflictPolicy) (AcceptIncomingDefaultResult, error) {
+	if policy != transfer.ConflictKeepBoth && policy != transfer.ConflictSkip && policy != transfer.ConflictError {
+		return AcceptIncomingDefaultResult{}, transfer.ErrPlanInvalid
+	}
+	done, err := s.beginProfileWork()
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	defer done()
+	t, err := s.incomingTask(id)
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	t.mu.RLock()
+	if err = t.checkIncomingLocked(revision); err == nil && t.snap.AttemptID != attemptID {
+		err = errors.New("REVISION_CONFLICT")
+	}
+	peerID := t.snap.PeerID
+	t.mu.RUnlock()
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	preview, err := s.previewIncomingPlan(id, IncomingPlanRequest{ExpectedRevision: revision, ConflictPolicy: policy}, true)
+	if err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	if err = s.acceptReceivePlan(id, preview.Revision, preview.PlanDigest); err != nil {
+		return AcceptIncomingDefaultResult{}, err
+	}
+	return defaultAcceptanceResult(remember, func() error { return s.SetAlwaysAccept(peerID, true) }), nil
+}
+
+func defaultAcceptanceResult(remember bool, save func() error) AcceptIncomingDefaultResult {
+	result := AcceptIncomingDefaultResult{Accepted: true, PreferenceSaved: !remember}
+	if !remember {
+		return result
+	}
+	if err := save(); err != nil {
+		result.Message = "本次已接收，免确认设置未保存；可稍后在设备页修改。"
+		return result
+	}
+	result.PreferenceSaved = true
+	return result
+}
+
 // This is a conservative free-space admission check, not a filesystem quota
 // guarantee: metadata/inodes and safe resume copy peaks depend on the volume.
 // Count full selected content and reserve 16 MiB for checkpoint/metadata writes.
@@ -241,7 +299,7 @@ func (s *Service) acceptReceivePlan(id string, revision uint64, digest string) e
 		t.mu.Unlock()
 		return err
 	}
-	if err = s.checkPeerAllowed(t.snap.PeerID); err != nil {
+	if err = s.checkTaskGrant(t.snap); err != nil {
 		t.mu.Unlock()
 		return err
 	}
@@ -387,7 +445,9 @@ func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attempt
 			return *plan, nil
 		}
 		if autoAccept {
-			if err := s.decideTask(t.snapshot().ID, true); err != nil {
+			snap := t.snapshot()
+			policy := receivePolicyForPeer(t.cfg, snap.PeerID)
+			if _, err := s.AcceptIncomingWithPolicy(snap.ID, snap.AttemptID, snap.Revision, false, policy); err != nil {
 				return transfer.ReceivePlan{}, err
 			}
 		}
@@ -435,6 +495,17 @@ func (s *Service) taskReceiveOptions(ctx context.Context, t *taskRecord, attempt
 		}
 		t.progress(attemptID, p)
 	}}
+}
+
+func receivePolicyForPeer(cfg DirectConfig, peerID string) transfer.ConflictPolicy {
+	policy := cfg.ReceiveConflictPolicy
+	if configured := cfg.DeviceConflictPolicies[peerID]; configured == transfer.ConflictKeepBoth || configured == transfer.ConflictSkip || configured == transfer.ConflictError {
+		policy = configured
+	}
+	if policy != transfer.ConflictKeepBoth && policy != transfer.ConflictSkip && policy != transfer.ConflictError {
+		return transfer.ConflictKeepBoth
+	}
+	return policy
 }
 
 func (t *taskRecord) recordSelectionAccepted(attemptID string, selection transfer.Selection, summary transfer.PlanSummary) error {

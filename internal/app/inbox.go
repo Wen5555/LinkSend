@@ -250,8 +250,10 @@ func (s *Service) runInbox(ctx context.Context, done chan struct{}, directory st
 					s.inbox.mu.Lock()
 					s.inbox.listening = false
 					s.inbox.mu.Unlock()
-					if s.receiveIncoming(ctx, peer, directory) {
-						_ = s.closePeerAfterTransfer(peer)
+					if peer.SessionReuse {
+						s.adoptInboundPeerSession(peer)
+					} else if s.receiveIncoming(ctx, peer, directory) {
+						s.adoptInboundPeerSession(peer)
 					} else {
 						_ = peer.Close()
 					}
@@ -305,22 +307,38 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 	if err := s.checkPeerAllowed(peer.PeerID); err != nil {
 		return false
 	}
-	var policyErr error
-	directory, policyErr = s.receiveDirectory(peer.PeerID, directory)
+	stream, err := peer.Data.Conn.AcceptStream(inboxCtx)
+	if err != nil {
+		return false
+	}
+	return s.receiveIncomingStream(inboxCtx, peer, directory, transport.WrapStream(stream))
+}
+
+func (s *Service) receiveIncomingStream(inboxCtx context.Context, peer *PeerSession, directory string, stream *transport.QUICStream) bool {
+	effectiveDirectory, policyErr := s.receiveDirectory(peer.PeerID, directory)
 	if policyErr != nil {
 		s.inbox.mu.Lock()
 		s.inbox.lastError = "RECEIVE_DIRECTORY_UNAVAILABLE"
 		s.inbox.mu.Unlock()
 		return false
 	}
+	directory = effectiveDirectory
 	ctx, cancel := context.WithCancel(inboxCtx)
+	authorizationGeneration := peer.AuthorizationGeneration
+	if authorizationGeneration == 0 {
+		authorizationGeneration, _ = s.currentAuthorizationGeneration(peer.PeerID)
+	}
+	if generationErr := s.checkAuthorizationGeneration(peer.PeerID, authorizationGeneration); generationErr != nil {
+		cancel()
+		return false
+	}
 	s.operationMu.Lock()
 	if s.isClosing() {
 		s.operationMu.Unlock()
 		cancel()
 		return false
 	}
-	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory}, cancel)
+	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: peer.PeerID, TargetDirectory: directory, AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		s.operationMu.Unlock()
 		cancel()
@@ -340,19 +358,13 @@ func (s *Service) receiveIncoming(inboxCtx context.Context, peer *PeerSession, d
 		applyDirectEvidence(v, peer.Evidence())
 	})
 
-	stream, err := peer.Data.Conn.AcceptStream(ctx)
-	if err != nil {
-		handleTaskRunError(t, attemptID, ctx, err)
-		cancel()
-		return false
-	}
 	options := s.taskReceiveOptions(ctx, t, attemptID, directory, nil, s.alwaysAccept(peer.PeerID))
 	options.Peer = peer.PeerID
-	result, runErr := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
+	result, runErr := transfer.ReceiveWithOptions(ctx, stream, options)
 	if runErr != nil {
 		handleTaskRunError(t, attemptID, ctx, runErr)
 		cancel()
-		return false
+		return reusablePeerStreamResult(runErr)
 	}
 	t.completeTransfer(attemptID, result, peer.SessionID)
 	cancel()

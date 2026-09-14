@@ -69,8 +69,8 @@ func (s *QUICStream) FlushTerminal(ctx context.Context) error {
 		if err != nil {
 			var applicationErr *quic.ApplicationError
 			if errors.As(err, &applicationErr) && applicationErr.Remote && applicationErr.ErrorCode == 0 {
-				// The product closes a one-transfer QUIC session with code 0 only
-				// after the receiver has read the terminal frame. quic-go may
+				// Legacy peers may close the QUIC session with code 0 after the
+				// receiver has read the terminal frame. quic-go may
 				// deliver that connection close before the stream FIN, so it is
 				// equivalent terminal-delivery evidence at this exact boundary.
 				return nil
@@ -85,7 +85,7 @@ func (s *QUICStream) FlushTerminal(ctx context.Context) error {
 }
 
 func QUICConfig() *quic.Config {
-	return &quic.Config{HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, KeepAlivePeriod: 5 * time.Second, MaxIncomingStreams: 8, MaxIncomingUniStreams: -1, Allow0RTT: false, InitialStreamReceiveWindow: 2 << 20, MaxStreamReceiveWindow: 8 << 20, InitialConnectionReceiveWindow: 4 << 20, MaxConnectionReceiveWindow: 32 << 20}
+	return &quic.Config{HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, KeepAlivePeriod: 5 * time.Second, MaxIncomingStreams: 8, MaxIncomingUniStreams: 4, Allow0RTT: false, InitialStreamReceiveWindow: 2 << 20, MaxStreamReceiveWindow: 8 << 20, InitialConnectionReceiveWindow: 4 << 20, MaxConnectionReceiveWindow: 32 << 20}
 }
 
 func validateTLSConfig(tlsConfig *tls.Config, responder bool) error {

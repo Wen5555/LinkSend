@@ -1,4 +1,102 @@
+## 2026-09-14 E4-01 profile SQLite owner 测量
+
+- taskManager 持有 profile 生命周期唯一 task-history.sqlite 连接并共享给 desktopStore，构造失败和 Shutdown 显式关闭；MaxOpenConns=1，失败仍撤销 durability claim。
+- Windows 微基准 100x、3轮：persistent 2.024/2.076/2.084 ms/op；reopen_each_write 3.663/4.254/3.699 ms/op，中位数减少约43.9%。根模块 test/vet 与历史/构造失败定向测试 PASS。
+- 仅存储 owner 子项完成；认证 QUIC 会话复用、流取消和公平调度仍为 NOT RUN，自动剪贴板未实现。见 docs/evidence/DESKTOP-E4-STORAGE-SESSIONS.md。
+## 2026-09-14 E3-C3 共享接管竞态与刷新
+
+- 放弃请求与 Enqueue 共用串行边界，队列已有 request_id 时拒绝并要求在队列取消；资源清理失败继续保留 journal。
+- Windows 按实际读取字节流式复制临时源，源增长受 16 GiB 总预算约束，WriteThrough + Flush(true)，失败清理半成品。
+- 两端打开共享面板先静默唤醒 owner；Windows 等待新鲜快照超时后显示状态未知和刷新入口。Mac 定向编译与测试作业 /tmp/codex-ssh/linksend-e3-c3-mac-swift-20260913T172620Z PASS。
+## 2026-09-14 E3-C2 原生共享闭环
+
+- 修正 Windows package root/manifest/wake 路径；在线目标按钮直接提交，离线等待显式确认；失败可重试。临时来源采用 16 GiB 实际累计限额、长度校验、Flush(true) 与失败清理。
+- Mac 宿主冷启动使用 NSWorkspace 显式 --native-share-background，设备时间支持 RFC3339Nano，provider 并发限制 4 且按实际 chunk 计总预算。
+- owned 清理失败时保留 journal；未入队失败请求在主界面提供明确放弃入口。Mac 定向作业 /tmp/codex-ssh/linksend-e3-c2-mac-swift-20260913T171611Z PASS。
+# 2026-09-14 E3-C1 原生共享审查修复
+
+- 原生共享来源 journal 与 queue request 生命周期绑定：入队后保留 bookmark/owned source，重启幂等恢复；completed/cancelled/expired 后按请求释放 security scope、临时文件和 journal。失败请求隔离，不阻塞后续记录。
+- 后台共享唤起不显示主窗口；macOS LaunchServices URL 进入 Wails ApplicationOpenedWithFile consumer。设备快照由后台每 15 秒发布，两端读端按 60 秒 TTL 降级陈旧可达状态。
+- 两端选择设备不自动提交；离线等待必须单独确认，并提供添加设备入口。Windows 临时/虚拟 StorageFile 必要时持久复制；macOS 依据真实 inPlace 回调决定 bookmark 或同步复制。
+- 本机 desktop Go tests、.NET build/self-test 通过；Mac Swift 定向作业 /tmp/codex-ssh/linksend-e3-c1-mac-swift-r2-20260913T165721Z 通过。签名安装与系统激活仍按用户要求 NOT RUN。
 # LinkSend implementation progress
+
+## 2026-09-14 E3 原生共享源码候选（待审查）
+
+- Windows 正式 Share Target 使用 `ShareOperation/StorageItems` 显示真实已配对设备小面板，只持久交接 broker 可打开的绝对路径，不复制正文；无绝对路径的临时/云端项目明确失败。Go 发布最小设备快照并消费 schema 2 journal，以 request ID 幂等后进入现有授权队列。
+- macOS 正式 Share Extension 使用 `com.linksend.desktop.share`/`group.com.linksend.desktop`；原位文件交接只读 security-scoped bookmark，系统临时表示才在回调内接管。旧 E0 4097 已定位为无 Team ID 导致 App Group 被拒绝且失败分支未 cancel；失败分支现全部终结 request。
+- Windows .NET Release build/self-test、desktop test/vet/build PASS。真实 Mac arm64 完成 plist、provider/store 4 项测试、appex 源码构建及 Go/Objective-C desktop test/vet/build；extension SHA256 `fb9d17affcdc43f189c75c3d3dde1a04db9ff6c9a8973ffa6e379970e1f6182b`。用户没有两平台证书并明确暂缓签名，系统安装、App Group 生效、系统激活、升级卸载准确保持 NOT RUN，不开发假身份绕过。
+
+## 2026-09-13 E2-C1 集中审查修复候选（待复审）
+
+- 主发送动作移到有界文件列表之前；完整 App 外壳 960×640、已选 LAN-only 目标和两个文件时按钮位于视口内、启用且点击回执成功。
+- 同名策略支持全局持久化与设备覆盖继承，任务库迁至 schema 7；普通确认和免确认均使用有效策略，活动/恢复计划不变。设置改为字段级 dirty 合并，保存期间锁定当前分类；CAS 冲突会读取后端最新 revision 并保留 dirty 输入，普通校验/I/O 错误不进入合并流程。
+- LAN 请求确认提升到应用级；请求结果区分 joined/switch_required/pending/not_joined，切组提供配对码后续；LAN-only 不再误报离线，删除记录可显式允许重新添加。
+- 存储页恢复旧版内容草稿的查看/取消入口，并可直达待发送管理；不恢复新建内容入口、不自动续发、不删除接收文件。根 `go test ./...`、`go vet ./...`、desktop `GOWORK=off` test/vet/build、前端 typecheck/lint/64 tests/build和Wails production通过；新候选CI待提交后运行。
+
+## 2026-09-13 E2桌面接收、设置与四视图候选（待复审）
+
+- U1：新增绑定 attempt/revision 的 Go 一次接收命令，默认 `keep_both`，计划/空间/授权/持久化完成后才同意；恢复仍沿用原计划，免确认保存失败不反转本次接收。
+- U5/U7：设置改为六个用途分类，偏好增加 revision 和分类局部 CAS；设备专属目录留空继承全局。主导航收敛为传输、记录、设备、设置，长列表使用单主滚动区与局部有界滚动。
+- U4：传输页移除文字、链接、图片手动创作入口；旧队列升级/重启后保持 `needs_attention`，不会自动续发。自动剪贴板仍属于 E4，本轮未开始。
+- 针对性 Go、前端 typecheck/lint/58 tests/build 已通过；Playwright production preview 覆盖 1100×720、960×640、CSS小可用区、深色、reduced motion 和键盘焦点；原生125%/150% DPI未运行，0 console error。准确 Wails 包与双机 UI 未运行，网络事实继续引用 E1，不把浏览器预览当网络结果。见 [默认接收](evidence/DESKTOP-E2-DEFAULT-RECEIVE.md)、[设置](evidence/DESKTOP-E2-SETTINGS.md)、[旧内容](evidence/DESKTOP-E2-LEGACY-CONTENT.md)、[布局](evidence/DESKTOP-E2-LAYOUT.md)。
+
+## 2026-09-13 E1物理LAN最小闭环（PARTIAL）
+
+- 固定源码 `e896f92`、Windows `10.234.232.205` 与Mac `10.234.212.116` 的全新隔离profile完成双向发现、独立LAN同确同意、LAN grant及Windows→Mac 1,179,648 bytes传输；两端SHA256同为 `8b1dc5b2...17a336d1`。
+- Mac→Windows在 `lan_control_connect` 后失败并回退不可用信令，0正文；独立Mac→Windows TCP/54446探针3,002ms timeout且Windows 15秒无accept。未改防火墙，因此整体网络PARTIAL，不冒充双向/准确包PASS。完整证据见 [E1物理LAN](evidence/DESKTOP-E1-PHYSICAL-LAN.md)。
+
+## 2026-09-13 E1-C2残余授权/LAN恢复/发现竞态修复（后端验收通过）
+
+- 完整成员快照移除peer后取消其活动task；queue保存的expected authorization generation贯穿StartSend、PeerSession和开流检查，LAN-only可信nearby设备可独立尝试，不再伪造online。持久authorization epoch阻止解除屏蔽后generation回退。
+- LAN发起端在正常及query恢复路径都只在验证done后启用pin；恢复helper共用credential消费，能继续报告joined/switch_required/pending。断线保留最多60秒、上限64的provisional/completed事务，query可在重启后恢复ready/done和target凭证，撤销/重配清除旧事务。发现多地址签名稳定排序，UDP重建与Close串行收尾，取消后不能遗留新socket。
+- 受影响三个包完整测试PASS；定向race覆盖活动快照撤销、旧queue generation、LAN同意及UDP rebuild/Close。准确包物理LAN、跨NAT和系统确认仍NOT RUN，不部署当前授权变更。
+- 物理Windows→Mac首次独立LAN同意在双方时钟相差约1秒时暴露provisional本地期限误按“本机now+60秒”复核，合法签名帧被接收端提前关闭为EOF。签名验证原本已约束 `ExpiresAt-IssuedAt<=60秒` 且允许15秒时钟偏差；持久层上限现与之对齐为75秒，并新增74秒接受/76秒拒绝边界回归。该失败未记为网络PASS，修复后重新从全新隔离profile执行。
+
+## 2026-09-13 E1-C3原生网络与睡眠事件源码闭环（已验收，物理待测）
+
+- Windows使用系统 `NotifyIpInterfaceChange`/`CancelMibChangeNotify2` 监听所有地址族接口变化；macOS使用 `SCDynamicStore` 监听全局和接口IPv4/IPv6状态。Wails 3的系统睡眠/唤醒事件与网络回调进入容量1串行泵，再调用既有core门闩；5秒接口快照fallback保留。
+- 关闭先注销Wails和系统订阅，停止并join macOS CFRunLoop/Windows通知，再等待事件泵退出和关闭core。通知只刷新未来发现/endpoint选择，不取消健康活动QUIC。
+- Windows桌面专项test/vet/build、前端typecheck/lint/58项测试/build、Wails 3 beta.18 production build PASS。Mac `10.234.212.116`（macOS26.5 arm64）对固定源码 `844e286` 的真实SCDynamicStore注册/停止测试、desktop vet/build PASS，作业 `/tmp/codex-ssh/linksend-e1-c3-mac-build-final-20260913T114047Z`；链接器deployment-target warning保留。提交 `248e1ee` 的core、desktop、Windows/macOS双架构包CI全部PASS，总控接受源码和两平台注册/停止构建闭环。准确包Windows/macOS事件延迟、网络切换、睡眠唤醒与文件hash仍NOT RUN；物理结果不得由源码检查替代。
+
+## 2026-09-13 E1第二候选与C1审查修复（待复审）
+
+- 修复C1六组问题：完整成员快照撤销第三方消失成员且拒绝revision回滚；组/LAN双关系不互相覆盖，旧LAN generation不能附着新关系；schema1本机block在授权读取前迁移；任务/恢复/queue/迟到确认绑定真实授权generation，任务库升级schema6。
+- LAN同意改为持久provisional的commit/ready/confirm/done并支持query恢复，pending上限64；服务端凭双方签名transcript签发target-bound 60秒凭证。新增空组签名初始化和显式跨组原子切换，控制库升级schema4。
+- 发现按同index地址变化退组重入、稳定刷新不增generation、失效UDP socket有界重建、持久记忆地址持续退避探测；LAN runtime每5秒以真实接口地址快照触发恢复，目录连接状态来自活动session。原生OS事件低延迟回调、IPv6/mDNS及物理矩阵仍准确保留为未完成。
+- 第二候选实际通过根 `go test ./...`、`go vet ./...`、`GOWORK=off go test ./...`、`git diff --check`；桌面独立模块 `GOWORK=off go test/go vet/go build ./...`；前端 typecheck、lint、58项测试和production build。当前隔离工作树未找到 `wails3.exe`，本候选本地Wails production build为NOT RUN；由阶段提交的GitHub CI继续验证跨平台构建。Node实际为24.19.0，低于项目声明的`^24.21.0`并产生engine warning，未造成上述命令失败。
+
+## 2026-09-13 E1设备与发现后端第一候选（待总控审查）
+
+- E1-01/02：成员控制面升级为 `membership_version=2` 与数据库schema 3，加入随机incarnation、组revision、邀请码代际绑定和普通成员幂等撤销事务；本机trust schema 2先持久拒绝/outbox并推进grant generation，旧快照、跨组、迟到actor、旧客户端与删后旧码负例通过。
+- E1-03：新增最近签名公告固定公钥后的TLS 1.3 `lan_pair` request/accept|reject/commit/ack；接收端明确同意，双方成功才写独立LAN grant，拒绝零pin。服务短期入组凭证和ack丢失查询仍待下一候选。
+- E1-04/05：同接口保留全部IPv4和多route目录；组播/广播/单播/TLS独立降级并限制资源。Windows使用真实source-bound UDP socket接收回包；网络/唤醒入口刷新未来路径但不取消健康任务。IPv6/mDNS与准确包物理网络矩阵未运行。
+- 实际通过：根 `go test ./...`、`go vet ./...`、`GOWORK=off go test ./...`；桌面模块 `GOWORK=off go test/go vet/go build ./...`；`git diff --check`。E0 draft PR #8 在 `1518e31` 的core、desktop、Windows和双Mac包CI全部SUCCESS。
+
+## 2026-09-13 E0候选同步与E1后端实施授权
+
+- `ec55db3`、`11c44df`、`2342009` 的既有证据已复用；总控接受 `2342009` 作为Mac共享原型的有界IO修补，不把它视为U6、4097 helper通信或文件交接通过，也不重复十项SafeIO测试。
+- 最新用户提示词明确恢复实施并授权阶段工作分支推送、复用draft PR和CI；旧TODO中的“未审不push”“等待派发E1”门槛已经失效。当前唯一产品写入方一次交接至 `/root/desktop_executor`，本批继续 E1-01 至 E1-05 的设备配对/撤销、LAN同意、发现、统一目录与恢复后端闭环。
+- 仍未证明且不会冒充通过：Windows安装信任、Mac共享4097/文件交接、准确候选包Windows↔Mac真实双向、双 NAT。网络原型缺口补齐前不扩张UI。
+
+## 2026-09-13 E0 Mac资源安全修补收尾（待审提交）
+
+按E0-supervision-ui-v1/E0-safeio-close-v1，Host的payload/receipt改为读入时有界校验；扩展失败只清理独占创建且身份仍匹配的本请求文件。真实Mac10项文件IO边界测试、host/.appex构建/签名通过。标准系统Share菜单展示及action已实际派发；分离服务复测仍NSCocoaErrorDomain/4097、最终退出1、无captured回执，保持E0-04待修技术缺陷。精确注册已注销，owned进程计数0；见 [安全修补回执](evidence/DESKTOP-E0-MAC-SAFEIO.md)。
+总控已复审接受11c44df的ADR语义，具体API/schema/实现及兼容测试仍待E1/E4。未宣布E0整体通过，未push；仓库外executor-progress.json持续记录当前状态。下一步等待总控复审后派发阶段同步和E0-B，不再在此批扩大共享加载器重构。
+
+## 2026-09-13 E0-ADR-review-v1 修订（待复审）
+
+已读取总控仓库外pending-e0-adr-review.md并修订ADR0007：接收端预签发lease/不可延长单调deadline阻止首帧或重传滞留后重获TTL；删除推进peer级generation使全部旧组/LAN grant失效；origin_sequence、Lamport与串行落板revision门闩分离。新增对应后续验收负例，见 [审查回复](evidence/DESKTOP-E0-ADR-REVIEW-V1.md)。
+本次仅工程文档，未改变产品代码/wire/schema，新增场景测试NOT RUN；E0-01/02现有证据与剩余物理/准确安装包矩阵不变，两平台U6仍PARTIAL。未推送，不自行宣称ADR冻结或E0通过。
+
+## 2026-09-13 桌面体验 E0 中间检查点（未验收）
+
+本轮按新的 U1–U7 授权继续，不受旧 M5 停止点限制。唯一工作分支 `codex/desktop-experience-upgrade`，基线3bcb730；全轮22条 [TODO](DESKTOP-EXPERIENCE-TODO.md) 已建立，E1尚未启动。
+准确M5四包本地SHA256与当前GitHub digest重新一致；Windows准确ZIP payload真实UIA复现手动内容、长设置、只有屏蔽入口及预览前禁用接收。NSIS和Mac完整准确包矩阵未运行；详见 [E0基线](evidence/DESKTOP-E0-BASELINE.md)。
+Mac/香港/登记荷兰节点当前manager登录与只读审计成功；香港health/真实WSS认证/在线列表分列通过，物理桌面双向文件链尚未运行，namespace能力检查不算双NAT；见 [E0网络](evidence/DESKTOP-E0-NETWORK.md)。
+Windows真Share Target开发MSIX编译/打包/签名成功，但系统拒绝证书信任和开发注册，未改主机安全策略；Mac真.appex编译/注册/系统共享服务激活有证据，文件授权交接仍在验证。原型不含假设备/发送，不称U6完成。
+[ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 提出成员代际、同事务撤销、独立LAN同意、旧端拒绝和自动剪贴板支撑，待总控审查，尚未冻结或改变产品协议/schema。
+实际根基线普通/workspace/独立vet由总控在3bcb730验证（缓存边界保留）；执行任务desktop独立test及新增control-inspect编译/vet/真实HTTPS运行退出0。未推送/部署/合并/正式发布。本检查点不能把原型、源码或提交等同阶段通过。
 
 ## 2026-09-12 桌面能力（用户指定M5收尾）
 
@@ -461,3 +559,39 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 本轮包标记 `UNCOMMITTED_TEST_SNAPSHOT`，基线 `fef3e3f59797a6de25cb7f9b1f2a1850512808d5`，不冒充该提交的干净构建。Windows 为 `UNSIGNED_TEST_BUILD`；Mac `code_signature=ADHOC / distribution_identity=NONE / notarization=NOT_RUN`。本轮无新 PR/合并/Release。
 - 该现场阶段当时 `NOT_IMPLEMENTED`：桌面重启恢复、字节级续传、桌面暂停/恢复；这些能力随后已在本文顶部所述源码快照中实现并通过本地真实 QUIC 回归，但尚未做新的物理双机恢复验收。中继仍为 `NOT_IMPLEMENTED`；真实双 NAT、Linux 双机、完整网卡矩阵、原生 UI 缺口仍见验收报告。
 - 历史交付勘误：较早的 Windows 便携包曾缺包内 SHA256/准确合并提交来源信息，不能视为满足本轮发布要求；本轮 ZIP 单独记录未提交来源并包含包内校验和。默认 Windows 身份数据目录通常为 `%APPDATA%\LinkSend`（`os.UserConfigDir()`），不是 `%LOCALAPPDATA%`。
+## 2026-09-14 E4-03 集中修复候选
+
+- 所有真实本机变化先推进剪贴板状态owner；无lease、无发送权限、格式不支持和离线变化均不补发。每peer固定一个worker，只保留current和一个latest-only pending；等待两路全局slot、开流和64 KiB分块写都继承lease deadline。新复制、暂停、撤权及Shutdown主动cancel/reset旧流；Ensure按peer并行并以singleflight阻止周期调用在离线peer后积累。
+- 连接协商增加独立`clipboard_sync`；只声明旧`session_reuse`不会启动剪贴板owner。双方各自本地authorization generation可不同，真实loopback用例以1/29非对称代次验证双向文字。origin绑定认证peer，lease/event绑定双方permission revision；关闭/重开同一权限后旧lease/正文拒绝，无关方向不删除健康lease。
+- 图片解码/验证移出最终state锁；mutation前按grant→state锁序复核暂停、peer generation、receive revision、deadline和OS generation。macOS普通文字不误判link，命名pasteboard的文字、URL、PNG和concealed marker已在arm64通过；Windows读取明确exclude marker。Windows PNG跨应用粘贴仍按计划留E5。
+- 设置新增独立自动剪贴板分类、持久且默认关闭的总开关、读取/远端写入说明、临时暂停，以及ready/connecting/unsupported/pause/error状态。后端只在内存中保留每peer最新有限等待/错误码，真实远端原生写入失败可见，下一次成功清除，不记录正文或历史。Wails bindings已重新生成。
+- Windows根完整test/vet/GOWORK=off test、定向race、桌面独立race/vet/build、前端typecheck/lint/66 tests/build通过。Mac最终作业`/tmp/codex-ssh/linksend-e4-ab-mac-final-20260914T002102Z`的根定向测试、nativeclipboard race、desktop完整test/vet通过；保留既有SDK 26/deployment target warning。物理Win↔Mac自动剪贴板、准确包锁屏/睡眠/网络切换仍留E5，未恢复E5部署。
+
+## 2026-09-14 E4-01 认证 QUIC 文件会话复用候选
+
+- peer ID + authorization generation 绑定的短期池复用同一认证 QUIC；两端都有入站 stream owner，连续正向和原始响应方反向文件保持同一 session_id。
+- 每 peer 仍限制一个活动文件发送流；传输中取消只终止当前 stream，下一文件可在同一连接完成。授权撤销、连接错误、3 秒空闲、空闲网络变化与 Shutdown 关闭池中连接；活动连接由真实 path watcher 决定。
+- C2 将 closing 判定、pool map 发布和 worker `WaitGroup.Add` 收敛到同一全局门闩；dial/adopt 在发布前遇到 Shutdown 会关闭连接且不留下 profile owner。远端 stream reset、接收拒绝只结束当前流；未协商复用的旧端恢复单操作 `CloseAfterTerminal` 收尾并在下一文件新建会话。
+
+## 2026-09-14 E4-02 自动剪贴板权限候选
+
+- 任务库升级 schema 8；权限按 peer、send/receive 与 text/link/image 分离保存并使用 revision CAS，默认无记录即关闭。
+- 启用前重验当前 peer 授权；本机阻止、成员移除或授权 generation 变化删除该 peer 全部剪贴板授权，解除阻止和重新配对不会自动恢复。
+- 当前候选只建立本机权限和原生变化监听边界；正文读取、lease wire、跨端同步与接收写入仍待 E4-03。
+- Windows 使用 `AddClipboardFormatListener` + `SetWindowSubclass`，回调只合并 sequence 和 text/link/image 格式标志；macOS 每 250ms 比较 `NSPasteboard.changeCount` 并只查询 types。仅存在 enabled grant 时注册，全部关闭、撤销、睡眠、锁屏或退出时停止；唤醒/解锁从新基线恢复，不补发停用期间变化。
+- C1 将 grant 升级到 schema 9 并绑定当前可信配对 generation；启用提交与撤销共用门闩，清理失败或重新配对都不能复活旧 generation。watcher 由单一 owner 串行 start/stop，分别跟踪睡眠、锁屏和用户暂停；Windows 注册时记录 OS sequence 基线并以 latest-only 合并变化。
+- C2 将锁屏/睡眠状态送入独立可靠队列，不受阻塞的 NetworkChanged 或网络 burst 推迟；保留事件顺序并独立合并网络通知。owner 在 Shutdown 先关注册门闩，迟到 RPC/workspace refresh 不能重启 watcher；并发 refresh 只注册一次。
+## 2026-09-14 E5 准确候选与 Mac 启动/恢复
+
+- E4 自动剪贴板源码范围已由总控在 `3363fd5+387b57c` 验收通过，E5 固定候选为 `387b57c76596975d0da61f01e060e0cc2940b0b5`。core push/PR、desktop push/PR 和 packages run `34792565786` 的 Windows amd64、macOS arm64、macOS amd64 全部 `success`；PR #8 保持 Draft。
+- 三个平台 artifact 已按 GitHub 外层 digest 下载和展开，仓库包核验脚本退出 0；包内 `BUILD-INFO.txt` 均记录 committed/clean 的准确提交，实际载荷 SHA256 与 `SHA256SUMS.txt` 一致。Windows portable ZIP 为 9,826,428 bytes / `a9bb4ae0...e0e7`，installer 为 75,023,277 bytes / `c8b25dd1...cdd8`；arm64 DMG 为 9,443,902 bytes / `be69d1f1...f810`，amd64 DMG 为 10,176,906 bytes / `60fd64f7...581d`。
+- `mac-test-102342413` 经 codex-ssh-manager resolve→probe→audit 后，在隔离 `/tmp/codex-ssh` 路径验证准确 arm64 DMG：布局、arm64、bundle ID、macOS 13 最低版本、ad-hoc codesign 严格校验通过；独立 profile 首次和二次启动均由 CoreGraphics 观察到一个真实 1097×745 窗口，进程 6 秒后存活并接受 SIGTERM。完成 jobs 为 `/tmp/codex-ssh/linksend-e5-mac-package-387b57c-20260914T004708Z` 和 `/tmp/codex-ssh/linksend-e5-mac-window-restore-r2-20260914T004932Z`。
+- Windows 准确 portable 包在独立 profile 首次与二次启动均创建 1120×760 原生窗口、1105×721 客户区，当前物理显示为 120 DPI（125%），进程 6 秒后存活。首次关闭原生选择“退出应用”后保存 `close_mode=exit` 并 exit 0；同 profile 再启动后关闭不再询问并 exit 0。5 次顺序启动窗口就绪中位数 230.5 ms，3 秒 working set/private bytes 中位数 47,894,528/62,156,800，均 exit 0；150% DPI、键盘和深色待补。
+- 私有 Windows window station 原型未触碰日常板：命名 station 被当前令牌以 Win32 5 拒绝；匿名 station 可创建 station/desktop/child，但子进程 user32.dll 初始化失败，现有 nativeclipboard 写读测试无法创建 HWND。general clipboard sequence 始终为 3882。准确系统剪贴板改由独立 Windows 用户会话/Windows Sandbox，或经一次明确授权临时覆盖两端系统板。
+- `hk-main` 已部署干净 `387b57c` Linux amd64 候选 `2c9c352a...6372`：事务 job `...014829Z`、备份 `/opt/linksend-lan-test/backups/20260914T014842.005473007Z-desktop-e5-387b57c`、独立 verify `...014925Z` 均 PASS；新 PID 553926，DB integrity `ok`、schema 2→4、V1/QUIC/`relay=false`。旧 M5 二进制在 schema 4 隔离副本上 exit 2，因此旧二进制回滚入口已作废；线上未试回滚，后续只用经 schema 4 副本验证的二进制向前恢复，绝不以旧 schema 2 DB 覆盖新写入。
+- `nl-highdefense` 在两个独立 NAT、重叠私网和独立 WAN 上完成 8 MiB 准确 `387b57c` CLI QUIC：同 session、摘要一致、`relay=false`、NAT 计数 8/6。run `...022524Z` 和独立 verify `...022658Z` PASS；本轮所有权门闩保证重入不删旧 namespace。敏感材料与 namespace/veth/process 已清理，宿主地址/路由/规则不变；脱敏包 SHA256 `4be226d1...b86b`。
+- Windows 125% DPI 原生小窗请求 960×640 后受最小高度约束为 960×700，继续请求 600×400 时钳制为 900×700，对应 720×560 逻辑最小值乘 1.25；进程 exit 0。延迟 Raw UIA 可读取 production DOM，39 字中文设备名 IsOffscreen=false 且边界留在窗口内，传输按钮声明 keyboard-focusable；但 PostMessage/真实键盘事件后的 FocusedElement 仍为空；只读核对发现 active input desktop 为 `Screen-saver`，而测试线程在 `Default`，因此准确包键盘属于环境待复测。当前系统 light theme 未改，150%/深色 NOT RUN。
+- `387b57c` 与 M5 `d0c4a4b` 的隔离 loopback 控制面做了两个方向：旧 client 加入当前 server 返回 `VERSION_INCOMPATIBLE`，准确候选当前 client 加入旧 server 原先返回 `AUTHENTICATION_FAILED`；两端管理视图都只保留原管理员，没有幽灵成员。后续源码修复让 `Join`/跨组切换先核对 `/healthz` 的 membership v2，桌面 `PairDevice` 对真实旧 M5 server 进程稳定返回 `VERSION_INCOMPATIBLE: server capabilities incompatible`，前端明确提示升级服务端；信令、桌面边界和前端测试通过。该修复尚未进入 `387b57c` 准确包，重新固定候选和构建包前不能改写原包结果；混合物理文件仍未运行。
+- 香港升级后，全新 Windows 隔离 profile 已用当前固定测试配对入口加入 schema 4 控制面，准确 Windows 包运行时有 1 个 listen、2 个 established 连接。旧 LAN-only profile 上的准确包 V2 share journal 只推进到 `waiting_peer`，不算文件网络通过。Mac alias 随后连续 SSH timeout，尚未创建配套新 profile；恢复后继续准确包 Win↔Mac 文件。
+- 物理双向文件、文本/链接/图片自动剪贴板、文件并存、网络切换/睡眠仍未闭合。Windows general clipboard 当前非空，fixture 返回 `CLIPBOARD_TEST_REQUIRES_EMPTY_DISPOSABLE_CLIPBOARD`；未读取、清空或覆盖用户剪贴板。Windows Sandbox 可执行文件不存在，未启用系统功能。
+- 2026-09-14 暂停收尾：兼容诊断修复固定为 `1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819` 并推送，`core` push/PR、`desktop-wails3-checks` push/PR 与 packages run `34802741572` 三平台 job 均 `success`，Draft PR #8 head 一致。GitHub artifact ID/外层摘要已记录；三平台下载在用户要求暂停时主动停止，监督目标目录为空，无部分包可被误用。恢复时从 run `34802741572` 下载至 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-ci-34802741572` 并运行 `scripts/verify-milestone-packages.ps1`；在此之前，包内载荷摘要与实机结果仍只属于 `387b57c`。

@@ -1,0 +1,9 @@
+# E1-03 LAN独立同意证据
+
+新增签名 `lan_pair` request/accept|reject/commit/ready/confirm/done 与 query 恢复transcript，绑定双方DeviceID、request ID、nonce、授权generation和最多60秒期限；承载通道是最近签名公告固定公钥后的双向TLS 1.3。发现本身不授予pin；接收端通过 `PendingLANPairings`/`RespondLANPair` 明确同意。双方先保存有界provisional；接收端收到confirm后提交，发起端仅在验证done后提交，任一断线都保留不可用于正文的provisional供request/nonce query恢复。完成事务和target-bound短期凭证保留到固定期限，重启后再次请求同一peer会优先恢复旧事务。并发双发以request ID确定单一事务；撤销/重配推进epoch并清除旧provisional。
+
+`TestLANPairingRequiresRemoteConsentAndCommitsBothPins` 在两个独立profile、两个真实TCP/TLS控制listener上通过；`TestLANPairingRejectLeavesNoAuthorization` 证明拒绝后双方零pin。`TestLANPairingQueryRecoversReadyAfterTLSDisconnect` 通过真实helper入口注入ready响应后立刻断开，证明发起端仍为零pin；随后在真实TCP/TLS连接上恢复ready、再注入confirm后done丢失，并用新连接query恢复done，最终双方pin一致。恢复helper与正常路径共用done验证后的本机commit和credential消费，因此不会在session关闭时丢弃服务加入/显式跨组结果。持久provisional回归另覆盖重载可见和授权epoch变化后拒绝提交。控制帧有32KiB上限，内存pending和持久provisional上限均为64并按固定期限回收。
+
+已入组同意方可向服务端提交双方签名transcript，取得仅目标DeviceID可消费的60秒凭证；无成员关系目标自动加入，同组/跨组仍遵循幂等与显式切换。未完成：准确Windows/Mac包上的系统确认入口和物理LAN双向同意；服务不可用时仍准确标为“LAN已配对、跨网络未加入”。
+
+物理首轮发现了持久层以接收端本机 `now+60秒` 重验期限会在约1秒时钟差下拒绝本来已通过签名验证的帧。wire仍固定60秒；本机持久上限仅为容纳既有15秒签名时钟偏差而设为75秒，测试锁定74秒接受、76秒拒绝，不延长签发方授权。

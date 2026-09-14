@@ -1,0 +1,4 @@
+windows/bin/
+windows/obj/
+macos/*.appex/
+macos/share-store-tests

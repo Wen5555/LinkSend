@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 const metadataTestPeer = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -187,11 +189,11 @@ func TestDesktopStoreRejectsFutureSchemaWithoutMutation(t *testing.T) {
 
 func TestDesktopDeviceProfilePersistsAndCASProtectsLastUse(t *testing.T) {
 	store, path := newTestDesktopStore(t)
-	profile, err := store.SaveDeviceProfile(DeviceProfile{PeerID: metadataTestPeer, Alias: "  我的笔记本  ", MyDevice: true, Pinned: true, Position: 2, ReceiveDirectory: t.TempDir(), LastUsedAt: "forged"})
+	profile, err := store.SaveDeviceProfile(DeviceProfile{PeerID: metadataTestPeer, Alias: "  我的笔记本  ", MyDevice: true, Pinned: true, Position: 2, ReceiveDirectory: t.TempDir(), ConflictPolicy: string(transfer.ConflictSkip), LastUsedAt: "forged"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Revision != 1 || profile.Alias != "我的笔记本" || profile.LastUsedAt != "" {
+	if profile.Revision != 1 || profile.Alias != "我的笔记本" || profile.ConflictPolicy != string(transfer.ConflictSkip) || profile.LastUsedAt != "" {
 		t.Fatalf("bad initial profile: %+v", profile)
 	}
 	if _, err = store.SaveDeviceProfile(DeviceProfile{PeerID: metadataTestPeer}); !errors.Is(err, ErrMetadataConflict) {
@@ -240,6 +242,37 @@ func TestDesktopDeviceProfilePersistsAndCASProtectsLastUse(t *testing.T) {
 	profiles, err := reopened.DeviceProfiles()
 	if err != nil || len(profiles) != 2 || profiles[0].PeerID != metadataTestPeer || profiles[1].MyDevice || profiles[1].Pinned || profiles[1].ReceiveDirectory != "" {
 		t.Fatalf("identity/sort isolation failed: %+v err=%v", profiles, err)
+	}
+}
+
+func TestSchemaSixMigratesDeviceConflictPolicyWithBackup(t *testing.T) {
+	store, path := newTestDesktopStore(t)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec("ALTER TABLE device_profiles DROP COLUMN conflict_policy; PRAGMA user_version=6; UPDATE metadata SET value='6' WHERE key='schema_version'"); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := openDesktopStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	saved, err := reopened.SaveDeviceProfile(DeviceProfile{PeerID: metadataTestPeer, ConflictPolicy: string(transfer.ConflictError)})
+	if err != nil || saved.ConflictPolicy != string(transfer.ConflictError) {
+		t.Fatalf("migrated policy unavailable: %+v %v", saved, err)
+	}
+	backups, err := filepath.Glob(path + ".schema-v6-*.bak")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("schema6 backup missing: %v %v", backups, err)
 	}
 }
 
@@ -298,6 +331,7 @@ func TestDesktopDeviceProfileValidation(t *testing.T) {
 		"relative_directory": func(p *DeviceProfile) { p.ReceiveDirectory = "relative" },
 		"missing_directory":  func(p *DeviceProfile) { p.ReceiveDirectory = filepath.Join(t.TempDir(), "missing") },
 		"file_directory":     func(p *DeviceProfile) { p.ReceiveDirectory = file },
+		"conflict_policy":    func(p *DeviceProfile) { p.ConflictPolicy = "overwrite" },
 		"revision_overflow":  func(p *DeviceProfile) { p.Revision = math.MaxUint64 },
 	} {
 		t.Run(name, func(t *testing.T) {

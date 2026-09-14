@@ -167,13 +167,31 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+      - task: build:share-extension
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
+
+  build:share-extension:
+    summary: Builds and embeds the native macOS Share Extension
+    platforms: [darwin]
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/PlugIns/LinkSendShare.appex/Contents/MacOS"
+      - cp native-share/macos/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/PlugIns/LinkSendShare.appex/Contents/Info.plist"
+      - >-
+        xcrun swiftc -swift-version 5 -target {{.ARCH_NAME}}-apple-macos13.0
+        -module-name LinkSendShareExtension -framework Cocoa -framework UniformTypeIdentifiers
+        -application-extension -parse-as-library -Xlinker -e -Xlinker _NSExtensionMain
+        native-share/macos/ShareStore.swift native-share/macos/ShareViewController.swift
+        -o "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/PlugIns/LinkSendShare.appex/Contents/MacOS/LinkSendShareExtension"
+    vars:
+      ARCH_NAME: '{{if eq (.ARCH | default ARCH) "amd64"}}x86_64{{else}}arm64{{end}}'
 
   codesign:adhoc:
     summary: Ad-hoc signs the app bundle (macOS only)
     internal: true
     cmds:
-      - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      - codesign --force --sign - --entitlements native-share/macos/entitlements.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/PlugIns/LinkSendShare.appex"
+      - codesign --force --sign - --entitlements build/darwin/entitlements.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      - codesign --verify --deep --strict "{{.BIN_DIR}}/{{.APP_NAME}}.app"
 
   codesign:skip:
     summary: Skips codesigning when cross-compiling

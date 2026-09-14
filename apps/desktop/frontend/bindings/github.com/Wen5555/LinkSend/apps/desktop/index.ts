@@ -9,10 +9,12 @@ export {
 export type {
     BackgroundOptions,
     BackgroundStatus,
+    ClipboardWatchStatus,
     DesktopEntryStatus,
     DesktopPreferences,
     DesktopStatus,
     EffectiveConfig,
+    NativeSharePending,
     NetworkInterfaceInfo,
     PreferencesStatus
 } from "./models.js";

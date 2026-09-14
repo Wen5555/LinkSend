@@ -41,9 +41,10 @@ func main() {
 		showNativeEntryFailure("无法接收这次文件选择。请检查路径、磁盘空间及草稿容量，然后重新选择。")
 		os.Exit(1)
 	}
-	single, err := profileSingleInstanceOptions(dataDir, func(_ []string, _ string) {
+	single, err := profileSingleInstanceOptions(dataDir, func(args []string, _ string) {
 		// The second process already committed its entry before Wails.New.
-		desktop.wakeEntries()
+		nativeOnly := slices.Contains(args, "--native-share-background") || slices.ContainsFunc(args, isNativeShareWakeURL)
+		desktop.wakeEntries(!nativeOnly)
 	})
 	if err != nil {
 		slog.Error("single instance setup failed", "error", err)
@@ -51,7 +52,8 @@ func main() {
 	}
 	// Hidden must be part of native window creation: on macOS a runtime-ready
 	// Hide can race the initial orderFront and AppKit's last-window policy.
-	startHidden := slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && loadPreferences(dataDir).Background.CloseMode == "background"
+	nativeShareWake := slices.Contains(os.Args[1:], "--native-share-background") || slices.ContainsFunc(os.Args[1:], isNativeShareWakeURL)
+	startHidden := nativeShareWake || slices.Contains(os.Args[1:], "--background") && len(paths) == 0 && loadPreferences(dataDir).Background.CloseMode == "background"
 	host := application.New(application.Options{
 		SingleInstance: single,
 		Name:           "LinkSend",
@@ -95,12 +97,17 @@ func main() {
 		},
 	})
 	desktop.attachRuntime(host, window)
+	host.Event.OnApplicationEvent(events.Common.ApplicationOpenedWithFile, func(event *application.ApplicationEvent) {
+		if isNativeShareWakeURL(event.Context().URL()) {
+			desktop.wakeEntries(false)
+		}
+	})
 	desktop.registerNativeEntries(window)
 	desktop.attachBackground(host, window, trayIcon)
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
 		slog.Info("desktop runtime ready")
 		desktop.runtimeEntriesReady()
-		if startHidden && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
+		if startHidden && !nativeShareWake && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
 			// A missing tray must not leave the application unreachable.
 			window.Show()
 		}

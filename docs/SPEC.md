@@ -1,4 +1,13 @@
+2026-09-14 E4-03修复候选：认证QUIC会话只有在双方分别声明`session_reuse`和独立`clipboard_sync`能力后才承载自动剪贴板单向流；双方各自的本地authorization generation可以不同，wire按消息方向绑定接收方实际代次。自动剪贴板持久总开关和全部peer/方向/text|link|image权限默认关闭；lease及event同时绑定permission revision，撤权、暂停、新复制和期限会淘汰旧正文。真实本地复制先推进唯一状态owner，再判断lease、发送权限和格式，因此不会在重连后补发旧内容。发送/接收各最多两路，正文有deadline、分块速率预算，原生图片验证在最终状态锁外完成，mutation前复核暂停、授权、permission revision、OS generation和deadline。loopback QUIC、Windows隔离原生测试与Mac命名pasteboard只证明对应边界，物理Win↔Mac用户剪贴板仍留E5。
+
 # LinkSend protocol V1 implementation specification
+2026-09-14 E3 源码候选：Windows `windows.shareTarget` 与 macOS `com.apple.share-services` 使用原生小面板选择真实已配对设备。两端把有界路径/bookmark 元数据以本机 `request_id` 持久交给 Go，Go 再经现有授权代际和幂等队列派发；文件正文不经 JavaScript、信令或本地 IPC。macOS 只在系统给出临时表示时于回调期限内复制，原位文件使用 security-scoped bookmark。正式 App Group 和 Windows package identity 的签名安装实测按用户要求暂缓，不将无签名注册或模拟交接记为通过；文件 wire 仍为 V1。
+
+2026-09-13 E2-C1 修复：默认同名策略可全局保存并按设备覆盖继承，桌面任务库 schema 7；设置按字段保留 dirty 输入。LAN 同意为应用级弹窗并处理跨组后续，旧内容草稿恢复管理入口，主发送动作在小客户区保持可见。文件 wire 与 E1 网络结论不变。
+
+2026-09-13 E2候选：桌面普通接收由 Go 基于 task/attempt/revision 原子生成并持久化默认 `keep_both` 计划，高级选收按需展开；设置使用分类局部 revision 保存，设备接收目录可继承全局；UI 固定为传输、记录、设备、设置四视图。文字/链接/图片的手动创作入口已从传输页移除，旧队列仍需显式确认继续。该变更没有增加文件信令/IPC/中继路径，也不提前实现 E4 自动剪贴板。
+
+2026-09-13：桌面体验 U1–U7 已进入实施。文件数据协议仍为V1；E1第二候选已落实 `membership_version=2`、控制库schema4、任务库schema6、完整成员快照/成员代际/撤销事务、独立LAN同意与target-bound短期凭证、多地址发现和低频网络快照恢复，见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md) 与 [全轮TODO](DESKTOP-EXPERIENCE-TODO.md)。该源码/自动测试结果不等于准确包物理双向、双NAT或原生共享通过；自动剪贴板wire仍待E4。
 
 2026-09-12 desktop six-feature implementation: current source targets product
 0.5.0 milestone prereleases; protocol remains V1. The user's explicit milestone

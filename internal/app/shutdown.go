@@ -38,6 +38,7 @@ func (s *Service) shutdownOwners() {
 	if s.workCancel != nil {
 		s.workCancel()
 	}
+	s.cancelClipboardSends("", "")
 	s.stopQueue()
 	// Set intent before cancelling parent listeners, including inbound tasks.
 	s.tasks.mu.RLock()
@@ -67,6 +68,9 @@ func (s *Service) shutdownOwners() {
 	_ = s.stopInbox(true)
 	_ = s.stopLANDiscovery()
 	s.listenerWorkers.Wait()
+	s.closePooledSessions("")
+	s.directPoolWG.Wait()
+	s.clipboardWorkers.Wait()
 	s.tasks.workers.Wait()
 	s.content.mu.Lock()
 	if s.content.store != nil {
@@ -76,6 +80,7 @@ func (s *Service) shutdownOwners() {
 	if s.store != nil {
 		_ = s.store.Close()
 	}
+	_ = s.tasks.closeHistory()
 	if s.profileLock != nil {
 		_ = s.profileLock.Close()
 	}

@@ -10,19 +10,22 @@ import (
 )
 
 type nativeTrayCallbacks struct {
-	Show       func()
-	Inbox      func()
-	PauseQueue func(bool)
-	Quit       func()
+	Show           func()
+	Inbox          func()
+	PauseQueue     func(bool)
+	PauseClipboard func(bool)
+	Quit           func()
 }
 
 type nativeTray struct {
-	tray      *application.SystemTray
-	menu      *application.Menu
-	pauseItem *application.MenuItem
-	paused    atomic.Bool
-	closed    atomic.Bool
-	callbacks nativeTrayCallbacks
+	tray               *application.SystemTray
+	menu               *application.Menu
+	queuePauseItem     *application.MenuItem
+	clipboardPauseItem *application.MenuItem
+	queuePaused        atomic.Bool
+	clipboardPaused    atomic.Bool
+	closed             atomic.Bool
+	callbacks          nativeTrayCallbacks
 }
 
 // Create before host.Run; Wails defers the real tray until its native loop is
@@ -43,9 +46,14 @@ func newNativeTray(host *application.App, iconPNG []byte, callbacks nativeTrayCa
 	handle.menu.AddSeparator()
 	// A normal menu item deliberately does not toggle a native checkbox before
 	// the core has committed its queue pause command.
-	handle.pauseItem = handle.menu.Add("暂停队列派发").OnClick(func(*application.Context) {
+	handle.queuePauseItem = handle.menu.Add("暂停队列派发").OnClick(func(*application.Context) {
 		if !handle.closed.Load() && callbacks.PauseQueue != nil {
-			callbacks.PauseQueue(!handle.paused.Load())
+			callbacks.PauseQueue(!handle.queuePaused.Load())
+		}
+	})
+	handle.clipboardPauseItem = handle.menu.Add("暂停自动剪贴板").OnClick(func(*application.Context) {
+		if !handle.closed.Load() && callbacks.PauseClipboard != nil {
+			callbacks.PauseClipboard(!handle.clipboardPaused.Load())
 		}
 	})
 	handle.menu.AddSeparator()
@@ -68,16 +76,33 @@ func (h *nativeTray) SetQueuePaused(paused bool) {
 	if h.closed.Load() {
 		return
 	}
-	h.paused.Store(paused)
+	h.queuePaused.Store(paused)
 	application.InvokeAsync(func() {
 		if h.closed.Load() {
 			return
 		}
 		label := "暂停队列派发"
-		if h.paused.Load() {
+		if h.queuePaused.Load() {
 			label = "继续队列派发"
 		}
-		h.pauseItem.SetLabel(label)
+		h.queuePauseItem.SetLabel(label)
+	})
+}
+
+func (h *nativeTray) SetClipboardPaused(paused bool) {
+	if h.closed.Load() {
+		return
+	}
+	h.clipboardPaused.Store(paused)
+	application.InvokeAsync(func() {
+		if h.closed.Load() {
+			return
+		}
+		label := "暂停自动剪贴板"
+		if h.clipboardPaused.Load() {
+			label = "继续自动剪贴板"
+		}
+		h.clipboardPauseItem.SetLabel(label)
 	})
 }
 

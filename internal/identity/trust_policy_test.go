@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func policyTestPeer(t *testing.T, name string) TrustedPeer {
@@ -17,6 +19,43 @@ func policyTestPeer(t *testing.T, name string) TrustedPeer {
 		t.Fatal(err)
 	}
 	return TrustedPeer{ID: i.ID(), Name: name, PublicKey: i.PublicKey()}
+}
+
+func TestProvisionalLANSurvivesReloadAndRejectsNewGeneration(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	grant := ProvisionalLANGrant{RequestID: strings.Repeat("a", 32), Nonce: strings.Repeat("b", 32), Peer: peer, Generation: 1, State: "accepted", ExpiresAt: time.Now().Add(time.Minute).UTC()}
+	if err := BeginProvisionalLAN(dir, grant); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := LANPairStatus(dir, peer.ID, grant.RequestID, grant.Nonce); err != nil || status != "ready" {
+		t.Fatalf("persisted provisional status=%q err=%v", status, err)
+	}
+	if resumed, ok, err := PendingProvisionalLAN(dir, peer.ID); err != nil || !ok || resumed.RequestID != grant.RequestID || resumed.Nonce != grant.Nonce {
+		t.Fatalf("restart recovery lost provisional: %+v ok=%v err=%v", resumed, ok, err)
+	}
+	if err := RevokePeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := AllowPeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := CommitProvisionalLAN(dir, grant.RequestID, grant.Nonce); err == nil {
+		t.Fatal("old provisional grant committed after authorization generation changed")
+	}
+}
+
+func TestProvisionalLANAllowsSignedFrameClockSkew(t *testing.T) {
+	peer := policyTestPeer(t, "clock-skew")
+	grant := ProvisionalLANGrant{RequestID: strings.Repeat("c", 32), Nonce: strings.Repeat("d", 32), Peer: peer, Generation: 1, State: "accepted", ExpiresAt: time.Now().Add(74 * time.Second).UTC()}
+	if err := BeginProvisionalLAN(t.TempDir(), grant); err != nil {
+		t.Fatalf("valid signed-frame skew was rejected: %v", err)
+	}
+	grant.RequestID = strings.Repeat("e", 32)
+	grant.ExpiresAt = time.Now().Add(76 * time.Second).UTC()
+	if err := BeginProvisionalLAN(t.TempDir(), grant); err == nil {
+		t.Fatal("provisional exceeded signed TTL plus clock-skew bound")
+	}
 }
 
 func writeLegacyPolicy(t *testing.T, dir string, peers ...TrustedPeer) []byte {
@@ -213,7 +252,7 @@ func TestRevocationCannotBeRolledBackByAutomaticBackupRecovery(t *testing.T) {
 			case "missing":
 				err = os.Remove(path)
 			case "future schema":
-				err = os.WriteFile(path, []byte(`{"schema_version":2,"peers":[]}`), 0600)
+				err = os.WriteFile(path, []byte(`{"schema_version":3,"peers":[]}`), 0600)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -273,5 +312,141 @@ func TestConcurrentRevocationAndEnrollmentDoesNotLoseDenial(t *testing.T) {
 	peers, err := LoadTrust(dir)
 	if err != nil || len(peers) != count {
 		t.Fatalf("concurrent write lost unrelated pins: got=%d err=%v", len(peers), err)
+	}
+}
+
+func TestMembershipRejoinAdvancesGrantWithoutRestoringConsent(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("a", 32)
+	peer.LocalIncarnation = strings.Repeat("b", 32)
+	peer.MembershipRevision = 2
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	oldTaskStarted := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := SetAutoAccept(dir, peer.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := RevokeMembershipPeer(dir, peer.ID, peer.PeerIncarnation, "request-1", 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("old membership snapshot reopened authorization: %v", err)
+	}
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.MembershipRevision = 3
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal("verified new incarnation did not establish a fresh grant:", err)
+	}
+	peers, err := LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].AutoAccept || peers[0].GrantGeneration < 2 {
+		t.Fatalf("fresh relationship restored old consent or generation: %+v %v", peers, err)
+	}
+	if err = CheckTaskAuthorization(dir, peer.ID, oldTaskStarted); err == nil {
+		t.Fatal("task created under revoked grant was reusable")
+	}
+}
+
+func TestLocalBlockCannotBeClearedByMembershipSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	if err := RevokePeer(dir, peer.ID); err != nil {
+		t.Fatal(err)
+	}
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.LocalIncarnation = strings.Repeat("d", 32)
+	peer.MembershipRevision = 99
+	if err := TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("membership cleared explicit local block: %v", err)
+	}
+}
+
+func TestSchemaOneDeniedPeerRemainsExplicitLocalBlockDuringSync(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	legacy := TrustFile{SchemaVersion: 1, Peers: []TrustedPeer{}, DeniedPeers: []DeniedPeer{{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC()}}}
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, "trust.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("e", 32)
+	peer.LocalIncarnation = strings.Repeat("f", 32)
+	peer.MembershipRevision = 2
+	if err = TrustMembershipPeer(dir, peer); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("schema1 local block was cleared: %v", err)
+	}
+}
+
+func TestCompleteMembershipSnapshotRevokesMissingPeerAndRejectsRollback(t *testing.T) {
+	dir := t.TempDir()
+	local := policyTestPeer(t, "local")
+	b := policyTestPeer(t, "b")
+	c := policyTestPeer(t, "c")
+	localInc := strings.Repeat("1", 32)
+	makePeer := func(peer TrustedPeer, incarnation string, revision uint64) TrustedPeer {
+		peer.GroupID = "group"
+		peer.PeerIncarnation = incarnation
+		peer.LocalIncarnation = localInc
+		peer.MembershipRevision = revision
+		return peer
+	}
+	initial := []TrustedPeer{makePeer(local, localInc, 1), makePeer(b, strings.Repeat("2", 32), 1), makePeer(c, strings.Repeat("3", 32), 1)}
+	if err := ApplyMembershipSnapshot(dir, local.ID, initial); err != nil {
+		t.Fatal(err)
+	}
+	removed := []TrustedPeer{makePeer(local, localInc, 2), makePeer(c, strings.Repeat("3", 32), 2)}
+	if err := ApplyMembershipSnapshot(dir, local.ID, removed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AuthorizationGeneration(dir, b.ID); !errors.Is(err, ErrPeerDenied) {
+		t.Fatalf("missing peer remained authorized: %v", err)
+	}
+	if err := ApplyMembershipSnapshot(dir, local.ID, initial); err == nil {
+		t.Fatal("older complete snapshot rolled membership back")
+	}
+	rejoined := append(removed, makePeer(b, strings.Repeat("4", 32), 3))
+	for index := range rejoined {
+		rejoined[index].MembershipRevision = 3
+	}
+	if err := ApplyMembershipSnapshot(dir, local.ID, rejoined); err != nil {
+		t.Fatal(err)
+	}
+	if generation, err := AuthorizationGeneration(dir, b.ID); err != nil || generation < 2 {
+		t.Fatalf("verified rejoin did not create new generation: %d %v", generation, err)
+	}
+}
+
+func TestLateLANCommitCannotAttachToNewMembershipGeneration(t *testing.T) {
+	dir := t.TempDir()
+	peer := policyTestPeer(t, "peer")
+	peer.GroupID = "group"
+	peer.PeerIncarnation = strings.Repeat("a", 32)
+	peer.LocalIncarnation = strings.Repeat("b", 32)
+	peer.MembershipRevision = 1
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	oldGeneration, _ := LANPairGeneration(dir, peer.ID)
+	if err := RevokeMembershipPeer(dir, peer.ID, peer.PeerIncarnation, "remove", 1); err != nil {
+		t.Fatal(err)
+	}
+	peer.PeerIncarnation = strings.Repeat("c", 32)
+	peer.MembershipRevision = 2
+	if err := TrustMembershipPeer(dir, peer); err != nil {
+		t.Fatal(err)
+	}
+	if err := CommitLANPeer(dir, TrustedPeer{ID: peer.ID, Name: peer.Name, PublicKey: peer.PublicKey}, oldGeneration); err == nil {
+		t.Fatal("late LAN commit reused old generation")
+	}
+	peers, err := LoadTrust(dir)
+	if err != nil || len(peers) != 1 || peers[0].GroupID != "group" || peers[0].GrantKind != "group" {
+		t.Fatalf("late LAN commit damaged group grant: %+v %v", peers, err)
 	}
 }

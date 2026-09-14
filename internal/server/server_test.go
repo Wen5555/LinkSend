@@ -91,3 +91,25 @@ func TestPublicTestPairingCodeRequiresExplicitGroup(t *testing.T) {
 		t.Fatalf("explicit public pairing group rejected: %v", err)
 	}
 }
+
+func TestMembershipV2RejectsLegacyClientBeforeAuthentication(t *testing.T) {
+	s, err := New(Config{Listen: "127.0.0.1:0", Database: filepath.Join(t.TempDir(), "control.db"), AllowInsecureLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	h := httptest.NewServer(s.Handler())
+	defer h.Close()
+	response, err := http.Post(h.URL+"/v1/pairing/join", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var failure protocol.Error
+	if err = json.NewDecoder(response.Body).Decode(&failure); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusUpgradeRequired || failure.Code != protocol.VersionIncompatible {
+		t.Fatalf("legacy client response status=%d body=%+v", response.StatusCode, failure)
+	}
+}

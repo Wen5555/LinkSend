@@ -18,6 +18,10 @@ import * as app$0 from "../../internal/app/models.js";
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function AcceptIncomingDefault(id: string, attemptID: string, revision: number, remember: boolean): $CancellablePromise<app$0.AcceptIncomingDefaultResult> {
+    return $Call.ByID(597288934, id, attemptID, revision, remember);
+}
+
 export function AcceptReceivePlan(id: string, revision: number, digest: string): $CancellablePromise<void> {
     return $Call.ByID(1555079805, id, revision, digest);
 }
@@ -56,6 +60,14 @@ export function CleanupContentSnapshots(): $CancellablePromise<app$0.ContentClea
 
 export function CleanupInboxStaging(limit: number): $CancellablePromise<app$0.InboxCleanupResult> {
     return $Call.ByID(1036648570, limit);
+}
+
+export function ClipboardGrants(peerID: string): $CancellablePromise<app$0.ClipboardGrant[] | null> {
+    return $Call.ByID(1458346422, peerID);
+}
+
+export function ClipboardWatcher(): $CancellablePromise<$models.ClipboardWatchStatus> {
+    return $Call.ByID(638849827);
 }
 
 export function ConfigureAutostart(enabled: boolean): $CancellablePromise<void> {
@@ -110,6 +122,10 @@ export function DiscardContentDraft(id: string, revision: number): $CancellableP
     return $Call.ByID(2495801629, id, revision);
 }
 
+export function DiscardNativeShare(requestID: string): $CancellablePromise<void> {
+    return $Call.ByID(3405804501, requestID);
+}
+
 export function EffectiveConfig(): $CancellablePromise<$models.EffectiveConfig> {
     return $Call.ByID(329529236);
 }
@@ -154,12 +170,20 @@ export function IncomingPlan(id: string, request: app$0.IncomingPlanRequest): $C
     return $Call.ByID(2659825470, id, request);
 }
 
+export function InitializeMembership(name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(1250672251, name);
+}
+
 export function JoinGroup(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
     return $Call.ByID(2730586904, token, name);
 }
 
 export function Membership(): $CancellablePromise<app$0.MembershipStatus> {
     return $Call.ByID(3247912641);
+}
+
+export function NetworkChanged(reason: string): $CancellablePromise<void> {
+    return $Call.ByID(465047923, reason);
 }
 
 export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfaceInfo[] | null> {
@@ -184,6 +208,10 @@ export function PairDevice(code: string, name: string): $CancellablePromise<app$
 
 export function PauseTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3621607596, id);
+}
+
+export function PendingLANPairings(): $CancellablePromise<app$0.LANPairRequestInfo[] | null> {
+    return $Call.ByID(3701228766);
 }
 
 export function PickDirectory(): $CancellablePromise<string> {
@@ -230,8 +258,16 @@ export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
 }
 
+export function RemoveDevice(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(2755636563, deviceID);
+}
+
 export function ReorderQueue(ids: string[] | null): $CancellablePromise<void> {
     return $Call.ByID(1496578879, ids);
+}
+
+export function RequestLANPair(deviceID: string): $CancellablePromise<app$0.LANPairResult> {
+    return $Call.ByID(1572173169, deviceID);
 }
 
 export function RequestNotificationPermission(): $CancellablePromise<$models.BackgroundStatus> {
@@ -240,6 +276,10 @@ export function RequestNotificationPermission(): $CancellablePromise<$models.Bac
 
 export function ResendInbox(request: app$0.ResendInboxRequest): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(1667322102, request);
+}
+
+export function RespondLANPair(requestID: string, accept: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2082189565, requestID, accept);
 }
 
 export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -270,6 +310,15 @@ export function SavePreferences(next: $models.DesktopPreferences): $CancellableP
     return $Call.ByID(3232231562, next);
 }
 
+/**
+ * SavePreferencesSection applies only fields owned by the named settings
+ * category. Revision is a compare-and-swap guard, so a form opened before a
+ * newer save cannot replace fields from that save with an old snapshot.
+ */
+export function SavePreferencesSection(section: string, expectedRevision: number, patch: $models.DesktopPreferences): $CancellablePromise<$models.DesktopPreferences> {
+    return $Call.ByID(3171888101, section, expectedRevision, patch);
+}
+
 export function SaveReceivedImage(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
     return $Call.ByID(1721016080, taskID);
 }
@@ -280,6 +329,14 @@ export function SetAlwaysAccept(deviceID: string, enabled: boolean): $Cancellabl
 
 export function SetBackgroundOptions(options: $models.BackgroundOptions): $CancellablePromise<void> {
     return $Call.ByID(3323717395, options);
+}
+
+export function SetClipboardGrant(patch: app$0.ClipboardGrantPatch): $CancellablePromise<app$0.ClipboardGrant> {
+    return $Call.ByID(3963166315, patch);
+}
+
+export function SetClipboardPaused(paused: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2288894013, paused);
 }
 
 export function SetContentSettings(settings: app$0.ContentSettings): $CancellablePromise<void> {
@@ -305,12 +362,20 @@ export function Status(): $CancellablePromise<$models.DesktopStatus> {
     return $Call.ByID(2836613335);
 }
 
+export function SwitchMembership(token: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(768739229, token, name);
+}
+
 export function Tasks(): $CancellablePromise<app$0.TaskSnapshot[] | null> {
     return $Call.ByID(151226709);
 }
 
 export function TrustDevice(deviceID: string, fingerprint: string): $CancellablePromise<void> {
     return $Call.ByID(4070375595, deviceID, fingerprint);
+}
+
+export function UnblockDevice(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(2627139005, deviceID);
 }
 
 export function UnblockPeer(id: string): $CancellablePromise<void> {

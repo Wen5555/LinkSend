@@ -1,4 +1,33 @@
 # Security
+## 2026-09-14 E3 原生共享交接
+
+系统共享适配器只能读取 Go 最近发布的已授权设备 ID、用户别名和可达性，不得到公钥、token、信令凭据或数据库。选择结果不直接授予权限：v2 本机交接记录持久化 `request_id/peer_id/paths/bookmarks/source`，Go 消费后仍调用现有 `Enqueue` 重验 peer grant generation，并以同一 request ID 做数据库幂等。记录提交失败、损坏、未来或同 ID 不同内容时保留证据且不发送；正文不进入 JSON、JavaScript、WSS 或第三方服务。
+
+Windows Share Target 只接受 `StorageItems` 中能由 broker 打开且具有绝对本地路径的普通文件；当前版本明确拒绝只有临时/云端表示的项目，不用默认复制大型文件伪造持久授权。macOS 原位表示生成只读 security-scoped bookmark，由 Go 进程解析并在进程期有界持有；临时表示必须在 `NSItemProvider` 回调返回前复制到本请求独占目录。取消和全部失败分支终结系统 request，不能留下 4097 式悬挂。
+
+正式 macOS App Group 要求签名 Team ID，Windows package identity 也要求可信签名。用户当前没有两平台证书并明确暂缓签名，因此源码保留真实 entitlement/manifest，不开发不受支持的假 App Group，也不把 ad-hoc/未安装包记为原生验收通过。
+
+## 2026-09-13 E2-C1 设置与授权补充
+
+同名策略只影响新建接收计划，优先级为设备覆盖、全局设置、`keep_both` 安全默认；恢复计划不可被新设置改写。设备覆盖随 schema 7 revision CAS 保存。删除后的设备仍保持拒绝，只有用户点击“允许重新添加”才清除本机 block，且不会自动恢复旧 pin 或免确认。
+
+## 2026-09-13 E2接收与设置边界
+
+普通接收按钮携带当前 task ID、attempt ID 和 revision；Go 在创建默认 `keep_both` 计划前后重验这些门闩、授权 generation、目录和空间，并在计划持久化成功后才发送同意。重复点击和陈旧窗口不能同意新的 attempt。免确认偏好在本次 acceptance 之后独立保存，失败会明确反馈且不谎称本次接收失败。
+
+桌面偏好增加单调 revision。分类保存仅合并该分类拥有的允许字段，并以 expected revision 拒绝陈旧表单；背景生命周期继续由独立命令拥有。该机制避免多个页面或异步刷新用旧整份快照覆盖较新的目录、网络或后台设置。
+
+## 2026-09-13 E1成员代际与LAN同意实现
+
+本机 trust schema 2 将完整组快照、组/LAN grant、双方incarnation、服务端revision、本机 `grant_generation` 和provisional LAN transcript统一持久化。组删除先原子移除全部组/LAN pin与免确认并写入带request ID的拒绝屏障及待同步outbox，再取消目标任务，最后提交服务端幂等事务；服务不可达时本机拒绝与outbox保留。完整新快照会撤销已消失成员，旧revision或同一incarnation不能清除屏障；只有可验证的新incarnation和更高revision能建立新的组grant。显式本机block（含schema1迁移记录）永不被成员同步解除。
+
+任务、恢复记录、持久队列和已认证PeerSession保存创建时的授权generation；派发、建连完成、实际开流、恢复和迟到接收确认均与当前generation精确比较，从而拒绝删除前状态在重新配对后复活。授权epoch独立持久，解除本机屏蔽也不能让generation回退。发现、WSS和LAN提交继续重验屏障/generation；授权文件损坏或未来schema仍按拒绝处理。桌面任务库因此由schema5迁移到schema6，迁移前保留可读备份。
+
+Windows 上 `x/net/ipv4.ControlMessage` 不提供有效源地址选择，因此发现发送使用最多 32 个临时 source-bound UDP socket；每个 socket绑定具体本地 IPv4、发送后在同一 socket有界接收回复。Darwin/Linux 保留 pktinfo/cmsg。组播、广播、受限单播与 TLS 控制分别降级，单个 provider 失败不关闭其余路径；peer、route、响应表和握手 goroutine均有固定上限。
+
+2026-09-14 E4-03修复候选：自动剪贴板正文只通过固定身份的TLS 1.3 QUIC传输；独立clipboard_sync能力阻止只支持文件会话复用的旧端进入该owner。两端本地授权代次可不同，lease/event按方向绑定接收方实际generation；origin必须等于认证peer。receive lease和event digest绑定双方permission revision，关闭/重开同一权限不能复用旧lease或已读正文。图片验证在最终状态锁外，实际原生mutation前仍重验暂停、当前peer generation、receive revision、OS generation与原始deadline。密码管理器等明确的Windows/macOS禁止同步标记会拒绝读取；总开关和细分权限均持久默认关闭。物理双机用户剪贴板仍未验收。
+
+E0-ADR-review-v1要求未来删除先使目标peer的全部既有组/LAN grant generation失效，禁止授权回退；新配对不恢复旧LAN/免确认/剪贴板。剪贴板提交门闩内重验授权、lease期限与OS/application generation。以上是待实现契约，不是当前M5安全能力声明。
 
 2026-09-12 M0 安全更新（源码 0.5.0）：本机撤销先原子删除 pin/auto_accept 并保存 denied_peers，
 随后尝试服务器撤销。服务器失败不会取消本机拒绝；成员同步、LAN、新发送、确认和恢复都不能复活授权。
@@ -53,3 +82,20 @@ diagnostics 采用允许列表，仅记录实际 base socket、接口、地址�
 计划 checkpoint 与 App PlanChanged 持久化回调都必须成功后才能接收正文或按新名称提交。恢复保持已接受集合与已持久名称；已提交文件/目录不允许重新命名，目录失效或身份变化需用户处理。实际 App/UI 和平台验收仍以证据表为准。
 
 M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、内容绑定和实际文件摘要，不能由前端路径或历史标签授权读取。未知 URL scheme 仅显示/复制为文字，打开动作每次限定 http/https；图片另存不覆盖。快照清理保护活动/恢复/队列/草稿及普通文件路径重叠引用，只释放本应用的引用命名空间，受控 Store 再检查持久 OS 文件身份与摘要，不删除接收用户文件。详情见 [ADR 0006](adr/0006-owned-content-lifecycle.md)。
+
+
+## E4 认证会话复用
+
+复用键包含固定 peer identity 与本机 authorization generation；每次打开文件流前重新读取当前授权，成员代际变化或本机阻止会关闭该 peer 的池中连接。0-RTT 仍关闭。取消只 reset 对应 QUIC stream；未知连接级错误、路径失效、空闲超时和退出关闭整个连接。复用不扩大文件路径或剪贴板权限。
+
+## E4 自动剪贴板权限
+
+任务库 schema 9 按 peer、authorization generation、方向（send/receive）和内容类型（text/link/image）分别保存 revision CAS 授权。没有记录或代际不匹配等同关闭；新配对、解除阻止或重新加入不会继承旧授权。启用前重新验证当前可信 peer grant，启用提交与撤销使用同一门闩；本机阻止、成员移除或授权 generation 变化使旧授权立即失效，即使清理行失败也不能恢复。该表只保存权限和时间戳，不保存剪贴板正文、图片或系统格式数据。
+
+原生监听器默认不注册。Windows `WM_CLIPBOARDUPDATE` 回调和 macOS `changeCount` 轮询只生成本机 sequence 与格式类别，不在系统回调中打开剪贴板、解码图片、访问文件 URL 或进入 JavaScript。睡眠、锁屏、撤销及退出会注销监听并清空最近变化基线；唤醒或解锁只观察后续变化。
+
+正文事件必须同时满足双方按方向和类型启用的授权交集，并绑定固定 peer、当前 authorization generation、当前 QUIC session 和接收方预签的 10 秒 lease。首帧、完整正文和最终原生写入都不能越过签发时的 deadline；续租不能给旧事件续命。撤销与最终写入采用相同的 grant→trust 锁顺序，因此撤销提交后不能跨过最终 gate 落板。暂停、锁屏、睡眠、重连或 generation 变化会清空 lease 和 readiness。
+
+event digest 覆盖 lease ID、origin device/boot/sequence、Lamport、类型、发送端 OS generation、正文长度与正文。接收方在读取大正文前验证 header，并在读取后再次验证 digest、状态 revision、OS generation 和稳定顺序。Windows 使用本应用有效 HWND 打开剪贴板，在分配和验证数据后执行 generation CAS、deadline 复核、`EmptyClipboard` 与 `SetClipboardData`；macOS 在解码后紧邻 mutation 复核 `changeCount` 与 deadline，但 NSPasteboard 不提供跨进程原子 CAS，仍存在检查与写入之间的系统级窄竞态。该限制必须保留在验收记录中。
+
+文字/链接 64 KiB、PNG 32 MiB，并复用 40MP/尺寸和 URL/UTF-8 校验。header 最多 8 KiB，每方向最多两个 lease，全局最多两个接收正文/解码槽；正文只驻留受限内存，不写入临时文件。最坏情况下两个 32 MiB 图片正文及解码对象可同时存在，因此物理平台内存矩阵仍需 E5 测量。原生回写通知按 generation 与 payload digest 仅抑制一次，防止回环同时允许用户真实重复复制相同内容。

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -17,10 +18,16 @@ const maxPendingActivations = 64
 
 var activationName = regexp.MustCompile(`^[0-9a-f]{32}\.json$`)
 var errActivationBusy = errors.New("SYSTEM_ENTRY_BUSY: another entry is being saved; retry shortly")
+var errActivationRetained = errors.New("SYSTEM_SHARE_RETAINED")
 
 type fileActivation struct {
-	Version int      `json:"version"`
-	Paths   []string `json:"paths"`
+	Version     int      `json:"version"`
+	RequestID   string   `json:"request_id,omitempty"`
+	PeerID      string   `json:"peer_id,omitempty"`
+	Paths       []string `json:"paths"`
+	Bookmarks   []string `json:"bookmarks,omitempty"`
+	WaitForPeer bool     `json:"wait_for_peer,omitempty"`
+	Source      string   `json:"source,omitempty"`
 }
 
 // This bounded multi-producer input journal contains only selected path metadata.
@@ -100,7 +107,33 @@ func stageFileActivation(dataDir string, paths []string, workingDir string) erro
 	if len(normalized) == 0 {
 		return nil
 	}
-	data, err := json.Marshal(fileActivation{Version: 1, Paths: normalized})
+	return persistActivation(dataDir, fileActivation{Version: 1, Paths: normalized})
+}
+
+func stageShareActivation(dataDir string, activation fileActivation, workingDir string) error {
+	if activation.RequestID != strings.ToLower(activation.RequestID) || activation.RequestID != strings.TrimSpace(activation.RequestID) || len(activation.RequestID) != 32 || !activationName.MatchString(activation.RequestID+".json") {
+		return errors.New("SYSTEM_SHARE_INVALID: request ID must be 32 lowercase hex characters")
+	}
+	if activation.PeerID == "" || len(activation.PeerID) > 128 || strings.ContainsAny(activation.PeerID, "\x00\r\n") {
+		return errors.New("SYSTEM_SHARE_INVALID: destination required")
+	}
+	if len(activation.Bookmarks) != 0 && len(activation.Bookmarks) != len(activation.Paths) {
+		return errors.New("SYSTEM_SHARE_INVALID: bookmark count")
+	}
+	normalized, err := normalizeNativePaths(activation.Paths, workingDir)
+	if err != nil || len(normalized) == 0 {
+		return errors.New("SYSTEM_SHARE_INVALID: source paths required")
+	}
+	activation.Version = 2
+	activation.Paths = normalized
+	if activation.Source != "windows_share" && activation.Source != "macos_share" {
+		return errors.New("SYSTEM_SHARE_INVALID: source kind")
+	}
+	return persistActivation(dataDir, activation)
+}
+
+func persistActivation(dataDir string, activation fileActivation) error {
+	data, err := json.Marshal(activation)
 	if err != nil {
 		return err
 	}
@@ -124,11 +157,28 @@ func stageFileActivation(dataDir string, paths []string, workingDir string) erro
 			count++
 			total += info.Size()
 		}
+		id := activation.RequestID
+		if id == "" {
+			id = protocol.RandomID()
+		}
+		final := id + ".json"
+		if existing, openErr := root.Open(final); openErr == nil {
+			saved, readErr := io.ReadAll(io.LimitReader(existing, maxNativeEntryBytes+1))
+			existing.Close()
+			if readErr != nil {
+				return readErr
+			}
+			if string(saved) == string(data) {
+				return nil
+			}
+			return errors.New("SYSTEM_SHARE_CONFLICT: request ID was already used")
+		} else if !errors.Is(openErr, os.ErrNotExist) {
+			return openErr
+		}
 		if count >= maxPendingActivations || total+int64(len(data)) > 16<<20 {
 			return errors.New("SYSTEM_ENTRY_TOO_LARGE: pending entries are full; open the app to resolve them")
 		}
-		id := protocol.RandomID()
-		temporary := id + ".pending"
+		temporary := protocol.RandomID() + ".pending"
 		file, err := root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			return err
@@ -145,7 +195,7 @@ func stageFileActivation(dataDir string, paths []string, workingDir string) erro
 		if closeErr != nil {
 			return closeErr
 		}
-		if err := root.Rename(temporary, id+".json"); err != nil {
+		if err := root.Rename(temporary, final); err != nil {
 			return err
 		}
 		return syncActivationDirectory(root)
@@ -154,7 +204,7 @@ func stageFileActivation(dataDir string, paths []string, workingDir string) erro
 
 // Delete only after the draft transaction commits. A crash between commit and
 // delete replays through MergeDraftPaths' canonical deduplication, never send.
-func consumeFileActivations(dataDir string, merge func([]string) error) (int, error) {
+func consumeActivations(dataDir string, consume func(fileActivation) error) (int, error) {
 	count := 0
 	err := withActivationStore(dataDir, func(root *os.Root) error {
 		entries, err := activationEntries(root)
@@ -184,8 +234,12 @@ func consumeFileActivations(dataDir string, merge func([]string) error) (int, er
 				return err
 			}
 			var activation fileActivation
-			if len(data) > maxNativeEntryBytes || json.Unmarshal(data, &activation) != nil || activation.Version != 1 {
+			if len(data) > maxNativeEntryBytes || json.Unmarshal(data, &activation) != nil || activation.Version != 1 && activation.Version != 2 {
 				firstErr = errors.New("SYSTEM_ENTRY_STORAGE: invalid entry preserved for inspection")
+				continue
+			}
+			if activation.Version == 2 && (activation.RequestID != strings.TrimSuffix(entry.Name(), ".json") || activation.PeerID == "" || activation.Source != "windows_share" && activation.Source != "macos_share" || len(activation.Bookmarks) != 0 && len(activation.Bookmarks) != len(activation.Paths)) {
+				firstErr = errors.New("SYSTEM_ENTRY_STORAGE: invalid share entry preserved for inspection")
 				continue
 			}
 			paths, err := normalizeNativePaths(activation.Paths, "")
@@ -193,8 +247,16 @@ func consumeFileActivations(dataDir string, merge func([]string) error) (int, er
 				firstErr = err
 				continue
 			}
-			if err := merge(paths); err != nil {
-				return err
+			activation.Paths = paths
+			if err := consume(activation); err != nil {
+				if errors.Is(err, errActivationRetained) {
+					count++
+					continue
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
 			if err := root.Remove(entry.Name()); err != nil {
 				return err
@@ -209,4 +271,61 @@ func consumeFileActivations(dataDir string, merge func([]string) error) (int, er
 		return firstErr
 	})
 	return count, err
+}
+
+func reapShareActivations(dataDir string, terminal map[string]bool) (int, error) {
+	removed := 0
+	err := withActivationStore(dataDir, func(root *os.Root) error {
+		entries, err := activationEntries(root)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			requestID := strings.TrimSuffix(entry.Name(), ".json")
+			if !activationName.MatchString(entry.Name()) || !terminal[requestID] {
+				continue
+			}
+			file, err := root.Open(entry.Name())
+			if err != nil {
+				return err
+			}
+			data, readErr := io.ReadAll(io.LimitReader(file, maxNativeEntryBytes+1))
+			file.Close()
+			var activation fileActivation
+			if readErr != nil || json.Unmarshal(data, &activation) != nil || activation.Version != 2 || activation.RequestID != requestID {
+				continue
+			}
+			owned := filepath.Join(dataDir, "share-owned-v1", requestID)
+			if info, statErr := os.Lstat(owned); statErr == nil {
+				if info.Mode()&os.ModeSymlink != 0 {
+					return errors.New("SYSTEM_SHARE_STORAGE: owned source is a symlink")
+				}
+				if err := os.RemoveAll(owned); err != nil {
+					return err
+				}
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				return statErr
+			}
+			releaseNativeShareActivation(requestID)
+			if err := root.Remove(entry.Name()); err != nil {
+				return err
+			}
+			removeNativeShareReceipt(dataDir, requestID)
+			removed++
+		}
+		if removed > 0 {
+			return syncActivationDirectory(root)
+		}
+		return nil
+	})
+	return removed, err
+}
+
+func consumeFileActivations(dataDir string, merge func([]string) error) (int, error) {
+	return consumeActivations(dataDir, func(activation fileActivation) error {
+		if activation.Version != 1 {
+			return errors.New("SYSTEM_ENTRY_STORAGE: share activation requires the native share consumer")
+		}
+		return merge(activation.Paths)
+	})
 }

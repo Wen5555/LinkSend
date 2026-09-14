@@ -9,4 +9,5 @@ export interface Capabilities {
     "history_persisted": boolean;
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
+    "membership_version": number;
 }

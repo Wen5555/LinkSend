@@ -14,6 +14,39 @@ import * as protocol$0 from "../protocol/models.js";
 // @ts-ignore: Unused imports
 import * as transfer$0 from "../transfer/models.js";
 
+export interface AcceptIncomingDefaultResult {
+    "accepted": boolean;
+    "preference_saved": boolean;
+    "message"?: string;
+}
+
+export interface ClipboardGrant {
+    "peer_id": string;
+    "direction": string;
+    "kind": string;
+    "enabled": boolean;
+    "revision": number;
+    "updated_at": string;
+    "authorization_generation": number;
+}
+
+export interface ClipboardGrantPatch {
+    "peer_id": string;
+    "direction": string;
+    "kind": string;
+    "enabled": boolean;
+    "expected_revision": number;
+}
+
+export interface ClipboardPeerStatus {
+    "peer_id": string;
+    "state": string;
+    "send_ready": boolean;
+    "receive_ready": boolean;
+    "waiting"?: string;
+    "error"?: string;
+}
+
 export interface ContentActionResult {
     "task_id": string;
     "action": string;
@@ -69,6 +102,12 @@ export interface DeviceInfo {
     "nearby": boolean;
     "blocked": boolean;
     "profile": DeviceProfile;
+    "incarnation"?: string;
+    "membership_revision"?: number;
+    "relationship": string;
+    "service_state": string;
+    "lan_control_state": string;
+    "connection_state": string;
 }
 
 /**
@@ -82,6 +121,7 @@ export interface DeviceProfile {
     "pinned": boolean;
     "position": number;
     "receive_directory": string;
+    "conflict_policy": string;
     "last_used_at": string;
     "revision": number;
 }
@@ -294,6 +334,19 @@ export interface InvitationInfo {
     "expires_in_seconds": number;
 }
 
+export interface LANPairRequestInfo {
+    "request_id": string;
+    "peer_id": string;
+    "peer_name": string;
+    "expires_at": string;
+}
+
+export interface LANPairResult {
+    "peer_id": string;
+    "state": string;
+    "server_state": string;
+}
+
 export interface MembershipStatus {
     /**
      * pending, member, not_member, auth_failed, unavailable
@@ -322,6 +375,7 @@ export interface QueueItem {
     "last_error": string;
     "wait_for_peer": boolean;
     "content"?: content$0.Snapshot | null;
+    "authorization_generation"?: number;
 }
 
 export interface ResendInboxRequest {
@@ -421,6 +475,7 @@ export interface TaskSnapshot {
     "history_persisted": boolean;
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
+    "authorization_generation"?: number;
 }
 
 export interface WorkspaceChange {

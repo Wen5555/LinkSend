@@ -104,8 +104,8 @@ Section
     !insertmacro wails.webview2runtime
 
     SetOutPath $INSTDIR
-
     !insertmacro wails.files
+    File /r "${ARG_LINKSEND_SHARE_DIR}\*.*"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
@@ -132,6 +132,11 @@ Section "uninstall"
     # Preserve profile, received files and WebView data on uninstall.
 
     Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    Delete "$INSTDIR\LinkSend.ShareTarget.exe"
+    Delete "$INSTDIR\LinkSend.ShareTarget.pdb"
+    Delete "$INSTDIR\AppxManifest.xml"
+    Delete "$INSTDIR\Assets\Logo.png"
+    RMDir "$INSTDIR\Assets"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"

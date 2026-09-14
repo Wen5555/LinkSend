@@ -102,9 +102,12 @@ func parseNativeFileArguments(args []string, workingDir string) ([]string, error
 	paths := make([]string, 0, len(args))
 	pathsOnly := false
 	for _, arg := range args {
+		if runtime.GOOS == "darwin" && isNativeShareWakeURL(arg) {
+			continue
+		}
 		if !pathsOnly {
 			switch arg {
-			case "--send-files", "--background":
+			case "--send-files", "--background", "--native-share-background":
 				continue
 			case "--":
 				pathsOnly = true
@@ -122,6 +125,14 @@ func parseNativeFileArguments(args []string, workingDir string) ([]string, error
 		paths = append(paths, arg)
 	}
 	return normalizeNativePaths(paths, workingDir)
+}
+
+func isNativeShareWakeURL(value string) bool {
+	if !strings.HasPrefix(value, "linksend-share://handoff/") {
+		return false
+	}
+	request := strings.TrimPrefix(value, "linksend-share://handoff/")
+	return len(request) == 32 && activationName.MatchString(request+".json")
 }
 
 func normalizeNativePaths(paths []string, workingDir string) ([]string, error) {

@@ -34,8 +34,11 @@ type DemoReport struct {
 }
 
 type iceDescription struct {
-	Ufrag    string `json:"ufrag"`
-	Password string `json:"password"`
+	Ufrag                   string `json:"ufrag"`
+	Password                string `json:"password"`
+	SessionReuse            bool   `json:"session_reuse,omitempty"`
+	ClipboardSync           bool   `json:"clipboard_sync,omitempty"`
+	AuthorizationGeneration uint64 `json:"authorization_generation,omitempty"`
 }
 
 // RunLocalDemo exercises the real control and data paths on one host. It is

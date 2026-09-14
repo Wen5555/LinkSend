@@ -39,10 +39,10 @@ export function useDesktop() {
   });
   const shell = useQuery({ queryKey: shellKey, enabled, refetchInterval: 5000,
     queryFn: async () => {
-      const [status, inbox, membership, diagnostics, entries, background] = await Promise.all([
-        Backend.Status(), Backend.InboxStatus(), Backend.Membership(), Backend.Diagnostics(), Backend.DesktopEntries(), Backend.Background(),
+      const [status, inbox, membership, diagnostics, entries, background, clipboard] = await Promise.all([
+        Backend.Status(), Backend.InboxStatus(), Backend.Membership(), Backend.Diagnostics(), Backend.DesktopEntries(), Backend.Background(), Backend.ClipboardWatcher(),
       ]);
-      return { status, inbox, membership, diagnostics, entries, background };
+      return { status, inbox, membership, diagnostics, entries, background, clipboard };
     },
   });
   const preferences = useQuery({ queryKey: ['preferences'], enabled, queryFn: () => Backend.Preferences() });
@@ -89,7 +89,7 @@ export function useDesktop() {
   return { enabled, workspace, devices, shell, preferences, configuration, refresh };
 }
 
-export type CommandRunner = (key: string, action: () => Promise<unknown>, message?: string, onError?: (error: unknown) => void) => Promise<boolean>;
+export type CommandRunner = (key: string, action: () => Promise<unknown>, message?: string, onError?: (error: unknown) => void | Promise<void>) => Promise<boolean>;
 type Command = { key: string; action: () => Promise<unknown> };
 
 export function useCommand(refresh: () => Promise<void>, lanes: CommandLanes, lane: string) {
@@ -115,7 +115,7 @@ export function useCommand(refresh: () => Promise<void>, lanes: CommandLanes, la
       return true;
     } catch (cause) {
       if (latestRun.current === runID) setError(humanizeBackendError(cause));
-      onError?.(cause);
+      await onError?.(cause);
       return false;
     } finally { release(); }
   }, [mutateAsync, refresh, lanes, lane]);

@@ -1,13 +1,71 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 )
+
+func TestPairDeviceReportsLegacyServerUpgradeBeforeJoin(t *testing.T) {
+	var registrations atomic.Int32
+	h := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status": "ok",
+				"capabilities": protocol.Capabilities{
+					ProtocolVersion: protocol.Version,
+					ProductVersion:  "0.5.0",
+					Transport:       "quic",
+				},
+			})
+			return
+		}
+		registrations.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(protocol.Error{Code: protocol.AuthenticationFailed, Detail: "registration proof invalid"})
+	}))
+	defer h.Close()
+	core, err := linksendapp.New(linksendapp.Config{DataDir: t.TempDir(), ServerURL: h.URL, AllowInsecureLoopback: true, Name: "desktop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Shutdown()
+	a := &App{ctx: context.Background(), core: core}
+	_, err = a.PairDevice("ABCD-EFGH", "desktop")
+	if protocol.ErrorCode(err) != protocol.VersionIncompatible || !strings.Contains(err.Error(), "server capabilities incompatible") {
+		t.Fatalf("desktop legacy server result=%v code=%s", err, protocol.ErrorCode(err))
+	}
+	if registrations.Load() != 0 {
+		t.Fatalf("desktop called legacy registration endpoint %d times", registrations.Load())
+	}
+}
+
+func TestPairDeviceAgainstExternalLegacyServer(t *testing.T) {
+	serverURL := os.Getenv("LINKSEND_TEST_LEGACY_SERVER_URL")
+	if serverURL == "" {
+		t.Skip("set LINKSEND_TEST_LEGACY_SERVER_URL for the opt-in legacy server process check")
+	}
+	core, err := linksendapp.New(linksendapp.Config{DataDir: t.TempDir(), ServerURL: serverURL, AllowInsecureLoopback: true, Name: "desktop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Shutdown()
+	a := &App{ctx: context.Background(), core: core}
+	_, err = a.PairDevice("ABCD-EFGH", "desktop")
+	if protocol.ErrorCode(err) != protocol.VersionIncompatible || !strings.Contains(err.Error(), "server capabilities incompatible") {
+		t.Fatalf("external legacy server result=%v code=%s", err, protocol.ErrorCode(err))
+	}
+}
 
 func TestTerminalTaskStateIncludesEveryProtocolTerminal(t *testing.T) {
 	for _, state := range []string{"completed", "rejected", "cancelled", "failed"} {
@@ -37,12 +95,12 @@ func TestShouldQuitAllowsEmptyInitializedService(t *testing.T) {
 func TestDesktopPreferencesAtomicRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{dataDir: dir}
-	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}, STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备"}
+	got := DesktopPreferences{ServerURL: "https://example.test", BindAddress: "192.168.1.10:0", InterfacePriority: []string{"Wi-Fi", "Ethernet"}, ExcludedInterfaces: []string{"TUN"}, STUNURLs: []string{"stun:example.test:3478"}, ReceiveDirectory: filepath.Join(dir, "downloads"), DeviceName: "测试设备", ClipboardEnabled: true}
 	if err := a.SavePreferences(got); err != nil {
 		t.Fatal(err)
 	}
 	loaded := loadPreferences(dir)
-	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName || len(loaded.InterfacePriority) != 2 || loaded.InterfacePriority[0] != "Wi-Fi" || len(loaded.ExcludedInterfaces) != 1 {
+	if loaded.ServerURL != got.ServerURL || loaded.BindAddress != got.BindAddress || loaded.DeviceName != got.DeviceName || !loaded.ClipboardEnabled || len(loaded.InterfacePriority) != 2 || loaded.InterfacePriority[0] != "Wi-Fi" || len(loaded.ExcludedInterfaces) != 1 {
 		t.Fatalf("round trip mismatch: %#v", loaded)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "desktop-preferences.json")); err != nil {

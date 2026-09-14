@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/store"
 	"github.com/coder/websocket"
@@ -90,10 +91,14 @@ func (c Config) Validate() error {
 }
 
 type JoinRequest struct {
-	Token     string `json:"token"`
-	Name      string `json:"name"`
-	PublicKey []byte `json:"public_key"`
-	Signature []byte `json:"signature"`
+	Token              string `json:"token"`
+	Name               string `json:"name"`
+	PublicKey          []byte `json:"public_key"`
+	Signature          []byte `json:"signature"`
+	CurrentGroup       string `json:"current_group,omitempty"`
+	CurrentIncarnation string `json:"current_incarnation,omitempty"`
+	CurrentRevision    uint64 `json:"current_revision,omitempty"`
+	ConfirmSwitch      bool   `json:"confirm_switch,omitempty"`
 }
 type Invitation struct {
 	Token      string    `json:"token"`
@@ -101,6 +106,34 @@ type Invitation struct {
 	ServerTime time.Time `json:"server_time"`
 	TTLSeconds int64     `json:"ttl_seconds"`
 }
+type lanPairFrame struct {
+	Version    int    `json:"version"`
+	Phase      string `json:"phase"`
+	RequestID  string `json:"request_id"`
+	Nonce      string `json:"nonce"`
+	Sender     string `json:"sender"`
+	Recipient  string `json:"recipient"`
+	Generation uint64 `json:"grant_generation"`
+	IssuedAt   int64  `json:"issued_at"`
+	ExpiresAt  int64  `json:"expires_at"`
+	Signature  []byte `json:"signature"`
+	Credential string `json:"credential,omitempty"`
+}
+
+func (f lanPairFrame) signingBytes() []byte {
+	body, _ := json.Marshal(struct {
+		Version                                    int `json:"version"`
+		Phase, RequestID, Nonce, Sender, Recipient string
+		Generation                                 uint64 `json:"grant_generation"`
+		IssuedAt, ExpiresAt                        int64
+		Credential                                 string
+	}{f.Version, f.Phase, f.RequestID, f.Nonce, f.Sender, f.Recipient, f.Generation, f.IssuedAt, f.ExpiresAt, f.Credential})
+	return protocol.AuthBytes("LINKSEND-LAN-PAIR", "/membership/v2", f.Sender, f.Nonce, f.IssuedAt, body)
+}
+func (f lanPairFrame) verify(public ed25519.PublicKey, recipient string, now time.Time) bool {
+	return f.Version == 2 && len(f.RequestID) == 32 && len(f.Nonce) == 32 && f.Recipient == recipient && f.Generation > 0 && f.IssuedAt <= now.Add(15*time.Second).Unix() && f.ExpiresAt >= now.Unix() && f.ExpiresAt-f.IssuedAt <= 60 && identity.DeviceID(public) == f.Sender && ed25519.Verify(public, f.signingBytes(), f.Signature)
+}
+
 type Wire struct {
 	Type         string                 `json:"type"`
 	Nonce        string                 `json:"nonce,omitempty"`
@@ -112,7 +145,12 @@ type Wire struct {
 }
 
 func JoinBytes(kind string, r JoinRequest) []byte {
-	return protocol.AuthBytes("POST", "/v1/"+kind, base64.RawStdEncoding.EncodeToString(r.PublicKey), r.Token, 0, []byte(r.Name))
+	proof, _ := json.Marshal(struct {
+		Name, CurrentGroup, CurrentIncarnation string
+		CurrentRevision                        uint64
+		ConfirmSwitch                          bool
+	}{r.Name, r.CurrentGroup, r.CurrentIncarnation, r.CurrentRevision, r.ConfirmSwitch})
+	return protocol.AuthBytes("POST", "/v1/"+kind, base64.RawStdEncoding.EncodeToString(r.PublicKey), r.Token, 0, proof)
 }
 
 type peer struct {
@@ -227,8 +265,10 @@ func (s *Server) Handler() http.Handler {
 		respond(w, 200, map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()})
 	})
 	m.HandleFunc("POST /v1/bootstrap", s.bootstrap)
+	m.HandleFunc("POST /v1/membership/init", s.initialize)
 	m.HandleFunc("POST /v1/pairing/join", s.join)
 	m.HandleFunc("POST /v1/pairing/invitations", s.invite)
+	m.HandleFunc("POST /v1/pairing/lan-credentials", s.lanCredential)
 	m.HandleFunc("GET /v1/devices", s.devices)
 	m.HandleFunc("DELETE /v1/devices/{id}", s.revoke)
 	m.HandleFunc("GET /v1/ws", s.websocket)
@@ -244,6 +284,10 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.Path != "/healthz" && r.Header.Get("X-LinkSend-Membership") != "2" {
+			reject(w, http.StatusUpgradeRequired, protocol.VersionIncompatible, "membership_v2 client required")
+			return
+		}
 		m.ServeHTTP(w, r)
 	})
 }
@@ -295,12 +339,26 @@ func (s *Server) registration(w http.ResponseWriter, r *http.Request) (JoinReque
 	kind := "pairing/join"
 	if r.URL.Path == "/v1/bootstrap" {
 		kind = "bootstrap"
+	} else if r.URL.Path == "/v1/membership/init" {
+		kind = "membership/init"
 	}
 	if !ed25519.Verify(req.PublicKey, JoinBytes(kind, req), req.Signature) {
 		reject(w, 401, protocol.AuthenticationFailed, "registration proof invalid")
 		return req, false
 	}
 	return req, true
+}
+func (s *Server) initialize(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.registration(w, r)
+	if !ok {
+		return
+	}
+	d, err := s.store.Initialize(r.Context(), req.Name, req.PublicKey)
+	if err != nil {
+		reject(w, http.StatusConflict, protocol.PairingIdentityConflict, "device already has an active membership")
+		return
+	}
+	respond(w, http.StatusCreated, d)
 }
 func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.registration(w, r)
@@ -330,7 +388,11 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.TestPairingCode != "" && subtle.ConstantTimeCompare([]byte(req.Token), []byte(s.cfg.TestPairingCode)) == 1 {
 		d, err = s.store.JoinTestCode(r.Context(), req.Name, req.PublicKey, s.cfg.TestPairingGroup)
 	} else {
-		d, err = s.store.Join(r.Context(), req.Token, req.Name, req.PublicKey)
+		var switchFrom *store.SwitchExpectation
+		if req.ConfirmSwitch {
+			switchFrom = &store.SwitchExpectation{CurrentGroup: req.CurrentGroup, CurrentIncarnation: req.CurrentIncarnation, CurrentRevision: req.CurrentRevision}
+		}
+		d, err = s.store.JoinWithSwitch(r.Context(), req.Token, req.Name, req.PublicKey, switchFrom)
 	}
 	if err != nil {
 		switch {
@@ -392,6 +454,39 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 201, Invitation{Token: token, ExpiresAt: expires, ServerTime: now, TTLSeconds: ttl})
 }
+
+func (s *Server) lanCredential(w http.ResponseWriter, r *http.Request) {
+	body, err := readBody(w, r)
+	if err != nil {
+		reject(w, 400, protocol.InvalidMessage, "invalid LAN credential request")
+		return
+	}
+	d, ok := s.authenticate(w, r, body)
+	if !ok {
+		return
+	}
+	var request struct {
+		TargetPublicKey []byte       `json:"target_public_key"`
+		Request         lanPairFrame `json:"request"`
+		Approval        lanPairFrame `json:"approval"`
+	}
+	if json.Unmarshal(body, &request) != nil || len(request.TargetPublicKey) != ed25519.PublicKeySize {
+		reject(w, 400, protocol.InvalidMessage, "invalid LAN credential request")
+		return
+	}
+	targetID := identity.DeviceID(request.TargetPublicKey)
+	if request.Request.Phase != "request" || request.Approval.Phase != "accept" || request.Request.RequestID != request.Approval.RequestID || request.Request.Nonce != request.Approval.Nonce || request.Request.Sender != targetID || request.Request.Recipient != d.ID || request.Approval.Sender != d.ID || request.Approval.Recipient != targetID || !request.Request.verify(request.TargetPublicKey, d.ID, time.Now()) || !request.Approval.verify(d.PublicKey, targetID, time.Now()) {
+		reject(w, 403, protocol.AuthenticationFailed, "LAN consent transcript invalid")
+		return
+	}
+	token, expires, err := s.store.LANInvitation(r.Context(), d, targetID)
+	if err != nil {
+		reject(w, 403, protocol.AuthenticationFailed, "current membership required")
+		return
+	}
+	now := time.Now().UTC()
+	respond(w, 201, Invitation{Token: token, ExpiresAt: expires, ServerTime: now, TTLSeconds: int64(time.Until(expires) / time.Second)})
+}
 func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	d, ok := s.authenticate(w, r, nil)
 	if !ok {
@@ -410,28 +505,47 @@ func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, devices)
 }
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
-	d, ok := s.authenticate(w, r, nil)
+	body, err := readBody(w, r)
+	if err != nil {
+		reject(w, 400, protocol.InvalidMessage, "invalid revocation request")
+		return
+	}
+	d, ok := s.authenticate(w, r, body)
 	if !ok {
 		return
 	}
 	id := r.PathValue("id")
-	if err := s.store.Revoke(r.Context(), d, id); err != nil {
+	var req store.RevokeRequest
+	if json.Unmarshal(body, &req) != nil || req.TargetID != "" && req.TargetID != id {
+		reject(w, 400, protocol.InvalidMessage, "invalid revocation request")
+		return
+	}
+	req.TargetID = id
+	revision, err := s.store.Revoke(r.Context(), d, req)
+	if err != nil {
 		reject(w, 403, protocol.AuthenticationFailed, "revocation not authorized")
 		return
 	}
 	s.mu.Lock()
-	p := s.clients[id]
+	peers := make([]*peer, 0, len(s.clients))
+	for _, connected := range s.clients {
+		if connected.device.GroupID == d.GroupID {
+			peers = append(peers, connected)
+		}
+	}
 	for sid, n := range s.sessions {
 		if n.from == id || n.to == id {
 			delete(s.sessions, sid)
 		}
 	}
 	s.mu.Unlock()
-	if p != nil {
-		p.cancel()
-		_ = p.conn.CloseNow()
+	// Force every online group member to reauthenticate and fetch the new
+	// revision. Established QUIC sessions remain independent of WSS teardown.
+	for _, connected := range peers {
+		connected.cancel()
+		_ = connected.conn.CloseNow()
 	}
-	respond(w, 200, map[string]bool{"revoked": true})
+	respond(w, 200, map[string]any{"revoked": true, "membership_revision": revision})
 }
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {

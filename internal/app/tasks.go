@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -93,6 +94,7 @@ type TaskSnapshot struct {
 	HistoryPersisted         bool                         `json:"history_persisted"`
 	RestartRecoverySupported bool                         `json:"restart_recovery_supported"`
 	ByteResumeSupported      bool                         `json:"byte_resume_supported"`
+	AuthorizationGeneration  uint64                       `json:"authorization_generation,omitempty"`
 }
 
 type taskRecord struct {
@@ -111,38 +113,41 @@ type taskRecord struct {
 }
 
 type taskRecovery struct {
-	ContentSnapshotID string            `json:"content_snapshot_id,omitempty"`
-	ContentMode       string            `json:"content_mode,omitempty"`
-	ContentBinding    string            `json:"content_binding,omitempty"`
-	ReceivePlanDigest string            `json:"receive_plan_digest,omitempty"`
-	SelectionDigest   string            `json:"selection_digest,omitempty"`
-	Version           int               `json:"version"`
-	Direction         string            `json:"direction"`
-	PeerID            string            `json:"peer_id"`
-	PeerFingerprint   string            `json:"peer_fingerprint"`
-	SourcePaths       []string          `json:"source_paths,omitempty"`
-	TargetDirectory   string            `json:"target_directory,omitempty"`
-	TransferID        string            `json:"transfer_id,omitempty"`
-	ManifestDigest    string            `json:"manifest_digest,omitempty"`
-	ChunkSize         int               `json:"chunk_size,omitempty"`
-	TotalBytes        int64             `json:"total_bytes,omitempty"`
-	FileCount         int               `json:"file_count,omitempty"`
-	ActualSentBytes   int64             `json:"actual_sent_bytes,omitempty"`
-	ReceivedBytes     int64             `json:"received_bytes,omitempty"`
-	RetransmitBytes   int64             `json:"retransmit_bytes,omitempty"`
-	LogicalCompleted  int64             `json:"logical_completed_bytes,omitempty"`
-	SentChunks        map[uint32][]bool `json:"sent_chunks,omitempty"`
+	ContentSnapshotID       string            `json:"content_snapshot_id,omitempty"`
+	ContentMode             string            `json:"content_mode,omitempty"`
+	ContentBinding          string            `json:"content_binding,omitempty"`
+	ReceivePlanDigest       string            `json:"receive_plan_digest,omitempty"`
+	SelectionDigest         string            `json:"selection_digest,omitempty"`
+	Version                 int               `json:"version"`
+	Direction               string            `json:"direction"`
+	PeerID                  string            `json:"peer_id"`
+	PeerFingerprint         string            `json:"peer_fingerprint"`
+	SourcePaths             []string          `json:"source_paths,omitempty"`
+	TargetDirectory         string            `json:"target_directory,omitempty"`
+	TransferID              string            `json:"transfer_id,omitempty"`
+	ManifestDigest          string            `json:"manifest_digest,omitempty"`
+	ChunkSize               int               `json:"chunk_size,omitempty"`
+	TotalBytes              int64             `json:"total_bytes,omitempty"`
+	FileCount               int               `json:"file_count,omitempty"`
+	ActualSentBytes         int64             `json:"actual_sent_bytes,omitempty"`
+	ReceivedBytes           int64             `json:"received_bytes,omitempty"`
+	RetransmitBytes         int64             `json:"retransmit_bytes,omitempty"`
+	LogicalCompleted        int64             `json:"logical_completed_bytes,omitempty"`
+	SentChunks              map[uint32][]bool `json:"sent_chunks,omitempty"`
+	AuthorizationGeneration uint64            `json:"authorization_generation,omitempty"`
 }
 
 type taskManager struct {
-	mu          sync.RWMutex
-	seq         uint64
-	tasks       map[string]*taskRecord
-	historyPath string
-	historyMu   sync.RWMutex
-	historyErr  error
-	workers     sync.WaitGroup
-	onChange    func(TaskSnapshot)
+	mu              sync.RWMutex
+	seq             uint64
+	tasks           map[string]*taskRecord
+	historyPath     string
+	historyMu       sync.RWMutex
+	historyErr      error
+	historyDB       *sql.DB
+	historyOpenPath string
+	workers         sync.WaitGroup
+	onChange        func(TaskSnapshot)
 }
 
 func newTaskManager() *taskManager { return &taskManager{tasks: make(map[string]*taskRecord)} }
@@ -184,7 +189,7 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.PhaseTimeline = append(s.PhaseTimeline, TaskPhaseEvent{Phase: s.Phase, At: now})
 	s.Revision = 1
 	s.HistoryPersisted = m.historyAvailable()
-	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory}}
+	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory, AuthorizationGeneration: s.AuthorizationGeneration}}
 	if s.Direction == "receive" {
 		t.decision = make(chan bool, 1)
 	}
@@ -669,6 +674,17 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if err := s.checkPeerAllowed(peerID); err != nil {
 		return TaskSnapshot{}, err
 	}
+	authorizationGeneration := cfg.expectedAuthorizationGeneration
+	var err error
+	if authorizationGeneration == 0 {
+		authorizationGeneration, err = s.currentAuthorizationGeneration(peerID)
+		if err != nil {
+			return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+		}
+	} else if err = s.checkAuthorizationGeneration(peerID, authorizationGeneration); err != nil {
+		return TaskSnapshot{}, err
+	}
+	cfg.expectedAuthorizationGeneration = authorizationGeneration
 	if s.tasks.hasActive() {
 		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 	}
@@ -683,7 +699,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	ctx, cancel := context.WithCancel(context.Background())
 	base := make([]string, len(paths))
 	copy(base, paths)
-	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths)}, cancel)
+	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
 		s.ensureInbox()
@@ -700,6 +716,12 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		}
 	}
 	t.peerID, t.paths, t.cfg = peerID, base, cfg
+	if err = s.checkTaskGrant(t.snapshot()); err != nil {
+		cancel()
+		t.finish("failed", err)
+		s.ensureInbox()
+		return TaskSnapshot{}, err
+	}
 	if cfg.beforeDispatch != nil {
 		if err = cfg.beforeDispatch(t.snapshot()); err != nil {
 			cancel()
@@ -744,7 +766,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		prepared, peer, runErr := s.prepareAndConnect(ctx, peerID, base, cfg)
 		if runErr == nil && cfg.expectedSourceDigest != "" && queueSourceDigest(prepared.Manifest) != cfg.expectedSourceDigest {
 			_ = prepared.Close()
-			_ = peer.Close()
+			_ = s.releasePeerSession(peer, nil)
 			runErr = transfer.ErrChanged
 		}
 		if runErr == nil {
@@ -774,7 +796,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 				recovery.SentChunks = sentChunks
 			})
 			if indexErr := s.IndexInboxManifest(ctx, t.snapshot().ID, prepared.Manifest); indexErr != nil {
-				handleTaskRunError(t, attemptID, ctx, errors.Join(indexErr, peer.Close()))
+				handleTaskRunError(t, attemptID, ctx, s.releasePeerSession(peer, indexErr))
 				return
 			}
 			result, runErr = s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{
@@ -790,11 +812,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 					}
 				},
 			})
-			if runErr == nil {
-				runErr = s.closePeerAfterTransfer(peer)
-			} else {
-				runErr = errors.Join(runErr, peer.Close())
-			}
+			runErr = s.releasePeerSession(peer, runErr)
 		}
 		if runErr != nil {
 			handleTaskRunError(t, attemptID, ctx, runErr)
@@ -821,7 +839,18 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 		return TaskSnapshot{}, errors.New("APP_CLOSING")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory)}, cancel)
+	var authorizationGeneration uint64
+	var err error
+	if expectedPeerID != "" {
+		authorizationGeneration, err = s.currentAuthorizationGeneration(expectedPeerID)
+		if err != nil {
+			cancel()
+			s.ensureInbox()
+			return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
+		}
+		cfg.expectedAuthorizationGeneration = authorizationGeneration
+	}
+	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
 		s.ensureInbox()
@@ -1068,6 +1097,13 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		s.ensureInbox()
 		return TaskSnapshot{}, err
 	}
+	currentGeneration, generationErr := identity.AuthorizationGeneration(s.cfg.DataDir, t.recovery.PeerID)
+	if generationErr != nil || t.recovery.AuthorizationGeneration == 0 || currentGeneration != t.recovery.AuthorizationGeneration {
+		t.mu.Unlock()
+		s.ensureInbox()
+		return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "task belongs to an older peer authorization", generationErr)
+	}
+	cfg.expectedAuthorizationGeneration = t.recovery.AuthorizationGeneration
 	if err := s.configureContentResume(s.workCtx, id, t.recovery, &cfg); err != nil {
 		t.mu.Unlock()
 		s.ensureInbox()
@@ -1246,7 +1282,7 @@ func (s *Service) decideTask(id string, accepted bool) error {
 	}
 	snap, hasIncoming := t.snap, t.incoming != nil
 	if accepted {
-		if err := s.checkPeerAllowed(snap.PeerID); err != nil {
+		if err := s.checkTaskGrant(snap); err != nil {
 			t.mu.Unlock()
 			return err
 		}

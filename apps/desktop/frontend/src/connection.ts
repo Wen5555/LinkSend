@@ -97,6 +97,9 @@ export function humanizeBackendError(raw: unknown): string {
   if (text.includes('administrator required')) {
     return '服务端仍要求管理员生成邀请，可能与当前客户端权限模型不兼容；请升级服务端后重试。';
   }
+  if (text.includes('server capabilities incompatible')) {
+    return '当前信令服务版本过旧或能力不兼容，请升级服务端后重试。';
+  }
   if (text.includes('invitation invalid, expired or used')) {
     return '配对码无效、已过期或已使用，请在另一台设备上重新生成。';
   }

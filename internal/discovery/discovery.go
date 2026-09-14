@@ -33,13 +33,15 @@ import (
 )
 
 const (
-	DefaultPort     = 53318
-	maxPacketBytes  = 2048
-	peerLifetime    = 15 * time.Second
-	announceEvery   = 4 * time.Second
-	maxFrameBytes   = protocol.MaxMessageBytes
-	discoveryMethod = "LINKSEND-LAN"
-	discoveryPath   = "/v1/discovery"
+	DefaultPort      = 53318
+	maxPacketBytes   = 2048
+	peerLifetime     = 15 * time.Second
+	announceEvery    = 4 * time.Second
+	maxFrameBytes    = protocol.MaxMessageBytes
+	maxPeers         = 512
+	maxRoutesPerPeer = 16
+	discoveryMethod  = "LINKSEND-LAN"
+	discoveryPath    = "/v1/discovery"
 )
 
 var multicastIP = net.IPv4(239, 255, 76, 83)
@@ -58,6 +60,9 @@ type Route struct {
 	Interface     string    `json:"interface"`
 	LocalAddress  string    `json:"local_address"`
 	LastSeen      time.Time `json:"last_seen"`
+	Family        string    `json:"family"`
+	Generation    uint64    `json:"network_generation"`
+	VerifiedAt    time.Time `json:"verified_at,omitempty"`
 }
 
 type Device struct {
@@ -107,26 +112,37 @@ type peerRecord struct {
 }
 
 type Manager struct {
-	cfg       Config
-	ctx       context.Context
-	cancel    context.CancelFunc
-	udp       net.PacketConn
-	packet    *ipv4.PacketConn
-	tcp       net.Listener
-	tlsCfg    *tls.Config
-	port      int
-	incoming  chan Incoming
-	wg        sync.WaitGroup
-	acceptWG  sync.WaitGroup
-	close     sync.Once
-	writeMu   sync.Mutex
-	refreshMu sync.Mutex
-	mu        sync.RWMutex
-	peers     map[string]*peerRecord
-	ifaces    map[int]interfaceRoute
-	joined    map[int]bool
-	replays   map[string]time.Time
-	lastResp  map[string]time.Time
+	cfg            Config
+	ctx            context.Context
+	cancel         context.CancelFunc
+	udp            net.PacketConn
+	packet         *ipv4.PacketConn
+	tcp            net.Listener
+	tlsCfg         *tls.Config
+	port           int
+	incoming       chan Incoming
+	wg             sync.WaitGroup
+	acceptWG       sync.WaitGroup
+	close          sync.Once
+	writeMu        sync.Mutex
+	refreshMu      sync.Mutex
+	mu             sync.RWMutex
+	peers          map[string]*peerRecord
+	ifaces         map[string]interfaceRoute
+	joined         map[int]*net.Interface
+	joinSignatures map[int]string
+	replays        map[string]time.Time
+	lastResp       map[string]time.Time
+	acceptSlots    chan struct{}
+	responseSlots  chan struct{}
+	generation     uint64
+	channelErrors  map[string]string
+	remembered     map[string]rememberedProbe
+}
+
+type rememberedProbe struct {
+	next    time.Time
+	backoff time.Duration
 }
 
 func Start(cfg Config) (*Manager, error) {
@@ -154,7 +170,7 @@ func Start(cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("LAN multicast listen: %w", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: ipv4.NewPacketConn(udp), tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[int]interfaceRoute{}, joined: map[int]bool{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}}
+	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: ipv4.NewPacketConn(udp), tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, joinSignatures: map[int]string{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}, remembered: map[string]rememberedProbe{}}
 	m.tlsCfg, err = cfg.Identity.TLSServerConfig(m.allowedPeer)
 	if err != nil {
 		m.Close()
@@ -165,17 +181,14 @@ func Start(cfg Config) (*Manager, error) {
 	// local-subnet matching across the joined interfaces.
 	_ = m.packet.SetControlMessage(ipv4.FlagInterface, true)
 	if err = m.packet.SetMulticastTTL(1); err != nil {
-		m.Close()
-		return nil, fmt.Errorf("LAN multicast TTL: %w", err)
+		m.channelErrors["multicast"] = "ttl_configuration_failed"
 	}
 	_ = m.packet.SetMulticastLoopback(false)
 	if err = enableBroadcast(m.udp); err != nil {
-		m.Close()
-		return nil, fmt.Errorf("LAN broadcast socket: %w", err)
+		m.channelErrors["broadcast"] = "socket_configuration_failed"
 	}
 	if err = m.refreshInterfaces(); err != nil {
-		m.Close()
-		return nil, err
+		m.channelErrors["interfaces"] = "initial_refresh_failed"
 	}
 	m.wg.Add(3)
 	go m.readLoop()
@@ -185,6 +198,23 @@ func Start(cfg Config) (*Manager, error) {
 }
 
 func (m *Manager) Incoming() <-chan Incoming { return m.incoming }
+func (m *Manager) ControlPort() int          { return m.port }
+
+// RememberVerifiedPeer seeds the bounded remembered-address provider from a
+// previously authenticated local record. The next TLS handshake still pins
+// the supplied public key; this method grants no transfer permission.
+func (m *Manager) RememberVerifiedPeer(peer Device, route Route) error {
+	ip := net.ParseIP(route.RemoteAddress)
+	local := net.ParseIP(route.LocalAddress)
+	if len(peer.ID) != 64 || len(peer.PublicKey) != ed25519.PublicKeySize || identity.DeviceID(peer.PublicKey) != peer.ID || ip == nil || local == nil || route.ControlPort < 1 || route.ControlPort > 65535 || (!m.cfg.AllowLoopback && (ip.IsLoopback() || local.IsLoopback())) {
+		return protocol.Fail(protocol.LANProbeInvalid, "invalid remembered LAN peer")
+	}
+	route.LastSeen = time.Now()
+	route.Family = "ipv4"
+	route.Generation = m.networkGeneration()
+	m.remember(packet{DeviceID: peer.ID, Name: peer.Name, PublicKey: peer.PublicKey, Port: route.ControlPort}, route)
+	return nil
+}
 
 func (m *Manager) Close() error {
 	var closeErr error
@@ -192,9 +222,11 @@ func (m *Manager) Close() error {
 		if m.cancel != nil {
 			m.cancel()
 		}
+		m.writeMu.Lock()
 		if m.udp != nil {
 			closeErr = errors.Join(closeErr, m.udp.Close())
 		}
+		m.writeMu.Unlock()
 		if m.tcp != nil {
 			closeErr = errors.Join(closeErr, m.tcp.Close())
 		}
@@ -210,6 +242,18 @@ func (m *Manager) Refresh() error {
 		return err
 	}
 	return m.sendAnnouncement(true, nil)
+}
+
+// ChannelErrors returns bounded provider status without exposing raw system
+// errors or making one failed discovery provider disable the others.
+func (m *Manager) ChannelErrors() map[string]string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]string, len(m.channelErrors))
+	for provider, state := range m.channelErrors {
+		out[provider] = state
+	}
+	return out
 }
 
 // ProbeAddress is the bounded fallback for networks that filter multicast and
@@ -233,7 +277,25 @@ func (m *Manager) ProbeAddress(raw string) error {
 	if !onLink {
 		return protocol.Fail(protocol.LANProbeInvalid, "LAN probe address is not directly connected")
 	}
-	return m.sendAnnouncement(true, &net.UDPAddr{IP: ip, Port: m.cfg.Port})
+	return m.sendAnnouncementOnRoute(true, &net.UDPAddr{IP: ip, Port: m.cfg.Port}, nil)
+}
+
+func (m *Manager) RememberAddress(raw string) error {
+	address, err := netip.ParseAddr(strings.TrimSpace(raw))
+	if err != nil || !address.Is4() || address.IsUnspecified() || address.IsMulticast() || address.IsLoopback() && !m.cfg.AllowLoopback {
+		return protocol.Fail(protocol.LANProbeInvalid, "invalid remembered LAN address")
+	}
+	key := address.String()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.remembered[key]; !ok && len(m.remembered) >= 64 {
+		return errors.New("LAN remembered address limit reached")
+	}
+	if m.remembered == nil {
+		m.remembered = map[string]rememberedProbe{}
+	}
+	m.remembered[key] = rememberedProbe{next: time.Now()}
+	return nil
 }
 
 func (m *Manager) Peers() []Device {
@@ -318,10 +380,10 @@ func (m *Manager) refreshInterfaces() error {
 	if err != nil {
 		return err
 	}
-	next := map[int]interfaceRoute{}
+	next := map[string]interfaceRoute{}
 	for index := range interfaces {
 		iface := interfaces[index]
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagMulticast == 0 || listed(iface.Name, m.cfg.ExcludedInterfaces) {
+		if iface.Flags&net.FlagUp == 0 || listed(iface.Name, m.cfg.ExcludedInterfaces) {
 			continue
 		}
 		addresses, addrErr := iface.Addrs()
@@ -333,36 +395,83 @@ func (m *Manager) refreshInterfaces() error {
 			if parseErr != nil || ip.To4() == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || (!m.cfg.AllowLoopback && ip.IsLoopback()) {
 				continue
 			}
-			next[iface.Index] = interfaceRoute{iface: &iface, address: ip.To4(), network: network, broadcast: subnetBroadcast(ip.To4(), network.Mask)}
-			break
+			key := fmt.Sprintf("%d|%s|%s", iface.Index, ip.String(), network.String())
+			next[key] = interfaceRoute{iface: &iface, address: ip.To4(), network: network, broadcast: subnetBroadcast(ip.To4(), network.Mask)}
 		}
-	}
-	if len(next) == 0 {
-		return errors.New("LAN discovery found no multicast-capable IPv4 interface")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	active := make(map[int]interfaceRoute, len(next))
-	for index, previous := range m.ifaces {
-		if _, ok := next[index]; !ok {
-			_ = m.packet.LeaveGroup(previous.iface, &net.UDPAddr{IP: multicastIP})
+	presentIndexes := map[int]*net.Interface{}
+	signatureParts := map[int][]string{}
+	for _, route := range next {
+		presentIndexes[route.iface.Index] = route.iface
+		signatureParts[route.iface.Index] = append(signatureParts[route.iface.Index], route.address.String()+"/"+route.network.String())
+	}
+	signatures := make(map[int]string, len(signatureParts))
+	for index, parts := range signatureParts {
+		signatures[index] = stableInterfaceSignature(parts)
+	}
+	if m.joinSignatures == nil {
+		m.joinSignatures = map[int]string{}
+	}
+	for index, previous := range m.joined {
+		if _, ok := presentIndexes[index]; !ok || m.joinSignatures[index] != signatures[index] {
+			_ = m.packet.LeaveGroup(previous, &net.UDPAddr{IP: multicastIP})
 			delete(m.joined, index)
+			delete(m.joinSignatures, index)
 		}
 	}
-	for index, route := range next {
-		if !m.joined[index] {
-			if err = m.packet.JoinGroup(route.iface, &net.UDPAddr{IP: multicastIP}); err != nil {
+	if len(next) == 0 {
+		changed := len(m.ifaces) != 0
+		m.ifaces = map[string]interfaceRoute{}
+		if changed {
+			m.generation++
+		}
+		m.channelErrors["interfaces"] = "no_eligible_address"
+		m.channelErrors["multicast"] = "no_eligible_address"
+		return errors.New("LAN discovery found no eligible IPv4 interface")
+	}
+	joinFailures := 0
+	for index, routeIface := range presentIndexes {
+		if m.joined[index] == nil && routeIface.Flags&net.FlagMulticast != 0 {
+			if err = m.packet.JoinGroup(routeIface, &net.UDPAddr{IP: multicastIP}); err != nil {
+				joinFailures++
 				continue
 			}
-			m.joined[index] = true
+			m.joined[index] = routeIface
+			m.joinSignatures[index] = signatures[index]
 		}
-		active[index] = route
 	}
-	if len(active) == 0 {
-		return errors.New("LAN discovery could not join multicast on an eligible interface")
+	changed := !sameInterfaceRoutes(m.ifaces, next)
+	m.ifaces = next
+	if changed {
+		m.generation++
 	}
-	m.ifaces = active
+	if joinFailures > 0 || len(m.joined) == 0 {
+		m.channelErrors["multicast"] = "join_degraded"
+	} else {
+		delete(m.channelErrors, "multicast")
+	}
+	delete(m.channelErrors, "interfaces")
 	return nil
+}
+
+func stableInterfaceSignature(parts []string) string {
+	parts = append([]string(nil), parts...)
+	sort.Strings(parts)
+	return strings.Join(parts, "|")
+}
+
+func sameInterfaceRoutes(left, right map[string]interfaceRoute) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key := range left {
+		if _, ok := right[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Manager) announceLoop() {
@@ -384,9 +493,39 @@ func (m *Manager) announceLoop() {
 			_ = m.refreshInterfaces()
 			_ = m.sendAnnouncement(true, nil)
 			m.probeKnownPeers()
+			m.probeRememberedAddresses()
 		case <-cleanup.C:
 			m.expirePeers()
 		}
+	}
+}
+
+func (m *Manager) probeRememberedAddresses() {
+	now := time.Now()
+	var due []string
+	m.mu.RLock()
+	for address, state := range m.remembered {
+		if !state.next.After(now) {
+			due = append(due, address)
+		}
+	}
+	m.mu.RUnlock()
+	for _, address := range due {
+		err := m.ProbeAddress(address)
+		m.mu.Lock()
+		state := m.remembered[address]
+		if err == nil {
+			if state.backoff == 0 {
+				state.backoff = 4 * time.Second
+			} else {
+				state.backoff = min(state.backoff*2, time.Minute)
+			}
+		} else {
+			state.backoff = min(max(state.backoff, 5*time.Second)*2, time.Minute)
+		}
+		state.next = now.Add(state.backoff)
+		m.remembered[address] = state
+		m.mu.Unlock()
 	}
 }
 
@@ -409,13 +548,41 @@ func (m *Manager) probeKnownPeers() {
 func (m *Manager) readLoop() {
 	defer m.wg.Done()
 	buffer := make([]byte, maxPacketBytes+1)
+	consecutiveErrors := 0
 	for {
-		n, control, source, err := m.packet.ReadFrom(buffer)
+		m.mu.RLock()
+		packetConn := m.packet
+		m.mu.RUnlock()
+		if packetConn == nil {
+			return
+		}
+		n, control, source, err := packetConn.ReadFrom(buffer)
 		if err != nil {
 			if m.ctx.Err() != nil {
 				return
 			}
+			consecutiveErrors++
+			if consecutiveErrors >= 8 {
+				m.mu.Lock()
+				m.channelErrors["receive"] = "socket_read_degraded"
+				m.mu.Unlock()
+				delay := time.Duration(min(consecutiveErrors, 32)) * 25 * time.Millisecond
+				select {
+				case <-time.After(delay):
+				case <-m.ctx.Done():
+					return
+				}
+				if consecutiveErrors >= 32 && m.rebuildUDPSocket() == nil {
+					consecutiveErrors = 0
+				}
+			}
 			continue
+		}
+		if consecutiveErrors != 0 {
+			m.mu.Lock()
+			delete(m.channelErrors, "receive")
+			m.mu.Unlock()
+			consecutiveErrors = 0
 		}
 		if n == 0 || n > maxPacketBytes {
 			continue
@@ -435,13 +602,55 @@ func (m *Manager) readLoop() {
 		if received.DeviceID == m.cfg.Identity.ID() {
 			continue
 		}
-		seen := Route{RemoteAddress: udpSource.IP.String(), ControlPort: received.Port, Interface: route.iface.Name, LocalAddress: route.address.String(), LastSeen: time.Now()}
+		seen := Route{RemoteAddress: udpSource.IP.String(), ControlPort: received.Port, Interface: route.iface.Name, LocalAddress: route.address.String(), LastSeen: time.Now(), Family: "ipv4", Generation: m.networkGeneration()}
 		m.remember(received, seen)
 		if received.Announce && m.shouldRespond(received.DeviceID, udpSource.IP) {
 			destination := &net.UDPAddr{IP: udpSource.IP, Port: udpSource.Port}
-			_ = m.sendAnnouncement(false, destination)
+			_ = m.sendAnnouncementOnRoute(false, destination, &route)
 		}
 	}
+}
+
+func (m *Manager) rebuildUDPSocket() error {
+	if m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	if m.udp != nil {
+		_ = m.udp.Close()
+	}
+	udp, err := net.ListenPacket("udp4", net.JoinHostPort(net.IPv4zero.String(), fmt.Sprint(m.cfg.Port)))
+	if err != nil {
+		return err
+	}
+	if m.ctx.Err() != nil {
+		_ = udp.Close()
+		return m.ctx.Err()
+	}
+	packet := ipv4.NewPacketConn(udp)
+	_ = packet.SetControlMessage(ipv4.FlagInterface, true)
+	_ = packet.SetMulticastTTL(1)
+	_ = packet.SetMulticastLoopback(false)
+	_ = enableBroadcast(udp)
+	m.mu.Lock()
+	m.udp, m.packet = udp, packet
+	m.joined = map[int]*net.Interface{}
+	m.joinSignatures = map[int]string{}
+	m.mu.Unlock()
+	if err = m.refreshInterfaces(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	delete(m.channelErrors, "receive")
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *Manager) networkGeneration() uint64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.generation
 }
 
 func (m *Manager) acceptLoop() {
@@ -454,9 +663,16 @@ func (m *Manager) acceptLoop() {
 			}
 			continue
 		}
+		select {
+		case m.acceptSlots <- struct{}{}:
+		default:
+			_ = raw.Close()
+			continue
+		}
 		m.acceptWG.Add(1)
 		go func() {
 			defer m.acceptWG.Done()
+			defer func() { <-m.acceptSlots }()
 			m.acceptOne(raw)
 		}()
 	}
@@ -503,6 +719,10 @@ func (m *Manager) acceptOne(raw net.Conn) {
 }
 
 func (m *Manager) sendAnnouncement(announce bool, destination *net.UDPAddr) error {
+	return m.sendAnnouncementOnRoute(announce, destination, nil)
+}
+
+func (m *Manager) sendAnnouncementOnRoute(announce bool, destination *net.UDPAddr, preferred *interfaceRoute) error {
 	p, err := m.newPacket(announce)
 	if err != nil {
 		return err
@@ -514,7 +734,18 @@ func (m *Manager) sendAnnouncement(announce bool, destination *net.UDPAddr) erro
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()
 	if destination != nil {
-		_, err = m.packet.WriteTo(body, nil, destination)
+		routes := m.routesForDestination(destination.IP, preferred)
+		if len(routes) == 0 {
+			return errors.New("LAN discovery has no on-link route for destination")
+		}
+		for _, route := range routes {
+			if err = m.writeOnRoute(body, destination, route); err == nil {
+				return nil
+			}
+		}
+		if err == nil {
+			return errors.New("LAN discovery packet was not sent")
+		}
 		return err
 	}
 	m.mu.RLock()
@@ -526,19 +757,21 @@ func (m *Manager) sendAnnouncement(announce bool, destination *net.UDPAddr) erro
 	var errs []error
 	sent := false
 	for _, route := range routes {
-		if err = m.packet.SetMulticastInterface(route.iface); err != nil {
-			errs = append(errs, err)
-		} else {
-			destination := &net.UDPAddr{IP: multicastIP, Port: m.cfg.Port}
-			if _, err = m.packet.WriteTo(body, nil, destination); err != nil {
+		if route.iface.Flags&net.FlagMulticast != 0 {
+			if err = m.packet.SetMulticastInterface(route.iface); err != nil {
 				errs = append(errs, err)
 			} else {
-				sent = true
+				destination := &net.UDPAddr{IP: multicastIP, Port: m.cfg.Port}
+				if err = m.writeOnRoute(body, destination, route); err != nil {
+					errs = append(errs, err)
+				} else {
+					sent = true
+				}
 			}
 		}
 		if route.broadcast != nil && !route.broadcast.Equal(route.address) {
 			destination := &net.UDPAddr{IP: route.broadcast, Port: m.cfg.Port}
-			if _, err = m.packet.WriteTo(body, nil, destination); err != nil {
+			if err = m.writeOnRoute(body, destination, route); err != nil {
 				errs = append(errs, err)
 			} else {
 				sent = true
@@ -548,7 +781,26 @@ func (m *Manager) sendAnnouncement(announce bool, destination *net.UDPAddr) erro
 	if sent {
 		return nil
 	}
+	if len(errs) == 0 {
+		return errors.New("LAN discovery has no usable multicast or broadcast route")
+	}
 	return errors.Join(errs...)
+}
+
+func (m *Manager) routesForDestination(ip net.IP, preferred *interfaceRoute) []interfaceRoute {
+	if preferred != nil && preferred.network.Contains(ip) {
+		return []interfaceRoute{*preferred}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var routes []interfaceRoute
+	for _, route := range m.ifaces {
+		if route.network.Contains(ip) && !route.address.Equal(ip) {
+			routes = append(routes, route)
+		}
+	}
+	sort.Slice(routes, func(i, j int) bool { return routes[i].address.String() < routes[j].address.String() })
+	return routes
 }
 
 func (m *Manager) newPacket(announce bool) (packet, error) {
@@ -596,9 +848,10 @@ func (m *Manager) routeForSource(control *ipv4.ControlMessage, source net.IP) (i
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if control != nil && control.IfIndex != 0 {
-		route, ok := m.ifaces[control.IfIndex]
-		if ok && route.network.Contains(source) && !route.address.Equal(source) {
-			return route, true
+		for _, route := range m.ifaces {
+			if route.iface.Index == control.IfIndex && route.network.Contains(source) && !route.address.Equal(source) {
+				return route, true
+			}
 		}
 		return interfaceRoute{}, false
 	}
@@ -611,15 +864,28 @@ func (m *Manager) routeForSource(control *ipv4.ControlMessage, source net.IP) (i
 }
 
 func (m *Manager) remember(p packet, route Route) {
-	key := route.Interface + "|" + route.RemoteAddress + "|" + fmt.Sprint(route.ControlPort)
+	key := route.Interface + "|" + route.LocalAddress + "|" + route.RemoteAddress + "|" + fmt.Sprint(route.ControlPort)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	record := m.peers[p.DeviceID]
 	if record == nil {
+		if len(m.peers) >= maxPeers {
+			return
+		}
 		record = &peerRecord{routes: map[string]Route{}}
 		m.peers[p.DeviceID] = record
 	}
 	record.device = Device{ID: p.DeviceID, Name: p.Name, PublicKey: bytes.Clone(p.PublicKey)}
+	if len(record.routes) >= maxRoutesPerPeer {
+		var oldestKey string
+		var oldest time.Time
+		for routeKey, existing := range record.routes {
+			if oldestKey == "" || existing.LastSeen.Before(oldest) {
+				oldestKey, oldest = routeKey, existing.LastSeen
+			}
+		}
+		delete(record.routes, oldestKey)
+	}
 	record.routes[key] = route
 }
 
@@ -635,6 +901,11 @@ func (m *Manager) expirePeers() {
 		}
 		if len(record.routes) == 0 {
 			delete(m.peers, id)
+		}
+	}
+	for key, seen := range m.lastResp {
+		if now.Sub(seen) > time.Minute {
+			delete(m.lastResp, key)
 		}
 	}
 }
@@ -740,6 +1011,18 @@ func (s *Session) SendHeartbeat(ctx context.Context) error {
 	return s.write(ctx, signaling.Wire{Type: "heartbeat"})
 }
 
+func (s *Session) SendLANPair(ctx context.Context, frame signaling.LANPairFrame) error {
+	if s.identity == nil || frame.Sender != s.identity.ID() || frame.Recipient != s.peer.ID {
+		return protocol.Fail(protocol.AuthenticationFailed, "outbound LAN pairing identity invalid")
+	}
+	if len(frame.Signature) == 0 {
+		frame.Signature = s.identity.Sign(frame.SigningBytes())
+	} else if frame.Verify(s.identity.PublicKey(), s.peer.ID, time.Now()) != nil {
+		return protocol.Fail(protocol.AuthenticationFailed, "outbound LAN pairing signature invalid")
+	}
+	return s.write(ctx, signaling.Wire{Type: "lan_pair", LANPair: &frame})
+}
+
 func (s *Session) Read(ctx context.Context) (signaling.Wire, error) {
 	select {
 	case <-ctx.Done():
@@ -809,7 +1092,7 @@ func (s *Session) readPump() {
 		}
 		s.received.Add(uint64(len(header) + len(body)))
 		var wire signaling.Wire
-		if err := json.Unmarshal(body, &wire); err != nil || wire.Type != "signal" && wire.Type != "heartbeat" {
+		if err := json.Unmarshal(body, &wire); err != nil || wire.Type != "signal" && wire.Type != "heartbeat" && wire.Type != "lan_pair" || wire.Type == "lan_pair" && wire.LANPair == nil {
 			s.deliver(readResult{err: protocol.Fail(protocol.InvalidMessage, "invalid LAN signaling frame")})
 			_ = s.Close()
 			return

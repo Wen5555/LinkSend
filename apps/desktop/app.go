@@ -18,44 +18,63 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wen5555/LinkSend/apps/desktop/nativeclipboard"
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
+	"github.com/Wen5555/LinkSend/internal/transfer"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.
 type App struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	core          *linksendapp.Service
-	initErr       error
-	prefs         DesktopPreferences
-	prefsMu       sync.RWMutex
-	prefsWriteMu  sync.Mutex
-	prefsStatus   PreferencesStatus
-	configBlocked bool
-	dataDir       string
-	closeMu       sync.Mutex
-	closeDialog   bool
-	quitReady     bool
-	runtimeApp    *application.App
-	window        application.Window
-	eventsDone    chan struct{}
-	entries       *desktopEntries
-	background    *desktopBackground
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	core                    *linksendapp.Service
+	initErr                 error
+	prefs                   DesktopPreferences
+	prefsMu                 sync.RWMutex
+	prefsWriteMu            sync.Mutex
+	prefsStatus             PreferencesStatus
+	configBlocked           bool
+	dataDir                 string
+	closeMu                 sync.Mutex
+	closeDialog             bool
+	quitReady               bool
+	runtimeApp              *application.App
+	window                  application.Window
+	eventsDone              chan struct{}
+	entries                 *desktopEntries
+	background              *desktopBackground
+	nativeEvents            *nativeSystemEventPump
+	clipboardMu             sync.Mutex
+	clipboardOwnerMu        sync.Mutex
+	clipboardStop           func()
+	clipboardLast           nativeclipboard.Change
+	clipboardErr            string
+	clipboardSleeping       bool
+	clipboardLocked         bool
+	clipboardUserPaused     bool
+	clipboardMasterDisabled bool
+	clipboardClosed         bool
+	clipboardWatchStart     func() (func(), error)
+	clipboardChanges        chan nativeclipboard.Change
+	clipboardDone           chan struct{}
 }
 
 type DesktopPreferences struct {
 	FormatVersion      int               `json:"format_version"`
+	Revision           uint64            `json:"revision"`
 	ServerURL          string            `json:"server_url"`
 	BindAddress        string            `json:"bind_address"`
 	InterfacePriority  []string          `json:"interface_priority"`
 	ExcludedInterfaces []string          `json:"excluded_interfaces"`
 	STUNURLs           []string          `json:"stun_urls"`
 	ReceiveDirectory   string            `json:"receive_directory"`
+	ConflictPolicy     string            `json:"conflict_policy"`
 	DeviceName         string            `json:"device_name"`
 	Background         BackgroundOptions `json:"background"`
+	ClipboardEnabled   bool              `json:"clipboard_enabled"`
 }
 
 type PreferencesStatus struct {
@@ -96,7 +115,7 @@ type DesktopStatus struct {
 var errBackendUnavailable = errors.New("BACKEND_UNAVAILABLE: desktop core is not initialized")
 
 func NewApp() *App {
-	return &App{entries: &desktopEntries{wake: make(chan struct{}, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}, background: &desktopBackground{}}
+	return &App{entries: &desktopEntries{wake: make(chan bool, 1), status: DesktopEntryStatus{SendToSupported: runtime.GOOS == "windows"}}, background: &desktopBackground{}}
 }
 
 // attachRuntime is called by the Wails 3 host before Run. Keeping the host
@@ -123,12 +142,20 @@ func (a *App) startup(ctx context.Context) {
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
 	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
+		a.startNativeSystemEvents()
 		if a.runtimeApp != nil {
 			if err := a.initializeContentActions(); err != nil {
 				a.initErr = err
 				return
 			}
 		}
+		if runtime.GOOS == "windows" && a.window != nil {
+			nativeclipboard.SetOwnerWindow(uintptr(a.window.NativeWindow()))
+		}
+		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Validate: nativeclipboard.ValidatePayload, Write: nativeclipboard.WritePreparedPayloadBefore})
+		a.setClipboardSuspended("master", !a.prefs.ClipboardEnabled)
+		a.startClipboardDelivery()
+		a.refreshClipboardWatch()
 		if strings.TrimSpace(a.prefs.ReceiveDirectory) == "" {
 			if explicitDataDir {
 				a.prefs.ReceiveDirectory = filepath.Join(dataDir, "received")
@@ -153,8 +180,13 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	a.closeClipboardOwner()
+	a.stopNativeSystemEvents()
 	if a.cancel != nil {
 		a.cancel()
+	}
+	if a.clipboardDone != nil {
+		<-a.clipboardDone
 	}
 	if a.eventsDone != nil {
 		<-a.eventsDone
@@ -327,6 +359,21 @@ func (a *App) showQuitWarning(message string) {
 
 func (a *App) directConfig() linksendapp.DirectConfig {
 	prefs := a.Preferences()
+	conflictPolicy := transfer.ConflictPolicy(prefs.ConflictPolicy)
+	if conflictPolicy != transfer.ConflictKeepBoth && conflictPolicy != transfer.ConflictSkip && conflictPolicy != transfer.ConflictError {
+		conflictPolicy = transfer.ConflictKeepBoth
+	}
+	devicePolicies := make(map[string]transfer.ConflictPolicy)
+	if a.core != nil {
+		if profiles, err := a.core.DeviceProfiles(); err == nil {
+			for _, profile := range profiles {
+				policy := transfer.ConflictPolicy(profile.ConflictPolicy)
+				if policy == transfer.ConflictKeepBoth || policy == transfer.ConflictSkip || policy == transfer.ConflictError {
+					devicePolicies[profile.PeerID] = policy
+				}
+			}
+		}
+	}
 	stun := make([]string, 0)
 	rawSTUN := firstNonEmpty(os.Getenv("LINKSEND_STUN"), strings.Join(prefs.STUNURLs, ","), "stun:stun.oooai.de:3478")
 	for _, value := range strings.Split(rawSTUN, ",") {
@@ -336,7 +383,7 @@ func (a *App) directConfig() linksendapp.DirectConfig {
 	}
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), prefs.BindAddress)
-	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute}
+	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute, ReceiveConflictPolicy: conflictPolicy, DeviceConflictPolicies: devicePolicies}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -430,6 +477,12 @@ func loadPreferencesDetailed(dataDir string) (DesktopPreferences, PreferencesSta
 	if loaded.FormatVersion != 1 {
 		return p, PreferencesStatus{State: "unsupported", Message: "偏好文件版本不受支持；原文件已保留，请重置桌面偏好"}
 	}
+	if loaded.Revision == 0 {
+		// Files written before section-scoped saves did not carry a revision.
+		// Treat that valid snapshot as the first revision without rewriting it
+		// during startup.
+		loaded.Revision = 1
+	}
 	return loaded, PreferencesStatus{State: "valid"}
 }
 
@@ -486,19 +539,64 @@ func (a *App) SavePreferences(next DesktopPreferences) error {
 	return a.savePreferencesLocked(next, true)
 }
 
+// SavePreferencesSection applies only fields owned by the named settings
+// category. Revision is a compare-and-swap guard, so a form opened before a
+// newer save cannot replace fields from that save with an old snapshot.
+func (a *App) SavePreferencesSection(section string, expectedRevision uint64, patch DesktopPreferences) (DesktopPreferences, error) {
+	a.prefsWriteMu.Lock()
+	defer a.prefsWriteMu.Unlock()
+	current := a.Preferences()
+	if current.Revision != expectedRevision {
+		return current, errors.New("PREFERENCES_REVISION_CONFLICT: 设置已在其他位置更新，请重试保存")
+	}
+	next := current
+	switch section {
+	case "general":
+		next.DeviceName = patch.DeviceName
+	case "receive":
+		next.ReceiveDirectory = patch.ReceiveDirectory
+		next.ConflictPolicy = patch.ConflictPolicy
+	case "network":
+		next.ServerURL = patch.ServerURL
+		next.BindAddress = patch.BindAddress
+		next.InterfacePriority = append([]string(nil), patch.InterfacePriority...)
+		next.ExcludedInterfaces = append([]string(nil), patch.ExcludedInterfaces...)
+		next.STUNURLs = append([]string(nil), patch.STUNURLs...)
+	case "clipboard":
+		next.ClipboardEnabled = patch.ClipboardEnabled
+	default:
+		return current, errors.New("INVALID_CONFIG: unknown preferences section")
+	}
+	if err := a.savePreferencesLocked(next, true); err != nil {
+		return current, err
+	}
+	return a.Preferences(), nil
+}
+
 func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool) error {
 	previous := a.Preferences()
 	if a.dataDir == "" {
 		return errBackendUnavailable
 	}
+	if previous.Revision == ^uint64(0) {
+		return errors.New("PREFERENCES_REVISION_EXHAUSTED")
+	}
 	next.FormatVersion = 1
+	next.Revision = previous.Revision + 1
 	next.ServerURL = strings.TrimSpace(next.ServerURL)
 	next.BindAddress = strings.TrimSpace(next.BindAddress)
 	next.InterfacePriority = normalizedList(next.InterfacePriority)
 	next.ExcludedInterfaces = normalizedList(next.ExcludedInterfaces)
 	next.STUNURLs = normalizedList(next.STUNURLs)
 	next.ReceiveDirectory = strings.TrimSpace(next.ReceiveDirectory)
+	next.ConflictPolicy = strings.TrimSpace(next.ConflictPolicy)
 	next.DeviceName = strings.TrimSpace(next.DeviceName)
+	if next.ConflictPolicy == "" {
+		next.ConflictPolicy = string(transfer.ConflictKeepBoth)
+	}
+	if next.ConflictPolicy != string(transfer.ConflictKeepBoth) && next.ConflictPolicy != string(transfer.ConflictSkip) && next.ConflictPolicy != string(transfer.ConflictError) {
+		return errors.New("INVALID_CONFIG: unknown receive conflict policy")
+	}
 	if next.ServerURL != "" {
 		u, err := url.Parse(next.ServerURL)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "wss" && u.Scheme != "http" && u.Scheme != "ws") {
@@ -535,7 +633,10 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
 	a.prefsMu.Unlock()
-	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
+	if previous.ClipboardEnabled != next.ClipboardEnabled {
+		a.setClipboardSuspended("master", !next.ClipboardEnabled)
+	}
+	receiverChanged := previous.ReceiveDirectory != next.ReceiveDirectory || previous.ConflictPolicy != next.ConflictPolicy || previous.BindAddress != next.BindAddress || !reflect.DeepEqual(previous.InterfacePriority, next.InterfacePriority) || !reflect.DeepEqual(previous.ExcludedInterfaces, next.ExcludedInterfaces) || !reflect.DeepEqual(previous.STUNURLs, next.STUNURLs)
 	if updateReceiver && receiverChanged && a.core != nil && next.ReceiveDirectory != "" {
 		if err := a.core.StartInbox(next.ReceiveDirectory, a.directConfig()); err != nil {
 			return err
@@ -708,6 +809,34 @@ func (a *App) JoinGroup(token, name string) (linksendapp.DeviceInfo, error) {
 	return a.core.Join(ctx, token, name)
 }
 
+func (a *App) InitializeMembership(name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.InitializeMembership(ctx, name)
+}
+
+func (a *App) SwitchMembership(token, name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.SwitchMembership(ctx, token, name)
+}
+
 // PairDevice is the user-facing alias for the simplified pairing-code flow.
 // JoinGroup remains for CLI/binding compatibility with existing clients.
 func (a *App) PairDevice(code, name string) (linksendapp.DeviceInfo, error) {
@@ -750,6 +879,58 @@ func (a *App) ProbeLANAddress(address string) error {
 		return errBackendUnavailable
 	}
 	return a.core.ProbeLANAddress(address)
+}
+
+func (a *App) PendingLANPairings() []linksendapp.LANPairRequestInfo {
+	if a.core == nil {
+		return nil
+	}
+	return a.core.PendingLANPairings()
+}
+
+func (a *App) RequestLANPair(deviceID string) (linksendapp.LANPairResult, error) {
+	if a.core == nil {
+		return linksendapp.LANPairResult{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.RequestLANPair(ctx, deviceID)
+}
+
+func (a *App) RespondLANPair(requestID string, accept bool) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.RespondLANPair(requestID, accept)
+}
+
+func (a *App) RemoveDevice(deviceID string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	err := a.core.Revoke(ctx, deviceID)
+	a.refreshClipboardWatch()
+	return err
+}
+
+func (a *App) UnblockDevice(deviceID string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.UnblockPeer(deviceID)
+}
+
+func (a *App) NetworkChanged(reason string) error {
+	if a.core == nil {
+		return errBackendUnavailable
+	}
+	return a.core.NetworkChanged(reason)
 }
 
 func (a *App) OpenTaskDirectory(taskID string) error {
@@ -863,7 +1044,11 @@ func (a *App) Devices() ([]linksendapp.DeviceInfo, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.core.Devices(ctx)
+	devices, err := a.core.Devices(ctx)
+	if err == nil {
+		a.nativeEntryError(publishNativeShareDevices(a.dataDir, devices))
+	}
+	return devices, err
 }
 
 func (a *App) Membership() linksendapp.MembershipStatus {

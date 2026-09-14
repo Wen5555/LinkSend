@@ -1,5 +1,27 @@
 # Protocol
 
+## 2026-09-14 E4 自动剪贴板 wire
+
+只有双方在连接请求与响应中显式声明 `session_reuse` 和独立的 `clipboard_sync`，已认证 QUIC 会话才启动自动剪贴板单向流owner；只声明旧 `session_reuse` 的端不会进入剪贴板协议。ICE描述同时携带发送端对认证peer的本地 `authorization_generation`，两端数值不要求相等。每条单向流以 ASCII magic `LSCB01`、4-byte big-endian JSON header 长度、最多 8 KiB header 和可选原始 payload 组成；消息类型仅为 `lease` 或 `event`。文件双向流和原 V1 文件帧不变，剪贴板正文不进入 WSS、信令、JavaScript IPC、HTTP 或第三方中继。
+
+接收方为指定认证 peer identity、QUIC session ID、接收方本地authorization generation、允许的 `text|link|image` 及其receive permission revision预签发lease；event另携带发送方本地send permission revision，并把双方revision纳入digest。lease从接收方签发时起固定有效10秒，每7秒可签发新的独立lease；续租不会延长旧event。每个peer/session每方向最多保留两个lease，重连、暂停、睡眠、锁屏、撤销、permission revision变化、generation变化和Shutdown清除旧lease。event的`origin_id`必须等于TLS认证peer，且在正文读取前通过lease、session、方向对应generation、类型、origin sequence、Lamport、digest、permission revision和首帧期限检查；正文读取deadline继续使用原始lease期限，读完后再次验证digest、应用revision、系统剪贴板generation、暂停状态、当前授权和稳定全序。
+
+文字和链接正文最多64 KiB，图片PNG最多32 MiB；header声明长度、实际长度、UTF-8/URL/PNG与图片尺寸在对应层复核。所有真实系统变化先推进OS generation、origin sequence、Lamport和应用revision，即使没有lease、没有发送权限或格式不支持也不会留下可补发的旧复制。一个本机复制事件fan-out给多个peer时复用同一origin sequence与Lamport，各peer的lease不同，因此event digest不同。每peer只有一个固定发送worker和一个latest-only pending，发送与接收正文各全局最多两路；等待slot、开流和发送都受原lease deadline与主动cancel约束，已打开流在新复制、暂停或撤权时reset。发送每64 KiB继续复核connection context、deadline和latest-only状态并执行有界节流。接收写入成功后的原生通知只按新OS generation与payload digest抑制一次；用户随后复制相同内容产生的新generation仍可发送。运行态仅保留每peer最新有限等待/错误码，成功后清除，不进入正文日志或持久历史。
+
+## 2026-09-13 membership_v2 与 LAN pairing 控制契约
+
+文件数据协议、QUIC ALPN 和 `protocol_version=1` 保持不变；成员授权控制面新增必需能力 `membership_version=2`。HTTP/WSS 客户端发送 `X-LinkSend-Membership: 2`，旧客户端对同意、列表、撤销和 WSS 得到 `VERSION_INCOMPATIBLE`，不能继续使用无 incarnation 的授权。新版客户端在提交加入或跨组切换签名前必须通过 `/healthz` 确认该能力；缺少 membership v2 的旧服务端返回 `VERSION_INCOMPATIBLE`，桌面明确要求升级服务端，不能把旧签名校验失败误报为配对码或设备凭据失败。
+
+控制库 schema 4 为每次有效入组生成不可复用的 128-bit `incarnation`，每个组维护单调 `membership_revision`。邀请码摘要绑定 inviter ID、组、inviter incarnation 和创建 revision；LAN短期凭证另绑定target DeviceID。同身份同组消费重试保持幂等，fresh code 不提权。被撤销身份只有使用新有效码才获得新 incarnation；跨组切换必须提交并签名当前group/incarnation/revision，旧组离开与新组加入在同一事务完成。
+
+`DELETE /v1/devices/{id}` 的签名正文为 `{request_id,target_incarnation,expected_revision}`。服务端在一个事务内重验 actor 当前 incarnation、同组目标、目标 incarnation/revision 和 request ID，普通有效成员均可撤销组内其他设备；重复 request ID 返回原 revision，已撤销 actor 的迟到请求和跨组目标拒绝。提交后组内 WSS 断开并重新认证/同步；客户端完整快照同步会停止被撤销peer的本机活动任务。与撤销无关的既有 QUIC 数据面不依赖 WSS 存活。
+
+LAN 添加使用刚通过签名公告和双向 TLS 1.3 验证的有界控制通道，交换签名 `lan_pair` request/accept|reject/commit/ready/confirm/done transcript。双方先持久provisional；接收端在收到confirm前没有有效pin，发起端在验证done前没有有效pin，断线可用query按request/nonce恢复ready/done及未过期target凭证。字段绑定双方DeviceID、request ID、128-bit nonce、本机授权generation和不超过60秒的期限；拒绝、超时或transcript不一致不产生可用授权，断线只保留不可用于正文的provisional。已入组同意方可凭双方签名transcript签发target-bound 60秒加入凭证；服务不可达时只建立独立LAN grant并显示跨网络未加入。文件正文仍只走经身份验证的QUIC。
+
+2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
+
+E0-ADR-review-v1已在提案中明确：剪贴板事件绑定接收方预签发lease及原始单调deadline，迟到首帧/重传不得重获寿命；origin_sequence与Lamport分离。具体wire/schema仍待后续实现冻结，不修改现役V1消息。
+
 2026-09-12 M0：当前源码产品为 0.5.0，V1 wire/ALPN/签名编码和任务 schema 2 保持兼容。
 本机拒绝在 LAN/WSS/恢复/接收确认前执行；拒绝使用既有 AUTHENTICATION_FAILED，不暴露本地拒绝详情。
 trust schema 1 与 profile 锁是本地迁移，不是协议版本。新内容及选收能力尚待 M4/M5 协商实现，
@@ -40,7 +62,7 @@ LAN 控制通道为 TLS 1.3 双向 Ed25519 证书验证，允许的客户端必�
 
 QUIC 的 `Write` 只保证数据进入发送缓冲。拒绝或 error 帧发送后，transport 先关闭发送方向，再有界等待对端结束读取，防止随后的 reset/连接关闭丢弃终态响应。该等待至多 2 秒且不延长调用者 deadline；原始错误仍作为任务结果。V1 帧结构和 completed/confirmed 语义保持不变，net.Pipe 兼容测试与真实 QUIC 负向回归分别覆盖同步和缓冲发送。
 
-`completed`/`confirmed` 成功边界增加向后兼容的 `confirmed_ack`：新版发送端收到匹配回执即可证明接收端已读 `confirmed`；旧接收端在读到 `confirmed` 后关闭发送方向，EOF 或远端 application code 0 仍是兼容证据。新版接收端向旧发送端写出的 `confirmed_ack` 会被旧 terminal flush 当作普通终态字节读取，不改变旧成功语义。非零 application close、stream reset、timeout 和其他连接错误仍失败。双方确认后 QUIC 正常关闭的 draining 在后台完成，不延迟任务完成。
+`completed`/`confirmed` 成功边界增加向后兼容的 `confirmed_ack`：新版发送端收到匹配回执即可证明接收端已读 `confirmed`；旧接收端在读到 `confirmed` 后关闭发送方向，EOF 或远端 application code 0 仍是兼容证据。新版接收端向旧发送端写出的 `confirmed_ack` 会被旧 terminal flush 当作普通终态字节读取，不改变旧成功语义。非零 application close、timeout 和连接级错误仍失败；单个 stream reset 只终止该操作流。新版双方只有在 connect_request/connect_response 都显式声明 session_reuse 时，才可在相同 peer identity 与 authorization generation 下短时复用已认证 QUIC，文件操作各占独立双向流；撤销、连接错误、真实 path watcher 失效、空闲超时或退出关闭会话，普通网络通知只关闭空闲池。旧端正常 code-0 关闭仍按兼容终态处理。
 
 信令协商状态绑定当前认证连接。断开或被同设备的新认证连接替换时清理该设备参与的协商；旧连接的迟到帧不能写入新连接状态。已建立的 QUIC 数据连接不因此被关闭。此修复需要升级信令服务源码；客户端升级无法修复仍运行旧版本的服务。
 

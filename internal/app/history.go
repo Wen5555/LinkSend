@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 5
+const taskStoreSchema = 9
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -132,6 +132,52 @@ func historyDB(path string) (*sql.DB, error) {
 			return rollback(err)
 		}
 	}
+	if schema < 6 {
+		hasGeneration, columnErr := tableHasColumn(tx, "send_queue", "authorization_generation")
+		if columnErr != nil {
+			return rollback(columnErr)
+		}
+		if !hasGeneration {
+			if _, err = tx.Exec("ALTER TABLE send_queue ADD COLUMN authorization_generation INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return rollback(err)
+			}
+		}
+	}
+	if schema < 7 {
+		hasPolicy, columnErr := tableHasColumn(tx, "device_profiles", "conflict_policy")
+		if columnErr != nil {
+			return rollback(columnErr)
+		}
+		if !hasPolicy {
+			if _, err = tx.Exec("ALTER TABLE device_profiles ADD COLUMN conflict_policy TEXT NOT NULL DEFAULT ''"); err != nil {
+				return rollback(err)
+			}
+		}
+	}
+	if schema < 8 {
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS clipboard_grants (
+			peer_id TEXT NOT NULL,
+			direction TEXT NOT NULL CHECK(direction IN ('send','receive')),
+			kind TEXT NOT NULL CHECK(kind IN ('text','link','image')),
+			enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+			revision INTEGER NOT NULL CHECK(revision > 0),
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(peer_id,direction,kind)
+		)`); err != nil {
+			return rollback(err)
+		}
+	}
+	if schema < 9 {
+		hasGeneration, columnErr := tableHasColumn(tx, "clipboard_grants", "authorization_generation")
+		if columnErr != nil {
+			return rollback(columnErr)
+		}
+		if !hasGeneration {
+			if _, err = tx.Exec("ALTER TABLE clipboard_grants ADD COLUMN authorization_generation INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return rollback(err)
+			}
+		}
+	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {
 		return rollback(err)
 	}
@@ -237,7 +283,12 @@ func (m *taskManager) configureHistory(path string) {
 		m.setHistoryError(err)
 		return
 	}
-	defer db.Close()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = db.Close()
+		}
+	}()
 	rows, err := db.Query(`SELECT id,revision,snapshot,recovery FROM tasks WHERE inbox_state NOT IN ('completed','rejected','failed','cancelled','no_content') OR id IN (SELECT id FROM tasks ORDER BY inbox_started DESC,id DESC LIMIT 200) ORDER BY id`)
 	if err != nil {
 		m.setHistoryError(err)
@@ -316,6 +367,11 @@ func (m *taskManager) configureHistory(path string) {
 			return
 		}
 	}
+	m.historyMu.Lock()
+	m.historyDB = db
+	m.historyOpenPath = path
+	m.historyMu.Unlock()
+	keep = true
 }
 
 func quarantineTask(db *sql.DB, item storedTask, reason string) error {
@@ -371,10 +427,35 @@ func (m *taskManager) persistRecord(snap TaskSnapshot, recovery taskRecovery) er
 	if historyErr := m.historyError(); historyErr != nil {
 		return historyErr
 	}
+	m.historyMu.RLock()
+	db := m.historyDB
+	openPath := m.historyOpenPath
+	m.historyMu.RUnlock()
+	if db != nil && openPath == m.historyPath {
+		return upsertTask(db, snap, recovery)
+	}
 	db, err := historyDB(m.historyPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 	return upsertTask(db, snap, recovery)
+}
+
+func (m *taskManager) closeHistory() error {
+	m.historyMu.Lock()
+	db := m.historyDB
+	m.historyDB = nil
+	m.historyOpenPath = ""
+	m.historyMu.Unlock()
+	if db != nil {
+		return db.Close()
+	}
+	return nil
+}
+
+func (m *taskManager) sharedHistoryDB() *sql.DB {
+	m.historyMu.RLock()
+	defer m.historyMu.RUnlock()
+	return m.historyDB
 }

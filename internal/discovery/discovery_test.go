@@ -19,7 +19,7 @@ func newTCPTestManager(t *testing.T, id *identity.Identity, name string) *Manage
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{cfg: Config{Identity: id, Name: name, AllowLoopback: true}, ctx: ctx, cancel: cancel, tcp: listener, port: listener.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 4), peers: map[string]*peerRecord{}, ifaces: map[int]interfaceRoute{}, joined: map[int]bool{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}}
+	m := &Manager{cfg: Config{Identity: id, Name: name, AllowLoopback: true}, ctx: ctx, cancel: cancel, tcp: listener, port: listener.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 4), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}}
 	m.tlsCfg, err = id.TLSServerConfig(m.allowedPeer)
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +28,44 @@ func newTCPTestManager(t *testing.T, id *identity.Identity, name string) *Manage
 	go m.acceptLoop()
 	t.Cleanup(func() { _ = m.Close() })
 	return m
+}
+
+func TestStableInterfaceSignatureIgnoresMapIterationOrder(t *testing.T) {
+	left := stableInterfaceSignature([]string{"192.168.1.2/192.168.1.0/24", "10.0.0.2/10.0.0.0/24"})
+	right := stableInterfaceSignature([]string{"10.0.0.2/10.0.0.0/24", "192.168.1.2/192.168.1.0/24"})
+	if left != right {
+		t.Fatalf("interface signature changed with address order: %q != %q", left, right)
+	}
+}
+
+func TestRebuildUDPSocketCannotOutliveClose(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	_ = probe.Close()
+	m, err := Start(Config{Identity: id, Name: "close-race", Port: port, AllowLoopback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rebuilt := make(chan error, 1)
+	go func() { rebuilt <- m.rebuildUDPSocket() }()
+	if err = m.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		t.Fatal(err)
+	}
+	select {
+	case <-rebuilt:
+	case <-time.After(2 * time.Second):
+		t.Fatal("socket rebuild remained blocked after Close")
+	}
+	if m.ctx.Err() == nil {
+		t.Fatal("manager context remained active after Close")
+	}
 }
 
 func rememberLoopbackPeer(m *Manager, peer *Manager) {
@@ -186,5 +224,54 @@ func TestManagersEstablishMutuallyPinnedLANControl(t *testing.T) {
 	wire, err := incoming.Session.Read(ctx)
 	if err != nil || wire.Type != "heartbeat" {
 		t.Fatalf("heartbeat wire=%+v err=%v", wire, err)
+	}
+}
+
+func TestRefreshClearsStaleRoutesWhenNoInterfaceRemains(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	excluded := make([]string, 0, len(interfaces))
+	for _, iface := range interfaces {
+		excluded = append(excluded, iface.Name)
+	}
+	m := &Manager{cfg: Config{Identity: id, Name: "test", ExcludedInterfaces: excluded}, ifaces: map[string]interfaceRoute{"stale": {}}, joined: map[int]*net.Interface{}, channelErrors: map[string]string{}}
+	if err = m.refreshInterfaces(); err == nil {
+		t.Fatal("refresh unexpectedly found an eligible interface")
+	}
+	if len(m.ifaces) != 0 || m.generation == 0 || m.channelErrors["interfaces"] == "" {
+		t.Fatalf("stale routes survived refresh: routes=%d generation=%d errors=%v", len(m.ifaces), m.generation, m.channelErrors)
+	}
+}
+
+func TestDirectedAnnouncementWithoutOnLinkRouteFails(t *testing.T) {
+	id, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{cfg: Config{Identity: id, Name: "test", Port: DefaultPort}, ifaces: map[string]interfaceRoute{}, responseSlots: make(chan struct{}, 1)}
+	err = m.sendAnnouncement(true, &net.UDPAddr{IP: net.ParseIP("192.0.2.10"), Port: DefaultPort})
+	if err == nil {
+		t.Fatal("missing route was reported as a sent discovery packet")
+	}
+}
+
+func TestStableInterfaceSnapshotDoesNotAdvanceGenerationAndMemoryOutlivesAnnouncement(t *testing.T) {
+	iface := &net.Interface{Index: 7, Name: "test", Flags: net.FlagUp | net.FlagMulticast}
+	_, network, _ := net.ParseCIDR("192.168.8.0/24")
+	route := interfaceRoute{iface: iface, address: net.ParseIP("192.168.8.10").To4(), network: network}
+	left := map[string]interfaceRoute{"7|192.168.8.10|192.168.8.0/24": route}
+	if !sameInterfaceRoutes(left, map[string]interfaceRoute{"7|192.168.8.10|192.168.8.0/24": route}) {
+		t.Fatal("stable interface snapshot looked changed")
+	}
+	m := &Manager{peers: map[string]*peerRecord{"peer": {routes: map[string]Route{"old": {LastSeen: time.Now().Add(-peerLifetime - time.Second)}}}}, remembered: map[string]rememberedProbe{"192.168.8.20": {next: time.Now()}}}
+	m.expirePeers()
+	if len(m.peers) != 0 || len(m.remembered) != 1 {
+		t.Fatalf("announcement cleanup removed persistent remembered provider state: peers=%v remembered=%v", m.peers, m.remembered)
 	}
 }

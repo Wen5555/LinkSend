@@ -268,8 +268,8 @@ func TestContentSchema4BackupAndTransactionalUpgrade(t *testing.T) {
 	}
 	defer db.Close()
 	var version int
-	if err = db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 5 {
-		t.Fatal("schema5 missing", err)
+	if err = db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != taskStoreSchema {
+		t.Fatal("current schema missing", err)
 	}
 	backups, err := filepath.Glob(history + ".schema-v4-*.bak")
 	if err != nil || len(backups) != 1 {

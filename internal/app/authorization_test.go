@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -63,7 +65,8 @@ func TestMembershipAndLANCompletionCannotRepinRevokedPeer(t *testing.T) {
 	if err = svc.BlockPeer(peer.ID()); err != nil {
 		t.Fatal(err)
 	}
-	if err = svc.syncPairedDevices([]signaling.Device{{ID: peer.ID(), PublicKey: peer.PublicKey(), Name: "new display name"}}); err != nil {
+	localIncarnation, peerIncarnation := "11111111111111111111111111111111", "22222222222222222222222222222222"
+	if err = svc.syncPairedDevices([]signaling.Device{{ID: svc.identity.ID(), PublicKey: svc.identity.PublicKey(), Name: "local", GroupID: "group", Incarnation: localIncarnation, MembershipRevision: 2}, {ID: peer.ID(), PublicKey: peer.PublicKey(), Name: "new display name", GroupID: "group", Incarnation: peerIncarnation, MembershipRevision: 2}}); err != nil {
 		t.Fatalf("blocked membership should be skipped without breaking other members: %v", err)
 	}
 	lateSession := &PeerSession{PeerID: peer.ID(), peerName: "peer", peerPublicKey: peer.PublicKey(), localPeer: true, lanAddress: "192.168.10.5"}
@@ -165,5 +168,117 @@ func TestResumeRevokedPeerDoesNotStartAnotherAttempt(t *testing.T) {
 	after, ok := f.a.Task(paused.ID)
 	if !ok || after.AttemptID != paused.AttemptID || after.Revision != paused.Revision || after.SentBytes != paused.SentBytes || after.State != "paused" {
 		t.Fatalf("denied resume modified the task: before=%+v after=%+v", paused, after)
+	}
+}
+
+func TestLateTaskConsentCannotUseNewMembershipGeneration(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Shutdown()
+	peer, _ := identity.Generate()
+	grant := identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey(), GroupID: "group", PeerIncarnation: strings.Repeat("a", 32), LocalIncarnation: strings.Repeat("b", 32), MembershipRevision: 1}
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	stale := TaskSnapshot{PeerID: peer.ID(), AuthorizationGeneration: generation}
+	if err = identity.RevokeMembershipPeer(svc.cfg.DataDir, peer.ID(), grant.PeerIncarnation, "remove", 1); err != nil {
+		t.Fatal(err)
+	}
+	grant.PeerIncarnation = strings.Repeat("c", 32)
+	grant.MembershipRevision = 2
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.checkTaskGrant(stale); protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("stale task generation was accepted: %v", err)
+	}
+}
+
+func TestLateTaskDecisionCannotUseNewRelationshipGeneration(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Shutdown()
+	peer, _ := identity.Generate()
+	grant := identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey(), GroupID: "group", PeerIncarnation: strings.Repeat("1", 32), LocalIncarnation: strings.Repeat("2", 32), MembershipRevision: 1}
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	snapshot := TaskSnapshot{PeerID: peer.ID(), AuthorizationGeneration: generation}
+	if err = identity.RevokeMembershipPeer(svc.cfg.DataDir, peer.ID(), grant.PeerIncarnation, "remove", 1); err != nil {
+		t.Fatal(err)
+	}
+	grant.PeerIncarnation = strings.Repeat("3", 32)
+	grant.MembershipRevision = 2
+	if err = identity.TrustMembershipPeer(svc.cfg.DataDir, grant); err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.checkTaskGrant(snapshot); protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("old task generation was accepted: %v", err)
+	}
+}
+
+func TestMembershipSnapshotCancelsRemovedPeerTask(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Shutdown()
+	peer, _ := identity.Generate()
+	localIncarnation := strings.Repeat("a", 32)
+	peerIncarnation := strings.Repeat("b", 32)
+	initial := []signaling.Device{
+		{ID: svc.identity.ID(), PublicKey: svc.identity.PublicKey(), GroupID: "group", Incarnation: localIncarnation, MembershipRevision: 1},
+		{ID: peer.ID(), PublicKey: peer.PublicKey(), GroupID: "group", Incarnation: peerIncarnation, MembershipRevision: 1},
+	}
+	if err = svc.syncPairedDevices(initial); err != nil {
+		t.Fatal(err)
+	}
+	generation, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	cancelled := make(chan struct{})
+	var cancelOnce sync.Once
+	task, err := svc.tasks.create(TaskSnapshot{Direction: "send", PeerID: peer.ID(), AuthorizationGeneration: generation}, func() { cancelOnce.Do(func() { close(cancelled) }) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed := []signaling.Device{{ID: svc.identity.ID(), PublicKey: svc.identity.PublicKey(), GroupID: "group", Incarnation: localIncarnation, MembershipRevision: 2}}
+	if err = svc.syncPairedDevices(removed); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("removed member's active task was not cancelled")
+	}
+	if snapshot := task.snapshot(); snapshot.State != "cancel_requested" {
+		t.Fatalf("unexpected task state after snapshot removal: %s", snapshot.State)
+	}
+}
+
+func TestStartSendDoesNotRebindExpectedGeneration(t *testing.T) {
+	svc, err := New(Config{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Shutdown()
+	peer := authorizationPeer(t, svc)
+	oldGeneration, _ := identity.AuthorizationGeneration(svc.cfg.DataDir, peer.ID())
+	if err = identity.RevokePeer(svc.cfg.DataDir, peer.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if err = identity.AllowPeer(svc.cfg.DataDir, peer.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if err = identity.TrustPairedPeer(svc.cfg.DataDir, identity.TrustedPeer{ID: peer.ID(), Name: "new relation", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.StartSend(peer.ID(), []string{"unused"}, DirectConfig{expectedAuthorizationGeneration: oldGeneration})
+	if protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("old queue generation rebound to new grant: %v", err)
 	}
 }
