@@ -2,7 +2,7 @@
 
 日期：2026-09-13。唯一产品写入方：执行任务 `/root/desktop_executor`（由已停止的 `01a096c7-6cfb-71b0-87aa-aa7ed781bb2f` 一次交接）。
 总控：`01a096c4-2e59-7db3-a7a8-ec2a125409d6`（local）。工作分支：`codex/desktop-experience-upgrade`。
-基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。E2 源码与浏览器范围已由总控在 `35885ab+8655eae` 验收，当前执行 E3-01/02/03 原生共享与安装生命周期；准确包 DPI、双向网络和双机 UI 统一留待 E5。
+基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。E4 自动剪贴板源码范围已由总控在 `3363fd5+387b57c` 验收，当前执行 E5 准确包、物理双机、恢复、部署与网络联合验收。
 
 依据：[用户执行提示词](prompts/DESKTOP-EXPERIENCE-GOAL.md)、[完整方案](DESKTOP-EXPERIENCE-IMPROVEMENT-PLAN.md)。
 七项均为必交付：U1 一次接收；U2 删除与配对；U3 发现可靠性；U4 移除手动内容并自动剪贴板；U5 设置；U6 真正系统共享；U7 有界四视图。
@@ -67,18 +67,18 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | c205b12 CI运行中 | bookmark/临时表示、冷启动与持久生命周期源码验收；签名/App Group实机暂缓 |
 | E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
-| E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 待E4-03候选CI | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
-| E4-03 | 待审查 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 4725c40五组checks/三平台包PASS | 无文件主动认证会话、双向文字、文件并存、期限/回环/限额和独立托盘暂停已接线；物理Win↔Mac未运行 |
-| E5-01 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
-| E5-02 | 待办 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 未审查 |
+| E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
+| E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
+| E5-01 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 三平台包、Win 125%、Mac arm64、HK schema4部署与NL固定映射双NAT PASS；准确包双向文件、剪贴板、网切/睡眠待运行 |
+| E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | E5来源、部署/备份/回退边界和脱敏NAT交付已记录；联合验收未完成 |
 
 ## 执行边界与恢复入口
 
-- 当前批次为 E4-03 自动剪贴板行为候选；E1、E2、E3及E4-01/02的总控判定按上表保留。签名相关由用户暂缓，准确包 DPI、双向网络、双机 UI 与物理用户剪贴板留 E5。
+- 当前批次为 E5 联合验收；E4 自动剪贴板源码范围已由总控验收通过。签名相关由用户暂缓，准确包 DPI、双向网络、双机 UI 与物理用户剪贴板按实际证据推进。
 - 授权含阶段工作分支/PR、两平台项目依赖及隔离安装、香港 LinkSend 支持组件事务部署、荷兰构建与专属 namespace/container NAT。
 - 不合并 main、不正式 Release、不购买签名服务、不改宿主防火墙/路由/代理、不影响无关业务。
 - 远程全部使用 codex-ssh-manager resolve/probe/audit；2026-09-13 当前 Mac 地址为 `10.234.212.116`，保留登记 alias 与 host key 校验。复杂任务使用 durable job，断线先 resume/tail。
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 活跃远程作业：无。E3 Mac 源码构建与 Go/Objective-C 测试 jobPath 见 E3 证据；签名安装由用户暂缓，准确包物理双向与双 NAT 留 E5。
+- 活跃远程作业：无。E5 Mac 准确包完成 jobs 为 `...004708Z` 与 `...004932Z`；HK 部署/独立复核为 `...014829Z` / `...014925Z`；NL 双NAT/独立复核为 `...022524Z` / `...022658Z`。Mac 当前 SSH timeout，未重复启动作业；签名安装由用户暂缓。
