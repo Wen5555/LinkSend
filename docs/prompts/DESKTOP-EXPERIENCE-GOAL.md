@@ -20,7 +20,7 @@
 - 仓库 `D:\apps\Osend`；GitHub `Wen5555/LinkSend`。
 - 执行任务 `01a096c7-6cfb-71b0-87aa-aa7ed781bb2f`，hostId=`local`。
 - 执行树 `C:\Users\Wen\.codex\worktrees\208a\Osend`；分支 `codex/desktop-experience-upgrade`。
-- 已有提交 `ec55db3`、`11c44df`、`2342009`；上次停止时未推送、未建 PR，以实际 Git 状态为准。
+- 已有 E5-A 证据提交 `d02b840` 已推送到 Draft PR #8；`0c59` 准确包已完成物理双向文件。E5-B 临时系统剪贴板窗口已于 2026-09-19 关闭：Windows→Mac 文本的 Mac 系统消费者断言 FAIL，双方 master 与六项 grant 已关闭；先离线定位，未经新的明确临时覆盖授权不得重开。
 - 复用执行树 `docs/DESKTOP-EXPERIENCE-TODO.md` 的 22 项 TODO、最新 E0 证据，以及 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\` 的现有进度记录；历史字段不是当前状态证明。
 - Mac 十项 IO 测试等有效成果复用。Windows 安装信任、Mac 共享 4097/文件交接、物理双向及双 NAT 缺项仍需补齐，不从零重跑 E0。
 

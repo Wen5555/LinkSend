@@ -4,7 +4,7 @@
 
 `v0.5.0-desktop-preview.1` 保持既有 tag、发布资产与 PR #8；本批不重发 release、不移动 tag、不合并 main。`0c59ae255d631b496a3e483e9c558f2998ee314c` 的准确 Windows/macOS arm64 包已完成物理包→包双向 1 MiB 文件与反向连续 session reuse，完整来源、哈希、task/session、journal fixture 与系统激活边界见 [E5 验收记录](DESKTOP-E5-ACCEPTANCE.md)。
 
-本批仅更新阶段证据、TODO、恢复提示与 Draft PR；HK 继续运行已接受的 `387b57c` / schema 4，NL 双 NAT 结论与既有签名/公证/App Group 暂缓项均未改写。下一批为用户明确授权后才可执行的双端系统剪贴板最小矩阵；当前没有读取或修改日常剪贴板。
+本批完成阶段证据、TODO、恢复提示与 Draft PR 同步；HK 继续运行已接受的 `387b57c` / schema 4，NL 双 NAT 结论与既有签名/公证/App Group 暂缓项均未改写。用户已授权并实际执行一次双端系统剪贴板最小尝试：首条 Windows→Mac 文本的 Mac 系统消费者断言失败，窗口已关闭，双方总开关与全部 grant 已关闭，未恢复剪贴板。链接、图片、反向、防回环和文件并存没有执行；精确命令、job 和收尾证据见 [E5 验收记录](DESKTOP-E5-ACCEPTANCE.md)。
 
 日期：2026-09-14。当前源码候选提交：`1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819`；完整准确包实机基线仍来自 `387b57c76596975d0da61f01e060e0cc2940b0b5`。
 

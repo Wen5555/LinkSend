@@ -18,17 +18,27 @@ Windows task-history 的三个 task 均记录零重传、1,048,576 verified/comm
 
 V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数据，由运行中的准确包自行验证、入队、建立 ICE/QUIC 和落盘；正文没有经 journal、信令或 JavaScript IPC。此结果不等同于 Windows `ShareOperation`、macOS Share Extension/App Group 或系统签名安装激活；这些仍按用户已暂缓的边界记录。一次早期辅助 CLI 发送曾停在 `AwaitingAcceptance`、0 bytes（其新 identity 未获 Mac package 自动接收授权）；该日志保留为辅助失败，不用于本节结论。
 
-### E5-B：等待一次临时双端系统剪贴板授权的最小步骤
+### E5-B：0c59 双端临时系统剪贴板最小尝试（FAIL，已收尾）
 
-当前两端 0c59 准确包和隔离 profile 可继续使用。执行前不会读取、导出、备份、清空或恢复用户日常剪贴板；若用户授权，测试开始后的剪贴板内容将只由已知、可丢弃的测试值组成，结束后由用户自行放回需要的内容。
+用户已授权一次仅限 15–20 分钟的双端临时覆盖窗口。窗口从 `2026-09-19T14:50:18.3854890Z` 开始，因首条传输失败于 `2026-09-19T15:04:25.5588969Z` 关闭。两端均为本节 E5-A 所列的准确包、隔离 profile 与同一受信任 peer；没有读取、导出、备份、恢复或检查写入前的日常剪贴板内容。
 
-1. 在两端 package 的自动剪贴板设置中显式开启总开关，并只对这对隔离设备启用 text、link、image 的双方向授权；记录 ready/unsupported/error 状态。
-2. 依次写入已知测试文字、`https://linksend.oooai.de/healthz` 链接和预先生成的 3×2 PNG，验证 Windows→Mac 与 Mac→Windows 落板、来源防回环和一次快速 A/B/C 复制只保留最新值。
-3. 在已知文字测试进行时，额外经 V2 journal 发送一份新的 1 MiB 文件；核对两个文件 hash、clipboard 终态、session/queue 状态，证明文件与 clipboard 并存。
-4. 两端关闭总开关、确认 watcher 状态停止并结束本轮 package 进程；只保留隔离 profile、日志和测试文件供审阅。预计需要 15–20 分钟的双端可操作时间。
+开始时，纯配置 helper 将两端 `clipboard_enabled` 和对该 peer 的 send/receive × text/link/image 六项 grant 设为开启；helper 不加载原生 adapter，也不读写剪贴板。启动准确 package 前，Windows 仅用 `System.Windows.Forms.Clipboard` 写入并回读已知预置文本，Mac 仅用 `NSPasteboard.general` 写入并回读已知预置文本。两者都是标准系统剪贴板消费者，预置值仅用于建立 watcher 基线。
 
-未获该一次性授权前，本节步骤均为 `NOT RUN`；不重试 private WinSta、CDP 或创建新的隔离桌面路线。
+随后 Windows 通过 `System.Windows.Forms.Clipboard` 写入并回读已知文本 `E5B-WIN-TEXT-20260919T1501Z`（`2026-09-19T15:00:57.1855645Z`）。Mac 对同一预期值进行 `NSPasteboard.general` 标准消费者断言，于 remote job `linksend-e5b-assert-mac-text-0c59-20260919T150130Z` 以 exit 1 / `SYSTEM_CONSUMER_TEXT_ASSERTION_FAILED` 失败。此事实只证明该次 Windows→Mac 文本没有在断言前落到 Mac 系统板；不推断会话、watcher 或协议的具体根因，也不把系统消费者的预置回读当作跨端成功。
 
+失败后未继续发送链接、3×2 PNG、Mac→Windows、快速 A/B/C 或文件与剪贴板并存。主开关先写为 false，macOS package 由受管 stop job 结束并以独立 job 确认 watcher 进程终止；Windows exact package PID `93952` 已结束。停止 package 后，两端再以 helper 关闭六项 grant，均输出 `grant_count=6`、`master_enabled=false`。没有恢复任何剪贴板内容，也未在窗口内进行进一步调试。
+
+原始入口：本地 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-window.json`、`windows\logs\e5b-clipboard-enable.json`、`windows\logs\e5b-win-to-mac-text-write.json`；Mac 受管 jobs 为 `/tmp/codex-ssh/linksend-e5b-configure-mac-0c59-20260919T145620Z`、`/tmp/codex-ssh/linksend-e5b-start-mac-package-0c59-20260919T150003Z`、`/tmp/codex-ssh/linksend-e5b-assert-mac-text-0c59-20260919T150130Z`、`/tmp/codex-ssh/linksend-e5b-stop-mac-after-text-failure-0c59-20260919T150243Z`、`/tmp/codex-ssh/linksend-e5b-disable-mac-grants-0c59-20260919T150353Z` 与 `/tmp/codex-ssh/linksend-e5b-verify-mac-stopped-0c59-20260919T150425Z`。
+
+离线定向回归 `TestClipboardConcurrentEnsureSessionsRemainReady` 使用内存 clipboard adapter，双端同时启动 inbox 和 `EnsureClipboardSessions`，确认双向 lease 就绪并完成文本 commit。它通过，故没有复现“同时建会话”这一假设；loopback/memory 结果不替代本节物理准确包的 FAIL，也没有读取系统剪贴板。
+
+重开系统剪贴板测试前，先离线定位此失败；需要新的用户明确临时覆盖授权。下一次复制前后必须复用准确 package 已有 `ClipboardWatcher` 设置页，记录其可见的 master、active/paused/reason/error 与汇总 peer 状态；进程存活或固定等待不能代替 ready 证据。不得重试 private WinSta、CDP 或创建新的隔离桌面路线。
+
+#### 下一次有界复测准备（未执行）
+
+新的明确授权后，先以 hidden window 启动本地 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-retest-watchdog.ps1`，传入不超过 12 分钟的 UTC deadline；它不处理剪贴板正文，到时只关闭两端 master/grant 并停止已核验 package。两端准确包启动后，在既有“设置 → 自动剪贴板”页等待其 5 秒轮询显示：总开关开启、监听器“运行中”、无暂停/错误、该 peer 为“就绪”。任一项不成立时不写任何内容，记录该页状态并由 watchdog 收尾。
+
+状态满足后，分别记录两端设置页的汇总状态，再仅写入一个已知文本并立即用对端标准系统消费者断言；断言后再次记录设置页。`ClipboardWatcher` 后端对象包含 `last.sequence` 与 send/receive ready，但准确包页面只显示汇总 peer 状态、且没有可用 CDP 外部读取入口，因此这些 raw 字段本轮标为不可观测，不新增调试功能。文本通过前不发送链接、图片、快速 A/B/C 或并存文件；任一失败先保留已有界面状态再停止，由 watchdog 自动收尾。
 ## 候选来源与 CI
 
 - Draft PR：[#8](https://github.com/Wen5555/LinkSend/pull/8)。

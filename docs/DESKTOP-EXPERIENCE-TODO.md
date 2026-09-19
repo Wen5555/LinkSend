@@ -69,8 +69,8 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
-| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 已用准确 Windows/macOS arm64 包、全新 membership-v2 profile 完成双向 1 MiB 文件 hash；Mac 连续反向两文件复用同一认证 QUIC session。V2 journal fixture 与正式系统 Share Target/App Group 分列；自动剪贴板、网切/睡眠、DPI/键盘仍待 |
-| E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 预览版来源、PR #8 与已发布四包摘要已核；本批物理证据及剪贴板最小步骤待同一阶段文档提交/推送，未合并 main、未移动既有 tag |
+| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 准确 Windows/macOS arm64 包完成双向 1 MiB hash 与反向连续认证 QUIC session reuse。E5-B 首条 Windows→Mac 系统文本为 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。V2 journal 与正式系统 Share Target/App Group 分列；网切/睡眠、DPI/键盘仍待 |
+| E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 预览版来源、PR #8 与已发布四包摘要已核；E5-A 文件与 E5-B 文本失败/收尾证据均已记录，待本次文档提交/推送。未合并 main、未移动既有 tag |
 
 ## 执行边界与恢复入口
 

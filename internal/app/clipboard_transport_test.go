@@ -495,3 +495,99 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	f.b.ResetClipboard(true, bGeneration.Load())
 	waitFor(t, 5*time.Second, func() bool { f.a.directPoolMu.Lock(); defer f.a.directPoolMu.Unlock(); return len(f.a.directPool) == 0 }, "paused clipboard kept idle sender session")
 }
+
+func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	if _, err := f.a.Devices(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.Devices(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var aGeneration, bGeneration atomic.Uint64
+	aGeneration.Store(1)
+	bGeneration.Store(1)
+	written := make(chan []byte, 1)
+	f.a.ConfigureClipboard(ClipboardAdapter{
+		Generation: aGeneration.Load,
+		Read: func(_ context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
+			if kind != clipboardsync.Text || expected != aGeneration.Load() {
+				return nil, aGeneration.Load(), clipboardsync.ErrStale
+			}
+			return []byte("simultaneous-session"), expected, nil
+		},
+		Write: func(_ clipboardsync.Kind, _ []byte, expected uint64, _ time.Time) (uint64, error) {
+			aGeneration.Store(expected + 1)
+			return expected + 1, nil
+		},
+	})
+	f.b.ConfigureClipboard(ClipboardAdapter{
+		Generation: bGeneration.Load,
+		Read: func(_ context.Context, _ clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
+			return []byte("reverse"), expected, nil
+		},
+		Write: func(kind clipboardsync.Kind, payload []byte, expected uint64, _ time.Time) (uint64, error) {
+			if kind != clipboardsync.Text || expected != bGeneration.Load() {
+				return 0, clipboardsync.ErrStale
+			}
+			bGeneration.Store(expected + 1)
+			written <- append([]byte(nil), payload...)
+			return expected + 1, nil
+		},
+	})
+	for _, item := range []struct {
+		service *Service
+		peerID  string
+	}{
+		{f.a, f.bID.ID()},
+		{f.b, f.aID.ID()},
+	} {
+		for _, direction := range []string{"send", "receive"} {
+			if _, err := item.service.SetClipboardGrant(ctx, ClipboardGrantPatch{PeerID: item.peerID, Direction: direction, Kind: "text", Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := item.service.SetAlwaysAccept(item.peerID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	if err := f.a.StartInbox(filepath.Join(t.TempDir(), "a-received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "b-received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "both clipboard inboxes did not become ready")
+	ensured := make(chan error, 2)
+	go func() { ensured <- f.a.EnsureClipboardSessions(ctx, cfg) }()
+	go func() { ensured <- f.b.EnsureClipboardSessions(ctx, cfg) }()
+	for range 2 {
+		if err := <-ensured; err != nil {
+			t.Fatalf("concurrent clipboard ensure: %v", err)
+		}
+	}
+	ready := func(service *Service, peerID string) bool {
+		for _, status := range service.ClipboardPeerStatuses() {
+			if status.PeerID == peerID && status.SendReady && status.ReceiveReady && status.Error == "" {
+				return true
+			}
+		}
+		return false
+	}
+	waitFor(t, 5*time.Second, func() bool { return ready(f.a, f.bID.ID()) && ready(f.b, f.aID.ID()) }, "concurrent clipboard peers did not exchange leases")
+	aGeneration.Store(2)
+	if err := f.a.ClipboardChanged(ctx, ClipboardChange{Generation: 2, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case payload := <-written:
+		if string(payload) != "simultaneous-session" {
+			t.Fatalf("clipboard payload=%q", payload)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("concurrent clipboard session did not deliver: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
+	}
+}

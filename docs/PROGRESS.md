@@ -602,3 +602,11 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - Windows 包经生产 V2 `windows_share` journal 自身消费、队列和认证 QUIC 向 Mac 包发送 1 MiB；源与接收 SHA256 均为 `2c7c48b84ae0b706befdd874f058bde9b86d2cf78404c3aee7ddd92f244dd443`。任务完成，`lan_direct`、QUIC、TLS 1.3、ALPN `linksend/1`、`relay=false`，Windows base `10.234.16.254:58074` 与 Mac host `10.234.35.5:62194`。
 - Mac 包连续消费两条 V2 `macos_share` journal 并向 Windows 包发送两份 1 MiB；`44abae6d...c6316` 与 `d5ca2258...d0f29` 各自和接收端一致。两条 Windows 接收 task 都为 completed、同一 session `0041445e4fe2bde11d8a0cd2b52db019`、同一 Windows base `10.234.16.254:51996`、同一 ICE generation，构成实际反向认证 QUIC 复用；正向 session 因超过 3 秒空闲边界而不同，未声称跨方向复用。
 - Journal 是对已接受 V2 入口的受控测试 fixture；准确包是唯一 core/SQLite queue owner 和网络发送/接收者。它不替代 Windows ShareTarget、macOS Share Extension/App Group 的系统激活验收，相关签名与系统安装仍按用户暂缓。未读取、备份、清空或覆盖用户系统剪贴板；网切/睡眠、自动剪贴板、150%/深色/键盘仍待 E5。
+
+
+## 2026-09-19 E5-B 0c59 双端系统剪贴板最小尝试
+
+- 用户一次性授权的临时双端覆盖窗口为 `2026-09-19T14:50:18.3854890Z` 至 `2026-09-19T15:04:25.5588969Z`。两端隔离 profile 的 `clipboard_enabled` 与该测试 peer 的 send/receive × text/link/image 六项 grant 曾由不接触 native clipboard 的 helper 开启；Windows `System.Windows.Forms.Clipboard` 与 macOS `NSPasteboard.general` 均先写入、回读了各自已知预置文本。没有读取、导出、备份、恢复或检查写入前的日常剪贴板内容。
+- Windows 准确包启动后以 `System.Windows.Forms.Clipboard` 写入并回读 `E5B-WIN-TEXT-20260919T1501Z`（`2026-09-19T15:00:57.1855645Z`）。Mac 对该值执行标准 `NSPasteboard.general` 断言时，受管 job `/tmp/codex-ssh/linksend-e5b-assert-mac-text-0c59-20260919T150130Z` exit 1，`SYSTEM_CONSUMER_TEXT_ASSERTION_FAILED`。因此 Windows→Mac 文本为 FAIL；链接、3×2 PNG、Mac→Windows、防回环 A/B/C 和文件并存均未执行，不能把预置板或源码测试写作跨端通过。
+- 按窗口异常边界立即收尾：两端总开关写为 false，macOS package stop/verify jobs 确认 watcher 已终止，Windows 准确 package PID `93952` 已结束；随后两端 helper 均返回 `grant_count=6`、`master_enabled=false`。本地窗口账本和 Windows 写入证据在 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\`；完整远端 jobs 与精确包哈希见 [E5 联合验收](evidence/DESKTOP-E5-ACCEPTANCE.md)。继续前须先离线分析，再取得新的明确临时覆盖授权。
+- 离线定向回归 `TestClipboardConcurrentEnsureSessionsRemainReady` 在 memory adapter/loopback 下验证双端同时启动 inbox、`EnsureClipboardSessions`、双向 lease 与文本 commit，结果 PASS，未复现并发建会话假设；该结果不替代物理准确包 FAIL，也没有读取系统剪贴板。
