@@ -54,23 +54,38 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E0-04 | 待审查 | PARTIAL | PARTIAL | PARTIAL | NOT RUN | 执行中 | 总控接受2342009原型IO修补；服务4097与文件交接仍未通过，见MAC-SAFEIO证据 |
 | E0-05 | 验收通过 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 仅ADR语义：总控E0-safeio-close-v1接受11c44df；具体API/schema/实现及兼容测试仍待E1/E4 |
 
-| E1-01 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | schema4/incarnation/revision/旧端拒绝、空组初始化、显式跨组切换候选 |
-| E1-02 | 待复审 | PASS | PASS | NOT RUN | NOT RUN | NOT RUN | 完整快照、本机屏障/outbox、generation绑定和幂等撤销候选；真实离线重启补同步未实机 |
-| E1-03 | 验收通过 | PASS | PASS | NOT RUN | PARTIAL | 执行中 | C2后端通过总控审查；物理LAN同意及Win→Mac文件PASS，反向入站阻塞 |
-| E1-04 | 待复审 | PARTIAL | PASS | NOT RUN | PARTIAL | 执行中 | 物理双端发现/正向路径PASS；反向TCP入站timeout，IPv6/mDNS/矩阵未闭合 |
-| E1-05 | 待复审 | PARTIAL | PASS | NOT RUN | NOT RUN | NOT RUN | 事实目录、原生OS事件与5秒快照已接线；准确包事件延迟/网络/睡眠矩阵未闭合 |
+| E1-01 | 源码验收通过 | PASS | PASS | NOT RUN | NOT RUN | PASS | 总控已接受 `666cbaa` E1 后端范围；准确包配对 UI/物理矩阵留 E5 |
+| E1-02 | 源码验收通过 | PASS | PASS | NOT RUN | NOT RUN | PASS | 总控已接受 `666cbaa`；准确包离线 outbox/重启同步仍未实机 |
+| E1-03 | 源码验收通过 | PASS | PASS | NOT RUN | PARTIAL | PASS | LAN 同意/恢复源码已接受；旧物理 LAN 仅 PARTIAL，准确 package 系统确认留 E5 |
+| E1-04 | 部分验收通过 | PARTIAL | PASS | NOT RUN | PARTIAL | PASS | IPv4 主路径源码已接受；双栈/mDNS provider 原型未执行，物理多网卡/IPv6/睡眠矩阵未闭合 |
+| E1-05 | 源码验收通过 | PASS | PASS | 源码构建PASS/准确包NOT RUN | NOT RUN | PASS | 事实目录、原生事件与5秒快照已接线；准确包事件延迟、网络/睡眠矩阵未闭合 |
 | E2-01 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | 复用E1 | PASS | 默认计划读取设备覆盖/全局同名策略；普通/免确认一致，恢复计划不变；准确包联合验收留E5 |
 | E2-02 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | schema7设备策略继承、全局策略、字段级dirty合并、deferred-save和CAS重试已验收 |
-| E2-03 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | 旧草稿可见/取消、队列直达且不自动续发；E4未开始 |
+| E2-03 | 源码验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | 旧草稿可见/取消、队列直达且不自动续发；E4 自动剪贴板源码已接受，物理同步留 E5 |
 | E2-04 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | 完整外壳960×640主按钮可见可点；准确包原生DPI/键盘与双机UI留E5 |
-| E3-01 | 源码验收通过 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | c205b12 CI运行中 | 原生目标动作、临时来源接管、持久授权/回收与错误隔离已验收；签名激活暂缓 |
-| E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | c205b12 CI运行中 | bookmark/临时表示、冷启动与持久生命周期源码验收；签名/App Group实机暂缓 |
-| E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包NOT RUN | NOT RUN | c205b12 CI运行中 | manifest/entitlement/安装卸载源码验收；签名、系统安装激活暂缓 |
-| E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | 422d96d CI运行中 | 总控已接受单一SQLite owner、双向QUIC复用、流取消与生命周期门闩；物理网络留E5 |
+| E3-01 | 源码验收通过 | PASS | PASS | 源码构建PASS/系统激活NOT RUN | NOT RUN | PASS | `c205b12` 源码范围已接受；签名/包身份系统激活按用户暂缓 |
+| E3-02 | 源码验收通过 | PASS | PASS | arm64源码构建PASS/签名激活NOT RUN | NOT RUN | PASS | `c205b12` 源码范围已接受；签名/App Group 系统激活按用户暂缓 |
+| E3-03 | 源码验收通过 | PARTIAL | PASS | 构建材料PASS/准确包系统生命周期NOT RUN | NOT RUN | PASS | 安装布局/manifest 源码接受；签名、系统安装与激活按用户暂缓 |
+| E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | PASS | 总控已接受单一 SQLite owner、QUIC 复用、流取消与生命周期门闩；物理网络留 E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
 | E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 准确 Windows/macOS arm64 包完成双向 1 MiB hash 与反向连续认证 QUIC session reuse。E5-B 首条 Windows→Mac 系统文本为 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。E5-C input desktop 已恢复 Default，但 package 前台被系统拒绝，未发送 Tab；网切/睡眠、DPI/键盘仍待 |
-| E5-02 | 执行中 | PASS | PASS | PARTIAL | PARTIAL | PASS | 预览版来源、PR #8 与已发布四包摘要已核；E5-A 文件与 E5-B 文本失败/收尾证据均已记录，待本次文档提交/推送。未合并 main、未移动既有 tag |
+| E5-02 | 阶段已同步/待最终验收 | PASS | PASS | PARTIAL | PARTIAL | PASS | 已核对 `560f6f2` 五项 CI success；E5-A/B/C 证据已推送。仅最终物理/系统矩阵未闭合；未合并 main、未移动 tag |
+
+
+## 当前交付对账（2026-09-19）
+
+| U | 已接受范围 | 尚缺的完成证据与依赖 |
+|---|---|---|
+| U1 一次接收 | E2-01 源码、计划/策略/恢复约束 | 准确 package 的一次默认接收与接收确认/恢复流程；需要双机准确包，不依赖剪贴板授权。 |
+| U2 配对/删除 | E1-01/02/03 主路径源码 | 准确包配对、删除后不复活和系统确认的物理矩阵；LAN 反向现场路径仍 PARTIAL。 |
+| U3 发现/恢复 | IPv4 主路径、原生事件与快照源码 | 双栈和 mDNS provider 的原型选择/验证尚未执行；物理多网卡、IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行。前者可在已授权荷兰隔离环境独立推进，不改宿主网络。 |
+| U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；其余双向文本/链接/图片、防回环和文件并存需要新的明确临时剪贴板授权。 |
+| U5 设置 | E2-02 源码/浏览器范围 | 准确包设置交互的补充现场证据可与双机 UI 一并完成；不需要主题或剪贴板授权。 |
+| U6 系统共享 | E3 源码和非签名构建 | Windows package identity/系统激活、Mac App Group/Share Extension 注册与安装生命周期；用户已暂缓签名/信任条件。 |
+| U7 四视图 | E2-04 浏览器范围、部分准确包 125%/小窗证据 | Windows Tab 顺序需用户点击准确 package 置前台；150%/深色需要用户提供相应系统显示/主题条件，Mac 原生控件矩阵未运行。 |
+
+独立最小建议：在荷兰隔离 namespace 中完成 U3 双栈和 mDNS provider 原型的技术选择与验证，限定为 provider/IPv6 发现、TLS 控制和 QUIC 文件分项，不重做双 NAT、不改宿主网络或产品 UI。
 
 ## 执行边界与恢复入口
 

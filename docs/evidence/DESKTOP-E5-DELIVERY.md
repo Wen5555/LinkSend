@@ -6,6 +6,12 @@
 
 本批完成阶段证据、TODO、恢复提示与 Draft PR 同步；HK 继续运行已接受的 `387b57c` / schema 4，NL 双 NAT 结论与既有签名/公证/App Group 暂缓项均未改写。用户已授权并实际执行一次双端系统剪贴板最小尝试：首条 Windows→Mac 文本的 Mac 系统消费者断言失败，窗口已关闭，双方总开关与全部 grant 已关闭，未恢复剪贴板。链接、图片、反向、防回环和文件并存没有执行；精确命令、job 和收尾证据见 [E5 验收记录](DESKTOP-E5-ACCEPTANCE.md)。
 
+## 2026-09-19 当前交付边界
+
+本次对账引用已核对 CI head `560f6f2909b0da6e502ece6137d87f9ad7597466`，其 core、desktop push/PR 和 packages 五项 CI 均为 success。E1 后端（`666cbaa`）、E2（`35885ab` + `8655eae`）、E3（`c205b12`）和 E4 自动剪贴板源码（`387b57c`）均已由总控按各自范围接受；这不把准确 package、系统激活或物理矩阵写成通过。
+
+当前准确包事实只包括 0c59 的 E5-A 双向文件 PASS，E5-B Windows→Mac 首条文本 FAIL 且已关闭，E5-C 未获 Windows 前台因而未发送 Tab。系统剪贴板仍关闭。剩余事项与可独立推进的 U3 双栈/mDNS provider 原型见 [全轮 TODO](../DESKTOP-EXPERIENCE-TODO.md#当前交付对账2026-09-19)。
+
 日期：2026-09-14。当前源码候选提交：`1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819`；完整准确包实机基线仍来自 `387b57c76596975d0da61f01e060e0cc2940b0b5`。
 
 ## GitHub 状态

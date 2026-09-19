@@ -6,4 +6,4 @@
 
 Windows的 `x/net/ipv4` 不落实发送ControlMessage源选择，本候选改用最多32个按本地IPv4绑定的临时UDP socket，同一socket有界接收回复；`TestWindowsBroadcastUsesBoundSourceWithoutMulticastFlag` 实际观察固定入口收到的源为指定 `127.0.0.2`。Darwin/Linux保留pktinfo/cmsg。LocalSend一手固定提交仍为方案记录的 `25b3019...`；本批没有把其机制误称mDNS，也没有替换LinkSend传输协议。
 
-未完成：准确包物理多网卡、VPN/TUN、DHCP、睡眠、IPv6和mDNS矩阵；双NAT仍未证明。
+未完成：准确包物理多网卡、VPN/TUN、DHCP、睡眠、IPv6和 mDNS 矩阵，以及方案要求的双栈/mDNS provider 原型选择与验证。E5 已在荷兰隔离环境完成固定 UDP 映射的双 NAT QUIC 正例；它不验证发现 provider，也不推广为其他 NAT 类型可用，MASQUERADE-only `CHECK_TIMEOUT` 仍为已知失败。
