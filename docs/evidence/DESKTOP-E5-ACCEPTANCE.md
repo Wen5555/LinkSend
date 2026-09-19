@@ -36,9 +36,9 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 
 #### 下一次有界复测准备（未执行）
 
-新的明确授权后，先以 hidden window 启动本地 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-retest-watchdog.ps1`，传入不超过 18 分钟的 UTC deadline；它不处理剪贴板正文，到时只关闭两端 master/grant 并停止已核验 package。需要提前结束时只创建同目录 `e5b-retest-close-now.flag`，watchdog 随即执行相同收尾。两端准确包启动后，在既有“设置 → 自动剪贴板”页等待其 5 秒轮询显示：总开关开启、监听器“运行中”、无暂停/错误、该 peer 为“就绪”。任一项不成立时不写任何内容，记录该页状态并由 watchdog 收尾。
+本轮用户已授权一次临时覆盖，但启动聚合命令在执行层 `CreateProcess` 前收到唯一可见原因 `blocked by policy`，没有启动 watchdog、Mac deadline job、package、master/grant 或任何系统剪贴板操作；审查文本为 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5h-4d36132/e5h-rejected-clipboard-window-launch-command.txt`。已准备的下一次窗口仍以 hidden window 启动 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-retest-watchdog.ps1`，传入不超过 18 分钟的 UTC deadline；它在启动和停止前校验 4d Windows portable EXE SHA256 `c22c3d2b...abbc4edd`，Mac 使用已核验 DMG `8145ede7...0b4b80c9` 提取的 4d App，同时继续使用 E5-A 的既有 profile/identity。它不处理剪贴板正文，到时只关闭两端 master/grant 并停止已核验 package。需要提前结束时只创建同目录 `e5b-retest-close-now.flag`，watchdog 随即执行相同收尾。候选、profile、master/grant 和独立截止配置正确即可运行标准消费者测试；可读的设置页状态仅补充诊断，Mac AX 不可读不阻止该受授权窗口。
 
-状态满足后，分别记录两端设置页的汇总状态，再仅写入一个已知文本并立即用对端标准系统消费者断言；断言后再次记录设置页。`ClipboardWatcher` 后端对象包含 `last.sequence` 与 send/receive ready，但准确包页面只显示汇总 peer 状态、且没有可用 CDP 外部读取入口，因此这些 raw 字段本轮标为不可观测，不新增调试功能。文本通过前不发送链接、图片、快速 A/B/C 或并存文件；任一失败先保留已有界面状态再停止，由 watchdog 自动收尾。
+窗口启动后写入一个已知文本并立即用对端标准系统消费者断言；可读的设置页状态在前后作为诊断证据。`ClipboardWatcher` 后端对象包含 `last.sequence` 与 send/receive ready，但准确包页面只显示汇总 peer 状态、且没有可用 CDP 外部读取入口，因此这些 raw 字段本轮标为不可观测，不新增调试功能。首项失败不原样重试：在同一 18 分钟窗口剩余时间仅进行有针对性的诊断或独立反向项，所有路径仍由 watchdog 自动收尾。
 
 ### E5-C：0c59 Windows 准确包键盘复测（UNRESOLVED，未发送按键）
 
@@ -85,6 +85,19 @@ mDNS/DNS-SD 使用 Pion github.com/pion/mdns/v2 v2.2.0、项目固定的 golang.
 - 早先 `2026-09-19T18:15Z` 的另一台 U2 准确 package 配对后，初始 CLI 撤销只保留 exit 1；其 stderr、临时 identity/join/owner 快照和 profile 已按旧脚本删除，无法恢复稳定错误码，文档不将其推断为 `UNPAIRED`。后续以 HK 邀请 `used_at=18:15:06 UTC`、issuer、DeviceID、名称和 incarnation 精确关联目标，正常 `Service.Revoke` 返回 0，HK 只读查询为 `revoked=1`；非目标候选保留。该次脚本将本地 denied 目录项误当服务成员，已通过 `removed/revoked/blocked` 语义和服务端状态纠正，不将该脚本错误记为产品删除失败。
 
 本批不读取、写入或恢复系统剪贴板；Mac manager 的一次 `tail-job` 返回 zsh `status` 只读变量包装错误，立即 `run-script` 回执、独立 Mac task-history 只读查询和 Windows task-history/文件摘要均成功，二者分列。当前 `4d36132` 的 core（2）、desktop（2）与 wails3-packages（1）五个 CI run 都为 success。
+
+### E5-H：4d36132 修复候选重配对与设备设置（PASS，范围受限）
+
+候选固定为已成功的 `4d361320bce1c0bb354a590fe0cc3c73be0242aa` packages run `35459981462`，不称为后续 `e065fe2` 或 `5038003` 的包。Windows artifact `10589072915` 的外层 ZIP 为 84,240,520 bytes / SHA256 `d0344809...c08f37cb`，portable `LinkSend.exe` 为 23,936,000 bytes / SHA256 `c22c3d2b...abbc4edd`；BUILD-INFO 的 source/workflow head 均为 4d、`source_state=COMMITTED`、`source_checkout_clean=true`。Mac arm64 artifact `10589072767` 的 DMG SHA256 为 `8145ede7...0b4b80c9`，已在实际 Mac 上核验 bundle ID、0.5.0、arm64 与 `codesign --verify --deep --strict`。
+
+- 用该 Windows 准确包复用 E5-G 的已撤销 identity `f090...1969` 重新配对，页面反馈“配对成功”。HK 只读记录邀请码于 `2026-09-19T19:34:57Z` 使用，identity 更新为 incarnation `2f8e...1008`、`revoked=0`、group revision 11。未创建新身份或保留邀请码正文。
+- 同一准确包的设备页以 `ExpandCollapsePattern` 展开邀请方设备设置。设备接收目录为空并继承全局；全局冲突策略为 `keep_both`；`device_profiles` 和 `clipboard_grants` 均无该设备记录；六个文字/链接/图片的 send/receive checkbox 全为 `Off`。这是默认权限与继承的准确包 UI/持久化读证据，未开启剪贴板主开关、grant 或系统剪贴板。
+- E5-A Windows profile 的已配对 Mac peer 另行覆盖验证：以 `SelectionItemPattern` 选择“遇到冲突时停止”并保存后，该 peer 的 `conflict_policy=error`、revision 6；再选“继承全局设置”并保存后恢复为空、revision 7。全局目录和冲突策略均保持为空，因此设备仍继承全局；第一次 `ValuePattern.SetValue("skip")` 虽返回但未更新 React select，随即以 `SelectionItemPattern` 恢复，未留下覆盖。
+- 设备目录的修正受管 picker 核验使用唯一测试名 `E5A Mac 0c59` 同行的 `ghost` “设置” `ExpandCollapsePattern` 进入编辑器。标题“选择接收目录”的对话框由本次 4d package PID 直接拥有，UIA 树在 7 次采样、97 个 descendants 后稳定；其标准控件为“文件夹:” Edit（AutomationId `1152`，`ValuePattern`）、“选择文件夹” Button（`1`，`InvokePattern`）及“取消” Button（`2`，`InvokePattern`）。随后同一入口以 `ValuePattern` 设置受管空目录并 Invoke 确认；返回应用后重取同一 PID 的 UIA 根仍未找到可 Invoke 的“保存设备偏好”，因此没有保存，SQLite 仍为目录/策略空、revision 7，package 已停止。目录覆盖验收为 PARTIAL；此前未加 owner/就绪约束的“控件不可达”记录不作为结论。
+- 同一准确包再次精确 Invoke“删除设备”和“确认删除”各一次。HK 只读查询确认同一新 incarnation 为 `revoked=1`、group revision 12；专用 profile 仅在该确认后按规范路径删除。所有候选 package 进程已停止，证据保留在 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-u1-u2-u5-20260920T0236Z/E5-H-EVIDENCE.json`。
+- Mac 的独立 AX 探针在自启动的准确 package PID、隔离 profile 和 loopback 服务下得到 `AX_TRUSTED=false` / `AX_WINDOWS_ERROR=-25211`。没有 AXPress、改值、系统权限修改、新自动化框架或剪贴板读写；这仅是未获用户辅助功能授权的外部条件，不是剪贴板失败根因，也不把 Mac 原生 U5/U7 控件列为已验收。
+- 18 分钟剪贴板复测仅完成准备：现有 watchdog 的 Windows 所有权检查固定至 4d portable EXE `c22c3d2b...abbc4edd`，Mac 固定至已提取的 4d App 与 DMG `8145ede7...0b4b80c9`，两端继续复用 E5-A profile/identity。Windows PowerShell 解析和 EXE hash、Mac 三份清理脚本的 `sh -n` 与候选根/DMG hash/E5-A profile 锚点均通过；没有启动 watchdog、package、master/grant 或读写系统剪贴板。
+- `e065fe2` 的 packages run `35462833862` 在 Windows `Verify core module` 中失败于 `TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists: fill issued text lease 1: CLIPBOARD_CONTENT_LIMIT`。调查确认是测试 fixture 与 7 秒续租竞争及满窗后等待 before-write hook，不改写为构建网络问题。`5038003` 只将 fixture 的满窗刷新和旧快照门闩分成两个受锁场景，未改产品/wire/TTL/MaxLeases；定向和受影响 race 已本地通过，随后 core（2）、desktop（2）和 packages（1）五个 CI run 全部 success。
 
 ## 候选来源与 CI
 
