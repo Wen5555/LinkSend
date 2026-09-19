@@ -69,7 +69,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | PASS | 总控已接受单一 SQLite owner、QUIC 复用、流取消与生命周期门闩；物理网络留 E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
-| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 准确 Windows/macOS arm64 包完成双向 1 MiB hash 与反向连续认证 QUIC session reuse。E5-B 首条 Windows→Mac 系统文本为 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。E5-C input desktop 已恢复 Default，但 package 前台被系统拒绝，未发送 Tab；网切/睡眠、DPI/键盘仍待 |
+| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 准确包新增 E5-G：U5 后台保存+配对、Mac→Windows 1 MiB 默认来件/keep_both/hash、准确 UI 删除及 HK revoked/重启不复活均 PASS。E5-B 首条 Windows→Mac 系统文本仍 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。网切/睡眠、DPI/键盘仍待 |
 | E5-02 | 阶段已同步/待最终验收 | PASS | PASS | PARTIAL | PARTIAL | PASS | 已核对 `560f6f2` 五项 CI success；E5-A/B/C 证据已推送。仅最终物理/系统矩阵未闭合；未合并 main、未移动 tag |
 
 
@@ -77,11 +77,11 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 
 | U | 已接受范围 | 尚缺的完成证据与依赖 |
 |---|---|---|
-| U1 一次接收 | E2-01 源码、计划/策略/恢复约束 | 准确 package 的一次默认接收与接收确认/恢复流程；需要双机准确包，不依赖剪贴板授权。 |
-| U2 配对/删除 | E1-01/02/03 主路径源码 | 准确包配对、删除后不复活和系统确认的物理矩阵；LAN 反向现场路径仍 PARTIAL。 |
+| U1 一次接收 | E2-01 源码、计划/策略/恢复约束；E5-G 的准确 package 默认“接收文件”弹窗、`keep_both`、双端 1 MiB hash PASS | 断线/应用重启中的接收恢复、更多目录/异常矩阵仍待；本次不依赖剪贴板授权。 |
+| U2 配对/删除 | E1-01/02/03 主路径源码；E5-G 准确 package UI 配对、精确删除、HK `revoked=1` 与 profile 重启不复活 PASS | LAN 反向现场路径、离线 outbox 和更多系统确认矩阵仍 PARTIAL。 |
 | U3 发现/恢复 | IPv4 主路径、原生事件与快照源码；E5-D test-only IPv6 signed discovery/LAN TLS 与 mDNS 原型 | 生产 IPv6 discovery/mDNS provider 未启用；物理多网卡、准确包IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行，均须在相应真实环境和操作下完成。荷兰隔离 namespace 仅验证原型，不能替代物理双机矩阵。 |
 | U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；其余双向文本/链接/图片、防回环和文件并存需要新的明确临时剪贴板授权。 |
-| U5 设置 | E2-02 源码/浏览器范围；0c59 准确 Windows package 的“本机名称”后台 UIA 保存/持久化 PASS | 文件接收、设备覆盖和物理双机设置矩阵仍待验收；不需要主题或剪贴板授权。 |
+| U5 设置 | E2-02 源码/浏览器范围；0c59 准确 Windows package 的两次“本机名称”后台 UIA 保存/持久化 PASS，其中 E5-G 的 revision=1 设置直接用于后续配对 | 文件接收、设备覆盖和物理双机设置矩阵仍待验收；不需要主题或剪贴板授权。 |
 | U6 系统共享 | E3 源码和非签名构建 | Windows package identity/系统激活、Mac App Group/Share Extension 注册与安装生命周期；用户已暂缓签名/信任条件。 |
 | U7 四视图 | E2-04 浏览器范围、部分准确包 125%/小窗证据 | Windows Tab 顺序需用户点击准确 package 置前台；150%/深色需要用户提供相应系统显示/主题条件，Mac 原生控件矩阵未运行。 |
 

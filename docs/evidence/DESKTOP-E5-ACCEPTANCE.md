@@ -75,6 +75,17 @@ mDNS/DNS-SD 使用 Pion github.com/pion/mdns/v2 v2.2.0、项目固定的 golang.
 复现入口为 scripts/e5d-ipv6-quic-netns.sh、scripts/e5d-ipv6-discovery-netns.sh 与 scripts/e5d-mdns-netns.sh。前者运行双向文件和 IPv6 HTTPS/WSS/ICE/QUIC 分项；第二项运行 test-only 签名/route/TLS 原型；第三项运行 cmd/e5d-mdns-prototype。三者都要求 LINKSEND_ISOLATED_LAB=1、root network namespace 能力和本轮交叉编译 Linux binary。
 
 当前不启用生产 IPv6 discovery 或 mDNS provider。internal/discovery.Manager 仍是 IPv4 listener/route/probe 实现；mDNS 的正确边界是未信任候选 hint，未来接入必须把候选送回有界的 LinkSend 签名 discovery 和 TLS identity pin 验证。以上不证明公网 IPv6、准确 Windows/macOS package IPv6、物理多网卡/DHCP/VPN/sleep 矩阵，且不改变 relay=false。
+### E5-G：0c59 准确包 U1/U2/U5 合并验收（PASS，范围受限）
+
+本批固定 Windows 准确包为 `0c59ae255d631b496a3e483e9c558f2998ee314c`，SHA256 `97b3a63a...16e0e3e`；Mac 发送端复用本页 E5-A 已核验的 arm64 准确 package。新的 Windows 隔离 profile 以唯一名称 `E5 U1U2U5 Windows 20260920T0236Z` 运行，其公开 DeviceID、加入时间、incarnation、文件摘要与撤销关联保留在受管回执 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-u1-u2-u5-20260920T0236Z/E5-G-EVIDENCE.json`；profile 在服务端撤销已核验后仍保留，未删除或覆盖用户文件。
+
+- **U5 通用设置与配对**：后台 UIA 先以 `ValuePattern.SetValue` 写入该唯一“本机名称”，再 Invoke“保存通用设置”；隔离 profile 直接复核名称和 `revision=1`。重启准确 package 后，设备页的配对码 Edit 输入一次性码并 Invoke“完成配对”，页面出现“配对成功”。随后 CLI 只读身份/目录确认新设备为 `group_paired / membership_synced`。全程未设前台、未发键盘、未使用 CDP/新框架或读写剪贴板。
+- **U1 一次默认接收**：Mac 准确 package 先只读刷新成员目录并确认该新 ID，再经 `macos_share` journal 向其发送一个 1 MiB 文件。Windows 准确 package 出现独立“接收确认”弹窗，文件名可见；“查看详情”保持折叠，仅 Invoke 一次“接收文件”，没有尝试旧“接收”Tab。目标接收目录预置 54-byte 同名 fixture，默认 `keep_both` 产出 `e5g-u1-keep-both (1).bin`，新文件 SHA256 与 Mac 源一致，原 fixture 摘要未变。Windows receive task `20260919T184030.415785300Z-00000001` 和 Mac send task `20260919T184029.353509000Z-00000001` 都为 `completed`，各自 verified/committed 1,048,576 bytes、0 retransmit；实际为 IPv4 host↔host `lan_direct`、QUIC、TLS 1.3、`relay=false`。这是准确 package 的一份默认来件、同名保留与哈希证据，不扩大为跨 NAT、应用重启续传或系统 Share Extension 通过。
+- **U2 准确 UI 删除与不复活**：邀请方使用相同准确 Windows package 的设备页，以唯一显示名定位新设备行。该行“设置”导出 `ExpandCollapsePattern`，展开后“删除设备”和“确认删除”各通过 `InvokePattern` 一次。HK `hk-main` 的只读 SQLite 查询确认该精确 ID 的 `revoked=1`，并记录同一 incarnation 的 membership request 于 `2026-09-19 18:48:53 UTC` 推进 group revision 至 10。邀请方刷新后将其显示为 `removed / revoked / blocked=true`，不是活动组成员；被删除 profile 在准确 package 中重启超过 5 秒后保持同一 identity，未调用加入或修复路径，服务端记录仍为 revoked。两端 package 均已停止。
+- 早先 `2026-09-19T18:15Z` 的另一台 U2 准确 package 配对后，初始 CLI 撤销只保留 exit 1；其 stderr、临时 identity/join/owner 快照和 profile 已按旧脚本删除，无法恢复稳定错误码，文档不将其推断为 `UNPAIRED`。后续以 HK 邀请 `used_at=18:15:06 UTC`、issuer、DeviceID、名称和 incarnation 精确关联目标，正常 `Service.Revoke` 返回 0，HK 只读查询为 `revoked=1`；非目标候选保留。该次脚本将本地 denied 目录项误当服务成员，已通过 `removed/revoked/blocked` 语义和服务端状态纠正，不将该脚本错误记为产品删除失败。
+
+本批不读取、写入或恢复系统剪贴板；Mac manager 的一次 `tail-job` 返回 zsh `status` 只读变量包装错误，立即 `run-script` 回执、独立 Mac task-history 只读查询和 Windows task-history/文件摘要均成功，二者分列。当前 `4d36132` 的 core（2）、desktop（2）与 wails3-packages（1）五个 CI run 都为 success。
+
 ## 候选来源与 CI
 
 - Draft PR：[#8](https://github.com/Wen5555/LinkSend/pull/8)。

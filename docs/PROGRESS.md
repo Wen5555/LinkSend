@@ -1,3 +1,11 @@
+## 2026-09-20 E5-G 准确 package U1/U2/U5 合并验收
+
+- 固定 `0c59ae2` Windows package（SHA256 `97b3a63a...16e0e3e`）在保留的唯一隔离 profile 完成后台 UIA 通用设置保存（本机名称、revision=1）和一次性码配对；新 DeviceID/加入时间/incarnation 记录在 supervision 回执，未保存邀请码正文、私钥或用户剪贴板内容。
+- Mac 准确 package 通过受控 `macos_share` journal 向该 ID 发送 1 MiB 文件。Windows 出现独立“接收确认”弹窗，文件名可见且详情保持折叠；只 Invoke 一次“接收文件”。默认 `keep_both` 保留 54-byte 同名 fixture，并写出带 `(1)` 的 1 MiB 文件，双端 SHA256 一致。Windows receive 与 Mac send task 均 completed，verified/committed 1 MiB、0 retransmit、IPv4 `lan_direct`/QUIC/TLS1.3/`relay=false`。
+- 邀请方的准确 Windows package 设备页以唯一显示名定位设备，按实际 UIA 模式展开“设置”后，Invoke“删除设备”与“确认删除”。HK `hk-main` 只读查询确认同一 ID/incarnation `revoked=1` 和 membership request；邀请方刷新呈现 `removed/revoked/blocked`，测试 profile 重启后 identity 未变且未重新加入。两端 package 已停止，profile 因服务端清理已通过而暂留审计。
+- 早先 U2 配对的首次撤销仅保留 exit 1，stderr 和临时 identity/join/owner 输出已由旧脚本删除，无法恢复真实稳定错误码；后续按 invite 使用时间、issuer、ID、名称和 incarnation 关联正确对象，以正常 Service.Revoke 和 HK read-only `revoked=1` 完成精确清理，另一候选未删除。不要把脚本的本地 denied 项误判为服务成员，或推测为 UNPAIRED。
+- `4d36132` CI 已全部 success：core 35459984881/35459981488、desktop 35459984870/35459981479、wails3-packages 35459981462。Mac tail 包装曾报 zsh `status` 变量错误；即时受管回执和独立任务库只读核验均 PASS，二者分列。
+
 ## 2026-09-20 E5-D U3 IPv6/mDNS 有界原型
 
 - 干净 77ce6bf Linux CLI/rendezvous 在荷兰隔离同链路 ULA namespace 完成 IPv6 SAN HTTPS/WSS、真实 Pion ICE host pair、QUIC TLS 1.3 和双向 1 MiB 文件；两端 SHA256 一致、relay=false。这不是公网 IPv6、LAN discovery 或准确桌面 package 验收。
