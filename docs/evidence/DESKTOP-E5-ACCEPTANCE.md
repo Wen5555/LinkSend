@@ -239,3 +239,7 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 中断前 Mac receive task 为 20260919T213851.068949000Z-00000003、attempt 4de65e264b6d8977b6c9e6f743f1fb18；恢复连接时 Mac 按当前产品模型创建新的本地 receive task/attempt c6b872ee064ef6e19f45de4ddd638b5b。两者的 TransferID、manifest、selection、receive plan 与目标目录一致，因此本节只声称 sender task 保持一致，不声称两端 task ID 一致。此结果证明 Windows 发送端应用重启续传，不证明接收端重启、物理网络切换、睡眠恢复、反向文件或系统 Share Extension/App Group 激活。
 
 收尾：Windows package PID 88356 和 Mac package PID 18701 已按路径/PID 所有权停止并复核；两端 clipboard master 为 false，六项 grant 均 disabled。测试 peer 的 receive_directory 仍为 E5J 受管目录、revision 12：SaveDeviceProfile 清理 helper 被执行层 blocked by policy 且未执行，用户 profile 没有操作。不得把该项写为目录恢复完成。完整机器回执位于 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5j-1a46564/e5j-final-machine-receipt.json；Mac checkpoint job 为 /tmp/codex-ssh/linksend-e5j-verify-mac-restart-checkpoint-20260919T213925Z，最终 job 为 /tmp/codex-ssh/linksend-e5j-verify-mac-resume-final-20260919T214516Z。
+
+### E5-K：4889cbe 反向复验（NOT PASS）
+Mac DMG 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows 外层 ZIP  bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，BUILD-INFO source_commit 均为 4889cbe。新 request 3e74d2c7470dd2a227b1cc7fe5c9515a 在 Mac sender task 20260919T234907.515235000Z-00000001 的 ice_checking/CHECK_TIMEOUT 终止，0 bytes，Windows 无 incoming、未 Invoke 接收。任务未保存候选/ICE 计数，无法区分 timeout 具体层次；未进入 QUIC，不证明旧 QUIC 失败已修复。两端 package 已停止，回执为 supervision e5k-4889cbe/e5k-machine-receipt.json。
+

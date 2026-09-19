@@ -107,3 +107,7 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 - [!] 单次 Mac 到 Windows V2 activation 为 0-byte QUIC_HANDSHAKE_FAILED；保留负例，不重试，不影响 Windows sender 恢复结论。
 - [!] 测试 peer 接收目录清理被执行层 blocked by policy：SaveDeviceProfile helper 在执行前未运行，受管目录仍为 revision 12；用户 profile 未触碰。不得标注为已恢复继承。
 - [ ] 接收端应用重启、物理网络切换/睡眠恢复、Mac 到 Windows 反向握手根因和系统 Share Extension/App Group 激活仍需独立验收。
+
+### E5-K（NOT PASS）
+- [x] 4889cbe handoff/diagnostic 与五项 CI；[!] 新反向 V2 在 ice_checking/CHECK_TIMEOUT、0 bytes 失败，未重试。
+
