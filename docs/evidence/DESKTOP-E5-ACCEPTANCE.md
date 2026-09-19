@@ -4,6 +4,31 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-19 E5-A：0c59 发布包的物理双向文件
+
+本节只适用于已发布预览 `v0.5.0-desktop-preview.1` 的源提交 `0c59ae255d631b496a3e483e9c558f2998ee314c`、workflow `34803743360`。Windows 使用已核验 ZIP payload `LinkSend.exe` SHA256 `97b3a63a122df148edbf5b3038b225bda84ad9e8d45b3bd0a5c8f598b16e0e3e`，macOS 使用 arm64 DMG SHA256 `ce89b37fea7658c57c58de8e1bb648d8e15d9a580233444e0fdd2c4ffe460ee5`。二者均在新的隔离 profile 和当前 schema 4 / membership-v2 测试组运行；Windows 当前以太网 `10.234.16.254/16`，Mac `en0=10.234.35.5/16`。Mac 连接、审计及所有远程 job 经 `mac-test-102342413` 管理，不修改宿主防火墙、路由、代理或 HK 服务。
+
+| 流向 | 包内实际 queue owner | 结果 | 文件与完整性 | 网络证据 |
+|---|---|---|---|---|
+| Windows → Mac | Windows 准确包消费 V2 `windows_share` journal；Mac 准确包自动接收 | PASS | `e5a-win-to-mac.bin`，1,048,576 bytes；两端 SHA256 `2c7c48b84ae0b706befdd874f058bde9b86d2cf78404c3aee7ddd92f244dd443` | task `20260919T142911.207564800Z-00000001` completed；session `2f7d72cd6d1de8a515ab7f638479fd69`；`lan_direct` / QUIC / TLS 1.3 / `linksend/1` / `relay=false`；host `10.234.16.254:58074` ↔ host `10.234.35.5:62194` |
+| Mac → Windows（先完成） | Mac 准确包消费 V2 `macos_share` journal；Windows 准确包自动接收 | PASS | `e5a-mac-to-win-b.bin`，1,048,576 bytes；SHA256 `d5ca225803f96c5a6b1bb51a54ba0815b5f7e060ed6509fef2e59e043fdd0f29` 一致 | task `20260919T143318.472039700Z-00000002` completed；session `0041445e4fe2bde11d8a0cd2b52db019`；`lan_direct` / QUIC / TLS 1.3 / `linksend/1` / `relay=false` |
+| Mac → Windows（连续下一份） | 同一 Mac 准确包 queue worker | PASS / session reuse | `e5a-mac-to-win-a.bin`，1,048,576 bytes；SHA256 `44abae6db34d86fd81de269778d335d2e52ece9a2320cea9c1e104cd6b5c6316` 一致 | task `20260919T143319.008859500Z-00000003` completed；与先完成文件同一 session、Windows base `10.234.16.254:51996`、remote host `10.234.35.5:56125`、ICE generation 1；两 task 相隔约 0.54 秒 |
+
+Windows task-history 的三个 task 均记录零重传、1,048,576 verified/committed bytes；反向 task 的本地候选被如实记录为 srflx `183.247.26.53:11139`，base socket 仍为 Windows 物理地址，不能据此扩大为跨 NAT 或任意网络保证。两条反向 task 相同 session 证明连续队列文件的认证 QUIC 复用。正向 task 在先前观测与反向注入之间超过产品 3 秒 idle 边界，使用不同 session，因此本节不把它描述为跨方向 session reuse。
+
+V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数据，由运行中的准确包自行验证、入队、建立 ICE/QUIC 和落盘；正文没有经 journal、信令或 JavaScript IPC。此结果不等同于 Windows `ShareOperation`、macOS Share Extension/App Group 或系统签名安装激活；这些仍按用户已暂缓的边界记录。一次早期辅助 CLI 发送曾停在 `AwaitingAcceptance`、0 bytes（其新 identity 未获 Mac package 自动接收授权）；该日志保留为辅助失败，不用于本节结论。
+
+### E5-B：等待一次临时双端系统剪贴板授权的最小步骤
+
+当前两端 0c59 准确包和隔离 profile 可继续使用。执行前不会读取、导出、备份、清空或恢复用户日常剪贴板；若用户授权，测试开始后的剪贴板内容将只由已知、可丢弃的测试值组成，结束后由用户自行放回需要的内容。
+
+1. 在两端 package 的自动剪贴板设置中显式开启总开关，并只对这对隔离设备启用 text、link、image 的双方向授权；记录 ready/unsupported/error 状态。
+2. 依次写入已知测试文字、`https://linksend.oooai.de/healthz` 链接和预先生成的 3×2 PNG，验证 Windows→Mac 与 Mac→Windows 落板、来源防回环和一次快速 A/B/C 复制只保留最新值。
+3. 在已知文字测试进行时，额外经 V2 journal 发送一份新的 1 MiB 文件；核对两个文件 hash、clipboard 终态、session/queue 状态，证明文件与 clipboard 并存。
+4. 两端关闭总开关、确认 watcher 状态停止并结束本轮 package 进程；只保留隔离 profile、日志和测试文件供审阅。预计需要 15–20 分钟的双端可操作时间。
+
+未获该一次性授权前，本节步骤均为 `NOT RUN`；不重试 private WinSta、CDP 或创建新的隔离桌面路线。
+
 ## 候选来源与 CI
 
 - Draft PR：[#8](https://github.com/Wen5555/LinkSend/pull/8)。

@@ -595,3 +595,10 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 香港升级后，全新 Windows 隔离 profile 已用当前固定测试配对入口加入 schema 4 控制面，准确 Windows 包运行时有 1 个 listen、2 个 established 连接。旧 LAN-only profile 上的准确包 V2 share journal 只推进到 `waiting_peer`，不算文件网络通过。Mac alias 随后连续 SSH timeout，尚未创建配套新 profile；恢复后继续准确包 Win↔Mac 文件。
 - 物理双向文件、文本/链接/图片自动剪贴板、文件并存、网络切换/睡眠仍未闭合。Windows general clipboard 当前非空，fixture 返回 `CLIPBOARD_TEST_REQUIRES_EMPTY_DISPOSABLE_CLIPBOARD`；未读取、清空或覆盖用户剪贴板。Windows Sandbox 可执行文件不存在，未启用系统功能。
 - 2026-09-14 暂停收尾：兼容诊断修复固定为 `1fa21b4073e12d40e87dc6e23f3ec4d67e5e1819` 并推送，`core` push/PR、`desktop-wails3-checks` push/PR 与 packages run `34802741572` 三平台 job 均 `success`，Draft PR #8 head 一致。GitHub artifact ID/外层摘要已记录；三平台下载在用户要求暂停时主动停止，监督目标目录为空，无部分包可被误用。恢复时从 run `34802741572` 下载至 `C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5-ci-34802741572` 并运行 `scripts/verify-milestone-packages.ps1`；在此之前，包内载荷摘要与实机结果仍只属于 `387b57c`。
+
+## 2026-09-19 E5-A 0c59 准确包双向文件
+
+- 已发布预览 `0c59ae255d631b496a3e483e9c558f2998ee314c` 的 Windows amd64 ZIP payload（`97b3a63a...16e0e3e`）与 macOS arm64 DMG（`ce89b37f...460ee5`）在全新隔离 profile 加入当前 schema 4 / membership-v2 测试组；Mac alias 按受管 SSH 更新为 `10.234.35.5` 后 probe/audit PASS。
+- Windows 包经生产 V2 `windows_share` journal 自身消费、队列和认证 QUIC 向 Mac 包发送 1 MiB；源与接收 SHA256 均为 `2c7c48b84ae0b706befdd874f058bde9b86d2cf78404c3aee7ddd92f244dd443`。任务完成，`lan_direct`、QUIC、TLS 1.3、ALPN `linksend/1`、`relay=false`，Windows base `10.234.16.254:58074` 与 Mac host `10.234.35.5:62194`。
+- Mac 包连续消费两条 V2 `macos_share` journal 并向 Windows 包发送两份 1 MiB；`44abae6d...c6316` 与 `d5ca2258...d0f29` 各自和接收端一致。两条 Windows 接收 task 都为 completed、同一 session `0041445e4fe2bde11d8a0cd2b52db019`、同一 Windows base `10.234.16.254:51996`、同一 ICE generation，构成实际反向认证 QUIC 复用；正向 session 因超过 3 秒空闲边界而不同，未声称跨方向复用。
+- Journal 是对已接受 V2 入口的受控测试 fixture；准确包是唯一 core/SQLite queue owner 和网络发送/接收者。它不替代 Windows ShareTarget、macOS Share Extension/App Group 的系统激活验收，相关签名与系统安装仍按用户暂缓。未读取、备份、清空或覆盖用户系统剪贴板；网切/睡眠、自动剪贴板、150%/深色/键盘仍待 E5。
