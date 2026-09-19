@@ -223,3 +223,19 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 | 签名安装/系统共享激活 | 用户已暂缓；现有 HKCU/HKLM 安装受保护 | 新的明确启动命令改变该决定并提供相应签名条件 | 不覆盖现有安装、快捷方式或卸载记录 |
 
 暂停时没有活跃本地下载、测试进程或远程实验 job。香港生产服务继续运行已验证的 `387b57c`/schema 4，荷兰 namespace 与敏感材料已清理；不得因恢复新包下载而重复部署或重做双 NAT。
+
+### E5-J：4d 准确包 Windows sender 中断/重启恢复（PASS，边界明确）
+
+本节的实际 package 来源固定为 4d361320bce1c0bb354a590fe0cc3c73be0242aa，而非文档工作树 1a465642894651c5d4c893c41bcabb3b8923bc8f。Windows portable SHA256 为 c22c3d2bd6b128ec136d3b14e282fe2c94ae2081e6f1334cbf258951abbc4edd；Mac arm64 DMG SHA256 为 8145ede728723dac5ce8cbfb35a0e29a6468bd1322fe138c17bd94860b4b80c9。V2 journal 仍仅作为受控 native-entry fixture；准确 package 仍是唯一 queue、ICE/QUIC 和文件正文 owner。
+
+| 场景 | 结果 | 事实 |
+|---|---|---|
+| Windows 到 Mac 正常 256 MiB | PASS | 源/目标 SHA256 均为 d1aa5f5926e51a85a082a75099c4832c2ee4f450ca58f8f089a40e73445a0df6；lan_direct、QUIC、TLS 1.3、ALPN linksend/1、0 retransmit。 |
+| 中断前检查点 | PASS | sender task 20260919T213847.941678300Z-00000002、initial attempt 4c09f0ad81b986f093d6aacf68eb7d73、TransferID 4497a49a802ab56e6358577e1590ed47；在 verified 4 MiB、sent 8 MiB、整体未完成时才停止 Windows package。Mac checkpoint 同时持久 verified 8 MiB、未提交。 |
+| Windows 重启与恢复 UI | PASS | 同 profile 重启后 sender task 为 restart_recovery_available。仅 Invoke 进行中和恢复传输，未 Invoke 重新发送；sender task/TransferID 保持不变，新 attempt 为 c56900eaf913564faf801fe038fecfd8。 |
+| 恢复完成与完整性 | PASS | sender verified/committed 为 1 GiB、retransmit 0、bilateral_confirmed=true；Mac 新 receive task 20260919T214348.804670000Z-00000004 只接收缺失 1,065,353,216 bytes，verified/committed 1 GiB、retransmit 0；最终 SHA256 为 5fd17c10b75c7052a339acb81ff9ee8884e9b08d4d7d8763bd52b5cd39f4a0ae。 |
+| Mac 到 Windows V2 activation | NOT_PASS | 独立单次 request 在 QUIC_HANDSHAKE_FAILED 前终止，0 verified bytes；没有重试，不能作为反向传输通过或恢复通过。 |
+
+中断前 Mac receive task 为 20260919T213851.068949000Z-00000003、attempt 4de65e264b6d8977b6c9e6f743f1fb18；恢复连接时 Mac 按当前产品模型创建新的本地 receive task/attempt c6b872ee064ef6e19f45de4ddd638b5b。两者的 TransferID、manifest、selection、receive plan 与目标目录一致，因此本节只声称 sender task 保持一致，不声称两端 task ID 一致。此结果证明 Windows 发送端应用重启续传，不证明接收端重启、物理网络切换、睡眠恢复、反向文件或系统 Share Extension/App Group 激活。
+
+收尾：Windows package PID 88356 和 Mac package PID 18701 已按路径/PID 所有权停止并复核；两端 clipboard master 为 false，六项 grant 均 disabled。测试 peer 的 receive_directory 仍为 E5J 受管目录、revision 12：SaveDeviceProfile 清理 helper 被执行层 blocked by policy 且未执行，用户 profile 没有操作。不得把该项写为目录恢复完成。完整机器回执位于 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5j-1a46564/e5j-final-machine-receipt.json；Mac checkpoint job 为 /tmp/codex-ssh/linksend-e5j-verify-mac-restart-checkpoint-20260919T213925Z，最终 job 为 /tmp/codex-ssh/linksend-e5j-verify-mac-resume-final-20260919T214516Z。

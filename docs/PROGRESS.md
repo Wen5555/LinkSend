@@ -646,3 +646,13 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 ## 2026-09-19 E5-C 0c59 Windows 键盘复测
 
 - 只读确认 input desktop 为 `Default` 后，启动准确 Windows package PID `80752`，但 `SetForegroundWindow` 返回 false。前台所有权检查未通过即终止，未发送任何 Tab/键盘事件；package 已停止，clipboard master/grant 保持关闭。键盘顺序仍为 UNRESOLVED；下一次仅需用户点击准确 package 窗口使其前台后再检查一次，不强制前台或引入替代自动化。
+
+## 2026-09-20 E5-J：4d 准确包中断/重启恢复
+
+- 本节物理 package 来源为 4d361320bce1c0bb354a590fe0cc3c73be0242aa；Windows portable SHA256 为 c22c3d2bd6b128ec136d3b14e282fe2c94ae2081e6f1334cbf258951abbc4edd，Mac arm64 DMG SHA256 为 8145ede728723dac5ce8cbfb35a0e29a6468bd1322fe138c17bd94860b4b80c9。证据操作的工作树当时为 1a465642894651c5d4c893c41bcabb3b8923bc8f，不能把它称为 package 来源。
+- 先完成 Windows 到 Mac 的正常 256 MiB 包：源和接收 SHA256 均为 d1aa5f5926e51a85a082a75099c4832c2ee4f450ca58f8f089a40e73445a0df6，lan_direct、QUIC、TLS 1.3、ALPN linksend/1、0 retransmit。
+- 发送端恢复案例使用 1 GiB 专用文件，SHA256 为 5fd17c10b75c7052a339acb81ff9ee8884e9b08d4d7d8763bd52b5cd39f4a0ae。Windows sender task 20260919T213847.941678300Z-00000002、TransferID 4497a49a802ab56e6358577e1590ed47 的初始 attempt 为 4c09f0ad81b986f093d6aacf68eb7d73；观察器只在已验证 4 MiB、实际已发送 8 MiB、整体未完成时停止已核验 package。Mac 持久 state checkpoint 在中断后仍保存同一 TransferID、manifest、selection、receive plan 和目标目录，已验证 8 MiB、未提交。
+- Windows 以同 profile 重启后，任务变为 restart_recovery_available。UI 仅 Invoke 进行中和恢复传输，未调用重新发送；同一 sender task 和 TransferID 进入新 attempt c56900eaf913564faf801fe038fecfd8。最终 sender verified/committed 为 1 GiB、retransmit 为 0、双方确认完成；新 session 为 36c7d0b5595609f2a92c2952d50ce2ae，仍为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1。
+- Mac 连接恢复时按产品模型新建本地 receive task 20260919T214348.804670000Z-00000004 及 attempt c6b872ee064ef6e19f45de4ddd638b5b；这不是双端 task ID 不变的宣称。它与中断前 Mac receive task 20260919T213851.068949000Z-00000003 保持同一 TransferID、manifest、selection、receive plan 和目标目录。恢复 attempt 只接收缺失的 1,065,353,216 bytes；最终 verified/committed 为 1 GiB、retransmit 为 0，目标文件 SHA256 与源一致。
+- Mac 到 Windows 的独立 V2 activation 只形成 0-byte QUIC_HANDSHAKE_FAILED，未重试，也未作为任何成功证据。本节只证明 Windows 发送端的应用重启续传；接收端重启、物理网络切换、睡眠恢复和反向传输仍未由此通过。
+- 两端本轮 package 都已按路径/PID 所有权停止；Windows/Mac clipboard master 均为 false，六项 grant 均为 disabled。测试 peer 的 Windows 接收目录仍指向 E5J 受管目录，revision 12：产品 SaveDeviceProfile 清理 helper 在运行前被执行层 blocked by policy，未写入 profile；用户 profile 未操作。该限制不影响上述专用测试 profile 的恢复事实，但不能写为目录清理完成。

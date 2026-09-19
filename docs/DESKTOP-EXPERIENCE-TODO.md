@@ -97,3 +97,13 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
 - 本批 E5-A 已在 `10.234.35.5` 完成 resolve/probe/audit 和受管 remote jobs；HK 健康生产服务继续保持 `387b57c`/schema 4，未重新部署。系统剪贴板保持不读不覆盖；用户已允许同范围双端临时使用，但本次执行层拒绝了窗口启动，未产生 package 或 profile 副作用。
+
+### E5-J 4d 准确包中断/重启恢复（2026-09-20）
+
+- [x] 固定 4d361320bce1c0bb354a590fe0cc3c73be0242aa 的 Windows/Mac 准确包与载荷摘要；1a46564 只记录为证据工作树。
+- [x] Windows 到 Mac 正常 256 MiB 文件及 SHA256 验证，路径为 lan_direct / QUIC / TLS 1.3 / ALPN linksend/1。
+- [x] Windows sender 在至少一块已验证且整体未完成时中断；同一 sender task/TransferID 经重启后的恢复传输 UI 进入新 attempt，最终 1 GiB SHA256 一致、双方确认完成、0 retransmit。
+- [x] Mac 的中断 checkpoint、恢复后缺失 1,065,353,216 bytes、同一 TransferID/manifest/selection/receive plan/target directory 和最终 SHA256 已核验。Mac 连接恢复会创建新的本地 receive task/attempt，文档不把它表述为双端 task ID 不变。
+- [!] 单次 Mac 到 Windows V2 activation 为 0-byte QUIC_HANDSHAKE_FAILED；保留负例，不重试，不影响 Windows sender 恢复结论。
+- [!] 测试 peer 接收目录清理被执行层 blocked by policy：SaveDeviceProfile helper 在执行前未运行，受管目录仍为 revision 12；用户 profile 未触碰。不得标注为已恢复继承。
+- [ ] 接收端应用重启、物理网络切换/睡眠恢复、Mac 到 Windows 反向握手根因和系统 Share Extension/App Group 激活仍需独立验收。
