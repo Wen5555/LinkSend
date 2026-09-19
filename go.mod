@@ -8,9 +8,13 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/pion/ice/v4 v4.4.2
+	github.com/pion/mdns/v2 v2.2.0
+	github.com/pion/stun/v4 v4.0.0
 	github.com/quic-go/quic-go v0.62.0
 	github.com/zeebo/blake3 v0.2.4
 	golang.org/x/net v0.56.0
+	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.40.0
 	modernc.org/sqlite v1.58.0
 )
 
@@ -22,16 +26,12 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pion/dtls/v3 v3.1.8 // indirect
 	github.com/pion/logging v0.2.4 // indirect
-	github.com/pion/mdns/v2 v2.2.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/stun/v4 v4.0.0 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pion/turn/v5 v5.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	modernc.org/libc v1.75.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
