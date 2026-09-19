@@ -458,49 +458,81 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	if _, err = f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "send", Kind: "image", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	// Recreate the precise renewal window from the Windows CI failure: both
-	// ends already hold two unexpired text leases. The image receive-policy
-	// change below is the only normal API transition; its renewal must replace
-	// both bounded windows with one text+image lease.
+	// Recreate the precise renewal window from the Windows CI failure. Hold
+	// the same grant boundary as the renewal worker while clearing and filling
+	// the window, so the worker cannot insert a third lease between either
+	// fixture operation. The normal image-policy commit below must replace the
+	// two text leases with a complete text+image policy.
+	f.b.clipboardGrantMu.Lock()
 	f.b.clipboardSync.InvalidatePeerDirection(f.aID.ID(), false)
 	f.a.clipboardSync.InvalidatePeerDirection(f.bID.ID(), true)
-	textGrants := f.b.clipboardGrants(f.aID.ID(), "receive", reversePeer.AuthorizationGeneration)
+	textGrants := f.b.clipboardGrantsLocked(f.aID.ID(), "receive", reversePeer.AuthorizationGeneration)
 	if len(textGrants) != 1 || textGrants[0].Kind != clipboardsync.Text {
+		f.b.clipboardGrantMu.Unlock()
 		t.Fatalf("unexpected pre-image receive grants: %+v", textGrants)
 	}
 	for index, id := range []string{"pre-image-text-a", "pre-image-text-b"} {
 		if _, err = f.b.clipboardSync.IssueScoped(f.aID.ID(), reversePeer.SessionID, reversePeer.AuthorizationGeneration, textGrants, clipboardLeaseTTL); err != nil {
+			f.b.clipboardGrantMu.Unlock()
 			t.Fatalf("fill issued text lease %d: %v", index, err)
 		}
 		if err = f.a.clipboardSync.InstallScoped(id, f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, textGrants, clipboardLeaseTTL, aGeneration.Load()); err != nil {
+			f.b.clipboardGrantMu.Unlock()
 			t.Fatalf("fill installed text lease %d: %v", index, err)
 		}
+	}
+	if _, err = f.b.clipboardSync.IssueScoped(f.aID.ID(), reversePeer.SessionID, reversePeer.AuthorizationGeneration, textGrants, clipboardLeaseTTL); !errors.Is(err, clipboardsync.ErrLimit) {
+		f.b.clipboardGrantMu.Unlock()
+		t.Fatalf("full text lease window accepted another lease: %v", err)
+	}
+	f.b.clipboardGrantMu.Unlock()
+	if _, err = f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "image", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, func() bool {
+		_, ok := f.a.clipboardSync.Outbound(f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Image)
+		return ok
+	}, "image lease did not arrive after full-window policy refresh")
+
+	// Exercise the stale-write serialization separately with a free lease slot.
+	// The previous full-window scenario is complete; retaining it here would
+	// make sendClipboardLease fail before its before-write hook can run.
+	if _, err = f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "send", Kind: "link", Enabled: true}); err != nil {
+		t.Fatal(err)
 	}
 	oldLeaseEntered, releaseOldLease := make(chan struct{}), make(chan struct{})
 	var releaseOldLeaseOnce sync.Once
 	unblockOldLease := func() { releaseOldLeaseOnce.Do(func() { close(releaseOldLease) }) }
 	defer unblockOldLease()
 	var oldLeaseOnce sync.Once
+	f.b.clipboardGrantMu.Lock()
+	f.b.clipboardSync.InvalidatePeerDirection(f.aID.ID(), false)
+	f.a.clipboardSync.InvalidatePeerDirection(f.bID.ID(), true)
 	f.b.clipboardLeaseBeforeWrite = func() {
 		oldLeaseOnce.Do(func() {
 			close(oldLeaseEntered)
 			<-releaseOldLease
 		})
 	}
+	f.b.clipboardGrantMu.Unlock()
 	oldLeaseDone := make(chan struct{})
 	go func() {
 		f.b.sendClipboardLease(t.Context(), reversePeer)
 		close(oldLeaseDone)
 	}()
-	<-oldLeaseEntered
-	imageGrantDone := make(chan error, 1)
+	select {
+	case <-oldLeaseEntered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stale lease sender did not reach before-write gate")
+	}
+	linkGrantDone := make(chan error, 1)
 	go func() {
-		_, grantErr := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "image", Enabled: true})
-		imageGrantDone <- grantErr
+		_, grantErr := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "link", Enabled: true})
+		linkGrantDone <- grantErr
 	}()
 	select {
-	case grantErr := <-imageGrantDone:
-		t.Fatalf("image grant committed before stale lease send finished: %v", grantErr)
+	case grantErr := <-linkGrantDone:
+		t.Fatalf("link grant committed before stale lease send finished: %v", grantErr)
 	case <-time.After(100 * time.Millisecond):
 	}
 	unblockOldLease()
@@ -509,13 +541,13 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	case <-time.After(time.Second):
 		t.Fatal("stale lease sender did not finish after release")
 	}
-	if err = <-imageGrantDone; err != nil {
+	if err = <-linkGrantDone; err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, 3*time.Second, func() bool {
-		_, ok := f.a.clipboardSync.Outbound(f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Image)
+		_, ok := f.a.clipboardSync.Outbound(f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Link)
 		return ok
-	}, "image lease did not arrive")
+	}, "new link lease did not arrive after stale write completed")
 	f.b.clipboardReceiveSlots <- struct{}{}
 	f.b.clipboardReceiveSlots <- struct{}{}
 	sendLargeImage.Store(true)
