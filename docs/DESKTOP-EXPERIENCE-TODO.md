@@ -69,7 +69,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E4-01 | 源码验收通过 | PASS | 定向/race PASS | N/A | loopback QUIC PASS | PASS | 总控已接受单一 SQLite owner、QUIC 复用、流取消与生命周期门闩；物理网络留 E5 |
 | E4-02 | 源码验收通过 | PASS | 定向/race PASS | Win监听PASS、Mac命名pasteboard PASS | N/A | 387b57c五组checks/三平台包PASS | 总控已接受schema9权限、原生watcher、生命周期FIFO与单owner；准确包用户剪贴板留E5 |
 | E4-03 | 源码验收通过 | PASS | 定向/race/前端PASS | Win真实HWND隔离写读PASS、Mac命名pasteboard PASS | loopback QUIC PASS | 387b57c五组checks/三平台包PASS | 总控已接受固定worker/latest pending、deadline/cancel/reset、singleflight、非对称generation与写入错误状态；物理Win↔Mac留E5 |
-| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 的 E5-G 已通过；4d36132 的 E5-H 已完成准确包重新配对、策略覆盖后恢复继承、六项默认关闭、精确删除与 HK revoked 收尾；设备目录系统 picker 已按 package PID/控件树核验可达并完成受管目录选择，但返回后保存控件未定位，未落库且仍继承全局。E5-B 首条 Windows→Mac 系统文本仍 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。网切/睡眠、DPI/键盘仍待 |
+| E5-01 | 执行中/待复审 | PASS | PASS | PARTIAL | PARTIAL | PASS | `0c59ae2` 的 E5-G 已通过；4d36132 的 E5-H 已完成准确包重新配对、策略覆盖后恢复继承、六项默认关闭、精确删除与 HK revoked 收尾；设备目录系统 picker 已按 package PID/控件树核验，受管目录覆盖已保存（revision 8）并经“继承全局目录”恢复（revision 9）。E5-B 首条 Windows→Mac 系统文本仍 FAIL；链接、图片、反向、防回环和文件并存未运行，窗口已关闭且两端 grant/master 均已关闭。网切/睡眠、DPI/键盘仍待 |
 | E5-02 | 阶段已同步/待最终验收 | PASS | PASS | PARTIAL | PARTIAL | PASS | 已核对 `560f6f2` 五项 CI success；E5-A/B/C 证据已推送。仅最终物理/系统矩阵未闭合；未合并 main、未移动 tag |
 
 
