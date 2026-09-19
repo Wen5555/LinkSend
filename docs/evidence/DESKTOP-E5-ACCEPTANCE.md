@@ -36,9 +36,15 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 
 #### 下一次有界复测准备（未执行）
 
-新的明确授权后，先以 hidden window 启动本地 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-retest-watchdog.ps1`，传入不超过 12 分钟的 UTC deadline；它不处理剪贴板正文，到时只关闭两端 master/grant 并停止已核验 package。两端准确包启动后，在既有“设置 → 自动剪贴板”页等待其 5 秒轮询显示：总开关开启、监听器“运行中”、无暂停/错误、该 peer 为“就绪”。任一项不成立时不写任何内容，记录该页状态并由 watchdog 收尾。
+新的明确授权后，先以 hidden window 启动本地 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\e5b-retest-watchdog.ps1`，传入不超过 18 分钟的 UTC deadline；它不处理剪贴板正文，到时只关闭两端 master/grant 并停止已核验 package。需要提前结束时只创建同目录 `e5b-retest-close-now.flag`，watchdog 随即执行相同收尾。两端准确包启动后，在既有“设置 → 自动剪贴板”页等待其 5 秒轮询显示：总开关开启、监听器“运行中”、无暂停/错误、该 peer 为“就绪”。任一项不成立时不写任何内容，记录该页状态并由 watchdog 收尾。
 
 状态满足后，分别记录两端设置页的汇总状态，再仅写入一个已知文本并立即用对端标准系统消费者断言；断言后再次记录设置页。`ClipboardWatcher` 后端对象包含 `last.sequence` 与 send/receive ready，但准确包页面只显示汇总 peer 状态、且没有可用 CDP 外部读取入口，因此这些 raw 字段本轮标为不可观测，不新增调试功能。文本通过前不发送链接、图片、快速 A/B/C 或并存文件；任一失败先保留已有界面状态再停止，由 watchdog 自动收尾。
+
+### E5-C：0c59 Windows 准确包键盘复测（UNRESOLVED，未发送按键）
+
+`2026-09-19T15:24:36.1159385Z` 的只读 `OpenInputDesktop` 结果为 `Default`，已不再是此前的 `Screen-saver` 条件。随后以 SHA256 `97b3a63a...16e0e3e` 的准确 Windows package 启动 PID `80752`，主窗口可被 UIA 找到；测试在验证前台所有权时收到 `FOREGROUND_REJECTED`。安全门槛因此未发送任何 Tab/键盘事件，PID 于 `2026-09-19T15:26:35.2786935Z` 停止，clipboard master 和六项 grant 全程保持关闭。
+
+该结果不能证明键盘顺序，也没有扩大为产品键盘缺陷。下一次仅需用户在 package 启动后点击其 Windows 窗口使其成为前台，再运行一次既有 Tab 顺序检查；不强制前台、不注入备用自动化路线。
 ## 候选来源与 CI
 
 - Draft PR：[#8](https://github.com/Wen5555/LinkSend/pull/8)。

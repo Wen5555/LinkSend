@@ -610,3 +610,7 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - Windows 准确包启动后以 `System.Windows.Forms.Clipboard` 写入并回读 `E5B-WIN-TEXT-20260919T1501Z`（`2026-09-19T15:00:57.1855645Z`）。Mac 对该值执行标准 `NSPasteboard.general` 断言时，受管 job `/tmp/codex-ssh/linksend-e5b-assert-mac-text-0c59-20260919T150130Z` exit 1，`SYSTEM_CONSUMER_TEXT_ASSERTION_FAILED`。因此 Windows→Mac 文本为 FAIL；链接、3×2 PNG、Mac→Windows、防回环 A/B/C 和文件并存均未执行，不能把预置板或源码测试写作跨端通过。
 - 按窗口异常边界立即收尾：两端总开关写为 false，macOS package stop/verify jobs 确认 watcher 已终止，Windows 准确 package PID `93952` 已结束；随后两端 helper 均返回 `grant_count=6`、`master_enabled=false`。本地窗口账本和 Windows 写入证据在 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\`；完整远端 jobs 与精确包哈希见 [E5 联合验收](evidence/DESKTOP-E5-ACCEPTANCE.md)。继续前须先离线分析，再取得新的明确临时覆盖授权。
 - 离线定向回归 `TestClipboardConcurrentEnsureSessionsRemainReady` 在 memory adapter/loopback 下验证双端同时启动 inbox、`EnsureClipboardSessions`、双向 lease 与文本 commit，结果 PASS，未复现并发建会话假设；该结果不替代物理准确包 FAIL，也没有读取系统剪贴板。
+
+## 2026-09-19 E5-C 0c59 Windows 键盘复测
+
+- 只读确认 input desktop 为 `Default` 后，启动准确 Windows package PID `80752`，但 `SetForegroundWindow` 返回 false。前台所有权检查未通过即终止，未发送任何 Tab/键盘事件；package 已停止，clipboard master/grant 保持关闭。键盘顺序仍为 UNRESOLVED；下一次仅需用户点击准确 package 窗口使其前台后再检查一次，不强制前台或引入替代自动化。
