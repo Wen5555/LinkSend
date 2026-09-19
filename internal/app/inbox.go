@@ -61,6 +61,11 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return classifyTaskError(err)
 	}
+	s.signalHandoffMu.Lock()
+	defer s.signalHandoffMu.Unlock()
+	if s.isClosing() || s.workCtx.Err() != nil {
+		return errors.New("APP_CLOSING")
+	}
 	s.operationMu.Lock()
 	if s.isClosing() {
 		s.operationMu.Unlock()
@@ -80,7 +85,7 @@ func (s *Service) StartInbox(directory string, cfg DirectConfig) error {
 	s.operationMu.Unlock()
 	s.prewarmNetwork(cfg)
 	s.startLANDiscovery(directory, cfg)
-	s.ensureInbox()
+	s.ensureInboxLocked()
 	return nil
 }
 
@@ -150,6 +155,15 @@ func (s *Service) keepSpareSignal(session *signaling.Session) bool {
 }
 
 func (s *Service) ensureInbox() {
+	s.signalHandoffMu.Lock()
+	defer s.signalHandoffMu.Unlock()
+	s.ensureInboxLocked()
+}
+
+// ensureInboxLocked starts the receiver only while signalHandoffMu is held.
+// Callers that acquire the gate for a sender or clipboard handoff use this to
+// avoid a new WSS connection racing that ownership transition.
+func (s *Service) ensureInboxLocked() {
 	if s.tasks.hasActive() {
 		return
 	}

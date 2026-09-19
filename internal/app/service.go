@@ -51,40 +51,45 @@ type Service struct {
 	lanMu                      sync.RWMutex
 	lan                        *lanRuntime
 	lanError                   string
-	operationMu                sync.Mutex
-	closing                    atomic.Bool
-	lanLifecycleMu             sync.Mutex
-	listenerWorkers            sync.WaitGroup
-	shutdownOnce               sync.Once
-	shutdownDone               chan struct{}
-	store                      *desktopStore
-	storeErr                   error
-	queue                      queueManager
-	changes                    changeHub
-	epoch                      string
-	workCtx                    context.Context
-	workCancel                 context.CancelFunc
-	content                    contentManager
-	lanPair                    lanPairCoordinator
-	recoveryMu                 sync.Mutex
-	lastNetworkChange          time.Time
-	directPoolMu               sync.Mutex
-	directPool                 map[string]*pooledPeerSession
-	directPoolLocks            map[string]*sync.Mutex
-	directPoolWG               sync.WaitGroup
-	directPoolBeforePublish    func(string)
-	clipboardSync              *clipboardsync.State
-	clipboardAdapterMu         sync.RWMutex
-	clipboardAdapter           ClipboardAdapter
-	clipboardDispatchMu        sync.Mutex
-	clipboardSenders           map[string]*clipboardPeerSender
-	clipboardStatusMu          sync.Mutex
-	clipboardPeerRuntime       map[string]clipboardPeerRuntimeStatus
-	clipboardEnsureMu          sync.Mutex
-	clipboardSendSlots         chan struct{}
-	clipboardWorkers           sync.WaitGroup
-	clipboardReceiveSlots      chan struct{}
-	clipboardPaused            atomic.Bool
+	// signalHandoffMu serializes ownership transitions for the single live
+	// signaling connection accepted by the control service. Acquire it before
+	// operationMu and before stopping or starting the inbox; never hold
+	// operationMu across network I/O.
+	signalHandoffMu         sync.Mutex
+	operationMu             sync.Mutex
+	closing                 atomic.Bool
+	lanLifecycleMu          sync.Mutex
+	listenerWorkers         sync.WaitGroup
+	shutdownOnce            sync.Once
+	shutdownDone            chan struct{}
+	store                   *desktopStore
+	storeErr                error
+	queue                   queueManager
+	changes                 changeHub
+	epoch                   string
+	workCtx                 context.Context
+	workCancel              context.CancelFunc
+	content                 contentManager
+	lanPair                 lanPairCoordinator
+	recoveryMu              sync.Mutex
+	lastNetworkChange       time.Time
+	directPoolMu            sync.Mutex
+	directPool              map[string]*pooledPeerSession
+	directPoolLocks         map[string]*sync.Mutex
+	directPoolWG            sync.WaitGroup
+	directPoolBeforePublish func(string)
+	clipboardSync           *clipboardsync.State
+	clipboardAdapterMu      sync.RWMutex
+	clipboardAdapter        ClipboardAdapter
+	clipboardDispatchMu     sync.Mutex
+	clipboardSenders        map[string]*clipboardPeerSender
+	clipboardStatusMu       sync.Mutex
+	clipboardPeerRuntime    map[string]clipboardPeerRuntimeStatus
+	clipboardEnsureMu       sync.Mutex
+	clipboardSendSlots      chan struct{}
+	clipboardWorkers        sync.WaitGroup
+	clipboardReceiveSlots   chan struct{}
+	clipboardPaused         atomic.Bool
 }
 
 type cachedNetworkSelection struct {

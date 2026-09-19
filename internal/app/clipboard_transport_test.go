@@ -724,6 +724,7 @@ func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "both clipboard inboxes did not become ready")
+	connectionsBefore := f.wsConnections.Load()
 	ensured := make(chan error, 2)
 	go func() { ensured <- f.a.EnsureClipboardSessions(ctx, cfg) }()
 	go func() { ensured <- f.b.EnsureClipboardSessions(ctx, cfg) }()
@@ -731,6 +732,10 @@ func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
 		if err := <-ensured; err != nil {
 			t.Fatalf("concurrent clipboard ensure: %v", err)
 		}
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "clipboard handoff did not restore both inboxes")
+	if connectionsAfter := f.wsConnections.Load(); connectionsAfter != connectionsBefore {
+		t.Fatalf("clipboard session setup replaced an inbox WSS connection: before=%d after=%d", connectionsBefore, connectionsAfter)
 	}
 	ready := func(service *Service, peerID string) bool {
 		for _, status := range service.ClipboardPeerStatuses() {
@@ -752,5 +757,70 @@ func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("concurrent clipboard session did not deliver: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
+	}
+}
+
+func TestClipboardEnsureHandoffCancelsBlockedBootstrapDuringShutdown(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	if _, err := f.a.Devices(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.Devices(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		service *Service
+		peerID  string
+	}{
+		{f.a, f.bID.ID()},
+		{f.b, f.aID.ID()},
+	} {
+		for _, direction := range []string{"send", "receive"} {
+			if _, err := item.service.SetClipboardGrant(ctx, ClipboardGrantPatch{PeerID: item.peerID, Direction: direction, Kind: "text", Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	if err := f.a.StartInbox(filepath.Join(t.TempDir(), "a-received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "b-received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "both inboxes did not become ready")
+	reached := make(chan struct{})
+	f.a.directPoolBeforePublish = func(kind string) {
+		if kind != "dial" {
+			return
+		}
+		select {
+		case <-reached:
+		default:
+			close(reached)
+		}
+		<-f.a.workCtx.Done()
+	}
+	ensured := make(chan error, 1)
+	go func() { ensured <- f.a.EnsureClipboardSessions(ctx, cfg) }()
+	select {
+	case <-reached:
+	case <-ctx.Done():
+		t.Fatal("clipboard bootstrap did not reach the controlled publish gate")
+	}
+	shutdownCtx, stopShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopShutdown()
+	if err := f.a.ShutdownContext(shutdownCtx); err != nil {
+		t.Fatalf("shutdown waited for a cancelled clipboard bootstrap: %v", err)
+	}
+	select {
+	case err := <-ensured:
+		if err == nil {
+			t.Fatal("cancelled clipboard bootstrap reported success")
+		}
+	case <-ctx.Done():
+		t.Fatal("cancelled clipboard bootstrap did not return")
 	}
 }

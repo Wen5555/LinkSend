@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	coreapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/identity"
@@ -15,16 +16,21 @@ import (
 func TestActivationJournalConcurrentProducersAndRestart(t *testing.T) {
 	profile, source := t.TempDir(), t.TempDir()
 	var wg sync.WaitGroup
+	errs := make(chan error, 20)
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := stageFileActivation(profile, []string{"中文 文件.txt"}, source); err != nil {
-				t.Error(err)
-			}
+			errs <- stageFileActivationWithBusyRetry(profile, []string{"中文 文件.txt"}, source)
 		}()
 	}
 	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Error(err)
+		}
+	}
 	// A failed draft transaction must not acknowledge/delete any activation.
 	failed := errors.New("disk full")
 	if n, err := consumeFileActivations(profile, func([]string) error { return failed }); n != 0 || !errors.Is(err, failed) {
@@ -43,6 +49,25 @@ func TestActivationJournalConcurrentProducersAndRestart(t *testing.T) {
 	}
 	if n, err = consumeFileActivations(profile, func([]string) error { t.Fatal("replayed removed entry"); return nil }); n != 0 || err != nil {
 		t.Fatal(n, err)
+	}
+}
+
+// Native entry writers receive errActivationBusy when a different producer
+// owns the bounded journal lock. The public contract is explicit retry, so the
+// concurrent-producer test retries only that sentinel and still requires all
+// 20 independently persisted entries; it never masks storage or validation
+// errors.
+func stageFileActivationWithBusyRetry(dataDir string, paths []string, workingDir string) error {
+	// The Windows CI failure completed five entries in the production retry
+	// window. Twenty serialized durable entries therefore need a larger but
+	// still bounded test-only total budget; production keeps its two seconds.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		err := stageFileActivation(dataDir, paths, workingDir)
+		if err == nil || !errors.Is(err, errActivationBusy) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

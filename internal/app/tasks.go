@@ -714,6 +714,11 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		return TaskSnapshot{}, err
 	}
 	cfg.expectedAuthorizationGeneration = authorizationGeneration
+	s.signalHandoffMu.Lock()
+	defer s.signalHandoffMu.Unlock()
+	if s.isClosing() || s.workCtx.Err() != nil {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
+	}
 	if s.tasks.hasActive() {
 		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 	}
@@ -731,7 +736,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, err
 	}
 	if cfg.contentSnapshot != nil {
@@ -740,7 +745,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		if err = s.registerOutgoingContentTask(ctx, cfg.contentTaskID, cfg.contentSnapshot, cfg.contentAllowFallback); err != nil {
 			cancel()
 			t.finish("failed", err)
-			s.ensureInbox()
+			s.ensureInboxLocked()
 			return TaskSnapshot{}, err
 		}
 	}
@@ -748,14 +753,14 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if err = s.checkTaskGrant(t.snapshot()); err != nil {
 		cancel()
 		t.finish("failed", err)
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, err
 	}
 	if cfg.beforeDispatch != nil {
 		if err = cfg.beforeDispatch(t.snapshot()); err != nil {
 			cancel()
 			t.finish("failed", err)
-			s.ensureInbox()
+			s.ensureInboxLocked()
 			return TaskSnapshot{}, err
 		}
 	}
@@ -856,6 +861,11 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	if strings.TrimSpace(directory) == "" {
 		return TaskSnapshot{}, errors.New("INVALID_ARGUMENT: receive directory is required")
 	}
+	s.signalHandoffMu.Lock()
+	defer s.signalHandoffMu.Unlock()
+	if s.isClosing() || s.workCtx.Err() != nil {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
+	}
 	if s.tasks.hasActive() {
 		return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 	}
@@ -874,7 +884,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 		authorizationGeneration, err = s.currentAuthorizationGeneration(expectedPeerID)
 		if err != nil {
 			cancel()
-			s.ensureInbox()
+			s.ensureInboxLocked()
 			return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "current peer grant required", err)
 		}
 		cfg.expectedAuthorizationGeneration = authorizationGeneration
@@ -882,7 +892,7 @@ func (s *Service) StartReceive(expectedPeerID, directory string, cfg DirectConfi
 	t, err := s.tasks.create(TaskSnapshot{Direction: "receive", PeerID: expectedPeerID, TargetDirectory: filepath.Clean(directory), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, err
 	}
 	t.cfg = cfg
@@ -1087,6 +1097,11 @@ func (s *Service) PauseTask(id string) error {
 }
 
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
+	s.signalHandoffMu.Lock()
+	defer s.signalHandoffMu.Unlock()
+	if s.isClosing() || s.workCtx.Err() != nil {
+		return TaskSnapshot{}, errors.New("APP_CLOSING")
+	}
 	if err := s.stopInbox(false); err != nil {
 		return TaskSnapshot{}, err
 	}
@@ -1106,36 +1121,36 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 		other.mu.RUnlock()
 		if running {
 			s.tasks.mu.RUnlock()
-			s.ensureInbox()
+			s.ensureInboxLocked()
 			return TaskSnapshot{}, errors.New("BUSY: another transfer task is active")
 		}
 	}
 	s.tasks.mu.RUnlock()
 	if t == nil {
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, errors.New("TASK_NOT_FOUND")
 	}
 	t.mu.Lock()
 	if t.cancel != nil || !t.snap.CanResume || !recoveryUsable(t.recovery) {
 		t.mu.Unlock()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, errors.New("TASK_NOT_RESUMABLE")
 	}
 	if err := s.validateRecoveryPeer(t.recovery); err != nil {
 		t.mu.Unlock()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, err
 	}
 	currentGeneration, generationErr := identity.AuthorizationGeneration(s.cfg.DataDir, t.recovery.PeerID)
 	if generationErr != nil || t.recovery.AuthorizationGeneration == 0 || currentGeneration != t.recovery.AuthorizationGeneration {
 		t.mu.Unlock()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, protocol.Wrap(protocol.AuthenticationFailed, "task belongs to an older peer authorization", generationErr)
 	}
 	cfg.expectedAuthorizationGeneration = t.recovery.AuthorizationGeneration
 	if err := s.configureContentResume(s.workCtx, id, t.recovery, &cfg); err != nil {
 		t.mu.Unlock()
-		s.ensureInbox()
+		s.ensureInboxLocked()
 		return TaskSnapshot{}, err
 	}
 	if t.recovery.Direction == "receive" {
@@ -1143,7 +1158,7 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 			attemptID := t.snap.AttemptID
 			t.mu.Unlock()
 			t.recoverWithCode(attemptID, protocol.ReceiveDirectoryUnavailable, "needs_attention")
-			s.ensureInbox()
+			s.ensureInboxLocked()
 			return TaskSnapshot{}, err
 		}
 	}

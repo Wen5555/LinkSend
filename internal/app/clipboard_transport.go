@@ -805,10 +805,29 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 		return nil
 	}
 	defer s.clipboardEnsureMu.Unlock()
+	connectRoot, cancelConnectRoot := context.WithCancel(ctx)
+	stopWork := context.AfterFunc(s.workCtx, cancelConnectRoot)
+	defer func() {
+		stopWork()
+		cancelConnectRoot()
+	}()
+
+	s.signalHandoffMu.Lock()
+	if s.isClosing() || s.workCtx.Err() != nil || s.clipboardPaused.Load() {
+		s.signalHandoffMu.Unlock()
+		return nil
+	}
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		s.signalHandoffMu.Unlock()
+		return workErr
+	}
+	defer done()
 	s.clipboardGrantMu.Lock()
 	rows, err := s.store.db.Query(`SELECT DISTINCT peer_id,authorization_generation FROM clipboard_grants WHERE enabled=1`)
 	if err != nil {
 		s.clipboardGrantMu.Unlock()
+		s.signalHandoffMu.Unlock()
 		return err
 	}
 	type target struct {
@@ -827,53 +846,90 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 	rowsErr := rows.Close()
 	s.clipboardGrantMu.Unlock()
 	if rowsErr != nil {
+		s.signalHandoffMu.Unlock()
 		return rowsErr
 	}
-	type ensureResult struct {
-		peerID string
-		err    error
+	if len(targets) == 0 {
+		s.signalHandoffMu.Unlock()
+		return nil
 	}
-	results := make(chan ensureResult, len(targets))
-	var workers sync.WaitGroup
+	requiresSignalHandoff := false
 	for _, item := range targets {
-		item := item
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			key := directPoolKey(item.id, item.generation)
-			s.directPoolMu.Lock()
-			pooled := s.directPool[key]
-			healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
-			s.directPoolMu.Unlock()
-			if healthy {
-				s.setClipboardPeerWaiting(item.id, "")
-				return
-			}
+		key := directPoolKey(item.id, item.generation)
+		s.directPoolMu.Lock()
+		pooled := s.directPool[key]
+		healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
+		s.directPoolMu.Unlock()
+		if !healthy {
+			requiresSignalHandoff = true
+			break
+		}
+	}
+	if !requiresSignalHandoff {
+		for _, item := range targets {
+			s.setClipboardPeerWaiting(item.id, "")
+		}
+		s.signalHandoffMu.Unlock()
+		return nil
+	}
+	if s.tasks.hasActive() {
+		s.signalHandoffMu.Unlock()
+		return nil
+	}
+	// The signaling server owns one live WSS connection per identity. Park the
+	// persistent inbox before every new clipboard dial, then reuse the spare
+	// slot. The gate spans one cancellable dial only; it is released before the
+	// next peer so shutdown or a file task can take ownership promptly.
+	if err := s.stopInbox(false); err != nil {
+		s.signalHandoffMu.Unlock()
+		return err
+	}
+	var result error
+	for index, item := range targets {
+		if s.isClosing() || s.workCtx.Err() != nil || connectRoot.Err() != nil || s.tasks.hasActive() {
+			break
+		}
+		key := directPoolKey(item.id, item.generation)
+		s.directPoolMu.Lock()
+		pooled := s.directPool[key]
+		healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
+		s.directPoolMu.Unlock()
+		if healthy {
+			s.setClipboardPeerWaiting(item.id, "")
+		} else {
 			s.setClipboardPeerWaiting(item.id, "connecting")
-			connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			connectCtx, cancel := context.WithTimeout(connectRoot, 10*time.Second)
 			peerCfg := cfg
 			peerCfg.expectedAuthorizationGeneration = item.generation
 			peer, connectErr := s.acquirePeerSession(connectCtx, item.id, peerCfg)
 			cancel()
 			if connectErr != nil {
 				s.setClipboardPeerError(item.id, "connection_failed")
-				results <- ensureResult{peerID: item.id, err: connectErr}
-				return
-			}
-			releaseErr := s.releasePeerSession(peer, nil)
-			if releaseErr != nil {
-				s.setClipboardPeerError(item.id, "connection_failed")
+				result = errors.Join(result, connectErr)
 			} else {
-				s.setClipboardPeerWaiting(item.id, "waiting_lease")
+				releaseErr := s.releasePeerSession(peer, nil)
+				if releaseErr != nil {
+					s.setClipboardPeerError(item.id, "connection_failed")
+				} else {
+					s.setClipboardPeerWaiting(item.id, "waiting_lease")
+				}
+				result = errors.Join(result, releaseErr)
 			}
-			results <- ensureResult{peerID: item.id, err: releaseErr}
-		}()
+		}
+		if index+1 >= len(targets) {
+			continue
+		}
+		s.signalHandoffMu.Unlock()
+		s.signalHandoffMu.Lock()
+		if s.isClosing() || s.workCtx.Err() != nil || connectRoot.Err() != nil || s.clipboardPaused.Load() || s.tasks.hasActive() {
+			break
+		}
+		if err := s.stopInbox(false); err != nil {
+			result = errors.Join(result, err)
+			break
+		}
 	}
-	workers.Wait()
-	close(results)
-	var result error
-	for item := range results {
-		result = errors.Join(result, item.err)
-	}
+	s.signalHandoffMu.Unlock()
+	s.ensureInbox()
 	return result
 }
