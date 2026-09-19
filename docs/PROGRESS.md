@@ -28,6 +28,13 @@
 - 本机 desktop Go tests、.NET build/self-test 通过；Mac Swift 定向作业 /tmp/codex-ssh/linksend-e3-c1-mac-swift-r2-20260913T165721Z 通过。签名安装与系统激活仍按用户要求 NOT RUN。
 # LinkSend implementation progress
 
+## 2026-09-20 E5 剪贴板 lease window 修复与后台 UIA
+
+- packages run `35456901989` 的 Windows amd64 在 `562bf6b` 上失败，唯一产品断言为 `TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists: image lease did not arrive`；该失败保留，不写为已消失。根因是 10 秒 TTL / 7 秒续租时，同 peer 的两张未过期 text lease 已占满 `MaxLeases=2`，receive:image 更新不能签发完整 text+image lease。
+- `da53ed6` 使 receive policy 更新清除本端已签发窗口，并由每 session 容量一唤醒复用既有续租 worker；对端仅在完整 grant/revision/generation 真正变化时替换已安装窗口。lease 写入保持 2 秒 deadline，取消时 `CancelWrite` 并释放权限锁；wire、TTL、MaxLeases 和 legacy `Install` 上限未改变。受控双端满窗、旧 text 快照门闩、新 image lease/大图路径和取消释放均通过。
+- 准确 `0c59` Windows package（SHA256 `97b3a63a...16e0e3e`）的只读后台 UIA 回执为 `.artifacts/e5-windows-uia-reachability-20260920T011406Z/result.json`：设置和设备导航的 `InvokePattern` 可用，配对码 `Edit` 导出 `ValuePattern`/`TextPattern`；不设前台、不发键盘、不用 CDP/新框架或剪贴板，临时 profile 已删除。传输导航 Invoke 返回成功，但没有导出名为“接收”的 `SelectionItem`，没有开始接收或提交配对。
+- 实际通过：`GOWORK=off go test ./...`、`go vet ./...`、`GOWORK=off go test/vet/build ./...`（`apps/desktop`）和 `GOWORK=off go test -race ./internal/app ./internal/clipboardsync -run 'TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists|TestCancelledClipboardLeaseSendReleasesGrantLock|TestReceivePolicyChangeReplacesBoundedIssuedLeaseWindow|TestReceiveGrantChangeReplacesIssuedLeaseWindow' -count=1`。后续 CI 需重新运行；本地结果不替代准确包或物理剪贴板验收。
+
 ## 2026-09-14 E3 原生共享源码候选（待审查）
 
 - Windows 正式 Share Target 使用 `ShareOperation/StorageItems` 显示真实已配对设备小面板，只持久交接 broker 可打开的绝对路径，不复制正文；无绝对路径的临时/云端项目明确失败。Go 发布最小设备快照并消费 schema 2 journal，以 request ID 幂等后进入现有授权队列。

@@ -46,6 +46,16 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 
 该结果不能证明键盘顺序，也没有扩大为产品键盘缺陷。下一次仅需用户在 package 启动后点击其 Windows 窗口使其成为前台，再运行一次既有 Tab 顺序检查；不强制前台、不注入备用自动化路线。
 
+### E5-C 补充：0c59 Windows 准确包后台 UIA 可达性（PARTIAL）
+
+`2026-09-20T01:14:06Z` 使用同一准确 Windows package、`0c59ae255d631b496a3e483e9c558f2998ee314c`、SHA256 `97b3a63a122df148edbf5b3038b225bda84ad9e8d45b3bd0a5c8f598b16e0e3e`，在新建隔离 profile 中运行既有 `UIAutomationClient`/`UIAutomationTypes` 探针。脚本只调用 UIA navigation 的 `InvokePattern` 和读取的 `ValuePattern`/`TextPattern`，没有调用 `SetForegroundWindow`、`ShowWindow`，没有发送键盘事件、使用 CDP/新自动化框架或读写剪贴板。退出后核验 profile 路径在该运行目录和工作树内，再删除；测试进程已退出。回执位于 ignored `.artifacts/e5-windows-uia-reachability-20260920T011406Z/result.json`，脚本 exit 0。
+
+设置导航的 Invoke 通过并显示“本地配置”；“自动剪贴板 同步与运行状态”和“保存通用设置”均导出 `InvokePattern`。设备导航 Invoke 通过并显示“跨网络配对”；“配对码” Edit 导出 `ValuePattern` 与 `TextPattern`，但没有输入任何代码或提交配对，且无服务/空代码下“生成配对码”“完成配对”保持禁用。传输导航 Invoke 也返回成功，不过探针只看到“传输视图/标签页栏”等 `SelectionPattern` 容器，没有导出名为“接收”的 `SelectionItem`，预期“接收状态”未出现；因此没有选择接收页、更没有开始接收。此结果证明后台 UIA 足以执行后续 U5 设置保存和已授权服务配对的界面导航，不能证明 Tab 顺序、接收流程或准确包网络验收；后两项仍分别需要前台点击或相应真实环境。
+
+### E5-C 修复：剪贴板完整 lease 策略刷新（源码，非物理剪贴板结果）
+
+`da53ed6028f6eb15ada925fbbb119b31bb74e3d6` 修复了 `562bf6b` packages Windows job 中唯一的 `image lease did not arrive` 失败窗口。受控回归先使两端各持有两张未过期 text lease，再仅由 receive:image 设置更新触发完整 text+image 策略；旧 text snapshot 在写出前被门闩阻塞，设置在旧写完成前不能提交，随后新 image lease 到达并继续既有大图路径。相同策略续租仍受两张 TTL 租约上限约束；取消的 lease 写入在 deadline/parent cancel 下释放权限锁。根 `GOWORK=off go test ./...`、root `go vet ./...`、受影响 race，以及 desktop `GOWORK=off go test/vet/build ./...` 均 exit 0。此为源码/loopback 证据：`562bf6b` 的 Windows packages 失败记录仍保留，尚未有修复提交的替代准确包或物理系统剪贴板结果。
+
 ### E5-D：U3 IPv6 与 mDNS 有界原型（PASS，非准确桌面验收）
 
 荷兰 nl-highdefense 只有 loopback/link-local IPv6，故以下均在两个 disposable network namespace 的同一 ULA 链路完成；没有改宿主防火墙、路由、代理或启动常驻 DNS-SD 服务。两个 endpoint 通过 veth 位于 fd42:5d:1::/64，实验结束均删除 namespace、身份、profile、私钥、payload 和上传二进制，只保留脱敏拓扑、摘要和哈希。
