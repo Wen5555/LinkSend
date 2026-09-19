@@ -397,6 +397,18 @@ export interface SendDraft {
 }
 
 /**
+ * TaskFailureDiagnostic retains only a bounded local classification. It is
+ * intentionally separate from user-facing ErrorMessage and never includes raw
+ * transport text, certificate data, paths, tokens, or file content.
+ */
+export interface TaskFailureDiagnostic {
+    "stage": string;
+    "category": string;
+    "code"?: string;
+    "origin"?: string;
+}
+
+/**
  * TaskSnapshot is the process-lifetime application view used by Wails and CLI.
  * It intentionally contains metadata only; file bytes never cross this boundary.
  */
@@ -467,6 +479,7 @@ export interface TaskSnapshot {
     "tls_version"?: number;
     "alpn"?: string;
     "connect_timings": DirectTimings;
+    "failure_diagnostic"?: TaskFailureDiagnostic | null;
     "can_cancel": boolean;
     "can_retry": boolean;
     "can_pause": boolean;

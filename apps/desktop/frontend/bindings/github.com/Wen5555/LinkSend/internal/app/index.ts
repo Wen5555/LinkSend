@@ -42,6 +42,7 @@ export type {
     QueueItem,
     ResendInboxRequest,
     SendDraft,
+    TaskFailureDiagnostic,
     TaskPhaseEvent,
     TaskSnapshot,
     WorkspaceChange,

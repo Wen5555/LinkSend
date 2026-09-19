@@ -216,6 +216,12 @@ func preparePausedTaskForResumeNegativeTest(t *testing.T) (directFixtureServices
 
 func TestResumeRejectsChangedSourceBeforeSendingMoreBytes(t *testing.T) {
 	f, source, paused := preparePausedTaskForResumeNegativeTest(t)
+	record := f.a.tasks.tasks[paused.ID]
+	record.mu.Lock()
+	record.snap.FailureDiagnostic = &TaskFailureDiagnostic{Stage: "quic_handshake", Category: "quic_tls_alert", Code: "CRYPTO_ERROR 0x12a", Origin: "remote"}
+	record.snap.ErrorCode = string(protocol.QUICHandshakeFailed)
+	record.snap.ErrorMessage = "安全直连握手失败"
+	record.mu.Unlock()
 	if err := os.WriteFile(source, bytes.Repeat([]byte{0x3c}, 2*transfer.DefaultChunkSize), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -229,6 +235,9 @@ func TestResumeRejectsChangedSourceBeforeSendingMoreBytes(t *testing.T) {
 	}
 	if failed.SentBytes != paused.SentBytes {
 		t.Fatalf("changed source sent more body bytes: before=%d after=%d", paused.SentBytes, failed.SentBytes)
+	}
+	if failed.FailureDiagnostic != nil {
+		t.Fatalf("prior attempt diagnostic survived new attempt: %+v", failed.FailureDiagnostic)
 	}
 }
 

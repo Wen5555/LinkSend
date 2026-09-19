@@ -12,6 +12,7 @@ import (
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
+	quic "github.com/quic-go/quic-go"
 )
 
 func TestTaskPhaseTimelineRecordsOnlyTransitions(t *testing.T) {
@@ -174,6 +175,22 @@ func TestClassifyTaskErrorKeepsStableCodesAndHidesRawDetails(t *testing.T) {
 	msg = userError(protocol.Fail(protocol.DirectFailed, "private stack / token"))
 	if strings.Contains(msg, "private stack") || strings.Contains(msg, "token") {
 		t.Fatalf("protocol detail leaked: %q", msg)
+	}
+}
+
+func TestTaskPersistsSafeTypedHandshakeDiagnostic(t *testing.T) {
+	manager := newTaskManager()
+	record, err := manager.create(TaskSnapshot{Direction: "send", Phase: "quic_handshake", SessionID: "session"}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.finish("failed", protocol.Wrap(protocol.QUICHandshakeFailed, "QUIC handshake failed", &quic.TransportError{Remote: true, ErrorCode: quic.TransportErrorCode(0x12a), ErrorMessage: "untrusted remote reason"}))
+	got := record.snapshot()
+	if got.FailureDiagnostic == nil || got.FailureDiagnostic.Stage != "quic_handshake" || got.FailureDiagnostic.Category != "quic_tls_alert" || got.FailureDiagnostic.Code != "CRYPTO_ERROR 0x12a" || got.FailureDiagnostic.Origin != "remote" {
+		t.Fatalf("diagnostic=%+v", got.FailureDiagnostic)
+	}
+	if strings.Contains(got.ErrorMessage, "untrusted remote reason") {
+		t.Fatalf("raw transport text leaked: %q", got.ErrorMessage)
 	}
 }
 

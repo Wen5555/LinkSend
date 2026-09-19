@@ -334,6 +334,9 @@ func (m *taskManager) configureHistory(path string) {
 		recoverable := recoveryUsable(recovery)
 		if !isTerminal(snap.State) {
 			snap.Revision++
+			// The prior attempt was interrupted by shutdown. Its diagnostic no
+			// longer describes the restart-recovery attempt we expose now.
+			snap.FailureDiagnostic = nil
 			if recoverable {
 				snap.State = "recovering"
 				snap.Phase = "restart_recovery_available"

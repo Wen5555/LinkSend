@@ -8,8 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/Wen5555/LinkSend/internal/protocol"
+	quic "github.com/quic-go/quic-go"
 )
 
 func TestTaskHistoryPersistsAndMarksInterruptedRecovery(t *testing.T) {
@@ -82,6 +86,51 @@ func TestTaskHistoryCompletedAndRevisionGuard(t *testing.T) {
 	got, _ := s2.Task(stale.ID)
 	if got.State != "completed" || got.Revision <= stale.Revision {
 		t.Fatalf("stale row replaced completion: %+v", got)
+	}
+}
+
+func TestTaskHistoryRetainsSafeTerminalHandshakeDiagnostic(t *testing.T) {
+	dir := t.TempDir()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := service.tasks.create(TaskSnapshot{Direction: "send", PeerID: "peer"}, func() {})
+	if err != nil {
+		service.Shutdown()
+		t.Fatal(err)
+	}
+	record.update(func(snap *TaskSnapshot) { snap.Phase = "quic_handshake" })
+	record.finish("failed", protocol.Wrap(protocol.QUICHandshakeFailed, "internal context", &quic.TransportError{
+		Remote:       true,
+		ErrorCode:    quic.TransportErrorCode(0x12a),
+		ErrorMessage: "untrusted peer-provided reason",
+	}))
+	before := record.snapshot()
+	if before.FailureDiagnostic == nil {
+		service.Shutdown()
+		t.Fatal("failed task did not retain a diagnostic before shutdown")
+	}
+	service.Shutdown()
+
+	restarted, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Shutdown()
+	after, ok := restarted.Task(before.ID)
+	if !ok {
+		t.Fatal("terminal failed task missing after restart")
+	}
+	if got := after.FailureDiagnostic; got == nil || got.Stage != "quic_handshake" || got.Category != "quic_tls_alert" || got.Code != "CRYPTO_ERROR 0x12a" || got.Origin != "remote" {
+		t.Fatalf("terminal handshake diagnostic was not retained safely: %+v", got)
+	}
+	encoded, err := json.Marshal(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "untrusted peer-provided reason") {
+		t.Fatalf("peer-provided text leaked into persisted task snapshot: %s", encoded)
 	}
 }
 

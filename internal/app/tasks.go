@@ -18,6 +18,7 @@ import (
 	"github.com/Wen5555/LinkSend/internal/identity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
+	"github.com/Wen5555/LinkSend/internal/transport"
 )
 
 // TaskSnapshot is the process-lifetime application view used by Wails and CLI.
@@ -25,6 +26,16 @@ import (
 type TaskPhaseEvent struct {
 	Phase string `json:"phase"`
 	At    string `json:"at"`
+}
+
+// TaskFailureDiagnostic retains only a bounded local classification. It is
+// intentionally separate from user-facing ErrorMessage and never includes raw
+// transport text, certificate data, paths, tokens, or file content.
+type TaskFailureDiagnostic struct {
+	Stage    string `json:"stage"`
+	Category string `json:"category"`
+	Code     string `json:"code,omitempty"`
+	Origin   string `json:"origin,omitempty"`
 }
 
 type TaskSnapshot struct {
@@ -86,6 +97,7 @@ type TaskSnapshot struct {
 	TLSVersion               uint16                       `json:"tls_version,omitempty"`
 	ALPN                     string                       `json:"alpn,omitempty"`
 	ConnectTimings           DirectTimings                `json:"connect_timings"`
+	FailureDiagnostic        *TaskFailureDiagnostic       `json:"failure_diagnostic,omitempty"`
 	CanCancel                bool                         `json:"can_cancel"`
 	CanRetry                 bool                         `json:"can_retry"`
 	CanPause                 bool                         `json:"can_pause"`
@@ -390,6 +402,18 @@ func applyDirectEvidence(snapshot *TaskSnapshot, evidence DirectEvidence) {
 func clearDirectEvidence(snapshot *TaskSnapshot) {
 	applyDirectEvidence(snapshot, DirectEvidence{})
 }
+
+func taskHandshakeDiagnostic(err error, stage string) *TaskFailureDiagnostic {
+	if err == nil || stage != "quic_handshake" {
+		return nil
+	}
+	code := protocol.ErrorCode(err)
+	if code != protocol.QUICHandshakeFailed && code != protocol.QUICHandshakeTimeout && code != protocol.AuthenticationFailed {
+		return nil
+	}
+	info := transport.HandshakeFailure(err)
+	return &TaskFailureDiagnostic{Stage: stage, Category: info.Category, Code: info.Code, Origin: info.Origin}
+}
 func (t *taskRecord) finish(state string, err error) {
 	t.finishAttempt("", state, err)
 }
@@ -430,6 +454,9 @@ func (t *taskRecord) finishAttempt(attemptID, state string, err error) {
 	if err != nil {
 		t.snap.ErrorCode = string(protocol.ErrorCode(err))
 		t.snap.ErrorMessage = userError(err)
+		t.snap.FailureDiagnostic = taskHandshakeDiagnostic(err, t.snap.Phase)
+	} else {
+		t.snap.FailureDiagnostic = nil
 	}
 	snap := t.snap
 	recovery := t.recovery
@@ -453,6 +480,7 @@ func (t *taskRecord) pauseAttempt(attemptID string) {
 	t.snap.ByteResumeSupported = t.snap.CanResume
 	t.snap.ErrorCode = ""
 	t.snap.ErrorMessage = ""
+	t.snap.FailureDiagnostic = nil
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.cancel = nil
 	t.incoming = nil
@@ -481,6 +509,7 @@ func (t *taskRecord) recoverWithCode(attemptID string, code protocol.Code, phase
 	t.snap.ByteResumeSupported = t.snap.CanResume
 	t.snap.ErrorCode = string(code)
 	t.snap.ErrorMessage = userErrorForCode(code)
+	t.snap.FailureDiagnostic = nil
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.cancel = nil
 	t.incoming = nil
@@ -1135,6 +1164,7 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	t.snap.CanRetry = false
 	t.snap.ErrorCode = ""
 	t.snap.ErrorMessage = ""
+	t.snap.FailureDiagnostic = nil
 	t.snap.EndedAt = ""
 	t.snap.RateBytesPerSecond = nil
 	t.snap.Revision++
