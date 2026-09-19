@@ -640,7 +640,7 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 
 - 用户一次性授权的临时双端覆盖窗口为 `2026-09-19T14:50:18.3854890Z` 至 `2026-09-19T15:04:25.5588969Z`。两端隔离 profile 的 `clipboard_enabled` 与该测试 peer 的 send/receive × text/link/image 六项 grant 曾由不接触 native clipboard 的 helper 开启；Windows `System.Windows.Forms.Clipboard` 与 macOS `NSPasteboard.general` 均先写入、回读了各自已知预置文本。没有读取、导出、备份、恢复或检查写入前的日常剪贴板内容。
 - Windows 准确包启动后以 `System.Windows.Forms.Clipboard` 写入并回读 `E5B-WIN-TEXT-20260919T1501Z`（`2026-09-19T15:00:57.1855645Z`）。Mac 对该值执行标准 `NSPasteboard.general` 断言时，受管 job `/tmp/codex-ssh/linksend-e5b-assert-mac-text-0c59-20260919T150130Z` exit 1，`SYSTEM_CONSUMER_TEXT_ASSERTION_FAILED`。因此 Windows→Mac 文本为 FAIL；链接、3×2 PNG、Mac→Windows、防回环 A/B/C 和文件并存均未执行，不能把预置板或源码测试写作跨端通过。
-- 按窗口异常边界立即收尾：两端总开关写为 false，macOS package stop/verify jobs 确认 watcher 已终止，Windows 准确 package PID `93952` 已结束；随后两端 helper 均返回 `grant_count=6`、`master_enabled=false`。本地窗口账本和 Windows 写入证据在 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\`；完整远端 jobs 与精确包哈希见 [E5 联合验收](evidence/DESKTOP-E5-ACCEPTANCE.md)。继续前须先离线分析，再取得新的明确临时覆盖授权。
+- 按窗口异常边界立即收尾：两端总开关写为 false，macOS package stop/verify jobs 确认 watcher 已终止，Windows 准确 package PID `93952` 已结束；随后两端 helper 均返回 `grant_count=6`、`master_enabled=false`。本地窗口账本和 Windows 写入证据在 `C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5a-0c59\`；完整远端 jobs 与精确包哈希见 [E5 联合验收](evidence/DESKTOP-E5-ACCEPTANCE.md)。已完成离线分析；用户现已允许同范围临时覆盖，但本轮窗口启动在执行层 `blocked by policy` 前被拒绝，未重写系统剪贴板。
 - 离线定向回归 `TestClipboardConcurrentEnsureSessionsRemainReady` 在 memory adapter/loopback 下验证双端同时启动 inbox、`EnsureClipboardSessions`、双向 lease 与文本 commit，结果 PASS，未复现并发建会话假设；该结果不替代物理准确包 FAIL，也没有读取系统剪贴板。
 
 ## 2026-09-19 E5-C 0c59 Windows 键盘复测

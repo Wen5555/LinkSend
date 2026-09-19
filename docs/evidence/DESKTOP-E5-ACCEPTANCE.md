@@ -32,7 +32,7 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 
 离线定向回归 `TestClipboardConcurrentEnsureSessionsRemainReady` 使用内存 clipboard adapter，双端同时启动 inbox 和 `EnsureClipboardSessions`，确认双向 lease 就绪并完成文本 commit。它通过，故没有复现“同时建会话”这一假设；loopback/memory 结果不替代本节物理准确包的 FAIL，也没有读取系统剪贴板。
 
-重开系统剪贴板测试前，先离线定位此失败；需要新的用户明确临时覆盖授权。下一次复制前后必须复用准确 package 已有 `ClipboardWatcher` 设置页，记录其可见的 master、active/paused/reason/error 与汇总 peer 状态；进程存活或固定等待不能代替 ready 证据。不得重试 private WinSta、CDP 或创建新的隔离桌面路线。
+重开系统剪贴板测试前，先离线定位此失败；用户现已允许同范围临时覆盖，但本轮启动聚合在执行层 `blocked by policy` 前停止，未出现副作用。下一次复制前后复用准确 package 已有 `ClipboardWatcher` 设置页，能读取时记录 master、active/paused/reason/error 与汇总 peer 状态；不得重试 private WinSta、CDP 或创建新的隔离桌面路线。
 
 #### 下一次有界复测准备（未执行）
 

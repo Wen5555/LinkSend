@@ -80,7 +80,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | U1 一次接收 | E2-01 源码、计划/策略/恢复约束；E5-G 的准确 package 默认“接收文件”弹窗、`keep_both`、双端 1 MiB hash PASS | 断线/应用重启中的接收恢复、更多目录/异常矩阵仍待；本次不依赖剪贴板授权。 |
 | U2 配对/删除 | E1-01/02/03 主路径源码；E5-G 准确 package UI 配对、精确删除、HK `revoked=1` 与 profile 重启不复活 PASS；E5-H 用同一已撤销 identity 显式重新配对后由 4d 准确 UI 再次删除/服务端清理 PASS | LAN 反向现场路径、离线 outbox 和更多系统确认矩阵仍 PARTIAL。 |
 | U3 发现/恢复 | IPv4 主路径、原生事件与快照源码；E5-D test-only IPv6 signed discovery/LAN TLS 与 mDNS 原型 | 生产 IPv6 discovery/mDNS provider 未启用；物理多网卡、准确包IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行，均须在相应真实环境和操作下完成。荷兰隔离 namespace 仅验证原型，不能替代物理双机矩阵。 |
-| U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；其余双向文本/链接/图片、防回环和文件并存需要新的明确临时剪贴板授权。 |
+| U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；用户已允许本轮临时覆盖，但启动聚合在执行层被 `blocked by policy` 拒绝、窗口未启动；其余双向文本/链接/图片、防回环和文件并存待可实际执行的同范围有界窗口。 |
 | U5 设置 | E2-02 源码/浏览器范围；0c59 准确 Windows package 的两次“本机名称”后台 UIA 保存/持久化 PASS；E5-H 4d 准确包确认设备目录继承、策略覆盖后恢复继承、全局 `keep_both`、六项 clipboard 权限默认关闭及受管系统目录 picker 的标准控件可达 | 文件接收、更多设备覆盖及物理双机设置矩阵仍待；Mac AX 未获用户授权，不扩展自动化。 |
 | U6 系统共享 | E3 源码和非签名构建 | Windows package identity/系统激活、Mac App Group/Share Extension 注册与安装生命周期；用户已暂缓签名/信任条件。 |
 | U7 四视图 | E2-04 浏览器范围、部分准确包 125%/小窗证据 | Windows Tab 顺序需用户点击准确 package 置前台；150%/深色需要用户提供相应系统显示/主题条件，Mac 原生控件矩阵未运行。 |
@@ -96,4 +96,4 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 - 生产先验证可读备份，再最小修改、独立验证和明确回滚；只使用已核实提交，旧数据库不能覆盖新业务写入。
 - 保护用户 profile/文件/剪贴板；保留无关未跟踪目录并逐路径暂存，不使用 git add .。
 - 根/desktop 两模块分别验证（含 GOWORK=off），前端与原生/网络结果独立。协议/schema 变更先文档与兼容安全测试。
-- 本批 E5-A 已在 `10.234.35.5` 完成 resolve/probe/audit 和受管 remote jobs；HK 健康生产服务继续保持 `387b57c`/schema 4，未重新部署。两端 0c59 隔离包仍可为 E5-B 使用；系统剪贴板保持不读不覆盖，等待一次明确的双端临时使用授权。
+- 本批 E5-A 已在 `10.234.35.5` 完成 resolve/probe/audit 和受管 remote jobs；HK 健康生产服务继续保持 `387b57c`/schema 4，未重新部署。系统剪贴板保持不读不覆盖；用户已允许同范围双端临时使用，但本次执行层拒绝了窗口启动，未产生 package 或 profile 副作用。
