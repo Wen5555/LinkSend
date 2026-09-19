@@ -57,7 +57,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | E1-01 | 源码验收通过 | PASS | PASS | NOT RUN | NOT RUN | PASS | 总控已接受 `666cbaa` E1 后端范围；准确包配对 UI/物理矩阵留 E5 |
 | E1-02 | 源码验收通过 | PASS | PASS | NOT RUN | NOT RUN | PASS | 总控已接受 `666cbaa`；准确包离线 outbox/重启同步仍未实机 |
 | E1-03 | 源码验收通过 | PASS | PASS | NOT RUN | PARTIAL | PASS | LAN 同意/恢复源码已接受；旧物理 LAN 仅 PARTIAL，准确 package 系统确认留 E5 |
-| E1-04 | 部分验收通过 | PARTIAL | PASS | NOT RUN | PARTIAL | PASS | IPv4 主路径源码已接受；双栈/mDNS provider 原型未执行，物理多网卡/IPv6/睡眠矩阵未闭合 |
+| E1-04 | 部分验收通过 | PARTIAL | PASS | NOT RUN | PARTIAL | PASS | IPv4 主路径源码已接受；E5-D test-only 双栈/mDNS 原型已通过但生产 provider 未启用，物理多网卡/准确包IPv6/睡眠矩阵未闭合 |
 | E1-05 | 源码验收通过 | PASS | PASS | 源码构建PASS/准确包NOT RUN | NOT RUN | PASS | 事实目录、原生事件与5秒快照已接线；准确包事件延迟、网络/睡眠矩阵未闭合 |
 | E2-01 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | 复用E1 | PASS | 默认计划读取设备覆盖/全局同名策略；普通/免确认一致，恢复计划不变；准确包联合验收留E5 |
 | E2-02 | 验收通过 | PASS | PASS | 浏览器PASS/准确包NOT RUN | NOT RUN | PASS | schema7设备策略继承、全局策略、字段级dirty合并、deferred-save和CAS重试已验收 |
@@ -79,13 +79,13 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 |---|---|---|
 | U1 一次接收 | E2-01 源码、计划/策略/恢复约束 | 准确 package 的一次默认接收与接收确认/恢复流程；需要双机准确包，不依赖剪贴板授权。 |
 | U2 配对/删除 | E1-01/02/03 主路径源码 | 准确包配对、删除后不复活和系统确认的物理矩阵；LAN 反向现场路径仍 PARTIAL。 |
-| U3 发现/恢复 | IPv4 主路径、原生事件与快照源码 | 双栈和 mDNS provider 的原型选择/验证尚未执行；物理多网卡、IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行。前者可在已授权荷兰隔离环境独立推进，不改宿主网络。 |
+| U3 发现/恢复 | IPv4 主路径、原生事件与快照源码；E5-D test-only IPv6 signed discovery/LAN TLS 与 mDNS 原型 | 生产 IPv6 discovery/mDNS provider 未启用；物理多网卡、准确包IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行。后者仍可在已授权荷兰隔离环境独立推进，不改宿主网络。 |
 | U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；其余双向文本/链接/图片、防回环和文件并存需要新的明确临时剪贴板授权。 |
 | U5 设置 | E2-02 源码/浏览器范围 | 准确包设置交互的补充现场证据可与双机 UI 一并完成；不需要主题或剪贴板授权。 |
 | U6 系统共享 | E3 源码和非签名构建 | Windows package identity/系统激活、Mac App Group/Share Extension 注册与安装生命周期；用户已暂缓签名/信任条件。 |
 | U7 四视图 | E2-04 浏览器范围、部分准确包 125%/小窗证据 | Windows Tab 顺序需用户点击准确 package 置前台；150%/深色需要用户提供相应系统显示/主题条件，Mac 原生控件矩阵未运行。 |
 
-独立最小建议：在荷兰隔离 namespace 中完成 U3 双栈和 mDNS provider 原型的技术选择与验证，限定为 provider/IPv6 发现、TLS 控制和 QUIC 文件分项，不重做双 NAT、不改宿主网络或产品 UI。
+U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现、TLS 控制、QUIC 文件分项与 DNS-SD 候选 hint；没有重做双 NAT、改宿主网络或扩产品 UI。后续只在明确产品收益与签名 hint 验证入口成立时评估生产 provider。
 
 ## 执行边界与恢复入口
 

@@ -71,6 +71,14 @@ schema 迁移测试必须确认：v1 数据可读、迁移前 `task-history.sqli
 
 ## P2 网络实验
 
+### E5-D U3 IPv6/mDNS 受控原型
+
+在 disposable Linux root namespace 环境中，从干净提交交叉编译 prototype binary 后，分别运行 scripts/e5d-ipv6-discovery-netns.sh 与 scripts/e5d-mdns-netns.sh。二者都要求 LINKSEND_ISOLATED_LAB=1，只允许管理自身 linksend-e5d-v6-a/linksend-e5d-v6-b namespace 和唯一 /tmp/linksend-e5d-* 根。
+
+签名发现脚本运行 TestE5DIPv6DiscoveryPrototype：它复用真实 packet Ed25519 签名/replay 校验、Manager.remember 的 DeviceID route 合并与 identity TLS pin，在一个 ULA endpoint 上使用两个地址验证多 route 合并；它是 test-only prototype，不能宣称 production Manager 已双栈。mDNS 脚本构建/运行 cmd/e5d-mdns-prototype 的 Pion DNS-SD publisher/browser；TXT 只允许作为候选 hint，不是身份、成员资格或授权依据。
+
+应记录 clean source commit、go version -m、binary SHA256、namespace 拓扑、result summary、远程 job 及 cleanup。不得用 host ::1、link-local 或同 namespace loopback 冒充双 endpoint IPv6；不得把该结果扩大为公网 IPv6、准确桌面 package 或多网卡矩阵通过。
+
 `internal/connectivity` 测试覆盖接口优先级/排除、IPv4/IPv6 地址族、IPv6 link-local 拒绝、地址消失触发 endpoint 失效和诊断脱敏。真实双 NAT 使用 `scripts/dual-nat-netns.sh`，只能在 disposable Linux VM 的 root 或 rootless user namespace 内显式设置 `LINKSEND_ISOLATED_LAB=1` 后运行；需要 `iproute2`、iptables、openssl、coturn 和本轮 Linux 二进制。脚本创建两个独立 NAT namespace 与重叠私网，通过独立 WAN 上的 STUN-only/HTTPS 服务传输 8 MiB，并保留 NAT 计数、拓扑、候选、session 和内容摘要。`bash -n` PASS 不是运行态 PASS。
 
 2026-09-11 在 `lab-server` 实际运行两种边界。MASQUERADE-only/状态过滤为 `CHECK_TIMEOUT`，不得改写为外部环境阻塞；固定 UDP SNAT/DNAT 的可穿透 NAT 为 PASS：8,388,608 bytes、SHA256 `9d9094fb6ec5cc17f6bbbd713ea2f4283a60482532ccfc955e051f4d5b5c90c7`、发送 STUN 16/6、接收 STUN 20/8、NAT 计数 9/7、TLS 1.3/ALPN `linksend/1`、`relay=false`、`connection_method=direct_unknown`。成功 manager job 为 `/tmp/codex-ssh/linksend-dual-nat-rootless-r5-20260911T082528Z`；最终回滚 job 为 `/tmp/codex-ssh/linksend-dual-nat-final-rollback-20260911T082920Z`。脱敏证据包位于 `.artifacts/final-20260911/linux-dual-nat-evidence-20260911.tar.gz`，SHA256 `ba7447fe3eb603b669db3a76ab7ba2be049d7abeeefdb94b4927161f43f7eebf`。宿主地址/路由前后一致；宿主 iptables 无非交互读取权限，不能把该字段记为 PASS，但 rootless 外层 network namespace 保证实验规则不进入宿主网络栈。

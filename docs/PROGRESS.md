@@ -1,3 +1,10 @@
+## 2026-09-20 E5-D U3 IPv6/mDNS 有界原型
+
+- 干净 77ce6bf Linux CLI/rendezvous 在荷兰隔离同链路 ULA namespace 完成 IPv6 SAN HTTPS/WSS、真实 Pion ICE host pair、QUIC TLS 1.3 和双向 1 MiB 文件；两端 SHA256 一致、relay=false。这不是公网 IPv6、LAN discovery 或准确桌面 package 验收。
+- 提交 4edb742 增加 test-only IPv6 signed discovery/LAN TLS prototype 与可复现 namespace 脚本。真实 job 证明同一 DeviceID 的 fd42:5d:1::2/::4 两条已签名 route 合并，并由 B→A 一次 TLS 1.3 pin/heartbeat 控制连接验证；生产 Manager 未改变，默认 IPv6 discovery 未启用。
+- Pion mDNS v2.2.0 的 IPv6 DNS-SD publish/browse 在相同范围通过；DNS-SD 只提供未信任候选 hint，当前无 production provider。未来集成须复用现有签名 announcement 与 TLS pin 验证，不能信任 TXT。
+- 77ce6bf 的 core push/PR、desktop push/PR 与 packages 五个 CI run 均 success。实际命令、二进制摘要、job 与限制见 docs/evidence/DESKTOP-E5-ACCEPTANCE.md；可复现入口见 scripts/e5d-ipv6-discovery-netns.sh、scripts/e5d-mdns-netns.sh。
+
 ## 2026-09-14 E4-01 profile SQLite owner 测量
 
 - taskManager 持有 profile 生命周期唯一 task-history.sqlite 连接并共享给 desktopStore，构造失败和 Shutdown 显式关闭；MaxOpenConns=1，失败仍撤销 durability claim。

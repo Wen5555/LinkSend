@@ -45,6 +45,20 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 `2026-09-19T15:24:36.1159385Z` 的只读 `OpenInputDesktop` 结果为 `Default`，已不再是此前的 `Screen-saver` 条件。随后以 SHA256 `97b3a63a...16e0e3e` 的准确 Windows package 启动 PID `80752`，主窗口可被 UIA 找到；测试在验证前台所有权时收到 `FOREGROUND_REJECTED`。安全门槛因此未发送任何 Tab/键盘事件，PID 于 `2026-09-19T15:26:35.2786935Z` 停止，clipboard master 和六项 grant 全程保持关闭。
 
 该结果不能证明键盘顺序，也没有扩大为产品键盘缺陷。下一次仅需用户在 package 启动后点击其 Windows 窗口使其成为前台，再运行一次既有 Tab 顺序检查；不强制前台、不注入备用自动化路线。
+
+### E5-D：U3 IPv6 与 mDNS 有界原型（PASS，非准确桌面验收）
+
+荷兰 nl-highdefense 只有 loopback/link-local IPv6，故以下均在两个 disposable network namespace 的同一 ULA 链路完成；没有改宿主防火墙、路由、代理或启动常驻 DNS-SD 服务。两个 endpoint 通过 veth 位于 fd42:5d:1::/64，实验结束均删除 namespace、身份、profile、私钥、payload 和上传二进制，只保留脱敏拓扑、摘要和哈希。
+
+IPv6 信令/ICE/QUIC 使用干净 detached 77ce6bf221740cba7c4588c0d55d66fc27835131 构建的 Linux amd64 CLI（SHA256 fe976c4fc0b3175d93e45046fc2798e02cee55e2825b88af74487c4bf84a6cd3）与 rendezvous（ffb3077de050188e5352f0a62926c4d5079dbe3c4a1765d4fe1c2ffbd9cd43ac）。manager job /tmp/codex-ssh/linksend-e5d-v6-quic-r3-20260920-20260919T161737Z exit 0：IPv6 literal SAN fd42:5d:1::2 的 HTTPS/WSS 经 openssl verify_ip 和 CLI 均校验成功；两个方向各传 1,048,576 bytes，a→b source/received SHA256 均为 8fcb03cc49c5723f401ae93cfc3a0420ebf3538f43e16259ca2084f750384fa7，b→a 均为 0ea1a3fe657735fbceaaea180b1367de58aeb80f1832a3fc7bbe12f96b3944f9。四个 DirectEvidence 均为 IPv6 host↔host、lan_direct、QUIC、TLS 1.3（772）、ALPN linksend/1、relay=false；每端信令计数约 1.7 KiB，未承载文件正文。脱敏回执位于本机 supervision e5d-v6-20260920T0012Z。
+
+签名发现/LAN TLS 使用提交 4edb7422efbe7d723160d45e13a8e41676bf283f 的 test-only TestE5DIPv6DiscoveryPrototype，test binary SHA256 为 4f188a9d077fa38ad8635385971be6ebc62da148526fdbea058ea9bc763d763d。job /tmp/codex-ssh/linksend-e5d-ipv6-discovery-20260920-20260919T164804Z exit 0：A 端同一 Ed25519 DeviceID 从 fd42:5d:1::2 与 fd42:5d:1::4 发出真实 IPv6 multicast signed packet；B 接受两条签名 packet 并将其合并为一个 DeviceID、两条 route。B 随后通过其中的已发现 route 建立一次到 A 的 LAN TLS 控制连接并发送 heartbeat；A 作为 TLS server 验证 B 的发现公钥，B pin A 的发现公钥。双方验证 TLS 1.3（772）与 linksend/1。这是一条 B→A 已认证控制连接，不是双向独立连接，也没有由该发现触发 QUIC 或文件传输。
+
+mDNS/DNS-SD 使用 Pion github.com/pion/mdns/v2 v2.2.0、项目固定的 golang.org/x/net v0.56.0。首次 job /tmp/codex-ssh/linksend-e5d-mdns-20260920-20260919T162655Z 在 browse_dns_sd 超时，保留为原型输入错误；修正 SRV target 的完整主机名后，job /tmp/codex-ssh/linksend-e5d-mdns-r2-20260920-20260919T163100Z exit 0。A 发布 _linksend._udp，B 成功 browse 到 AAAA/SRV/TXT 候选 fd42:5d:1::2:41001；veth A TX 由 1 增至 13、B RX 由 1 增至 13。TXT 仅含 candidate、proto，结论是 IPv6 同链路 DNS-SD 可提供候选 hint。
+
+复现入口为 scripts/e5d-ipv6-quic-netns.sh、scripts/e5d-ipv6-discovery-netns.sh 与 scripts/e5d-mdns-netns.sh。前者运行双向文件和 IPv6 HTTPS/WSS/ICE/QUIC 分项；第二项运行 test-only 签名/route/TLS 原型；第三项运行 cmd/e5d-mdns-prototype。三者都要求 LINKSEND_ISOLATED_LAB=1、root network namespace 能力和本轮交叉编译 Linux binary。
+
+当前不启用生产 IPv6 discovery 或 mDNS provider。internal/discovery.Manager 仍是 IPv4 listener/route/probe 实现；mDNS 的正确边界是未信任候选 hint，未来接入必须把候选送回有界的 LinkSend 签名 discovery 和 TLS identity pin 验证。以上不证明公网 IPv6、准确 Windows/macOS package IPv6、物理多网卡/DHCP/VPN/sleep 矩阵，且不改变 relay=false。
 ## 候选来源与 CI
 
 - Draft PR：[#8](https://github.com/Wen5555/LinkSend/pull/8)。
