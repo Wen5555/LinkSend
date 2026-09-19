@@ -81,7 +81,7 @@ E0 准备记录：[DESKTOP-E0-PREPARATION](evidence/DESKTOP-E0-PREPARATION.md)�
 | U2 配对/删除 | E1-01/02/03 主路径源码 | 准确包配对、删除后不复活和系统确认的物理矩阵；LAN 反向现场路径仍 PARTIAL。 |
 | U3 发现/恢复 | IPv4 主路径、原生事件与快照源码；E5-D test-only IPv6 signed discovery/LAN TLS 与 mDNS 原型 | 生产 IPv6 discovery/mDNS provider 未启用；物理多网卡、准确包IPv6、DHCP、VPN/TUN、睡眠矩阵也未执行，均须在相应真实环境和操作下完成。荷兰隔离 namespace 仅验证原型，不能替代物理双机矩阵。 |
 | U4 自动剪贴板 | E2 旧入口迁移、E4 源码 | 准确包物理同步首条 Windows→Mac 文本 FAIL；其余双向文本/链接/图片、防回环和文件并存需要新的明确临时剪贴板授权。 |
-| U5 设置 | E2-02 源码/浏览器范围 | 准确包设置交互的补充现场证据可与双机 UI 一并完成；不需要主题或剪贴板授权。 |
+| U5 设置 | E2-02 源码/浏览器范围；0c59 准确 Windows package 的“本机名称”后台 UIA 保存/持久化 PASS | 文件接收、设备覆盖和物理双机设置矩阵仍待验收；不需要主题或剪贴板授权。 |
 | U6 系统共享 | E3 源码和非签名构建 | Windows package identity/系统激活、Mac App Group/Share Extension 注册与安装生命周期；用户已暂缓签名/信任条件。 |
 | U7 四视图 | E2-04 浏览器范围、部分准确包 125%/小窗证据 | Windows Tab 顺序需用户点击准确 package 置前台；150%/深色需要用户提供相应系统显示/主题条件，Mac 原生控件矩阵未运行。 |
 

@@ -48,9 +48,15 @@ V2 journal 仅是受控的 native-entry fixture：它保存路径与目标元数
 
 ### E5-C 补充：0c59 Windows 准确包后台 UIA 可达性（PARTIAL）
 
-`2026-09-20T01:14:06Z` 使用同一准确 Windows package、`0c59ae255d631b496a3e483e9c558f2998ee314c`、SHA256 `97b3a63a122df148edbf5b3038b225bda84ad9e8d45b3bd0a5c8f598b16e0e3e`，在新建隔离 profile 中运行既有 `UIAutomationClient`/`UIAutomationTypes` 探针。脚本只调用 UIA navigation 的 `InvokePattern` 和读取的 `ValuePattern`/`TextPattern`，没有调用 `SetForegroundWindow`、`ShowWindow`，没有发送键盘事件、使用 CDP/新自动化框架或读写剪贴板。退出后核验 profile 路径在该运行目录和工作树内，再删除；测试进程已退出。回执位于 ignored `.artifacts/e5-windows-uia-reachability-20260920T011406Z/result.json`，脚本 exit 0。
+`2026-09-19T17:14:06.8479737Z` 使用同一准确 Windows package、`0c59ae255d631b496a3e483e9c558f2998ee314c`、SHA256 `97b3a63a122df148edbf5b3038b225bda84ad9e8d45b3bd0a5c8f598b16e0e3e`，在新建隔离 profile 中运行既有 `UIAutomationClient`/`UIAutomationTypes` 探针。脚本只调用 UIA navigation 的 `InvokePattern` 和读取的 `ValuePattern`/`TextPattern`，没有调用 `SetForegroundWindow`、`ShowWindow`，没有发送键盘事件、使用 CDP/新自动化框架或读写剪贴板。退出后核验 profile 路径在该运行目录和工作树内，再删除；测试进程已退出。回执位于 ignored `.artifacts/e5-windows-uia-reachability-20260920T011406Z/result.json`，脚本 exit 0。
 
 设置导航的 Invoke 通过并显示“本地配置”；“自动剪贴板 同步与运行状态”和“保存通用设置”均导出 `InvokePattern`。设备导航 Invoke 通过并显示“跨网络配对”；“配对码” Edit 导出 `ValuePattern` 与 `TextPattern`，但没有输入任何代码或提交配对，且无服务/空代码下“生成配对码”“完成配对”保持禁用。传输导航 Invoke 也返回成功，不过探针只看到“传输视图/标签页栏”等 `SelectionPattern` 容器，没有导出名为“接收”的 `SelectionItem`，预期“接收状态”未出现；因此没有选择接收页、更没有开始接收。此结果证明后台 UIA 足以执行后续 U5 设置保存和已授权服务配对的界面导航，不能证明 Tab 顺序、接收流程或准确包网络验收；后两项仍分别需要前台点击或相应真实环境。
+
+### E5-C 补充：0c59 Windows 准确包 U5 通用设置保存（PASS，局部）
+
+`2026-09-19T18:01:54.8018470Z` 用同一 package 和 SHA256 新建隔离 profile 后，后台 UIA Invoke“设置”，找到“本机名称” Edit 的 `ValuePattern`/`TextPattern`，以 `ValuePattern.SetValue` 写入本轮临时 marker，再 Invoke“保存通用设置”。轮询并直接读取隔离 profile 的 `desktop-preferences.json`，marker 与 `device_name` 一致、`revision=1`；脚本 exit 0。回执为 ignored `.artifacts/e5-windows-uia-settings-save-20260920T020154Z/result.json`。
+
+本轮没有调用 `SetForegroundWindow`、`ShowWindow`，没有发送键盘事件、使用 CDP/新框架或读写剪贴板。测试进程退出后，profile 删除前先验证其规范路径属于此运行目录和工作树，删除结果为 true。此项只验收通用分类的一次本地持久化；没有变更网络、接收目录、设备覆盖或自动剪贴板，不替代物理双机设置矩阵。
 
 ### E5-C 修复：剪贴板完整 lease 策略刷新（源码，非物理剪贴板结果）
 
