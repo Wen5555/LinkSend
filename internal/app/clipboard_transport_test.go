@@ -458,10 +458,60 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	if _, err = f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "send", Kind: "image", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "image", Enabled: true}); err != nil {
+	// Recreate the precise renewal window from the Windows CI failure: both
+	// ends already hold two unexpired text leases. The image receive-policy
+	// change below is the only normal API transition; its renewal must replace
+	// both bounded windows with one text+image lease.
+	f.b.clipboardSync.InvalidatePeerDirection(f.aID.ID(), false)
+	f.a.clipboardSync.InvalidatePeerDirection(f.bID.ID(), true)
+	textGrants := f.b.clipboardGrants(f.aID.ID(), "receive", reversePeer.AuthorizationGeneration)
+	if len(textGrants) != 1 || textGrants[0].Kind != clipboardsync.Text {
+		t.Fatalf("unexpected pre-image receive grants: %+v", textGrants)
+	}
+	for index, id := range []string{"pre-image-text-a", "pre-image-text-b"} {
+		if _, err = f.b.clipboardSync.IssueScoped(f.aID.ID(), reversePeer.SessionID, reversePeer.AuthorizationGeneration, textGrants, clipboardLeaseTTL); err != nil {
+			t.Fatalf("fill issued text lease %d: %v", index, err)
+		}
+		if err = f.a.clipboardSync.InstallScoped(id, f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, textGrants, clipboardLeaseTTL, aGeneration.Load()); err != nil {
+			t.Fatalf("fill installed text lease %d: %v", index, err)
+		}
+	}
+	oldLeaseEntered, releaseOldLease := make(chan struct{}), make(chan struct{})
+	var releaseOldLeaseOnce sync.Once
+	unblockOldLease := func() { releaseOldLeaseOnce.Do(func() { close(releaseOldLease) }) }
+	defer unblockOldLease()
+	var oldLeaseOnce sync.Once
+	f.b.clipboardLeaseBeforeWrite = func() {
+		oldLeaseOnce.Do(func() {
+			close(oldLeaseEntered)
+			<-releaseOldLease
+		})
+	}
+	oldLeaseDone := make(chan struct{})
+	go func() {
+		f.b.sendClipboardLease(t.Context(), reversePeer)
+		close(oldLeaseDone)
+	}()
+	<-oldLeaseEntered
+	imageGrantDone := make(chan error, 1)
+	go func() {
+		_, grantErr := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "image", Enabled: true})
+		imageGrantDone <- grantErr
+	}()
+	select {
+	case grantErr := <-imageGrantDone:
+		t.Fatalf("image grant committed before stale lease send finished: %v", grantErr)
+	case <-time.After(100 * time.Millisecond):
+	}
+	unblockOldLease()
+	select {
+	case <-oldLeaseDone:
+	case <-time.After(time.Second):
+		t.Fatal("stale lease sender did not finish after release")
+	}
+	if err = <-imageGrantDone; err != nil {
 		t.Fatal(err)
 	}
-	f.b.sendClipboardLease(t.Context(), reversePeer)
 	waitFor(t, 3*time.Second, func() bool {
 		_, ok := f.a.clipboardSync.Outbound(f.bID.ID(), peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Image)
 		return ok
@@ -494,6 +544,87 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	}
 	f.b.ResetClipboard(true, bGeneration.Load())
 	waitFor(t, 5*time.Second, func() bool { f.a.directPoolMu.Lock(); defer f.a.directPoolMu.Unlock(); return len(f.a.directPool) == 0 }, "paused clipboard kept idle sender session")
+}
+
+func TestCancelledClipboardLeaseSendReleasesGrantLock(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	setupCtx, cancelSetup := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancelSetup()
+	if _, err := f.a.Devices(setupCtx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.Devices(setupCtx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "send", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "receive", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "send", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.b.SetAlwaysAccept(f.aID.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	if err := f.b.StartInbox(filepath.Join(t.TempDir(), "received"), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.EnsureClipboardSessions(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	var peer *PeerSession
+	f.a.directPoolMu.Lock()
+	for _, pooled := range f.a.directPool {
+		peer = pooled.peer
+	}
+	f.a.directPoolMu.Unlock()
+	if peer == nil {
+		t.Fatal("pooled sender peer missing")
+	}
+	f.a.sendClipboardLease(t.Context(), peer)
+	var reversePeer *PeerSession
+	waitFor(t, 3*time.Second, func() bool {
+		f.b.directPoolMu.Lock()
+		defer f.b.directPoolMu.Unlock()
+		for _, pooled := range f.b.directPool {
+			reversePeer = pooled.peer
+		}
+		return reversePeer != nil
+	}, "pooled reverse peer missing")
+	if reversePeer == nil {
+		t.Fatal("pooled reverse peer missing")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	sendDone := make(chan struct{})
+	go func() {
+		f.b.sendClipboardLease(ctx, reversePeer)
+		close(sendDone)
+	}()
+	select {
+	case <-sendDone:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled lease send held the grant lock")
+	}
+	updateDone := make(chan error, 1)
+	go func() {
+		_, err := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "receive", Kind: "link", Enabled: true})
+		updateDone <- err
+	}()
+	select {
+	case err := <-updateDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("grant update remained blocked after cancelled lease send")
+	}
 }
 
 func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {

@@ -209,6 +209,10 @@ func (s *Service) clipboardGrantLocked(peerID, direction string, kind clipboards
 func (s *Service) clipboardGrants(peerID, direction string, generation uint64) []clipboardsync.Grant {
 	s.clipboardGrantMu.Lock()
 	defer s.clipboardGrantMu.Unlock()
+	return s.clipboardGrantsLocked(peerID, direction, generation)
+}
+
+func (s *Service) clipboardGrantsLocked(peerID, direction string, generation uint64) []clipboardsync.Grant {
 	rows, err := s.store.db.Query(`SELECT kind,revision FROM clipboard_grants WHERE peer_id=? AND direction=? AND enabled=1 AND authorization_generation=? ORDER BY kind`, peerID, direction, generation)
 	if err != nil {
 		return nil
@@ -513,6 +517,12 @@ func (s *Service) clearClipboardWaiting() {
 
 func (s *Service) serveClipboardPeer(peer *PeerSession) {
 	ctx := peer.Data.Conn.Context()
+	peer.mu.Lock()
+	if peer.clipboardLeaseWake == nil {
+		peer.clipboardLeaseWake = make(chan struct{}, 1)
+	}
+	leaseWake := peer.clipboardLeaseWake
+	peer.mu.Unlock()
 	renewDone := make(chan struct{})
 	go func() {
 		defer close(renewDone)
@@ -525,6 +535,9 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				s.sendClipboardLease(ctx, peer)
+				s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration))
+			case <-leaseWake:
 				s.sendClipboardLease(ctx, peer)
 				s.setClipboardReady(peer, "send", s.clipboardSync.HasOutbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration))
 			}
@@ -659,11 +672,17 @@ func (s *Service) commitClipboardCandidate(peer *PeerSession, candidate clipboar
 }
 
 func (s *Service) sendClipboardLease(parent context.Context, peer *PeerSession) {
+	// The policy snapshot, lease issue and stream write form one serialization
+	// boundary with SetClipboardGrant. A stale snapshot therefore completes
+	// before the new policy commits; the single renewal worker emits the new
+	// policy afterwards instead of letting an old lease overtake it.
+	s.clipboardGrantMu.Lock()
+	defer s.clipboardGrantMu.Unlock()
 	if s.clipboardPaused.Load() || !peer.ClipboardSync || peer.RemoteAuthorizationGeneration == 0 {
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
-	grants := s.clipboardGrants(peer.PeerID, "receive", peer.AuthorizationGeneration)
+	grants := s.clipboardGrantsLocked(peer.PeerID, "receive", peer.AuthorizationGeneration)
 	if len(grants) == 0 {
 		s.setClipboardReady(peer, "receive", false)
 		return
@@ -673,22 +692,69 @@ func (s *Service) sendClipboardLease(parent context.Context, peer *PeerSession) 
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
-	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	deadline := time.Now().Add(2 * time.Second)
+	if parentDeadline, ok := parent.Deadline(); ok && parentDeadline.Before(deadline) {
+		deadline = parentDeadline
+	}
+	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 	stream, err := peer.Data.Conn.OpenUniStreamSync(ctx)
 	if err != nil {
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
+	if err = stream.SetWriteDeadline(deadline); err != nil {
+		stream.CancelWrite(0)
+		s.setClipboardReady(peer, "receive", false)
+		return
+	}
+	if hook := s.clipboardLeaseBeforeWrite; hook != nil {
+		hook()
+	}
 	message := clipboardsync.Message{Type: "lease", LeaseID: lease.ID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, Grants: grants, TTLMillis: uint32(clipboardLeaseTTL / time.Millisecond)}
+	done, watcherDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-ctx.Done():
+			stream.CancelWrite(0)
+		case <-done:
+		}
+	}()
 	err = clipboardsync.Write(stream, message, nil)
-	err = errors.Join(err, stream.Close())
+	if err == nil {
+		err = stream.Close()
+	}
+	close(done)
+	<-watcherDone
 	if err != nil {
 		stream.CancelWrite(0)
 		s.setClipboardReady(peer, "receive", false)
 		return
 	}
 	s.setClipboardReady(peer, "receive", true)
+}
+
+// renewClipboardLeases wakes the existing per-session renewal owner after a
+// receive-policy change. The capacity-one wake channel coalesces rapid edits.
+func (s *Service) renewClipboardLeases(peerID string) {
+	s.directPoolMu.Lock()
+	if s.isClosing() {
+		s.directPoolMu.Unlock()
+		return
+	}
+	peers := make([]*PeerSession, 0, 1)
+	for _, pooled := range s.directPool {
+		peer := pooled.peer
+		if peer == nil || peer.PeerID != peerID || peer.Data == nil || peer.Data.Conn.Context().Err() != nil {
+			continue
+		}
+		peers = append(peers, peer)
+	}
+	s.directPoolMu.Unlock()
+	for _, peer := range peers {
+		peer.requestClipboardLeaseRenewal()
+	}
 }
 
 func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready bool) {

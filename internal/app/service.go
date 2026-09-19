@@ -43,6 +43,7 @@ type Service struct {
 	trustMu                    sync.Mutex
 	clipboardGrantMu           sync.Mutex
 	clipboardGrantBeforeCommit func()
+	clipboardLeaseBeforeWrite  func()
 	tasks                      *taskManager
 	inbox                      inboxManager
 	networkMu                  sync.Mutex

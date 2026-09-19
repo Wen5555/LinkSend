@@ -76,55 +76,68 @@ func (s *Service) SetClipboardGrant(ctx context.Context, patch ClipboardGrantPat
 	if strings.TrimSpace(patch.PeerID) == "" || !validClipboardGrant(patch.Direction, patch.Kind) {
 		return ClipboardGrant{}, errors.New("INVALID_ARGUMENT: clipboard grant")
 	}
-	s.clipboardGrantMu.Lock()
-	defer s.clipboardGrantMu.Unlock()
-	var authorizationGeneration uint64
-	if patch.Enabled {
-		if authorizationGeneration, err = s.clipboardPeerGeneration(patch.PeerID); err != nil {
-			return ClipboardGrant{}, err
+	next, renewLease, err := func() (ClipboardGrant, bool, error) {
+		s.clipboardGrantMu.Lock()
+		defer s.clipboardGrantMu.Unlock()
+		var authorizationGeneration uint64
+		if patch.Enabled {
+			if authorizationGeneration, err = s.clipboardPeerGeneration(patch.PeerID); err != nil {
+				return ClipboardGrant{}, false, err
+			}
 		}
-	}
-	if hook := s.clipboardGrantBeforeCommit; hook != nil {
-		hook()
-	}
-	tx, err := s.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return ClipboardGrant{}, err
-	}
-	defer tx.Rollback()
-	var current uint64
-	err = tx.QueryRowContext(ctx, `SELECT revision FROM clipboard_grants WHERE peer_id=? AND direction=? AND kind=?`,
-		patch.PeerID, patch.Direction, patch.Kind).Scan(&current)
-	if errors.Is(err, sql.ErrNoRows) {
-		current, err = 0, nil
-	}
-	if err != nil {
-		return ClipboardGrant{}, err
-	}
-	if current != patch.ExpectedRevision {
-		return ClipboardGrant{}, ErrMetadataConflict
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	next := ClipboardGrant{PeerID: patch.PeerID, Direction: patch.Direction, Kind: patch.Kind,
-		Enabled: patch.Enabled, Revision: current + 1, UpdatedAt: now, AuthorizationGeneration: authorizationGeneration}
-	result, err := tx.ExecContext(ctx, `INSERT INTO clipboard_grants(peer_id,direction,kind,enabled,revision,updated_at,authorization_generation)
-		VALUES(?,?,?,?,?,?,?) ON CONFLICT(peer_id,direction,kind) DO UPDATE SET
-		enabled=excluded.enabled,revision=excluded.revision,updated_at=excluded.updated_at,authorization_generation=excluded.authorization_generation WHERE clipboard_grants.revision=?`,
-		next.PeerID, next.Direction, next.Kind, next.Enabled, next.Revision, next.UpdatedAt, next.AuthorizationGeneration, current)
-	if err != nil {
-		return ClipboardGrant{}, err
-	}
-	if changed, rowsErr := result.RowsAffected(); rowsErr != nil || changed != 1 {
-		if rowsErr != nil {
-			return ClipboardGrant{}, rowsErr
+		if hook := s.clipboardGrantBeforeCommit; hook != nil {
+			hook()
 		}
-		return ClipboardGrant{}, ErrMetadataConflict
-	}
-	if err = tx.Commit(); err != nil {
+		tx, err := s.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return ClipboardGrant{}, false, err
+		}
+		defer tx.Rollback()
+		var current uint64
+		err = tx.QueryRowContext(ctx, `SELECT revision FROM clipboard_grants WHERE peer_id=? AND direction=? AND kind=?`,
+			patch.PeerID, patch.Direction, patch.Kind).Scan(&current)
+		if errors.Is(err, sql.ErrNoRows) {
+			current, err = 0, nil
+		}
+		if err != nil {
+			return ClipboardGrant{}, false, err
+		}
+		if current != patch.ExpectedRevision {
+			return ClipboardGrant{}, false, ErrMetadataConflict
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		next := ClipboardGrant{PeerID: patch.PeerID, Direction: patch.Direction, Kind: patch.Kind,
+			Enabled: patch.Enabled, Revision: current + 1, UpdatedAt: now, AuthorizationGeneration: authorizationGeneration}
+		result, err := tx.ExecContext(ctx, `INSERT INTO clipboard_grants(peer_id,direction,kind,enabled,revision,updated_at,authorization_generation)
+			VALUES(?,?,?,?,?,?,?) ON CONFLICT(peer_id,direction,kind) DO UPDATE SET
+			enabled=excluded.enabled,revision=excluded.revision,updated_at=excluded.updated_at,authorization_generation=excluded.authorization_generation WHERE clipboard_grants.revision=?`,
+			next.PeerID, next.Direction, next.Kind, next.Enabled, next.Revision, next.UpdatedAt, next.AuthorizationGeneration, current)
+		if err != nil {
+			return ClipboardGrant{}, false, err
+		}
+		if changed, rowsErr := result.RowsAffected(); rowsErr != nil || changed != 1 {
+			if rowsErr != nil {
+				return ClipboardGrant{}, false, rowsErr
+			}
+			return ClipboardGrant{}, false, ErrMetadataConflict
+		}
+		if err = tx.Commit(); err != nil {
+			return ClipboardGrant{}, false, err
+		}
+		if patch.Direction == "receive" {
+			s.clipboardSync.InvalidatePeerDirection(patch.PeerID, false)
+		} else {
+			s.clipboardSync.InvalidateGrant(patch.PeerID, true, clipboardsync.Kind(patch.Kind))
+		}
+		s.cancelClipboardSends(patch.PeerID, clipboardsync.Kind(patch.Kind))
+		return next, patch.Direction == "receive", nil
+	}()
+	if err != nil {
 		return ClipboardGrant{}, err
 	}
-	s.clipboardSync.InvalidateGrant(patch.PeerID, patch.Direction == "send", clipboardsync.Kind(patch.Kind))
-	s.cancelClipboardSends(patch.PeerID, clipboardsync.Kind(patch.Kind))
+	if renewLease {
+		s.renewClipboardLeases(patch.PeerID)
+	}
 	s.notifyChange()
 	return next, nil
 }

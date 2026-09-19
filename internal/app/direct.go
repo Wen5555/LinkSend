@@ -87,6 +87,23 @@ type PeerSession struct {
 	lanAddress                    string
 	SessionReuse                  bool
 	ClipboardSync                 bool
+	clipboardLeaseWake            chan struct{}
+}
+
+func (p *PeerSession) requestClipboardLeaseRenewal() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	wake := p.clipboardLeaseWake
+	p.mu.Unlock()
+	if wake == nil {
+		return
+	}
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
 }
 
 type directSignalSession interface {

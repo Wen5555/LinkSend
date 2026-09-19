@@ -154,7 +154,7 @@ func (s *State) Install(id, peerID, sessionID string, generation uint64, kinds [
 	for _, kind := range kinds {
 		grants = append(grants, Grant{Kind: kind})
 	}
-	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline)
+	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline, false)
 }
 
 func (s *State) InstallScoped(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64) error {
@@ -165,10 +165,10 @@ func (s *State) InstallScoped(id, peerID, sessionID string, generation uint64, g
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline)
+	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline, true)
 }
 
-func (s *State) installLocked(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64) error {
+func (s *State) installLocked(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64, replaceChangedPolicy bool) error {
 	if s.paused || id == "" || peerID == "" || sessionID == "" || generation == 0 || ttl <= 0 {
 		return ErrStale
 	}
@@ -184,10 +184,26 @@ func (s *State) installLocked(id, peerID, sessionID string, generation uint64, g
 		return ErrStale
 	}
 	count := 0
+	policyChanged := false
 	for _, lease := range s.leases {
 		if lease.outbound && lease.PeerID == peerID && lease.SessionID == sessionID {
 			count++
+			if lease.Generation != generation || !sameLeasePolicy(lease, allowed, revisions) {
+				policyChanged = true
+			}
 		}
+	}
+	// A lease carries the complete send policy. A policy change must replace
+	// prior leases for this session; otherwise two valid renewals can consume
+	// the bounded window and make the changed policy un-installable. Identical
+	// renewals retain their normal overlapping TTL window.
+	if replaceChangedPolicy && policyChanged {
+		for id, lease := range s.leases {
+			if lease.outbound && lease.PeerID == peerID && lease.SessionID == sessionID {
+				delete(s.leases, id)
+			}
+		}
+		count = 0
 	}
 	if count >= MaxLeases {
 		return ErrLimit
@@ -196,6 +212,19 @@ func (s *State) installLocked(id, peerID, sessionID string, generation uint64, g
 	s.leases[id] = Lease{ID: id, PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, revisions: revisions, issued: now, deadline: now.Add(ttl), baseline: baseline, outbound: true}
 	return nil
 }
+
+func sameLeasePolicy(lease Lease, kinds map[Kind]bool, revisions map[Kind]uint64) bool {
+	if len(lease.Kinds) != len(kinds) || len(lease.revisions) != len(revisions) {
+		return false
+	}
+	for kind := range kinds {
+		if !lease.Kinds[kind] || lease.revisions[kind] != revisions[kind] {
+			return false
+		}
+	}
+	return true
+}
+
 func (l Lease) ExpiresAt() time.Time      { return l.deadline }
 func (l Lease) Revision(kind Kind) uint64 { return l.revisions[kind] }
 
@@ -463,6 +492,30 @@ func (s *State) DropSession(peerID, sessionID string) {
 			delete(s.leases, id)
 		}
 	}
+}
+
+// InvalidatePeerDirection removes every lease in one local direction for a
+// peer. A receive-policy edit needs a fresh lease containing the complete
+// current policy; retaining an older partial lease can otherwise fill the
+// bounded renewal window and prevent that new policy from being issued.
+func (s *State) InvalidatePeerDirection(peerID string, outbound bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for id, lease := range s.leases {
+		if lease.PeerID != peerID || lease.outbound != outbound {
+			continue
+		}
+		delete(s.leases, id)
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	s.revision++
+	s.pending = orderKey{}
+	s.pendingRevision = 0
+	s.pendingDeadline = time.Time{}
 }
 
 func (s *State) InvalidateGrant(peerID string, outbound bool, kind Kind) {

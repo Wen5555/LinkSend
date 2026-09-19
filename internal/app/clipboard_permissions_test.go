@@ -99,6 +99,38 @@ func TestClipboardPermissionRevisionRevokesOldLeaseWithoutBreakingOtherDirection
 	}
 }
 
+func TestReceiveGrantChangeReplacesIssuedLeaseWindow(t *testing.T) {
+	dir := t.TempDir()
+	service, err := New(Config{DataDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Shutdown)
+	peer, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = identity.TrustPairedPeer(dir, identity.TrustedPeer{ID: peer.ID(), Name: "peer", PublicKey: peer.PublicKey()}); err != nil {
+		t.Fatal(err)
+	}
+	text, err := service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "receive", Kind: "text", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range clipboardsync.MaxLeases {
+		if _, err = service.clipboardSync.IssueScoped(peer.ID(), "session", text.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Text, Revision: text.Revision}}, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	image, err := service.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: peer.ID(), Direction: "receive", Kind: "image", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.clipboardSync.IssueScoped(peer.ID(), "session", image.AuthorizationGeneration, []clipboardsync.Grant{{Kind: clipboardsync.Text, Revision: text.Revision}, {Kind: clipboardsync.Image, Revision: image.Revision}}, time.Minute); err != nil {
+		t.Fatalf("receive grant change retained a full lease window: %v", err)
+	}
+}
+
 func TestClipboardValidationDoesNotHoldCommitLockAndRevocationWinsFinalGate(t *testing.T) {
 	dir := t.TempDir()
 	service, err := New(Config{DataDir: dir})

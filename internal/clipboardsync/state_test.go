@@ -40,6 +40,43 @@ func TestLeaseCausalityExpiryAndNoRebinding(t *testing.T) {
 	}
 }
 
+func TestReceivePolicyChangeReplacesBoundedIssuedLeaseWindow(t *testing.T) {
+	if MaxLeases != 2 {
+		t.Fatalf("MaxLeases=%d, bounded renewal contract changed", MaxLeases)
+	}
+	now := time.Unix(300, 0)
+	state := New("receiver", func() time.Time { return now })
+	state.Reset(false, 1)
+	for range MaxLeases {
+		if _, err := state.IssueScoped("peer", "session", 7, []Grant{{Kind: Text, Revision: 1}}, 10*time.Second); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := state.IssueScoped("peer", "session", 7, []Grant{{Kind: Text, Revision: 1}}, 10*time.Second); !errors.Is(err, ErrLimit) {
+		t.Fatalf("bounded renewal window accepted a third lease: %v", err)
+	}
+	state.InvalidatePeerDirection("peer", false)
+	if _, err := state.IssueScoped("peer", "session", 7, []Grant{{Kind: Text, Revision: 1}, {Kind: Image, Revision: 1}}, 10*time.Second); err != nil {
+		t.Fatalf("new receive policy could not replace bounded lease window: %v", err)
+	}
+	sender := New("sender", func() time.Time { return now })
+	sender.Reset(false, 1)
+	for _, id := range []string{"text-a", "text-b"} {
+		if err := sender.InstallScoped(id, "peer", "session", 7, []Grant{{Kind: Text, Revision: 1}}, 10*time.Second, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := sender.InstallScoped("text-overflow", "peer", "session", 7, []Grant{{Kind: Text, Revision: 1}}, 10*time.Second, 1); !errors.Is(err, ErrLimit) {
+		t.Fatalf("identical renewal bypassed bounded lease window: %v", err)
+	}
+	if err := sender.InstallScoped("text-image", "peer", "session", 7, []Grant{{Kind: Text, Revision: 1}, {Kind: Image, Revision: 1}}, 10*time.Second, 1); err != nil {
+		t.Fatalf("changed receive policy could not replace installed lease window: %v", err)
+	}
+	if _, ok := sender.Outbound("peer", "session", 7, Image); !ok {
+		t.Fatal("changed receive policy did not install an image lease")
+	}
+}
+
 func TestCommitRevisionLocalPriorityAndHighWater(t *testing.T) {
 	now := time.Unix(200, 0)
 	s := New("receiver", func() time.Time { return now })
