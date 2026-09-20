@@ -138,12 +138,21 @@ sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -q -l -s 96 -c 80 "(host 10.234.35.5 an
 - [x] 空闲主进程各采 12 点、2 秒间隔：Windows 22.221 秒窗口的 CPU 秒差为 0.328125，即单逻辑核平均 1.476627%，working set 51,552,256–52,989,952 bytes、private 65,372,160–66,588,672 bytes；Mac 22.195 秒窗口的 RSS 恒为 130,514,944 bytes，ps 平滑 pcpu 为 0.1–0.7%、均值 0.316667%。两端均不含 WebView/helper 子进程，两个 CPU 口径不可直接等同。
 - [!] 准确 package 没有端到端 discovery timestamp，也不暴露单独 DB commit 定时边界，均记为 NOT_OBSERVABLE；当前 n=3/n=1 不称 p95。初始 Mac 采样成功后 SSH-manager 的 tail-job 读回 helper 触发 zsh status 变量问题，未为绕过它新增样本。
 
+### E5-P：4889cbe 海量小文件基线（PASS，1000 文件边界）
+- [x] 一次单批目录传输：新增 1000 个 1 KiB 专用文件，合计 1,024,000 bytes，低于 4 MiB 上限；不重跑 E5-N 的 1 MiB/12 文件样本。产品 file_count=1001，因为它把所选根目录与 1000 个普通文件均计为条目。
+- [x] sender/receiver 均 completed、verified/committed=1,024,000、bilateral_confirmed=true、retransmitted=0，lan_direct/QUIC/TLS 1.3/ALPN linksend/1。Mac read-only 逐文件 SHA256 复核 1000 个目标文件，mismatch=0；完整 1000 项 source hash manifest 保留在 E5P 最终回执。
+- [x] sender task persisted start 至 bilateral completed 为 35,000 ms。activation 入队至完成的墙钟未被初始 monitor 持久化，entry 被消费后不可回补，明确记为 NOT_OBSERVABLE，不能用 journal 文件时间猜造。
+- [x] 空闲主进程观测均小于 180 秒：Windows 15 点/28.309 秒，CPU 秒差 1.671875、单逻辑核平均 5.905756%，working set 51,404,800–53,501,952 bytes、private 64,425,984–66,347,008 bytes；Mac 12 点/22.181 秒，RSS 130,482,176–130,514,944 bytes、ps 平滑 pcpu 0.1–0.9%、均值 0.316667%。仅主进程，不称长时稳定性或全应用资源。
+- [!] 首个 sender monitor 把 product file_count 误按为 leaf file count，完成后才恢复回执；首个 Mac read-only 查询误按 manifest_summary 精确等于目录名。两者都是收集假设，未重传、未改变传输或补造时钟。两端 package 已按 owned PID/path 停止，clipboard=false、enabled grants=0。
+
 ### E5-N 收束后的剩余必交付项
 
 仍可自主完成的具体下一步：
-- [ ] 本次合并提交推送后，等待并记录该新 SHA 的 core×2、desktop-wails3-checks×2、wails3-packages 五项 CI 终态；当前修正的 restart-recovery race 用例已在本地有界重复通过。
+- [x] 4d19adce4bcc759afedeca87f02670e5e235b250 的 core×2、desktop-wails3-checks×2、wails3-packages 五项 CI 已全部 success；restart-recovery race 用例的本地有界重复验证通过。
+- [ ] 性能记录仍缺长时空闲/GC、发现延迟和单独 DB commit 延迟。E5-P 仅覆盖一个 1000 文件目录批，不外推百万文件；当前准确包没有后两项时钟，NOT_OBSERVABLE 只表示本轮无测点，不表示完成或外部权限阻塞；不为补测点单独修改包。
 
 确需用户现场、权限或签名条件：
+- [ ] U2 离线删除的当前 4889 准确包尝试没有执行删除：仅本次进程覆盖 LINKSEND_SERVER_URL=https://127.0.0.1:1 后，UIA 可 Invoke 设备导航，但精确测试 Mac identity 不在当前 WebView 可访问树。没有 ScrollPattern，向已确认 package HWND 的设备列表区域发送 12 次定向滚动仍不可达；未按第 N 个设置按钮盲删。只缺用户现场手动滚动并选择该精确测试 Mac 行后的一次删除/确认，随后再由受管脚本核验 pending-sync、重启、原服务同步和重新配对。
 - [ ] E5-L 反向 Mac→Windows 写路径根因：最小两 IP UDP/ICMP 头部观察仍需 Mac 现有管理员权限终端。双 IP outer filter 不显示第三方网关的 ICMP 引述错误；无匹配样本不能排除网关拒绝，不扩大观察方案。
 - [ ] Windows 原生 Tab 顺序：只缺用户把准确包窗口置前且 input desktop 为 Default 后的一次真实 Tab 检查；不强制前台或改用 CDP。
 - [ ] 150% DPI/深色：只缺真实 150% 显示与系统深色环境的准确包布局观察；当前用户全局显示/主题保持不改。

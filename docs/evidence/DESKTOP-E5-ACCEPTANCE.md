@@ -285,3 +285,19 @@ Mac DMG 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windo
 | discovery / DB commit 延迟 | NOT_OBSERVABLE | package 未给端到端 discovery timestamp 或单独 DB commit 时钟；不新打包。连续 n=3、批量 n=1，未报告 p95。 |
 
 CPU/内存只覆盖 LinkSend 主进程，不含 WebView/helper；Windows CPU 是进程 CPU 秒差除实测墙钟，Mac 为系统 ps 平滑 pcpu，不能并列比较。初始 Mac 采样已成功；后续 SSH-manager tail-job helper 因 zsh status 变量无法读回，未用新增样本绕过该读回限制。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。最终机器回执为 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5n-4889cbe/e5n-final-machine-receipt.json。
+
+### E5-O：U2 离线删除准确包路径（NOT RUN，UIA 可达性限制）
+
+固定 4889cbe Windows package 在仅本次进程 LINKSEND_SERVER_URL=https://127.0.0.1:1 覆盖下启动，未写入保存的 server_url 或改变 membership。UIA 只 Invoke“设备”导航；精确测试 Mac identity 不在当前 WebView 可访问树，窗口没有 ScrollPattern，向 owned HWND 的设备列表坐标发出 12 次定向滚动仍未出现目标。没有 Invoke 设置、删除设备或确认删除，也没有按序号猜测按钮；没有前台、键盘、全局输入、CDP 或 clipboard 操作。package 收尾后 target 仍 trusted、无 denied entry，clipboard/grant 保持关闭。该轮不形成删除、pending-sync、同步或重配对结论；完整回执在 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5o-4889cbe-u2/u2-noaction-machine-receipt.json。
+
+### E5-P：4889cbe 海量小文件基线（PASS，1000 文件边界）
+
+| 项目 | 结果 | 事实 |
+|---|---|---|
+| 单批 fixture | PASS | 一个目录含 1000 个 1 KiB 文件，source 合计 1,024,000 bytes，新增量低于 4 MiB。产品 task 计 1001 entries，包含被选择的根目录。 |
+| 传输、数量和完整性 | PASS | sender/receiver 都 completed，verified/committed=1,024,000、bilateral_confirmed=true、retransmitted=0；Mac 逐一复核 1000 个目标文件 SHA256，mismatch=0。 |
+| 连接 | PASS | lan_direct / QUIC / TLS 1.3 / ALPN linksend/1。 |
+| 耗时 | PARTIAL | sender task persisted start 至 bilateral completed 为 35,000 ms。activation enqueue 墙钟没有在 entry 消费前持久化，enqueue-to-completion 为 NOT_OBSERVABLE。 |
+| 空闲主进程 | PASS，范围有限 | Windows 15 点/28.309 秒：单逻辑核平均 5.905756%，working set 51,404,800–53,501,952 bytes、private 64,425,984–66,347,008 bytes；Mac 12 点/22.181 秒：RSS 130,482,176–130,514,944 bytes、ps 平滑 pcpu 0.1–0.9%、均值 0.316667%。不含 WebView/helper，不代表长时稳定性。 |
+
+初始 sender monitor 把 product entry count 当成 leaf file count、初始 Mac read-only matcher 把 summary 当成精确目录名；两项在成功完成后仅更正回执查询，不发生重传或第二次传输。完整 1000 项 source SHA256 manifest、任务与接收核验摘要均在 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5p-4889cbe/e5p-final-machine-receipt.json。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。

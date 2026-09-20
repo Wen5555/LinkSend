@@ -688,3 +688,18 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - Mac read-only receiver 核验得到 4 个 completed task、15 个预期目标文件、无 E5N 重名副本；每个 target bytes 和 SHA256 都与 Windows fixture manifest 一致，receiver retransmitted=0。完整收束回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5n-4889cbe\e5n-final-machine-receipt.json。
 - 空闲期仅测 LinkSend 主进程，不包括 WebView/helper 子进程。Windows 12 点、2 秒间隔、22.221 秒窗口：CPU seconds delta=0.328125，按实测墙钟折算为单逻辑核平均 1.476627%，working set=51,552,256–52,989,952 bytes，private=65,372,160–66,588,672 bytes。Mac 12 点、2 秒间隔、22.195 秒窗口：RSS 恒为 130,514,944 bytes，系统 ps 的平滑 pcpu=0.1–0.7%、均值 0.316667%。两个 CPU 口径不同，不能直接横向等同。
 - 准确包任务只提供连接 timing，未提供端到端 discovery timestamp；task snapshot 也没有单独 DB commit 时间边界，均为 NOT_OBSERVABLE。连续 n=3、批量 n=1，不报告 p95。Mac 初始采样的 run-script 结果已获记录；随后 SSH-manager tail-job helper 因 zsh status 变量失败，未为绕过读回问题新增任何样本。
+
+## 2026-09-20 E5-O U2 离线删除准确包路径（NOT RUN，UIA 可达性限制）
+
+- 只用当前 4889cbe Windows 准确包与本任务 Windows profile；确认无 package 进程后，以本次进程环境 LINKSEND_SERVER_URL=https://127.0.0.1:1 启动。该覆盖只使信令不可达，不写 desktop-preferences.json，不改 membership/group 归属、宿主网络、HK 服务或用户 profile。
+- UIA 对 owned package PID 成功 Invoke 一次“设备”导航。精确测试 Mac identity 在 trust 中仍是 group peer，但 1400×950 窗口的 WebView UIA 树只导出当前可见的 10 个身份项，目标不在树中。树不提供 ScrollPattern；向该 package HWND 的设备列表坐标发送 12 次定向 WM_MOUSEWHEEL 后仍未出现目标。没有 SetForegroundWindow、键盘、全局 SendInput、CDP 或 clipboard 操作。
+- 因而没有 Invoke 设置、删除设备或确认删除，也没有按第 N 个设置按钮猜测目标。package 随后按 owned PID 停止；target 仍 trusted、没有 denied entry，saved server_url 仍为空，clipboard master=false、enabled grants=0。此轮不是离线删除 PASS 或 FAIL，回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5o-4889cbe-u2\u2-noaction-machine-receipt.json。
+- 要完成此项，只需用户现场滚动并选择精确测试 Mac 行，之后执行一次产品删除/确认并核验本地 pending-sync、重启保持撤销、原服务同步、刷新/LAN 不复活和既有流程重新配对。旧 4d 包的删除/重配对记录不替代本轮 4889 离线结论。
+
+## 2026-09-20 E5-P 4889cbe 海量小文件基线（PASS，1000 文件边界）
+
+- 固定现有 4889cbe Windows/Mac package、83c68b Windows profile 和已免确认 Mac peer；新增一个专用目录，内有 1000 个 1 KiB 文件，合计 1,024,000 bytes，低于 4 MiB。只发起该目录的一次 native-entry batch，未下载、构建、优化、改变系统设置、网络、clipboard 或用户 profile。
+- sender/receiver 均 completed、verified/committed=1,024,000、bilateral_confirmed=true、retransmitted=0，连接为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1。产品 task file_count=1001：所选根目录是一个条目，另有 1000 个普通文件。Mac read-only 脚本按 Windows fixture manifest 逐一计算 1000 个目标文件的 SHA256，mismatch=0；完整 source hash 清单在最终机器回执内，不在日志或本文展开。
+- sender persisted task start 至 bilateral completed 的实际耗时为 35,000 ms。activation entry 在最初 monitor 记录墙钟前已被消费，故 enqueue-to-completion 是 NOT_OBSERVABLE；没有以 journal 文件时间补造这一指标。首个 sender receipt 假定 file_count 只计普通文件，首个 Mac read-only 查询假定 manifest_summary 精确等于目录名；两项均在完成后只读修正回执谓词，未重传或改变任何任务。
+- 本次记录的空闲主进程观测小于 180 秒：Windows 15 点/28.309 秒，CPU seconds delta=1.671875、单逻辑核平均 5.905756%，working set=51,404,800–53,501,952 bytes、private=64,425,984–66,347,008 bytes；Mac 12 点/22.181 秒，RSS=130,482,176–130,514,944 bytes，ps 平滑 pcpu=0.1–0.9%、均值 0.316667%。两端均排除 WebView/helper 子进程，CPU 口径不同；这不是长时稳定性或百万文件结论。
+- 准确包仍没有端到端 discovery 或独立 DB commit 时间边界，继续为 NOT_OBSERVABLE。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。完整机器回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5p-4889cbe\e5p-final-machine-receipt.json。
