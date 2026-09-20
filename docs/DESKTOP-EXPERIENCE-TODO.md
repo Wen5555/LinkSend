@@ -106,7 +106,7 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 - [x] Mac 的中断 checkpoint、恢复后缺失 1,065,353,216 bytes、同一 TransferID/manifest/selection/receive plan/target directory 和最终 SHA256 已核验。Mac 连接恢复会创建新的本地 receive task/attempt，文档不把它表述为双端 task ID 不变。
 - [!] 单次 Mac 到 Windows V2 activation 为 0-byte QUIC_HANDSHAKE_FAILED；保留负例，不重试，不影响 Windows sender 恢复结论。
 - [!] 测试 peer 接收目录清理被执行层 blocked by policy：SaveDeviceProfile helper 在执行前未运行，受管目录仍为 revision 12；用户 profile 未触碰。不得标注为已恢复继承。
-- [ ] 接收端应用重启、物理网络切换/睡眠恢复、Mac 到 Windows 反向握手根因和系统 Share Extension/App Group 激活仍需独立验收。
+- [ ] 物理网络切换/睡眠恢复、Mac 到 Windows 反向握手根因和系统 Share Extension/App Group 激活仍需独立验收。
 
 ### E5-K（NOT PASS）
 - [x] 4889cbe handoff/diagnostic 与五项 CI；[!] 新反向 V2 在 ice_checking/CHECK_TIMEOUT、0 bytes 失败，未重试。
@@ -119,7 +119,18 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 - [!] 无 sudo 改动的权限检查显示：tcpdump 可执行但 sudo -n 要求密码；当前 Mac 用户对 /dev/bpf0..3 无读写权限。因此头部观察 BLOCKED_BY_EXTERNAL_ENV，没有抓包、pcap、全机过滤或权限变更。
 - [ ] 供总控/用户审阅的最小头部观察草案，未执行：在 Mac 的现有管理员权限终端中，仅在一次新的受控双机 4889 attempt 期间运行下列 90 秒/80 包有界命令。它只把 UDP/ICMP 的时间、IP、端口、长度和 ICMP 摘要写到终端；没有 -X、-A、-w，不保存正文或 pcap：
 ~~~sh
-sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -l -s 96 -c 80 "(host 10.234.35.5 and host 10.234.16.254) and (udp or icmp)" & p=$!; (sleep 90; kill -INT "$p" 2>/dev/null) & g=$!; wait "$p"; r=$?; kill "$g" 2>/dev/null || true; exit "$r"'
+sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -q -l -s 96 -c 80 "(host 10.234.35.5 and host 10.234.16.254) and (udp or icmp)" & p=$!; (sleep 90; kill -INT "$p" 2>/dev/null) & g=$!; wait "$p"; r=$?; kill "$g" 2>/dev/null || true; exit "$r"'
 ~~~
-  观察仅用于区分 QUIC datagram 是否离开 Mac、是否收到相关 ICMP 拒绝；不得把没有样本当作成功或失败原因。执行前仍需总控确认该用户侧权限窗口。
-- [ ] E5-M 已排队：固定 4889 包 Windows→Mac 的接收端应用重启恢复。先按 E5-J 的 package/profile/路径所有权和 checkpoint 条件预检；Mac→Windows 的 write_EHOSTUNREACH 反向故障不阻断正向恢复，也不重试反向链路。
+  观察仅用于区分 QUIC datagram 是否离开 Mac、是否收到相关 ICMP 拒绝；不得把没有样本当作成功或失败原因。双 IP outer filter 不会显示第三方网关发出的 ICMP 引述错误；没有匹配样本不能排除网关拒绝，暂不扩展观察方案。执行前仍需总控确认该用户侧权限窗口。
+
+### E5-M：4889cbe Windows→Mac 接收端应用重启恢复（PASS）
+- [x] 固定 workflow 35475890292 的 4889cbe Windows/Mac 准确包，并复用受管 1 GiB 源 e5j-win-to-mac-restart-1g.bin（SHA256 5fd17c10b75c7052a339acb81ff9ee8884e9b08d4d7d8763bd52b5cd39f4a0ae）；未新建或复制 GiB 文件。
+- [x] 正确 fixture 使用 e5a-0c59/windows/profile（sender identity 83c68b7afd4698cc8affca4f0aa67c2460521c7875f9ce326b7807b9d670561f），Mac 既有该 identity 的 auto_accept。此前错误 profile 达 awaiting_acceptance、0 bytes，已停止且不计入恢复证据。
+- [x] request a6faacd12d62457b86acb09bb217acfd：Mac 仅在新 TransferID 的 verified 4 MiB、received 8 MiB、committed 0 checkpoint 后由受管监控 SIGTERM；sender 随后为 recovering/connection_interrupted。UIA 仅 Invoke 恢复传输，不 Invoke 重新发送。
+- [x] sender task 和 TransferID 保持一致并进入新 attempt；最终双方 verified/committed 均为 1 GiB，sender retransmitted 4 MiB、receiver retransmitted 0、bilateral_confirmed=true，lan_direct/QUIC/TLS 1.3/ALPN linksend/1，目标 SHA256 与源一致。
+- [x] Mac 恢复任务只接收缺失 1,069,547,520 bytes；初始/恢复 receive task 的 TransferID、manifest、selection、receive plan 和目标目录一致，binding_consistent=true，receive plan digest 为 191827a88f13e4d09a2ea34afa9b8eec484437d77a3d83eb3a20fd99c4dd0415，最终无意外第二副本。
+- [!] 两次旧同名 TransferID 监控漏列/时序错误和首次 UIA 参数名冲突均保留为无效基线；前者没有中断，后者没有 UI action，均不计入通过。已终态的旧受管 activations 可逆归档，不删除源或用户文件。Mac→Windows write_EHOSTUNREACH 仍是独立反向故障。
+- [x] 两端 package 按 owned PID/path 停止；clipboard master=false、enabled grants=0。最终回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5m-4889cbe\e5m-final-machine-receipt.json。
+
+### E5-N：4889cbe 小文件与空闲性能基线（排队）
+- [ ] 仅复用已确认 package/profile，新增 fixture 总量不超过 32 MiB；先记录少量连续/批量小文件与稳定空闲 CPU、内存的样本数、实际 elapsed 和 bytes。现有 1 GiB 正向样本只作已测吞吐参考，不重复传输。发现延迟或 DB commit 延迟如准确包不可观察，明确记为 NOT_OBSERVABLE/gap；少样本不得称 p95。

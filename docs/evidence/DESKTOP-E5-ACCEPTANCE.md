@@ -256,3 +256,18 @@ Mac DMG 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windo
 原始 stderr 从未落盘：Pion 通过 FIFO/内存白名单留下 ICE 状态和 STUN/selected-pair 事件；quic-go error 只映射出 write_EHOSTUNREACH，没有保留任意 reason、credential、token、证书或正文。两轮 app 都由本轮 PID/路径所有权启动并停止。Mac route snapshot 为 10.234.16.254 经 active en0 direct，Application Firewall disabled、app 无 sandbox；这只是静态状态，不能据此否定运行时链路错误。
 
 受管 Mac 的 tcpdump 需要 sudo 密码，普通用户不能读写 /dev/bpf0..3，故没有执行头部观察或改动权限。用户侧的有界两 IP UDP/ICMP、仅头部且不落 pcap 的草案列在 E5 TODO，等待审阅。完整机器回执见 e5l-4889cbe/attempt-20260920T0033Z/e5l-machine-receipt.json 与 e5l-4889cbe/attempt-20260920T0055Z-ecn-disabled/e5l-ecn-machine-receipt.json。
+
+### E5-M：4889cbe Windows→Mac 接收端应用重启恢复（PASS）
+
+| 场景 | 结果 | 事实 |
+|---|---|---|
+| 受管 source 与正确 fixture | PASS | 复用 e5j-1a46564 的 1 GiB source，SHA256 为 5fd17c10b75c7052a339acb81ff9ee8884e9b08d4d7d8763bd52b5cd39f4a0ae；使用 Windows e5a-0c59/windows/profile 的 identity 83c68b7afd4698cc8affca4f0aa67c2460521c7875f9ce326b7807b9d670561f，Mac 已对它 auto_accept。 |
+| 中断前 Mac checkpoint | PASS | request a6faacd12d62457b86acb09bb217acfd，TransferID 90135fbd1c1685f850346abd6f32aaf5；initial receive task 在 verified 4 MiB、received 8 MiB、committed 0 时由受管 monitor SIGTERM。monitor 先排除旧同名 TransferID，只匹配本轮。 |
+| sender 恢复状态与 UI | PASS | 中断后 sender state 为 recovering/connection_interrupted；Windows UIA 仅 Invoke 恢复传输，未 Invoke 重新发送，无键盘、前台、clipboard 或 CDP 操作。sender task 保持 20260920T014430.033251000Z-00000004，initial/resumed attempt 为 60f45c1844608d59d33ed670a898c1fb / 9baf86970d7053c0e491282d70539714。 |
+| Mac receiver 恢复与绑定 | PASS | initial/resumed receive task 为 20260920T014434.352220000Z-00000001 / 20260920T014743.650042000Z-00000001；同一 TransferID、manifest、selection、receive plan 和 target directory，binding_consistent=true，receive plan digest 为 191827a88f13e4d09a2ea34afa9b8eec484437d77a3d83eb3a20fd99c4dd0415。恢复只接收缺失 1,069,547,520 bytes，无意外第二副本。 |
+| 完成与完整性 | PASS | sender/receiver verified 与 committed 均为 1 GiB；sender retransmitted 4 MiB、receiver retransmitted 0、bilateral_confirmed=true；路径为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1，最终目标 SHA256 与 source 相同。 |
+| 收尾 | PASS | 两端准确 package 依 owned PID/path 停止；clipboard master=false，六项 peer grant 均 disabled。 |
+
+固定资产来自 workflow 35475890292 的 4889cbe14931f0b1743b4e618c4388e2587a7a5b：Windows EXE SHA256 为 5a2629ee520bebdea37d113dd86fa37b67d910357241fbb985b3f28f606537b7，Mac DMG SHA256 为 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5。最终证据为 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5m-4889cbe/e5m-final-machine-receipt.json。
+
+不计入 PASS 的记录：首次误用 identity 58e437ccbf16ac9a951ef3f7fa9061277012c9affc1f8c288a7dabc6a56cb01e 的 profile，只到 awaiting_acceptance、0 bytes，已停止且未重配对；两次同名 TransferID 的 monitor 基线漏列/时序错误未在中断处命中；首个 UIA 脚本在动作前因 pid/PID 参数冲突退出。它们均保留并排除在恢复证据外。E5J/K/L 的已终态受管 activations 只作可逆归档，源和用户文件没有删除。Mac→Windows write_EHOSTUNREACH 仍为独立反向故障，不被写成 E5-M 失败或通过。
