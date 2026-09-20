@@ -243,3 +243,16 @@ alias `nl-highdefense`，Ubuntu 26.04 / Linux 7.0 amd64。实际 job `/tmp/codex
 ### E5-K：4889cbe 反向复验（NOT PASS）
 Mac DMG 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows artifact 内 portable ZIP 0bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，BUILD-INFO source_commit 均为 4889cbe。新 request 3e74d2c7470dd2a227b1cc7fe5c9515a 在 Mac sender task 20260919T234907.515235000Z-00000001 的 ice_checking/CHECK_TIMEOUT 终止，0 bytes，Windows 无 incoming、未 Invoke 接收。任务未保存候选/ICE 计数，无法区分 timeout 具体层次；未进入 QUIC，不证明旧 QUIC 失败已修复。两端 package 已停止，回执为 supervision e5k-4889cbe/e5k-machine-receipt.json。
 
+
+### E5-L：4889cbe 反向 QUIC 诊断（NOT PASS）
+
+| 轮次 | 唯一变量 | ICE | 发送端终态 | 安全诊断 | 接收端 | 结论 |
+|---|---|---|---|---|---|---|
+| baseline | 无 | 双端 selected pair、Connected | quic_handshake / QUIC_HANDSHAKE_FAILED / 0 bytes | udp_socket / 0x41 (EHOSTUNREACH) | Windows 无 incoming，未 Invoke | 不是 CHECK_TIMEOUT |
+| ECN 对照 | Mac QUIC_GO_DISABLE_ECN=true；QUIC_GO_LOG_LEVEL=error 只观察 | 双端 selected pair、Connected | 相同终态、0 bytes | QUIC_EVENT_OPERATION=write_EHOSTUNREACH | Windows 无 incoming，未 Invoke | 禁用 ECN 后仍复现；不能归因 ECN 单因素 |
+
+两轮均使用 workflow 35475890292 的固定 4889cbe 资产：Mac DMG SHA256 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows portable ZIP SHA256 0bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，EXE SHA256 5a2629ee520bebdea37d113dd86fa37b67d910357241fbb985b3f28f606537b7。baseline request 为 2f2b3a5a724802e6fdcc9ded9c9ea713，ECN request 为 90445430033aaf9810bd5af49e8c0c8b；均为 12 MiB 随机专用源，均未发生正文传输。
+
+原始 stderr 从未落盘：Pion 通过 FIFO/内存白名单留下 ICE 状态和 STUN/selected-pair 事件；quic-go error 只映射出 write_EHOSTUNREACH，没有保留任意 reason、credential、token、证书或正文。两轮 app 都由本轮 PID/路径所有权启动并停止。Mac route snapshot 为 10.234.16.254 经 active en0 direct，Application Firewall disabled、app 无 sandbox；这只是静态状态，不能据此否定运行时链路错误。
+
+受管 Mac 的 tcpdump 需要 sudo 密码，普通用户不能读写 /dev/bpf0..3，故没有执行头部观察或改动权限。用户侧的有界两 IP UDP/ICMP、仅头部且不落 pcap 的草案列在 E5 TODO，等待审阅。完整机器回执见 e5l-4889cbe/attempt-20260920T0033Z/e5l-machine-receipt.json 与 e5l-4889cbe/attempt-20260920T0055Z-ecn-disabled/e5l-ecn-machine-receipt.json。

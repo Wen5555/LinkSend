@@ -111,3 +111,15 @@ U3 独立原型已在荷兰隔离 namespace 完成，范围为 IPv6 签名发现
 ### E5-K（NOT PASS）
 - [x] 4889cbe handoff/diagnostic 与五项 CI；[!] 新反向 V2 在 ice_checking/CHECK_TIMEOUT、0 bytes 失败，未重试。
 
+
+### E5-L：4889cbe 反向 QUIC 写路径诊断（NOT PASS）
+- [x] 复用固定 4889cbe Windows/Mac 包和现有隔离 profile，完成 baseline V2 request：ICE 两端 selected/Connected，但 Mac sender 在 quic_handshake/QUIC_HANDSHAKE_FAILED、0 bytes 终止；持久受限分类为 udp_socket/0x41/EHOSTUNREACH。
+- [x] 仅 Mac 设置 QUIC_GO_DISABLE_ECN=true 进行第二轮；仍得到 QUIC_EVENT_OPERATION=write_EHOSTUNREACH 和 0 bytes。该对照说明禁用 ECN 后仍复现，不能归因于 ECN 单因素；它不排除 WriteMsgUDP/sendmsg 或内核/链路原因，也不是把 ECN 永久关闭作为产品修复的依据。
+- [x] 两轮均保存无凭据 ICE/QUIC 白名单日志、任务安全快照、source hash 和 PID 收尾回执；Windows 没有 incoming task，因此未 Invoke 接收。两端 clipboard master=false，测试 peer 六项 grant 全 disabled。
+- [!] 无 sudo 改动的权限检查显示：tcpdump 可执行但 sudo -n 要求密码；当前 Mac 用户对 /dev/bpf0..3 无读写权限。因此头部观察 BLOCKED_BY_EXTERNAL_ENV，没有抓包、pcap、全机过滤或权限变更。
+- [ ] 供总控/用户审阅的最小头部观察草案，未执行：在 Mac 的现有管理员权限终端中，仅在一次新的受控双机 4889 attempt 期间运行下列 90 秒/80 包有界命令。它只把 UDP/ICMP 的时间、IP、端口、长度和 ICMP 摘要写到终端；没有 -X、-A、-w，不保存正文或 pcap：
+~~~sh
+sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -l -s 96 -c 80 "(host 10.234.35.5 and host 10.234.16.254) and (udp or icmp)" & p=$!; (sleep 90; kill -INT "$p" 2>/dev/null) & g=$!; wait "$p"; r=$?; kill "$g" 2>/dev/null || true; exit "$r"'
+~~~
+  观察仅用于区分 QUIC datagram 是否离开 Mac、是否收到相关 ICMP 拒绝；不得把没有样本当作成功或失败原因。执行前仍需总控确认该用户侧权限窗口。
+- [ ] E5-M 已排队：固定 4889 包 Windows→Mac 的接收端应用重启恢复。先按 E5-J 的 package/profile/路径所有权和 checkpoint 条件预检；Mac→Windows 的 write_EHOSTUNREACH 反向故障不阻断正向恢复，也不重试反向链路。

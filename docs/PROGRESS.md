@@ -661,3 +661,12 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 2c81b40 typed handshake diagnostic，4889cbe 修复 clipboard/inbox WSS handoff；五项 CI SUCCESS。Mac DMG SHA256 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows artifact 内 portable ZIP SHA256 0bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，BUILD-INFO 均指向 4889cbe。
 - 新 Mac→Windows V2 request 在 sender ice_checking/CHECK_TIMEOUT 0 bytes 失败，Windows 无 incoming/无 UIA 接收；未进入 QUIC，旧 QUIC 失败仍未知。两端候选已停止。
 
+
+## 2026-09-20 E5-L 4889cbe 反向 QUIC 写路径诊断（NOT PASS）
+
+- 固定候选为 4889cbe14931f0b1743b4e618c4388e2587a7a5b：Mac arm64 DMG SHA256 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows portable ZIP SHA256 0bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，EXE SHA256 5a2629ee520bebdea37d113dd86fa37b67d910357241fbb985b3f28f606537b7。两轮均使用同一隔离 profile、一次性 12 MiB 随机文件和新的 V2 activation request；未重新配对、改网络、触碰剪贴板或传递文件正文到信令/IPC。
+- 首轮 request 2f2b3a5a724802e6fdcc9ded9c9ea713 的 Mac sender task 20260920T004043.317397000Z-00000001 在 quic_handshake 以 QUIC_HANDSHAKE_FAILED、0 bytes 终止。两端安全 ICE 时间线都实际经历 Checking → Connected 和一个 selected pair；Windows 随后 Disconnected → Closed，没有 incoming task 或 UIA 接收。持久的受限 failure diagnostic 是 udp_socket/0x41，Darwin 映射为 EHOSTUNREACH，不能把它称为 CHECK_TIMEOUT。
+- 第二轮只在 Mac package 进程额外设置 QUIC_GO_DISABLE_ECN=true；QUIC_GO_LOG_LEVEL=error 只用于观察。新的 request 90445430033aaf9810bd5af49e8c0c8b 仍在 quic_handshake/QUIC_HANDSHAKE_FAILED、0 bytes 失败，安全错误白名单归一化为 QUIC_EVENT_OPERATION=write_EHOSTUNREACH。因此禁用 ECN 后仍复现，不能归因于 ECN 单因素；该结果也不能排除更广义的 WriteMsgUDP/sendmsg 或内核/链路可达性因素。
+- Mac 到 Windows 10.234.16.254 的只读路由为 active en0 直连，Mac 本机地址 10.234.35.5；Application Firewall global state 为 disabled，包没有 sandbox entitlement。该快照不证明运行时没有链路错误。两轮 Mac/Windows owned package 均按 PID/路径停掉；自动剪贴板总开关仍为 false，测试 peer 的六项 grant 均 disabled。
+- 为保留凭据边界，Pion stderr 仅经 FIFO/内存过滤写入固定 ICE 事件；quic-go error 只归一化保留上述 read/write 与 errno 类别。未持久化或回传任何原始 stderr。首轮和 ECN 轮机器回执分别位于 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5l-4889cbe\attempt-20260920T0033Z\e5l-machine-receipt.json 与 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5l-4889cbe\attempt-20260920T0055Z-ecn-disabled\e5l-ecn-machine-receipt.json。
+- 请求现有权限的头部观察未能启动：sudo -n tcpdump --version 需要密码，普通用户对 /dev/bpf0 至 /dev/bpf3 都没有读写权限。未反复探测、没有运行 tcpdump、写 pcap 或修改 sudo/BPF/防火墙策略。待用户在已有权限下审阅并执行的最小草案见 E5 TODO；它只观察两台测试机 UDP/ICMP 头部，90 秒或 80 包上限，不记录正文或 pcap。
