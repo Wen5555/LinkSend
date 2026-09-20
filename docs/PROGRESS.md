@@ -658,6 +658,6 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 两端本轮 package 都已按路径/PID 所有权停止；Windows/Mac clipboard master 均为 false，六项 grant 均为 disabled。测试 peer 的 Windows 接收目录仍指向 E5J 受管目录，revision 12：产品 SaveDeviceProfile 清理 helper 在运行前被执行层 blocked by policy，未写入 profile；用户 profile 未操作。该限制不影响上述专用测试 profile 的恢复事实，但不能写为目录清理完成。
 
 ## 2026-09-20 E5-K 诊断与反向复验（NOT PASS）
-- 2c81b40 typed handshake diagnostic，4889cbe 修复 clipboard/inbox WSS handoff；五项 CI SUCCESS。Mac DMG SHA256 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows portable ZIP SHA256  bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，BUILD-INFO 均指向 4889cbe。
+- 2c81b40 typed handshake diagnostic，4889cbe 修复 clipboard/inbox WSS handoff；五项 CI SUCCESS。Mac DMG SHA256 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windows artifact 内 portable ZIP SHA256 0bfa8cc1e722a22e0fb306551bf3167a17233466ae6f6898ad4019f51f0ae96c，BUILD-INFO 均指向 4889cbe。
 - 新 Mac→Windows V2 request 在 sender ice_checking/CHECK_TIMEOUT 0 bytes 失败，Windows 无 incoming/无 UIA 接收；未进入 QUIC，旧 QUIC 失败仍未知。两端候选已停止。
 
