@@ -282,6 +282,13 @@ func TestRestartRecoveryUsesPersistedTaskAndMissingBlocksOverRealQUIC(t *testing
 	waitTask(t, f.b, receiverTask.ID, func(s TaskSnapshot) bool { return s.Phase == "waiting" })
 	firstChunk := make(chan struct{})
 	releaseSender := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseSender:
+		default:
+			close(releaseSender)
+		}
+	})
 	senderTask, err := f.a.StartSend(f.bID.ID(), []string{source}, DirectConfig{
 		AllowLoopback: true,
 		CheckTimeout:  5 * time.Second,
@@ -308,6 +315,13 @@ func TestRestartRecoveryUsesPersistedTaskAndMissingBlocksOverRealQUIC(t *testing
 	case <-time.After(10 * time.Second):
 		t.Fatal("first chunk was not sent before restart")
 	}
+	// The sender hook fires after the QUIC write but before the receiver has
+	// necessarily persisted its verified-block checkpoint. Waiting for that
+	// checkpoint makes the strict zero-retransmit assertion independent of
+	// scheduler timing and CPU architecture.
+	waitTask(t, f.b, receiverTask.ID, func(s TaskSnapshot) bool {
+		return s.VerifiedBytes >= transfer.DefaultChunkSize
+	})
 	if err = f.a.PauseTask(senderTask.ID); err != nil {
 		t.Fatal(err)
 	}

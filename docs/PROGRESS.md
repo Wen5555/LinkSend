@@ -680,3 +680,11 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - Mac 恢复 receive task 20260920T014743.650042000Z-00000001 只接收缺失的 1,069,547,520 bytes，最终 verified/committed 均为 1,073,741,824、receiver retransmitted=0、目标 SHA256 与源一致。初始和恢复 receive task 的 TransferID、manifest digest、selection digest、receive plan digest 与 target directory 均一致；binding_consistent=true，receive plan digest 为 191827a88f13e4d09a2ea34afa9b8eec484437d77a3d83eb3a20fd99c4dd0415，最终目录只有预期文件而无第二副本。
 - 两次同名 TransferID 的旧 monitor 基线漏列/时序错误导致任务正常完成，保留记录但不计恢复证据。首个 UIA 脚本因 PowerShell 参数名 pid 与自动 PID 冲突而在输入前退出；v2 改用 processId 后只 Invoke 恢复传输。E5J/K/L 的已终态受管 activations 已可逆归档到 E5M 根，未删除源或用户文件，也没有将旧 recovering history 误判为外部阻塞。
 - 两端 package 均按 owned PID/path 停止；clipboard master=false，测试 peer 的 enabled grants=0。最终机器回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5m-4889cbe\e5m-final-machine-receipt.json。此 PASS 只覆盖 Windows sender、Mac receiver 的接收端应用重启恢复；Mac→Windows write_EHOSTUNREACH 是独立的反向故障，未纳入本项。
+
+## 2026-09-20 E5-N 4889cbe 小文件与空闲性能基线（PASS，样本范围有限）
+
+- 固定 4889cbe 准确包和既有 Windows/Mac profile，新建受管 source 仅 9,437,184 bytes：连续 1 MiB 文件 3 个，批量 512 KiB 文件 12 个，共 15 文件，低于 32 MiB 上限。没有下载、构建、优化、重传既有 1 GiB 样本，亦未改系统设置、权限、网络、配对、clipboard 或日志边界。
+- Windows→Mac 连续 run 的实际 stage-to-completed elapsed 为 3,588.242、1,312.396、1,856.090 ms，各为 1,048,576 bytes；12×512 KiB 批量为 6,291,456 bytes、2,509.479 ms。四次 sender task 均 completed、verified/committed 与 source bytes 相等、bilateral_confirmed=true、retransmitted=0，连接为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1。它们是小样本端到端耗时，不是吞吐承诺。
+- Mac read-only receiver 核验得到 4 个 completed task、15 个预期目标文件、无 E5N 重名副本；每个 target bytes 和 SHA256 都与 Windows fixture manifest 一致，receiver retransmitted=0。完整收束回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5n-4889cbe\e5n-final-machine-receipt.json。
+- 空闲期仅测 LinkSend 主进程，不包括 WebView/helper 子进程。Windows 12 点、2 秒间隔、22.221 秒窗口：CPU seconds delta=0.328125，按实测墙钟折算为单逻辑核平均 1.476627%，working set=51,552,256–52,989,952 bytes，private=65,372,160–66,588,672 bytes。Mac 12 点、2 秒间隔、22.195 秒窗口：RSS 恒为 130,514,944 bytes，系统 ps 的平滑 pcpu=0.1–0.7%、均值 0.316667%。两个 CPU 口径不同，不能直接横向等同。
+- 准确包任务只提供连接 timing，未提供端到端 discovery timestamp；task snapshot 也没有单独 DB commit 时间边界，均为 NOT_OBSERVABLE。连续 n=3、批量 n=1，不报告 p95。Mac 初始采样的 run-script 结果已获记录；随后 SSH-manager tail-job helper 因 zsh status 变量失败，未为绕过读回问题新增任何样本。

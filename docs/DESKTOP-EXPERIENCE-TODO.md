@@ -132,5 +132,21 @@ sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -q -l -s 96 -c 80 "(host 10.234.35.5 an
 - [!] 两次旧同名 TransferID 监控漏列/时序错误和首次 UIA 参数名冲突均保留为无效基线；前者没有中断，后者没有 UI action，均不计入通过。已终态的旧受管 activations 可逆归档，不删除源或用户文件。Mac→Windows write_EHOSTUNREACH 仍是独立反向故障。
 - [x] 两端 package 按 owned PID/path 停止；clipboard master=false、enabled grants=0。最终回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5m-4889cbe\e5m-final-machine-receipt.json。
 
-### E5-N：4889cbe 小文件与空闲性能基线（排队）
-- [ ] 仅复用已确认 package/profile，新增 fixture 总量不超过 32 MiB；先记录少量连续/批量小文件与稳定空闲 CPU、内存的样本数、实际 elapsed 和 bytes。现有 1 GiB 正向样本只作已测吞吐参考，不重复传输。发现延迟或 DB commit 延迟如准确包不可观察，明确记为 NOT_OBSERVABLE/gap；少样本不得称 p95。
+### E5-N：4889cbe 小文件与空闲性能基线（PASS，样本范围有限）
+- [x] 新增受管 fixture 为 3 个连续 1 MiB 文件和 12 个 512 KiB 批量文件，共 15 个、9,437,184 bytes，低于 32 MiB 上限；未重传已有 1 GiB 样本。Windows→Mac 4 次 run 均为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1、双方确认、0 retransmit，Mac 只读核验 4 个 completed task、15 个目标文件和全部 SHA256，未见 E5N 重名副本。
+- [x] 实际端到端 elapsed：连续 1 MiB 为 3,588.242、1,312.396、1,856.090 ms（n=3）；12×512 KiB 批量共 6 MiB 为 2,509.479 ms（n=1）。样本不足，不报告 p95。
+- [x] 空闲主进程各采 12 点、2 秒间隔：Windows 22.221 秒窗口的 CPU 秒差为 0.328125，即单逻辑核平均 1.476627%，working set 51,552,256–52,989,952 bytes、private 65,372,160–66,588,672 bytes；Mac 22.195 秒窗口的 RSS 恒为 130,514,944 bytes，ps 平滑 pcpu 为 0.1–0.7%、均值 0.316667%。两端均不含 WebView/helper 子进程，两个 CPU 口径不可直接等同。
+- [!] 准确 package 没有端到端 discovery timestamp，也不暴露单独 DB commit 定时边界，均记为 NOT_OBSERVABLE；当前 n=3/n=1 不称 p95。初始 Mac 采样成功后 SSH-manager 的 tail-job 读回 helper 触发 zsh status 变量问题，未为绕过它新增样本。
+
+### E5-N 收束后的剩余必交付项
+
+仍可自主完成的具体下一步：
+- [ ] 本次合并提交推送后，等待并记录该新 SHA 的 core×2、desktop-wails3-checks×2、wails3-packages 五项 CI 终态；当前修正的 restart-recovery race 用例已在本地有界重复通过。
+
+确需用户现场、权限或签名条件：
+- [ ] E5-L 反向 Mac→Windows 写路径根因：最小两 IP UDP/ICMP 头部观察仍需 Mac 现有管理员权限终端。双 IP outer filter 不显示第三方网关的 ICMP 引述错误；无匹配样本不能排除网关拒绝，不扩大观察方案。
+- [ ] Windows 原生 Tab 顺序：只缺用户把准确包窗口置前且 input desktop 为 Default 后的一次真实 Tab 检查；不强制前台或改用 CDP。
+- [ ] 150% DPI/深色：只缺真实 150% 显示与系统深色环境的准确包布局观察；当前用户全局显示/主题保持不改。
+- [ ] 系统剪贴板双机矩阵及与文件并存：用户已有临时覆盖授权，但执行策略仍拒绝窗口；只缺可执行的隔离/可丢弃 clipboard 窗口，不需再次授权或读取日常 clipboard。
+- [ ] 物理网络切换、睡眠/唤醒：只缺双机同时在线且允许自然事件时的接口、session、revision 与 hash 时间线；不修改路由、代理或防火墙。
+- [ ] 受信任系统安装、Share Extension/App Group、Developer ID/公证：用户已暂缓，需要相应签名身份、安装决定和凭据；现有受保护安装与快捷方式不覆盖。

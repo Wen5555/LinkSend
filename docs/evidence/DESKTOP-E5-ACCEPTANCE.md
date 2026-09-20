@@ -271,3 +271,17 @@ Mac DMG 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5，Windo
 固定资产来自 workflow 35475890292 的 4889cbe14931f0b1743b4e618c4388e2587a7a5b：Windows EXE SHA256 为 5a2629ee520bebdea37d113dd86fa37b67d910357241fbb985b3f28f606537b7，Mac DMG SHA256 为 5dd149a176f00fa44fff47d65db59d21fb8d8952e0d53b82a9f015241e2372a5。最终证据为 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5m-4889cbe/e5m-final-machine-receipt.json。
 
 不计入 PASS 的记录：首次误用 identity 58e437ccbf16ac9a951ef3f7fa9061277012c9affc1f8c288a7dabc6a56cb01e 的 profile，只到 awaiting_acceptance、0 bytes，已停止且未重配对；两次同名 TransferID 的 monitor 基线漏列/时序错误未在中断处命中；首个 UIA 脚本在动作前因 pid/PID 参数冲突退出。它们均保留并排除在恢复证据外。E5J/K/L 的已终态受管 activations 只作可逆归档，源和用户文件没有删除。Mac→Windows write_EHOSTUNREACH 仍为独立反向故障，不被写成 E5-M 失败或通过。
+
+### E5-N：4889cbe 小文件与空闲性能基线（PASS，样本范围有限）
+
+| 项目 | 结果 | 事实 |
+|---|---|---|
+| 受管 fixture 上限 | PASS | 新建 15 文件、9,437,184 bytes：连续 3×1 MiB，批量 12×512 KiB；低于 32 MiB，既有 1 GiB 样本未重传。 |
+| 连续小文件 | PASS | 三个 1 MiB sender run 的实际 elapsed 为 3,588.242、1,312.396、1,856.090 ms；每次 verified/committed=1 MiB、bilateral_confirmed=true、sender retransmitted=0。 |
+| 批量小文件 | PASS | 一个 12×512 KiB、共 6 MiB run 的实际 elapsed 为 2,509.479 ms；verified/committed=6 MiB、bilateral_confirmed=true、sender retransmitted=0。 |
+| 接收与完整性 | PASS | Mac read-only 核验 4 个 completed receive task、15 个预期 target、全部 SHA256 与 Windows manifest 一致，receiver retransmitted=0，未出现 E5N 第二副本。四次均为 lan_direct/QUIC/TLS 1.3/ALPN linksend/1。 |
+| Windows 空闲主进程 | PASS | 12 点/2 秒，22.221 秒：CPU seconds delta=0.328125，按墙钟为单逻辑核平均 1.476627%；working set 51,552,256–52,989,952 bytes，private 65,372,160–66,588,672 bytes。 |
+| Mac 空闲主进程 | PASS | 12 点/2 秒，22.195 秒：RSS 130,514,944 bytes，ps 平滑 pcpu 0.1–0.7%、均值 0.316667%。 |
+| discovery / DB commit 延迟 | NOT_OBSERVABLE | package 未给端到端 discovery timestamp 或单独 DB commit 时钟；不新打包。连续 n=3、批量 n=1，未报告 p95。 |
+
+CPU/内存只覆盖 LinkSend 主进程，不含 WebView/helper；Windows CPU 是进程 CPU 秒差除实测墙钟，Mac 为系统 ps 平滑 pcpu，不能并列比较。初始 Mac 采样已成功；后续 SSH-manager tail-job helper 因 zsh status 变量无法读回，未用新增样本绕过该读回限制。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。最终机器回执为 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5n-4889cbe/e5n-final-machine-receipt.json。
