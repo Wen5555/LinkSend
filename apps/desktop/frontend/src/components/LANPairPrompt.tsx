@@ -8,7 +8,12 @@ export function LANPairPrompt({ run, op, available }: { run: CommandRunner; op: 
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const pending = useQuery({ queryKey: ['lan-pair-pending'], queryFn: () => Backend.PendingLANPairings(), refetchInterval: 1000, retry: false, enabled: available });
   const request = pending.data?.find(item => !dismissed.has(item.request_id));
-  useEffect(() => { if (request) dialog.current?.querySelector<HTMLButtonElement>('.primary')?.focus(); }, [request?.request_id]);
+  useEffect(() => {
+    if (!request) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.querySelector<HTMLButtonElement>('.primary')?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [request?.request_id]);
   if (!request) return null;
   const respond = (accept: boolean) => void run(`lan-${accept ? 'accept' : 'reject'}-${request.request_id}`, async () => {
     await Backend.RespondLANPair(request.request_id, accept); setDismissed(current => new Set(current).add(request.request_id)); await pending.refetch();

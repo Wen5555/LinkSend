@@ -257,6 +257,59 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .section-heading { margin-bottom: 14px; }
   .compact-file-list { max-height: 92px; }
 }
+
+/* E5-Q: keep high-cardinality directories bounded and make device detail
+   actions reachable in a short native window. */
+.device-directory-section { padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }
+.transfer-grid { grid-template-columns: minmax(0, 1fr); }
+.device-directory-section:first-of-type { padding-top: 0; margin-top: 16px; border-top: 0; }
+.device-directory-section h3 { margin: 0; font-size: 14px; }
+.device-search { display: grid; gap: 6px; margin-top: 16px; color: var(--muted); font-size: 11px; }
+.device-search input { min-width: 0; }
+.device-search-empty { margin: 12px 0; }
+.device-pagination, .bounded-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 11px; }
+.device-pagination { border-top: 1px solid var(--line); padding-top: 10px; }
+.bounded-pagination { padding-top: 12px; }
+.bounded-pagination span, .device-pagination span { text-align: center; }
+.device-detail-backdrop { position: fixed; z-index: 1100; inset: 0; display: flex; justify-content: flex-end; padding: 12px; background: rgba(14,20,30,.38); backdrop-filter: blur(8px); }
+.device-detail-drawer { display: flex; flex-direction: column; width: min(590px, 100%); max-height: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 72px rgba(17,29,48,.28); }
+.device-detail-heading { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px 17px; border-bottom: 1px solid var(--line); }
+.device-detail-heading h2 { margin: 3px 0 5px; font-size: 21px; }
+.device-detail-heading code { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.device-detail-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px; }
+.device-detail-content .device-editor { padding: 0; }
+.device-detail-footer { flex: 0 0 auto; border-top: 1px solid var(--line); padding: 14px 24px; background: var(--surface); box-shadow: 0 -8px 18px rgba(17,29,48,.04); }
+.device-profile-fields { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.device-detail-actions, .device-remove-confirm { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.device-remove-confirm > div:first-child { min-width: 0; }
+.device-remove-confirm strong { font-size: 12px; }
+.device-remove-confirm p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.top-status { gap: 8px; }
+.top-receive-settings { min-height: 30px; padding-inline: 8px; font-size: 11px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .device-detail-backdrop { padding: 0; }
+  .device-detail-drawer { width: 100%; border-radius: 0; }
+  .device-detail-heading, .device-detail-content, .device-detail-footer { padding-inline: 18px; }
+  .device-detail-actions, .device-remove-confirm { align-items: flex-start; flex-direction: column; }
+  .device-detail-actions > .primary, .device-remove-confirm .inline-actions { width: 100%; }
+  .device-remove-confirm .inline-actions { justify-content: flex-start; }
+  .bounded-pagination { align-items: flex-start; flex-wrap: wrap; }
+  .bounded-pagination span { flex: 1 0 100%; order: 3; }
+}
+@media (max-height: 640px) {
+  .device-detail-backdrop { padding: 6px; }
+  .device-detail-heading { padding-block: 14px 11px; }
+  .device-detail-heading h2 { font-size: 18px; }
+  .device-detail-content { padding-block: 14px; }
+  .device-detail-footer { padding-block: 10px; }
+  .device-permissions { margin-top: 14px; padding-top: 14px; }
+}
+@media (prefers-color-scheme: dark) {
+  .device-detail-drawer, .device-detail-footer { background: rgba(44,44,46,.98); }
+}
+
+/* Receiver confirmation and LAN pairing own the highest interaction layer. */
+.modal-backdrop { z-index: 1200; }
 @media (max-width: 720px) and (max-height: 600px) {
   .brand { display: none; }
   .sidebar { padding-block: 7px; }

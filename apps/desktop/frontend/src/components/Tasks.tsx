@@ -7,17 +7,24 @@ import { deviceName, formatBytes, taskLabels } from '../presentation';
 import { ReceivedContentActions } from './ContentActions';
 
 export function TaskList({ tasks, devices, run, op }: { tasks: TaskSnapshot[]; devices: DeviceInfo[]; run: CommandRunner; op: string }) {
+  const pageSize = 10;
+  const [page, setPage] = useState(0);
+  const ordered = [...tasks].reverse();
+  const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const activePage = Math.max(0, Math.min(page, Math.max(0, pageCount - 1)));
+  const visible = ordered.slice(activePage * pageSize, activePage * pageSize + pageSize);
+  useEffect(() => { setPage(current => Math.max(0, Math.min(current, Math.max(0, Math.ceil(tasks.length / pageSize) - 1)))); }, [tasks.length]);
   return <section className="tasks-section" aria-labelledby="tasks-title">
     <div className="section-heading compact"><div><span className="section-kicker">活动与记录</span><h2 id="tasks-title">任务</h2></div><span className="task-count">{tasks.length} 个</span></div>
     {!tasks.length ? <div className="empty-state"><strong>还没有传输记录</strong><p>加入发送队列，或等待另一台设备发来请求。</p></div> :
-      <div className="task-list">{[...tasks].reverse().map(task => <TaskRow key={task.id} task={task} device={devices.find(d => d.id === task.peer_id)} run={run} op={op} />)}</div>}
+      <><div className="task-list">{visible.map(task => <TaskRow key={task.id} task={task} device={devices.find(d => d.id === task.peer_id)} run={run} op={op} />)}</div>{tasks.length > pageSize && <div className="bounded-pagination" aria-label="进行中任务分页"><button className="ghost" aria-label="任务上一页" disabled={activePage === 0} onClick={() => setPage(current => Math.max(0, current - 1))}>上一页</button><span>第 {activePage + 1} / {pageCount} 页 · 每页最多 {pageSize} 项</span><button className="ghost" aria-label="任务下一页" disabled={activePage + 1 >= pageCount} onClick={() => setPage(current => Math.min(pageCount - 1, current + 1))}>下一页</button></div>}</>}
   </section>;
 }
 
 function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: DeviceInfo; run: CommandRunner; op: string }) {
   const pct = t.total_bytes && t.total_bytes > 0 ? Math.min(100, Math.round(t.processed_bytes / t.total_bytes * 100)) : 0;
   const terminal = ['completed', 'failed', 'cancelled', 'rejected', 'no_content'].includes(t.state);
-  return <article className="task-row" id={`task-${t.id}`} tabIndex={-1}>
+  return <article className="task-row" data-task-id={t.id} id={`task-${t.id}`} tabIndex={-1}>
     <div className={`task-symbol ${t.direction}`} aria-hidden="true">{t.direction === 'send' ? '↑' : '↓'}</div>
     <div className="task-main">
       <div className="task-title"><strong>{t.direction === 'send' ? '发送' : '接收'} · {t.source_summary || t.manifest_summary || '文件传输'}</strong><span className={`state-badge ${t.state}`}>{taskLabels[t.state] || t.state}</span></div>
@@ -29,11 +36,11 @@ function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: De
       <div className="task-foot"><span>逻辑完成 {formatBytes(t.processed_bytes)} / {formatBytes(t.total_bytes)}</span>{t.error_message && <span className="task-error">{t.error_code} · {t.error_message}</span>}</div>
     </div>
     <div className="task-actions">{t.direction === 'receive' && t.state === 'completed' && t.bilateral_confirmed && <ReceivedContentActions taskID={t.id} revision={t.revision} run={run} op={op} available={true} />}
-      {t.can_pause && <button className="secondary" disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}
-      {t.can_resume && <button className="primary" disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
-      {t.can_cancel && t.state !== 'awaiting_acceptance' && <button className="ghost" disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}
-      {t.can_retry && <button className="secondary" disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
-      {t.state === 'completed' && t.direction === 'receive' && <button className="secondary" disabled={!!op} onClick={() => void run(t.id, () => Backend.OpenTaskDirectory(t.id))}>打开文件夹</button>}
+      {t.can_pause && <button className="secondary" aria-label={`暂停传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}
+      {t.can_resume && <button className="primary" aria-label={`恢复传输 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
+      {t.can_cancel && t.state !== 'awaiting_acceptance' && <button className="ghost" aria-label={`取消传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}
+      {t.can_retry && <button className="secondary" aria-label={`重新发送 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
+      {t.state === 'completed' && t.direction === 'receive' && <button className="secondary" aria-label={`打开 ${t.id} 的文件夹`} disabled={!!op} onClick={() => void run(t.id, () => Backend.OpenTaskDirectory(t.id))}>打开文件夹</button>}
     </div>
   </article>;
 }

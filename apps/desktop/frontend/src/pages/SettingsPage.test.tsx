@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClipboardWatchStatus, DesktopPreferences } from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
 import type { CommandRunner } from '../hooks/useDesktop';
-import { SettingsPage } from './SettingsPage';
+import { SettingsPage, type SettingsCategoryRequest } from './SettingsPage';
 
 const backend = vi.hoisted(() => ({
   Preferences: vi.fn(),
@@ -49,11 +49,11 @@ const run: CommandRunner = async (_key, action, _message, onError) => {
   }
 };
 
-function renderSettings(clipboard?: ClipboardWatchStatus) {
+function renderSettings(clipboard?: ClipboardWatchStatus, categoryRequest?: SettingsCategoryRequest) {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  act(() => root.render(<SettingsPage preferences={basePreferences} clipboard={clipboard} interfaces={[]} run={run} controlRun={run} op="" available />));
+  act(() => root.render(<SettingsPage preferences={basePreferences} clipboard={clipboard} interfaces={[]} run={run} controlRun={run} op="" available initialCategory={categoryRequest?.category} categoryRequest={categoryRequest} />));
   return { container, root };
 }
 
@@ -136,5 +136,21 @@ describe('SettingsPage save lifecycle', () => {
 	expect(container.textContent).toContain('写入系统剪贴板失败');
     await act(async () => button(container, '保存自动剪贴板设置').click());
     expect(backend.SavePreferencesSection).toHaveBeenCalledWith('clipboard', 2, expect.objectContaining({ clipboard_enabled: true }));
+  });
+});
+
+describe('SettingsPage navigation requests', () => {
+  it('opens receive settings for every explicit request without remounting local preferences state', () => {
+    const { container, root } = renderSettings(undefined, { category: 'general', revision: 0 });
+    roots.push(root);
+    act(() => button(container, '网络与发现').click());
+    expect(container.textContent).toContain('连接设置');
+    act(() => root.render(<SettingsPage preferences={basePreferences} interfaces={[]} run={run} controlRun={run} op="" available initialCategory="receive" categoryRequest={{ category: 'receive', revision: 1 }} />));
+    expect(container.textContent).toContain('目录与冲突');
+    act(() => button(container, '网络与发现').click());
+    expect(container.textContent).toContain('连接设置');
+    act(() => root.render(<SettingsPage preferences={basePreferences} interfaces={[]} run={run} controlRun={run} op="" available initialCategory="receive" categoryRequest={{ category: 'receive', revision: 2 }} />));
+    expect(container.textContent).toContain('目录与冲突');
+    expect((container.querySelector('input[placeholder="请选择目录"]') as HTMLInputElement).value).toBe('C:\\receive');
   });
 });

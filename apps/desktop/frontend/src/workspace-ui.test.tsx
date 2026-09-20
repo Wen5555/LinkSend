@@ -39,8 +39,8 @@ describe('workspace operation surfaces', () => {
     expect(markup).not.toContain('保存内容草稿');
     expect(markup).not.toContain('内容类型');
     const controls = renderToStaticMarkup(createElement(TaskList, { tasks: [task], devices: [device], run, op: '' }));
-    expect(controls).toMatch(/<button class="secondary">暂停传输<\/button>/);
-    expect(controls).toMatch(/<button class="ghost">取消<\/button>/);
+    expect(controls).toContain('aria-label="暂停传输 task"');
+    expect(controls).toContain('aria-label="取消传输 task"');
   });
   it('requires an explicit waiting choice for an offline destination', () => {
     const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [{ ...device, online: false }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));

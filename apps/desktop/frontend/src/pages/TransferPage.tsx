@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
-import type { DesktopPreferences } from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
-import type { DeviceInfo, InboxStatus, SendDraft, WorkspaceSnapshot } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
+import type { DeviceInfo, SendDraft, WorkspaceSnapshot } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
 import { humanizeBackendError } from '../connection';
 import { EnqueueIdentity } from '../workspace-cache';
@@ -10,13 +9,23 @@ import { deviceName, fileName } from '../presentation';
 import { Queue } from '../components/Queue';
 import { TaskList } from '../components/Tasks';
 
-type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; inbox?: InboxStatus; preferences?: DesktopPreferences; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean; initialView?: 'send' | 'queue' | 'active' };
+type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean; initialView?: 'send' | 'queue' | 'active' };
+const pathPageSize = 10;
 
-export function TransferPage({ workspace, devices, identityID, inbox, preferences, run, op, controlRun, controlOp, enqueueIdentity, available, initialView = 'send' }: Props) {
+function clampPathPage(page: number, count: number) {
+  return Math.max(0, Math.min(page, Math.max(0, Math.ceil(count / pathPageSize) - 1)));
+}
+
+export function TransferPage({ workspace, devices, identityID, run, op, controlRun, controlOp, enqueueIdentity, available, initialView = 'send' }: Props) {
   const [waitForPeer, setWaitForPeer] = useState(false);
   const [view, setView] = useState<'send' | 'queue' | 'active'>(initialView);
+  const [pathPage, setPathPage] = useState(0);
   const draft = workspace?.draft;
   const paths = draft?.paths ?? [];
+  const pathPageCount = Math.max(1, Math.ceil(paths.length / pathPageSize));
+  const activePathPage = clampPathPage(pathPage, paths.length);
+  const visiblePaths = paths.slice(activePathPage * pathPageSize, activePathPage * pathPageSize + pathPageSize);
+  useEffect(() => { setPathPage(page => clampPathPage(page, paths.length)); }, [paths.length]);
   const preview = useQuery({ queryKey: ['draft-preview', draft?.revision], enabled: available && !!draft?.paths?.length,
     queryFn: () => Backend.PreviewDraft(), retry: false });
   const peers = devices.filter(device => device.id !== identityID && (device.trusted || device.nearby) && !device.blocked);
@@ -48,17 +57,14 @@ export function TransferPage({ workspace, devices, identityID, inbox, preference
         <label className="queue-wait"><input type="checkbox" checked={waitForPeer} disabled={disabled} onChange={event => setWaitForPeer(event.target.checked)} /><span>对方离线时，留在队列中等待</span></label>
         {selected && !selected.online && !selected.nearby && !waitForPeer && <p className="queue-notice">对方暂时离线。勾选等待后可加入队列，也可以稍后再发。</p>}
         <button className="primary full send-button" disabled={disabled || !draft?.peer_id || !paths.length || !selected || selected.blocked || (!selected.online && !selected.nearby && !waitForPeer)} onClick={enqueue}>{op === 'enqueue' ? '正在核对内容并加入…' : '发送文件'}</button>
-        <div className="file-list compact-file-list">{paths.length ? paths.map(path => <div className="file-row" key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>尚未选择文件</strong><small>选择窗口取消后不会清空已有草稿。</small></div>}</div>
+        <div className="file-list compact-file-list">{paths.length ? visiblePaths.map(path => <div className="file-row" data-draft-path={path} key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>尚未选择文件</strong><small>选择窗口取消后不会清空已有草稿。</small></div>}</div>
+        {paths.length > pathPageSize && <div className="bounded-pagination" aria-label="发送草稿分页"><button className="ghost" aria-label="草稿上一页" disabled={activePathPage === 0} onClick={() => setPathPage(page => clampPathPage(page - 1, paths.length))}>上一页</button><span>第 {activePathPage + 1} / {pathPageCount} 页 · 每页最多 {pathPageSize} 项</span><button className="ghost" aria-label="草稿下一页" disabled={activePathPage + 1 >= pathPageCount} onClick={() => setPathPage(page => clampPathPage(page + 1, paths.length))}>下一页</button></div>}
         <p className="hint">可将文件或目录拖到这里；系统入口只加入草稿。当前传输不会阻止加入下一项，重启后需确认继续。</p>
         {preview.data && preview.data.revision === draft?.revision && <p className="hint">{preview.data.complete ? '' : '已统计 '} {preview.data.files} 个文件 · {preview.data.directories} 个目录 · {(preview.data.bytes / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB{preview.data.problem && ` · ${preview.data.problem}`}</p>}
         {draft && <small className="draft-status">{draft.updated_at ? `草稿已保存 · ${new Date(draft.updated_at).toLocaleTimeString()}` : '选择内容后保存草稿'}</small>}
       </section>
-      <section className="surface receive-ready"><div className="section-heading"><div><span className="section-kicker">接收</span><h2>{inbox?.listening || inbox?.lan_available ? '可以接收文件' : '接收状态'}</h2></div><span className={inbox?.signaling_connected || inbox?.lan_available ? 'receive-orb ready' : 'receive-orb'} aria-hidden="true">↓</span></div><p className="intro">应用打开时等待接收请求，收到后显示确认。</p>
-        <div className="receiver-status"><span className={inbox?.signaling_connected || inbox?.lan_available ? 'status-dot ready' : 'status-dot'} /><div><strong>{inbox?.lan_available ? '局域网接收在线' : inbox?.signaling_connected ? '远程接收连接在线' : '接收尚未就绪'}</strong><small>{inbox?.last_error ? humanizeBackendError(inbox.last_error) : '以实际连接和接收结果为准'}</small></div></div>
-        <label className="field-label">默认保存到<input value={preferences?.receive_directory ?? ''} readOnly placeholder="请选择接收目录" /></label><button className="secondary full" disabled={disabled || !preferences} onClick={() => void run('receive-directory', async () => { const path = await Backend.PickDirectory(); if (path && preferences) await Backend.SavePreferencesSection('receive', preferences.revision, { ...preferences, receive_directory: path }); }, '默认接收目录已更新')}>更改默认目录</button><p className="field-help">单台设备的专属目录可在设备页设置。</p>
-      </section>
     </div>}
     {view === 'queue' && <section className="surface bounded-view"><Queue items={workspace?.queue ?? []} devices={devices} paused={workspace?.queue_paused ?? false} run={controlRun} op={controlOp} available={available && !!workspace?.persistence_available} /></section>}
-    {view === 'active' && <section className="surface bounded-view"><TaskList tasks={(workspace?.tasks ?? []).filter(task => !['completed','cancelled','failed','rejected'].includes(task.state))} devices={devices} run={controlRun} op={controlOp} /></section>}
+    {view === 'active' && <section className="surface bounded-view"><TaskList tasks={(workspace?.tasks ?? []).filter(task => !['completed','cancelled','failed','rejected','no_content'].includes(task.state))} devices={devices} run={controlRun} op={controlOp} /></section>}
   </div>;
 }

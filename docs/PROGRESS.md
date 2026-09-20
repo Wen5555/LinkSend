@@ -703,3 +703,11 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - sender persisted task start 至 bilateral completed 的实际耗时为 35,000 ms。activation entry 在最初 monitor 记录墙钟前已被消费，故 enqueue-to-completion 是 NOT_OBSERVABLE；没有以 journal 文件时间补造这一指标。首个 sender receipt 假定 file_count 只计普通文件，首个 Mac read-only 查询假定 manifest_summary 精确等于目录名；两项均在完成后只读修正回执谓词，未重传或改变任何任务。
 - 本次记录的空闲主进程观测小于 180 秒：Windows 15 点/28.309 秒，CPU seconds delta=1.671875、单逻辑核平均 5.905756%，working set=51,404,800–53,501,952 bytes、private=64,425,984–66,347,008 bytes；Mac 12 点/22.181 秒，RSS=130,482,176–130,514,944 bytes，ps 平滑 pcpu=0.1–0.9%、均值 0.316667%。两端均排除 WebView/helper 子进程，CPU 口径不同；这不是长时稳定性或百万文件结论。
 - 准确包仍没有端到端 discovery 或独立 DB commit 时间边界，继续为 NOT_OBSERVABLE。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。完整机器回执为 C:\Users\Wen\.codex\supervision\linksend-desktop-experience\e5p-4889cbe\e5p-final-machine-receipt.json。
+
+## 2026-09-20 E5-Q U2/U7 有界目录与详情可达性（源码通过，非准确包结论）
+
+- 以 `5a5f43f` 为基线完成源码收敛：配对、附近和已删除三类设备均支持名称、别名和完整 identity 搜索，每类独立每页最多 10 行；详情由稳定 `DeviceID` 驱动的抽屉承载。搜索、翻页或同 ID 后台快照不会错指目标或丢失未保存别名；目标消失时页码钳制并把焦点回搜索框，普通关闭回详情触发器，Escape 只关闭抽屉。
+- 抽屉标题和操作栏固定，正文单独滚动；保存、删除和二次确认在 footer 中可达。其 Tab/Shift+Tab 闭环已在 Chromium 本地 Vite 源码 harness 验证；保存期间字段集禁用，旧 revision snapshot 不会覆盖刚保存的更高 revision。新收件确认与 LAN 配对遮罩升为 `z-index:1200`，高于设备抽屉的 1100；LAN 配对关闭时恢复此前焦点。
+- 发送草稿、待发送队列和进行中任务均分页到每页 10 项，删除、控制和重排仍使用完整 path、queue ID 或 task ID；队列重排继续将完整 pending 集合交给 `ReorderQueue`。收件状态只保留在 App 顶栏，并从该行进入已有“文件接收”设置分类；`no_content` 不出现在进行中视图。传输工作区改为单列，移除接收块后不留旧双列空槽。
+- 验证：`pnpm test` 为 8 files / 76 tests PASS；`pnpm run typecheck`、`pnpm run lint`、`pnpm run build` 均 PASS（本机 Node 24.19.0 与 pnpm 11.19.0 不满足 package 声明的 Node ^24.21.0 / pnpm 12.4.1，命令仍成功）。Chromium 源码 harness 在 960×640 和 1100×720、中文长名称下确认抽屉无水平溢出、正文独立滚动、关闭/保存/删除及二次确认均在视口内；传输页单列无接收空槽。这不是 Windows/macOS 准确 package、DPI 或系统辅助功能验收。
+- 性能账本边界：百万文件、GC 和长时稳定性是后续观察，不是本里程碑新增必交付。E5-N 的 n=3/n=1 不产生 p50/p95，准确包的 discovery 与独立 DB commit 仍无测点。存储持久化不是“完全无证据”：`history_test.go:327` 的 `BenchmarkTaskHistoryConnectionLifecycle` 覆盖 `persistRecord → SQLite autocommit` 全路径；E4 的 100×3 为 2.140/2.176/2.190 ms/op，包含序列化、锁和 SQL，不能表述成单独 `tx.Commit`。

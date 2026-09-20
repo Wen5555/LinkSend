@@ -301,3 +301,15 @@ CPU/内存只覆盖 LinkSend 主进程，不含 WebView/helper；Windows CPU 是
 | 空闲主进程 | PASS，范围有限 | Windows 15 点/28.309 秒：单逻辑核平均 5.905756%，working set 51,404,800–53,501,952 bytes、private 64,425,984–66,347,008 bytes；Mac 12 点/22.181 秒：RSS 130,482,176–130,514,944 bytes、ps 平滑 pcpu 0.1–0.9%、均值 0.316667%。不含 WebView/helper，不代表长时稳定性。 |
 
 初始 sender monitor 把 product entry count 当成 leaf file count、初始 Mac read-only matcher 把 summary 当成精确目录名；两项在成功完成后仅更正回执查询，不发生重传或第二次传输。完整 1000 项 source SHA256 manifest、任务与接收核验摘要均在 C:/Users/Wen/.codex/supervision/linksend-desktop-experience/e5p-4889cbe/e5p-final-machine-receipt.json。两端 package 已按 owned PID/path 停止，clipboard master=false、enabled grants=0。
+
+### E5-Q：U2/U7 有界目录与详情抽屉（源码 PASS，准确 package NOT RUN）
+
+| 项目 | 结果 | 事实 |
+|---|---|---|
+| 设备目录有界化 | 源码 PASS | paired、nearby、removed 均按名称、别名和完整 identity 搜索并每页最多渲染 10 行；操作和详情以完整 DeviceID 绑定。 |
+| 详情稳定性和焦点 | 源码 PASS | 同 ID snapshot 保留 dirty draft，换 ID 不复用 draft/异步 grants；目标消失会关闭、钳制页码并回焦搜索，普通关闭回详情触发器，Escape 不发后台命令。 |
+| 小窗详情可达性 | 源码浏览器 PASS | Chromium Vite harness 在 960×640、1100×720 和中文长名称下确认无水平溢出、内容区单独滚动，关闭/保存/删除/二次确认留在固定 header/footer 视口中；Tab/Shift+Tab 闭环通过。 |
+| U7 列表与接收入口 | 源码 PASS | 草稿、queue、active tasks 均每页最多 10 项；enqueue 保留全量 paths，ReorderQueue 保留完整 pending 集合，action 使用稳定 ID，页码会钳制。接收状态只留 App 顶栏并进入既有文件接收设置，`no_content` 不在活动任务中。 |
+| 原生包验收 | NOT RUN | 本节只运行浏览器源码 harness 与 Vitest，未在 Windows/macOS 准确安装包、DPI、深色或辅助功能环境中复验，不将其升级为 U2/U7 原生通过。 |
+
+本轮前端命令为 `pnpm test`（8 files / 76 tests）、`pnpm run typecheck`、`pnpm run lint`、`pnpm run build`，均成功；本机 Node 24.19.0 / pnpm 11.19.0 与 package 声明的 Node ^24.21.0 / pnpm 12.4.1 存在版本警告。性能记录继续按 E5-N/P 的实际小样本解释：不报告 p50/p95，不把百万文件、GC 或长时稳定性作为此批门槛；`BenchmarkTaskHistoryConnectionLifecycle` 及 E4 的 2.140/2.176/2.190 ms/op 为含序列化、锁和 SQLite autocommit 的全路径证据，并非单独 commit 时延。

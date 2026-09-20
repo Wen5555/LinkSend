@@ -6,11 +6,12 @@ import type { CommandRunner } from '../hooks/useDesktop';
 import { BackgroundSettings } from '../components/BackgroundSettings';
 import { ContentSettings } from '../components/ContentSettings';
 
-type Category = 'general' | 'receive' | 'clipboard' | 'system' | 'network' | 'storage' | 'diagnostics';
+export type SettingsCategory = 'general' | 'receive' | 'clipboard' | 'system' | 'network' | 'storage' | 'diagnostics';
+export type SettingsCategoryRequest = { category: SettingsCategory; revision: number };
 type EditableSection = 'general' | 'receive' | 'clipboard' | 'network';
 type DirtyField = 'device_name' | 'receive_directory' | 'conflict_policy' | 'clipboard_enabled' | 'server_url' | 'bind_address' | 'interface_priority' | 'excluded_interfaces' | 'stun_urls';
-type Props = { preferences: DesktopPreferences; effective?: EffectiveConfig; preferencesStatus?: PreferencesStatus; interfaces: NetworkInterfaceInfo[]; diagnostics?: Diagnostics; inbox?: InboxStatus; background?: BackgroundStatus; clipboard?: ClipboardWatchStatus; run: CommandRunner; controlRun: CommandRunner; op: string; available: boolean; sendToSupported?: boolean; onOpenLegacyQueue?: () => void };
-const categories: { id: Category; label: string; hint: string }[] = [
+type Props = { preferences: DesktopPreferences; effective?: EffectiveConfig; preferencesStatus?: PreferencesStatus; interfaces: NetworkInterfaceInfo[]; diagnostics?: Diagnostics; inbox?: InboxStatus; background?: BackgroundStatus; clipboard?: ClipboardWatchStatus; run: CommandRunner; controlRun: CommandRunner; op: string; available: boolean; sendToSupported?: boolean; onOpenLegacyQueue?: () => void; initialCategory?: SettingsCategory; categoryRequest?: SettingsCategoryRequest };
+const categories: { id: SettingsCategory; label: string; hint: string }[] = [
   { id: 'general', label: '通用', hint: '名称与外观' }, { id: 'receive', label: '文件接收', hint: '目录与同名策略' },
   { id: 'clipboard', label: '自动剪贴板', hint: '同步与运行状态' },
   { id: 'system', label: '系统集成', hint: '后台、通知与分享' }, { id: 'network', label: '网络与发现', hint: '服务与接口' },
@@ -45,14 +46,18 @@ function clipboardPeerState(peer: ClipboardPeerStatus) {
   return peer.state === 'ready' ? '就绪' : peer.state === 'unsupported' ? '对端不支持' : '连接中';
 }
 
-export function SettingsPage({ preferences, effective, preferencesStatus, interfaces, diagnostics, inbox, background, clipboard, run, controlRun, op, available, sendToSupported, onOpenLegacyQueue }: Props) {
-  const [category, setCategory] = useState<Category>('general');
+export function SettingsPage({ preferences, effective, preferencesStatus, interfaces, diagnostics, inbox, background, clipboard, run, controlRun, op, available, sendToSupported, onOpenLegacyQueue, initialCategory = 'general', categoryRequest }: Props) {
+  const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const [prefs, setPrefs] = useState(preferences);
   const [baselineRevision, setBaselineRevision] = useState(preferences.revision);
   const [latestSeenRevision, setLatestSeenRevision] = useState(preferences.revision);
   const [dirty, setDirty] = useState<Set<DirtyField>>(new Set());
   const [mergeRequired, setMergeRequired] = useState(false);
   const [savingSection, setSavingSection] = useState<EditableSection>();
+  useEffect(() => {
+    if (!categoryRequest || categoryRequest.revision === 0) return;
+    setCategory(categoryRequest.category);
+  }, [categoryRequest?.revision, categoryRequest?.category]);
   useEffect(() => {
     if (preferences.revision <= latestSeenRevision) return;
     setLatestSeenRevision(preferences.revision);
