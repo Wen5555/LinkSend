@@ -711,3 +711,10 @@ Verification on Windows amd64: root `gofmt`, `git diff --check`, `go mod verify`
 - 发送草稿、待发送队列和进行中任务均分页到每页 10 项，删除、控制和重排仍使用完整 path、queue ID 或 task ID；队列重排继续将完整 pending 集合交给 `ReorderQueue`。收件状态只保留在 App 顶栏，并从该行进入已有“文件接收”设置分类；`no_content` 不出现在进行中视图。传输工作区改为单列，移除接收块后不留旧双列空槽。
 - 验证：`pnpm test` 为 8 files / 76 tests PASS；`pnpm run typecheck`、`pnpm run lint`、`pnpm run build` 均 PASS（本机 Node 24.19.0 与 pnpm 11.19.0 不满足 package 声明的 Node ^24.21.0 / pnpm 12.4.1，命令仍成功）。Chromium 源码 harness 在 960×640 和 1100×720、中文长名称下确认抽屉无水平溢出、正文独立滚动、关闭/保存/删除及二次确认均在视口内；传输页单列无接收空槽。这不是 Windows/macOS 准确 package、DPI 或系统辅助功能验收。
 - 性能账本边界：百万文件、GC 和长时稳定性是后续观察，不是本里程碑新增必交付。E5-N 的 n=3/n=1 不产生 p50/p95，准确包的 discovery 与独立 DB commit 仍无测点。存储持久化不是“完全无证据”：`history_test.go:327` 的 `BenchmarkTaskHistoryConnectionLifecycle` 覆盖 `persistRecord → SQLite autocommit` 全路径；E4 的 100×3 为 2.140/2.176/2.190 ms/op，包含序列化、锁和 SQL，不能表述成单独 `tx.Commit`。
+
+## 2026-09-20 preview.2 发布及停止
+
+- 已按用户最新指令发布 [v0.5.0-desktop-preview.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-desktop-preview.2)，tag/程序包来源均为 `0229cbf3e8373c544431102ed904c4a19ed02dc4`，五项源码 CI success，packages run `35488500579`。四个程序包及两份校验/来源资产已上传，六项远端 digest 与本地相同；旧 tag/资产保留，PR #8 仍为 Draft，未合并 main。
+- 已完成设备/文件/队列/任务分页、固定设备详情操作区、键盘焦点与设置保存竞态修复；前端 76 tests、typecheck/lint/build 及两种窗口尺寸的 Chromium 检查通过。新发行包仍未进行原生与物理网络完整验收；旧 `4889cbe` 的实机证据保持原来源。
+- 本机超长 artifact 路径使安装器版本读取为空，缩短受管本地路径后原校验器通过；载荷 SHA256 未改变。详细资产表、CI 链接和发布回执见 [E5 交付记录](evidence/DESKTOP-E5-DELIVERY.md)。
+- 执行模型容量不足后，总控接手提交同步和发布收尾；没有新建执行者。按用户要求，文档同步后停止所有后续实施/派发，等待下一次明确启动。保留未完成 TODO，不把发布或浏览器通过当作整轮完成。

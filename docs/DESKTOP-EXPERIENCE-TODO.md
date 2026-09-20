@@ -1,5 +1,7 @@
 # LinkSend 桌面体验全轮 TODO
 
+> **2026-09-20 发布后停止：** preview.2 已发布，源码/产物为 `0229cbf3e8373c544431102ed904c4a19ed02dc4`，发布源码五项 CI 全绿。用户要求完成文档后停止，等待下一次明确启动；不得自动派发或恢复实施。U1–U7 尚未全部验收，Goal 不标完成。发布资产、摘要和恢复入口见 [E5 交付记录](evidence/DESKTOP-E5-DELIVERY.md)。
+
 日期：2026-09-13。唯一产品写入方：执行任务 `/root/desktop_executor_terra`（`gpt-5.6-terra` / `xhigh`；旧执行者已停止且不得并发恢复）。
 总控：`01a096c4-2e59-7db3-a7a8-ec2a125409d6`（local）。工作分支：`codex/desktop-experience-upgrade`。
 基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。E4 自动剪贴板源码范围已由总控在 `3363fd5+387b57c` 验收，当前执行 E5 准确包、物理双机、恢复、部署与网络联合验收。
@@ -157,8 +159,8 @@ sudo sh -c '/usr/sbin/tcpdump -i en0 -nn -q -l -s 96 -c 80 "(host 10.234.35.5 an
 - [x] 草稿 paths、队列、活动任务每页最多 10 项；enqueue 继续发全量 paths，跨页 ReorderQueue 继续传完整 pending IDs，动作使用稳定 ID，页码在后台删除/完成后钳制。收件状态只在顶栏并导航至既有“文件接收”设置；`no_content` 不列入进行中。
 - [x] 前端验证：`pnpm test` 8 files / 76 tests、typecheck、lint、build 全部 PASS；本地源浏览器检查不是准确 package 结果。
 
-确需用户现场、权限或签名条件：
-- [ ] U2 离线删除的当前 4889 准确包尝试没有执行删除：仅本次进程覆盖 LINKSEND_SERVER_URL=https://127.0.0.1:1 后，UIA 可 Invoke 设备导航，但精确测试 Mac identity 不在当前 WebView 可访问树。没有 ScrollPattern，向已确认 package HWND 的设备列表区域发送 12 次定向滚动仍不可达；未按第 N 个设置按钮盲删。只缺用户现场手动滚动并选择该精确测试 Mac 行后的一次删除/确认，随后再由受管脚本核验 pending-sync、重启、原服务同步和重新配对。
+待恢复的原生验收及现场、权限或签名条件：
+- [ ] U2 离线删除：旧 4889 包因 UIA 可达性限制未执行删除；preview.2 已包含目录搜索、分页和固定详情操作区，但新准确包尚未复验。下一次启动先检验新包可达性与 pending-sync→恢复同步，不把旧 UI 限制自动列为新包必须现场的阻塞。
 - [ ] E5-L 反向 Mac→Windows 写路径根因：最小两 IP UDP/ICMP 头部观察仍需 Mac 现有管理员权限终端。双 IP outer filter 不显示第三方网关的 ICMP 引述错误；无匹配样本不能排除网关拒绝，不扩大观察方案。
 - [ ] Windows 原生 Tab 顺序：只缺用户把准确包窗口置前且 input desktop 为 Default 后的一次真实 Tab 检查；不强制前台或改用 CDP。
 - [ ] 150% DPI/深色：只缺真实 150% 显示与系统深色环境的准确包布局观察；当前用户全局显示/主题保持不改。
