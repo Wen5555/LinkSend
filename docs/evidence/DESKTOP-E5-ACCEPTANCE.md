@@ -4,9 +4,19 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-23 E5-X：用户终止与未合入候选留存
+
+用户在 U3 增量集成期间要求停止开发并同步主分支。Goal 已暂停、子代理已中断，相关 Go/Wails 进程已结束；无新远程实验、安装、宿主规则、部署或 Release。主分支采用下面已通过七个 CI jobs 的 E5-W / `8fcc76d`，并附收尾文档，不包含本节未完成 U3 源码。
+
+未合入增量共九个文件，位于 `internal/app/lan*.go` 与 `internal/discovery/{discovery.go,discovery_test.go,send_windows.go,udp_socket.go,udp_recovery_test.go}`：临时 UDP 降级/恢复、多路由探测、当前 Manager 记忆提示，以及旧 reader 状态写入的原子性修补。后者来自独立审查：旧读在新 socket 安装后可能写回已过期的 receive 降级状态；RED 已保存，修复已写入，但用户停止时最终 GREEN/RACE 尚未执行。
+
+停止前已完成的中间验证分别为：app 记忆地址定向 race 10.607s；discovery 完整测试 9.545s、race 8.365s；根 workspace app 79.872s / discovery 9.976s；desktop workspace/off race/vet 和 Windows production build。它们对应最后 reader 状态修补之前的中间版本，不迁移到最后候选；完整根 off/race、该补丁最终验证、新候选 CI/准确包均 `NOT RUN`。Linux/macOS 只交叉编译；没有物理网络验收。
+
+原实施树 `C:/Users/Wen/.codex/worktrees/208a/Osend` 保留全部未提交文件。独立归档为 `D:/apps/Osend/.artifacts/astra-stop-20260923/`：`candidate-source/` 九文件逐一复制和 SHA256 对照、`U3-TRACKED.patch`、`PRESERVED-WORK.json`。原生 Git 生成 patch 的反向 apply 检查 PASS，没有实际应用或清空现场；首次 PowerShell CRLF 转换的无效 patch 另存 `.invalid-eol.patch`，不得用于恢复。相关原始日志仍在原树 `.artifacts/astra-resume/{lan-memory,discovery-recovery}/`。不 stash/reset/clean，不重启旧 writer 或 heartbeat。
+
 ## 2026-09-23 E5-W：事实状态、LAN 入队与 Windows 网络事件
 
-本条来源为本次源码提交（前一 HEAD `ea18774`）；准确安装包未运行。修复三个相连但独立的缺口：
+本条准确来源为 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf`（前一 HEAD `ea18774`），已推送且七个 CI jobs 全 success；准确安装包未运行，产物来源见 DELIVERY。修复三个相连但独立的缺口：
 
 - 设备行与发送选择器不再把附近公告当作 LAN 可达，服务未知不显示离线。Go 只从仍存活、授权代次匹配的真实已认证 QUIC 合成 connected，覆盖普通/旧端/同时发起/空闲复用；SessionID 与旧 TLS 记录仅作诊断。关闭与重新授权使旧连接证据失效，blocked 始终优先。
 - LAN 配对成功且有当前路径时，原 Enqueue 错以没有服务在线记录而拒绝；回归真实复现 PEER_OFFLINE 后修复。入队和调度将 LAN/presence/已有认证连接作为尝试条件，发现未配对不授信。HTTP 关闭时已有认证连接仍可支持入队，关闭连接后恢复显式等待要求；未把入队结果称为文件已传输。

@@ -1,5 +1,24 @@
 # Desktop E5 交付记录
 
+## 2026-09-23 按用户要求终止并同步 main
+
+交付范围固定为已验证源码 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf` 加收尾文档；源码与该提交相同，复用下节七个成功 CI jobs。文档收尾使用 `[skip ci]`，不声称重新构建包。main 由其祖先 `3bcb73019d1ac6de1d9f341bb7d22e2813875081` 普通 fast-forward 推进，不强推；准确最终 Git SHA 写入本机收尾回执，Git 历史中的本节提交即对应文档来源。
+
+后续本地 U3 候选没有纳入 main，保留原实施树及 `D:/apps/Osend/.artifacts/astra-stop-20260923/` 的九文件、SHA256、可恢复 patch，详见 E5-X。当前 Goal/旧 heartbeat 均暂停，不继续功能开发或外部实验。所有缺项保留，不把终止等同于 U1–U7 完成；没有生产部署、新 Release 或 tag 变更。
+
+## 2026-09-23 设备状态与网络事件候选 8fcc76d（CI PASS）
+
+准确源码 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf` 已推送原分支 / Draft PR #8，远端 SHA 一致。core push/PR `35752165655 / 35752171719`、desktop push/PR `35752165653 / 35752171738`、[packages 35752165664](https://github.com/Wen5555/LinkSend/actions/runs/35752165664) 的五个 workflows、七个 jobs 全 success。三平台原生共享自测、准确提交/干净源码检查与构建通过；artifact ID、来源 SHA、上传归档 digest 与日志一致。
+
+| 载荷 | workflow 输出 SHA256（未下载载荷） |
+|---|---|
+| Windows ZIP | `86b8efca56388f54b4ce211c63ae6d3685a39b79473648be5de67e5d62a76c4c` |
+| Windows installer | `bcebaba43706d993112841c577e68b6eb89902e4d915fd4f81ef3b7bc018d0d7` |
+| Mac arm64 DMG | `a6c123f94422cfa71d6baa7f2cc83d5d3904abd92a680a77d317dcd2f87f8089` |
+| Mac amd64 DMG | `292578e0aea2748d82912a7578ff4d900245a912bf02e397a0465ec3e791c515` |
+
+回执 `.artifacts/astra-resume/ci-8fcc76d/CI-PROVENANCE-RECEIPT.json`；最终一次并发读取 EOF，经低并发退避重读原端点恢复，未重跑 workflow。此候选未完整下载、安装或执行；完整验包仍为 `36302a9`，不覆盖随后两个桌面增量。继续执行 U3 源码待办，不合并 main、不发布新 Release、不改生产或宿主网络。
+
 ## 2026-09-22 桌面撤销入口候选 6cb0705（CI PASS，未下载新包）
 
 源码 `6cb0705aaeb2bae6b5ebde13a2d65ec35c8d5b07` 已推送原分支，Draft PR #8 的 head 已核对。core push/PR `35746382731 / 35746390830`、desktop push/PR `35746382814 / 35746390799`、[packages 35746382748](https://github.com/Wen5555/LinkSend/actions/runs/35746382748) 共七个 jobs 全 success。Windows / Mac ARM / Mac Intel 的 artifact 来源 SHA、归档 digest 与 workflow 日志一致，原生共享自测与构建通过；没有下载或执行该候选的新载荷。

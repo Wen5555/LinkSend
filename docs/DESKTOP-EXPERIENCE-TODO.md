@@ -1,5 +1,7 @@
 # LinkSend 桌面体验全轮 TODO
 
+> **2026-09-23 用户终止实施并要求主分支推送、整理日志。** 当前 Goal 已 `paused`，子代理已中断，旧 heartbeat 仍 PAUSED；不再自动恢复或执行待授权的宿主规则实验。主分支收录已验证源码 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf` 及本次收尾文档，U1–U7 未全完成。最后 U3 候选没有进入主分支：保留在 `208a/Osend` 原实施树，并按 SHA256 备份至 `D:/apps/Osend/.artifacts/astra-stop-20260923/`。恢复须另有明确指令；见 E5-X / DELIVERY。
+
 > **2026-09-22 恢复实施：** 用户明确要求当前 Astra ultra 接管；旧停止指令已由本次恢复覆盖。实际接管 HEAD 为 `6eb23bab94e2a3d9fe615c0adceb1509e28494e0`，与远端/开放 Draft PR #8 一致，既有七个 check 均成功。preview.2 产物仍绑定 `0229cbf3e8373c544431102ed904c4a19ed02dc4`；旧包验证不迁移到新源码。Mac 本轮暂不可用，香港/荷兰可用；U1–U7 未全部验收，Goal 保持 active。
 
 创建日期：2026-09-13；当前负责人：`01a0c8e2-a09d-79f0-9947-2c346172bfc9`（local，Astra ultra 当前任务）。旧执行者/旧总控仅作历史来源，不再派发；任务内子代理按文件与机器资源分工，由主代理统一集成和 Git 同步。
@@ -21,8 +23,8 @@
 6. **E1-02 / U2：组版本冲突源码及 CLI 现场收尾已验证。** `36302a9` 的 helper、actor 持久绑定、legacy 明确新意图/CAS 已完成 RED→GREEN、完整双模块/race/Windows 构建及独立安全审查。准确 CLI 通过正常 API 撤销 NL legacy pending，新的明确请求/原 incarnation/actor 绑定持久为 revision 22；HK 独立复核两目标 revoked、原 23 条设备和 owner 不变。没有手改 trust/DB；准确桌面 GUI 的离线删除仍 NOT RUN。
 7. **E5-01 / 网络后续：宿主规则变更待明确授权。** 只读核对证实 HK 外部 NEW TCP80 会落现有 nftables INPUT 默认 DROP。一次仅 NL 单一 IP→HK TCP80、600 秒自动撤销的 runtime 规则提案已写 E5-U，并按提示词第 6 节的授权排除向用户单独询问；没有执行规则或新探针。此条件只涉及隔离 HTTPS 入口，不将它归作旧 QUIC 故障的根因。
 8. **E1-02 / U2 桌面入口：阶段已同步。** `6cb0705` 的 pending 显示、确认“继续撤销”、成员变化与键盘焦点已完成 82 tests/typecheck/lint/build、desktop 双模式/race/vet/Windows build、Playwright 页面夹具与七个 CI jobs。新三平台 artifact 来源与日志摘要已核对，未下载新载荷；准确桌面包仍待独立验收。最终纯文档提交复用该源码检查，见 E5-V / DELIVERY。
-9. **E1-05 / U2/U3 事实状态与恢复：源码已验证，CI 待本批推送核实。** 已修复发现即“可达”、未知即“离线”、握手前/暂停 SessionID 误作 connected，以及 LAN-only 已配对/已有认证连接被入队误拒；Windows 补齐原生地址/路由通知。定向 RED/GREEN、根 workspace/off 完整 tests/vet/build 与完整 app race（166.576s）、desktop 双模式/race/vet、前端 86 tests/typecheck/lint/build 和 Windows Wails build 全 PASS。当前准确包/物理项仍未验收，详见 E5-W，不借用旧候选验包。
-10. **E1-04 / U3：后续可独立实施，不能列为外部阻塞。** 本次差异核对确认固定 UDP 端口初始 bind 失败仍会关闭已成功监听的 TLS 控制；新增认证地址只写持久信任文件、未加入当前 Manager 的记忆重探；重叠私网的受限单播在第一条 UDP Write 成功后停止，不能证明该出口可达。按原 5.2/5.3 要求继续补齐降级、即时记忆与多路由探测，并核实刷新 burst/抖动。已有多地址/容量/重建测试保留，不重造 discovery 框架。
+9. **E1-05 / U2/U3 事实状态与恢复：阶段已同步。** `8fcc76d` 已修复发现即“可达”、未知即“离线”、握手前/暂停 SessionID 误作 connected，以及 LAN-only 已配对/已有认证连接被入队误拒；Windows 补齐原生地址/路由通知。定向 RED/GREEN、根 workspace/off 完整 tests/vet/build 与完整 app race（166.576s）、desktop 双模式/race/vet、前端 86 tests/typecheck/lint/build 和 Windows Wails build 全 PASS；七个 CI jobs 全 success，三平台新 artifact 来源/日志摘要已核对，未下载新载荷。当前准确包/物理项仍未验收，详见 E5-W/DELIVERY，不借用旧候选验包。
+10. **E1-04 / U3：按用户要求暂停，未合入主分支。** 本地候选包含固定 UDP 临时端口降级/恢复、最多 32 路探测和当前 Manager 的记忆重探。定向测试及中间集成通过，但审查最后补的旧 reader 状态写入原子性修复尚未完成最终 GREEN/RACE，整批不作为主分支已验证成果。原文件、可逆补丁、逐文件备份和 SHA256 均保留；若以后明确恢复，应先验证该准确候选，再处理刷新 burst/抖动、设备页触发及桌面 provider 诊断。当前不继续派发。
 
 香港/荷兰均完成只读接管核对，无未收尾旧作业。香港仍是已核实 `387b57c`、schema 4、health PASS；本批没有更改服务端源码或部署。Mac 暂不可用、用户暂缓签名及本轮 Windows 启动策略拒绝分别记录，不能把它们合并成“所有工作阻塞”。旧下面账本保留各自历史来源，以本节及最新追加 evidence 为当前状态。
 
