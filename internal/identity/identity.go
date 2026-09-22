@@ -293,6 +293,8 @@ type DeniedPeer struct {
 	LocalBlock              bool      `json:"local_block,omitempty"`
 	AuthorizationGeneration uint64    `json:"authorization_generation,omitempty"`
 	TargetIncarnation       string    `json:"target_incarnation,omitempty"`
+	ActorGroupID            string    `json:"actor_group_id,omitempty"`
+	ActorIncarnation        string    `json:"actor_incarnation,omitempty"`
 	SeenRevision            uint64    `json:"seen_revision,omitempty"`
 	RequestID               string    `json:"request_id,omitempty"`
 	PendingSync             bool      `json:"pending_sync,omitempty"`
@@ -537,6 +539,9 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 	for _, denied := range f.DeniedPeers {
 		if !validPeerID(denied.ID) || denied.DeniedAt.IsZero() || seen[denied.ID] || denied.AuthorizationGeneration == 0 && f.SchemaVersion >= 2 {
 			return TrustFile{}, errors.New("invalid denied peer record")
+		}
+		if (denied.ActorGroupID != "" || denied.ActorIncarnation != "") && (denied.ActorGroupID == "" || len(denied.ActorIncarnation) != 32) {
+			return TrustFile{}, errors.New("invalid revocation actor binding")
 		}
 		seen[denied.ID] = true
 	}
@@ -1107,6 +1112,7 @@ func RevokeMembershipPeer(dir, peerID, targetIncarnation, requestID string, seen
 	for index, peer := range f.Peers {
 		if peer.ID == peerID {
 			denied.Name = peer.Name
+			denied.ActorGroupID, denied.ActorIncarnation = peer.GroupID, peer.LocalIncarnation
 			denied.AuthorizationGeneration = max(uint64(1), peer.GrantGeneration+1)
 			f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
 			break
@@ -1114,6 +1120,34 @@ func RevokeMembershipPeer(dir, peerID, targetIncarnation, requestID string, seen
 	}
 	f.DeniedPeers = append(f.DeniedPeers, denied)
 	return saveTrust(dir, f)
+}
+
+// RenewMembershipRevokeIntent is for a new explicit removal command, never
+// background migration. It replaces only the unchanged pending request and
+// preserves its original target, denial generation and local file history.
+func RenewMembershipRevokeIntent(dir string, expected DeniedPeer, requestID, groupID, actorIncarnation string, revision uint64) (DeniedPeer, error) {
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	if requestID == "" || requestID == expected.RequestID || groupID == "" || len(actorIncarnation) != 32 || revision <= expected.SeenRevision {
+		return DeniedPeer{}, authenticationError("invalid explicit revocation intent")
+	}
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return DeniedPeer{}, err
+	}
+	for index := range f.DeniedPeers {
+		d := &f.DeniedPeers[index]
+		if d.ID != expected.ID || d.RequestID != expected.RequestID || d.TargetIncarnation != expected.TargetIncarnation || d.ActorGroupID != expected.ActorGroupID || d.ActorIncarnation != expected.ActorIncarnation || d.SeenRevision != expected.SeenRevision || !d.PendingSync || d.LocalBlock {
+			continue
+		}
+		d.RequestID, d.ActorGroupID, d.ActorIncarnation, d.SeenRevision = requestID, groupID, actorIncarnation, revision
+		d.DeniedAt = time.Now().UTC()
+		if err = saveTrust(dir, f); err != nil {
+			return DeniedPeer{}, err
+		}
+		return *d, nil
+	}
+	return DeniedPeer{}, ErrPeerDenied
 }
 
 func MarkMembershipRevokeSynced(dir, peerID, requestID string, revision uint64) error {

@@ -4,6 +4,18 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-22 E5-T：准确诊断候选与撤销版本冲突
+
+HK/NL 两端 CLI 源码均为 `8c6e1e8738073922d0a0291cc2a01101178c38a7`，干净 archive SHA256 `5effc716a2a2dcb46508fea8741ea4dd6c2723a9bfc996ddb1562bd42639eb5e`，Linux amd64 binary SHA256 `92fd9653803d2f7e14449105fe14d95f0e8d0ed3840f8fea49eec44dd4da599b`（Go 1.27.1，构建命令同 E5-S）。唯一方向 HK→NL、1 MiB fixture SHA256 `2b2eab9bf44b6e705c724c7b21164b05eea461628d3f876bf52f32efea704b63`，信令/STUN/ICE/ECN 参数保持，两个新身份与独占 root `/tmp/codex-ssh/linksend-astra-quic-8c6e1e8-20260922T1325Z/`。
+
+NL receive job `...quic-8c6e1e8-receive-20260922T133353Z` exit 1；实际进程窗口 13:34:07.367944Z–13:34:17.829810Z，HTTP 525 被正确分类为 `SIGNALING_UNREACHABLE`、failure_phase=`signaling_connect`，0 bytes、session 空、TLS=0/ALPN 空，40 条 owned socket 样本无 UDP。HK sender job `...quic-8c6e1e8-send-20260922T133430Z` exit 3：前置检查 peer online=false，未启动发送 CLI。本轮没有重试或反向，也没有获得 QUIC 候选对或 typed cause，不能写成修好了握手。
+
+HK 443 由部署 `387b57c` / PID 911287 直接提供 TLS，无本机反代；日志实际写 `/opt/linksend-lan-test/rendezvous-public.log`，journal 空不代表无错误。证书 SAN 正确且在 2026-09-22–29 有效期内。精确窗口有一条 13:34:15Z、`172.70.162.175:11301` 的 TCP read / io_timeout；官方 Cloudflare IPv4 清单于 13:48:51Z 实际 200 读取，该 IP 属 `172.64.0.0/13`（清单 SHA256 `c9ba63c4094dae08f30d7c86766b20bfed0959bd3bd5331ad28fd3df35d1c92a`）。没有 CF-Ray 或连接关联 ID，因此只能记录时间相关，不能断言该行就是本次请求、TLS 版本错误或具体网络根因。没有修改 TLS 配置/超时、部署或宿主网络。
+
+入组前新在线备份 `/opt/linksend-lan-test/backups/20260922T1325Z-astra-quic-8c6e1e8/server.db` SHA256 `8108ec075c82add73e9d0329553d3d7dbc29ba277e126ceba8184caa97e98cba`，schema 4 / integrity ok；完整非本轮基线为 23 条（包括前轮已撤销墓碑）。撤销时 HK incarnation `ff1e16f47effa6155501064223a9613c` 已正常 revoked，原 request `d0848688569b261fd2d273601340295a` 返回 revision 21；NL incarnation `f845c293e7be44017f408c835fab3236` 的旧 expected_revision=20 被拒绝，原 request `1f4fb194c5bdc311ac33c758579f0059` 保留 pending。批量脚本最后 exit 1 属第二项 NL，早期把它当首项失败的解释已纠正，真实记录未删除。
+
+这个现场缺陷引出 [E1-02 的版本与 actor 修复](DESKTOP-E1-REVOCATION.md)。代码/完整本地检查通过后提交，再以该提交的准确 CLI 对 NL 发起新的显式删除操作；当前两端测试进程均停止、身份/profile 暂留待正常收尾，邀请码已消费删除，本机仅留空受限目录。原生产数据未回滚覆盖。完整记录位于 `.artifacts/astra-resume/quic-8c6e1e8/`。
+
 ## 2026-09-22 E5-S：HK/NL 混合版本失败与诊断修补
 
 以两个干净 `git archive` 构建 Linux amd64 CLI（Go 1.27.1、`GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false`）。旧端源码 `387b57c76596975d0da61f01e060e0cc2940b0b5`、二进制 SHA256 `ada44bad056d4cac79442fd0f7d1a93520198c290e856988aaec00828bd5ac29`；新端源码 `096d79a9ba6916452c5f12608a184df2d8280ecc`、二进制 SHA256 `eaff151988938cc3a1c697ce5d742a8d4ece50c1cc6d18c7b3441f05a1fe4db9`。archive 摘要和构建回执在 `D:/apps/Osend/.artifacts/astra-r22-mixed/source-receipts.json`；没有把 `buildvcs=false` 的二进制冒充自带 Git 来源证明。

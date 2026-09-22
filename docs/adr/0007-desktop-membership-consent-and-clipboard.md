@@ -33,6 +33,8 @@
 
 ## 删除与同步事务
 
+2026-09-22 版本冲突恢复补充：本机 pending 还固定删除时的 actor group/incarnation。自动恢复只能在同一 actor、同一目标 incarnation 和仍有效的 request ID 下刷新组 revision，不能把发起方重新入组当作旧意图的新授权。缺少 actor 绑定的旧记录不自动补推断；新的显式删除经认证快照核验后可用 CAS 建立新的、绑定当前 actor 的 request ID，旧返回不能覆盖新意图。服务端严格版本检查、成员代际和 wire 均保持，细节见 PROTOCOL 与 E1-02 证据。
+
 1. 本机先持久化带 request ID、目标 incarnation、已见 revision 的删除意图/拒绝屏障，同时推进该 peer 的本机授权 generation，使删除前的**全部**组关系与独立 LAN grant（包括 provisional grant）失效；原子关闭文件免确认、剪贴板与重试资格。失败则不报告已删除。
 2. 再取消目标任务流、关闭相应连接和停止重试；保存文件、历史与可恢复元数据。恢复必须重新授权。
 3. 提交幂等服务端删除：事务内重新检查 actor 当前有效同组关系、目标 incarnation 和请求唯一键，再变更成员与组版本。互撤竞态以提交次序线性化，已被撤销 actor 不能完成迟到删除。

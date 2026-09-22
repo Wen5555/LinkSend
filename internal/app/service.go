@@ -428,12 +428,12 @@ func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Clie
 		if !pending.PendingSync || pending.RequestID == "" || pending.TargetIncarnation == "" || pending.SeenRevision == 0 {
 			continue
 		}
-		revision, revokeErr := c.RevokeMembership(ctx, pending.ID, pending.TargetIncarnation, pending.SeenRevision, pending.RequestID)
+		requestID, revision, revokeErr := s.revokeMembershipWithRefresh(ctx, c, pending, false)
 		if revokeErr != nil {
 			continue
 		}
 		s.trustMu.Lock()
-		_ = identity.MarkMembershipRevokeSynced(s.cfg.DataDir, pending.ID, pending.RequestID, revision)
+		_ = identity.MarkMembershipRevokeSynced(s.cfg.DataDir, pending.ID, requestID, revision)
 		s.trustMu.Unlock()
 	}
 }
@@ -609,11 +609,11 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 			if clientErr != nil {
 				return clientErr
 			}
-			revision, retryErr := c.RevokeMembership(ctx, deviceID, prior.TargetIncarnation, prior.SeenRevision, prior.RequestID)
+			requestID, revision, retryErr := s.revokeMembershipWithRefresh(ctx, c, prior, true)
 			if retryErr != nil {
 				return retryErr
 			}
-			return identity.MarkMembershipRevokeSynced(s.cfg.DataDir, deviceID, prior.RequestID, revision)
+			return identity.MarkMembershipRevokeSynced(s.cfg.DataDir, deviceID, requestID, revision)
 		}
 		return errors.New("UNPAIRED: current membership grant required")
 	}
@@ -647,7 +647,7 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 	if err != nil {
 		return errors.Join(err, grantErr)
 	}
-	revision, err := c.RevokeMembership(ctx, deviceID, peer.PeerIncarnation, peer.MembershipRevision, requestID)
+	requestID, revision, err := s.revokeMembershipWithRefresh(ctx, c, identity.DeniedPeer{ID: deviceID, TargetIncarnation: peer.PeerIncarnation, ActorGroupID: peer.GroupID, ActorIncarnation: peer.LocalIncarnation, SeenRevision: peer.MembershipRevision, RequestID: requestID}, false)
 	if err != nil {
 		return errors.Join(err, grantErr)
 	}

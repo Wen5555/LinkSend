@@ -1,5 +1,20 @@
 # Desktop E5 交付记录
 
+## 2026-09-22 诊断候选 8c6e1e8
+
+源码 `8c6e1e8738073922d0a0291cc2a01101178c38a7` 已推送同一分支及 Draft PR #8。core push/PR `35733082354 / 35733088915`、desktop push/PR `35733082368 / 35733088944` 与 [packages 35733082293](https://github.com/Wen5555/LinkSend/actions/runs/35733082293) 全 success，Windows/Mac ARM/Mac Intel 三个原生交接自测与打包 job 均成功。
+
+以下 SHA256 取自本次 workflow 的 `Hash package` 标准输出；三个 artifact 的 GitHub metadata、来源 SHA 和日志 archive digest 已互相核对。**本候选未下载载荷或执行完整验包**，不能借用下面 `096d79a` 的下载验证。来源回执为 `.artifacts/astra-resume/ci-8c6e1e8/CI-PROVENANCE-RECEIPT.json`。
+
+| 载荷 | workflow 输出 SHA256 |
+|---|---|
+| Windows amd64 ZIP | `1e8dd7edd266db94fa16560716af8c3e9717e3faab27469805dbc0509925d041` |
+| Windows amd64 installer | `e72aaccdd1153c149926bbd11046de4b64c393848abfea791ac8b940b54f2036` |
+| Mac arm64 DMG | `45f3ae558bbb74ee1f3e4708969d5fd1e859f4e4da410c59837283eb9bf8d677` |
+| Mac amd64 DMG | `7d460bf563c24581f6de3b400e8412d8e141eb44e75b31379a03499a397da7d0` |
+
+无新 Release、tag 移动、main 合并或生产部署；原生系统和物理网络缺项继续留在唯一 TODO。
+
 ## 2026-09-22 Astra 续接同步
 
 在原实现树、原工作分支与 Draft PR #8 上续接 `6eb23ba`，保留全部历史预览与未跟踪文件。当前源码增量：`535a77c` 满容量原生共享幂等；`1849c31` 双重配对关系离线撤销；`7d3bfb8` 剪贴板 lease 因果时钟；`9f15fba` 取消复用测试所有权；`9953601` 锁定工具链重建跟踪的嵌入前端。双模块本地集成检查、race、前端检查和 Windows native build 通过，具体命令与失败保留见 PROGRESS 和 E5-R 验收记录。

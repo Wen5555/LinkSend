@@ -32,6 +32,10 @@
 
 `DELETE /v1/devices/{id}` 的签名正文为 `{request_id,target_incarnation,expected_revision}`。服务端在一个事务内重验 actor 当前 incarnation、同组目标、目标 incarnation/revision 和 request ID，普通有效成员均可撤销组内其他设备；重复 request ID 返回原 revision，已撤销 actor 的迟到请求和跨组目标拒绝。提交后组内 WSS 断开并重新认证/同步；客户端完整快照同步会停止被撤销peer的本机活动任务。与撤销无关的既有 QUIC 数据面不依赖 WSS 存活。
 
+2026-09-22 客户端补充：组 revision 可在离线或连续删除期间推进。原撤销得到 HTTP 403 / `AUTHENTICATION_FAILED` 时，客户端最多读取一次新的认证成员快照；仅当快照完整一致、本机和原目标仍同组、目标 incarnation 未变、revision 已前进且本机仍保留同 request ID/incarnation 的 pending 撤销时，才考虑一次新 revision 请求。自动同步还必须匹配删除时持久化的 `actor_group_id/actor_incarnation`，保持原 request ID；401、网络故障、新目标 incarnation、离组、畸形快照或已替换的本机请求不触发该重试。
+
+上述 actor 字段是本机 trust schema 2 的可选扩展，不改变 wire 或服务端严格版本检查。旧记录保持可读及原请求的幂等确认，但缺少原 actor 绑定时不自动猜填或刷新版本；actor 被撤销后重新入组也不能自动重放旧删除意图。只有新的显式删除操作、经上述快照核对原目标仍未更换 incarnation 后，才通过本机 CAS 建立新的 request ID 和当前 actor 绑定。旧 request 的迟到结果不能标记新意图已同步，原拒绝代际和文件历史保留。
+
 LAN 添加使用刚通过签名公告和双向 TLS 1.3 验证的有界控制通道，交换签名 `lan_pair` request/accept|reject/commit/ready/confirm/done transcript。双方先持久provisional；接收端在收到confirm前没有有效pin，发起端在验证done前没有有效pin，断线可用query按request/nonce恢复ready/done及未过期target凭证。字段绑定双方DeviceID、request ID、128-bit nonce、本机授权generation和不超过60秒的期限；拒绝、超时或transcript不一致不产生可用授权，断线只保留不可用于正文的provisional。已入组同意方可凭双方签名transcript签发target-bound 60秒加入凭证；服务不可达时只建立独立LAN grant并显示跨网络未加入。文件正文仍只走经身份验证的QUIC。
 
 2026-09-13 E0：本轮新授权/同意/剪贴板方案见 [ADR0007](adr/0007-desktop-membership-consent-and-clipboard.md)，语义已由总控E0-safeio-close-v1接受。当前 M5 wire/schema/授权实现尚未改变；具体API/schema/协议仍需在E1/E4冻结并补兼容与安全测试，不能将提案当作已实现能力。
