@@ -1,3 +1,12 @@
+## 2026-09-22 E5-S 跨主机失败取证与诊断修补
+
+- `096d79a` 的 core push/PR、desktop push/PR 与三平台 packages 共七个 jobs success；Windows/Mac ARM/Mac Intel 均执行原生交接自测。四个包已完整下载，经既有校验器核对 hash、内外 BUILD-INFO、COMMITTED/clean 来源、平台/架构与 Windows 版本，见 E5-DELIVERY。该候选不包含下面的新诊断补丁。
+- HK 旧 `387b57c` → NL 新 `096d79a` 首轮在信令 HTTP 525 退出；只读健康/TLS 复核后一次恢复得到 sender `QUIC_HANDSHAKE_FAILED` / receiver `QUIC_HANDSHAKE_TIMEOUT`、0 bytes。仅将 HK 切到同新版的区分实验仍失败，反向 NOT RUN；不能据此认定版本不兼容、UDP 阻断或故障已修复。
+- 无有效协议 JSON 的 HTTP 5xx 现在映射到 `SIGNALING_UNREACHABLE`，504 映射到 `SIGNALING_TIMEOUT`，保留 HTTP status、合法协议错误优先与未知正文脱敏。CLI `--evidence` 失败输出新增可选阶段和有界类型化诊断，并保留已观测的 session、ICE 路径和计数；未建立 TLS 时 version=0 / ALPN 为空。并行准备、正文拒收、开流、授权与关闭各按真实错误阶段归类，不新增重试或改变身份/TLS 验证。
+- 实际检查全 PASS：根 workspace 与 `GOWORK=off go test ./... -count=1 -timeout 240s`（app 102.040s / 103.856s），根独立 vet/build；`GOWORK=off go test -race ./internal/app ./internal/signaling ./cmd/linksend -count=1 -timeout 300s`（app 149.279s）；desktop workspace test、独立完整 race/vet；锁定工具链 Windows `wails3 task build ARCH=amd64`；diff check。首轮旧诊断用例预期 `INVALID_MESSAGE` 失败，按新契约改为 `SIGNALING_UNREACHABLE` 后完整重跑通过，原失败日志保留于 `.artifacts/astra-resume/checks-diagnostics/`。前端源码/依赖未变，复用 E5-R 的 76 tests/lint；本轮 Wails 再次 typecheck/build。
+- 两个测试身份已按精确 incarnation 正常撤销，原 21 条成员记录与 owner 不变；远端测试 profile/fixture/receive/bin/invite/进程/UDP 已清理，仅 root-only 日志和脱敏证据保留。HK 仍运行 `387b57c`、PID 911287、schema 4，health/integrity 正常；在线备份未覆盖 live，宿主网络未变。两端作业、摘要与原始失败见 E5-S 和 `.artifacts/astra-resume/mixed-096d79a/RESULT.json`。
+- 本轮诊断源码已完成审查与测试，下一次跨主机实验将绑定新的已提交来源；Mac、准确 Windows GUI 策略限制、签名和系统共享等缺项继续分列，不标整轮完成。
+
 ## 2026-09-22 E5-R Astra 续接与三个缺陷修复
 
 - 安全接管原 `208a/Osend` 实现树，起点 `6eb23ba` 与 origin / Draft PR #8 一致，旧任务 idle、旧 heartbeat PAUSED；同步指定新提示词，唯一 TODO 和过期续接索引已更新。Mac 本轮暂不可用；香港/荷兰只读确认健康服务及旧实验收尾，无部署或宿主网络变更。

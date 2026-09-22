@@ -4,6 +4,24 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-22 E5-S：HK/NL 混合版本失败与诊断修补
+
+以两个干净 `git archive` 构建 Linux amd64 CLI（Go 1.27.1、`GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false`）。旧端源码 `387b57c76596975d0da61f01e060e0cc2940b0b5`、二进制 SHA256 `ada44bad056d4cac79442fd0f7d1a93520198c290e856988aaec00828bd5ac29`；新端源码 `096d79a9ba6916452c5f12608a184df2d8280ecc`、二进制 SHA256 `eaff151988938cc3a1c697ce5d742a8d4ece50c1cc6d18c7b3441f05a1fe4db9`。archive 摘要和构建回执在 `D:/apps/Osend/.artifacts/astra-r22-mixed/source-receipts.json`；没有把 `buildvcs=false` 的二进制冒充自带 Git 来源证明。
+
+两端使用独占 `/tmp/codex-ssh/linksend-astra-mixed-096d79a-20260922T1222Z/`、全新身份/profile、每方向一个专用 1 MiB 源文件及 85 秒硬截止。复用既有测试组 owner，通过正常 invite/join 完成配对；一次性码仅短暂存于 workspace 外受限目录和远端 0700 目录，消费后均删除。没有修改部署、主机防火墙、路由或代理。
+
+| 尝试 | 实际结果 | Sender / receiver job 后缀（均位于 `/tmp/codex-ssh/linksend-astra-mixed-096d79a-`） |
+|---|---|---|
+| 旧 HK → 新 NL 首轮 | 接收端信令 HTTP 525 / exit 1；发送前检查对端未 online，exit 3，没有发起文件发送 | `old-to-new-send-20260922T123321Z` / `old-to-new-receive-20260922T123251Z` |
+| 健康/TLS 只读复核后一次恢复 | 对端 online/trusted 后进入握手；HK `QUIC_HANDSHAKE_FAILED`，NL `QUIC_HANDSHAKE_TIMEOUT`，两端 exit 1，0 bytes | `old-to-new-send-attempt2-20260922T123830Z` / `old-to-new-recv-attempt2-20260922T123755Z` |
+| 同新版区分实验 | 只将 HK 测试二进制换为已核验 `096d79a`，身份/profile/网络/参数/源文件不变；仍为相同 QUIC 失败/超时，0 bytes | `new-control-send-20260922T124518Z` / `new-control-receive-20260922T124449Z` |
+
+因此本轮文件验收 **FAIL**、反向 **NOT RUN**，不能归因为混合版本不兼容或确定的网络阻断。两端健康接口 200、WSS 普通 GET 到应用 426、TLS 校验成功、NTP 均 synchronized；两次独立时钟采样相差约 0.3735 秒不等于精确时钟偏移。旧 CLI 在连接失败时 `DirectEvidence` 全零，缺 session/候选对/typed cause；其默认 `relay=false` 也不能记作成功的无中继证明。一次 HK 只读时钟 job `hk-clock-udp-20260922T124154Z` SSH exit 255、恢复为 stopped-unknown；后续补充只读回执确认无存活作业，不把该基础设施失败隐藏或算作传输失败。
+
+收尾通过正常 API 撤销两个精确测试 incarnation，HK 独立查询确认 revoked；原 21 条设备记录不变、owner active、PID 911287/部署 hash/schema 4/integrity/health 保持。`hk-cleanup-owned-20260922T124928Z` 和 `nl-cleanup-owned-20260922T124928Z` 均 exit 0，两端本轮 profile/源文件/接收目录/二进制/邀请与进程/UDP 监听已清。在线 SQLite 备份 `/opt/linksend-lan-test/backups/20260922T1222Z-astra-mixed-membership/server.db` 校验为 `cbeae5fecbdb399a4f224e86ee5e66635515db6bfd60a3c8651ed5d5732b787e`，未恢复覆盖 live。完整机器回执 `.artifacts/astra-resume/mixed-096d79a/RESULT.json`；两份脱敏归档下载摘要分别 `621b1c3b820d452b066044e0048859d6662f512d8e2569a472d5b1f996864d8f`、`36bd3c623ba3445f399638d3891b7cb61bffbd2ab660b047e1a69eaab3d9b87e`。远端仅保留 root-only 原日志和脱敏回执。
+
+上述实测引出两个本地诊断修补：无有效协议 JSON 的网关 5xx 保留 HTTP status 并归为 `SIGNALING_UNREACHABLE`（504 为 `SIGNALING_TIMEOUT`），合法协议 code、鉴权/版本/4xx 语义不变且不输出未知正文；CLI `--evidence` 的失败输出保留真实阶段、已观测的 session/候选/计数与有界 typed QUIC 分类。未建立 TLS 时版本保持 0、ALPN 为空；文件准备失败与拒收分别为 preparing / transfer，不误报为握手失败。真实 HTTPS/WSS、缺失源文件、loopback QUIC 拒收、阶段观察链、errno 脱敏和 CLI JSON 回归/race 已通过；这些是源码诊断改善，尚未在新的远端候选上查明此路径失败原因。
+
 ## 2026-09-22 E5-R：Astra 安全续接与缺陷闭环
 
 接管工作树 `C:/Users/Wen/.codex/worktrees/208a/Osend`，HEAD / origin / Draft PR #8 均为 `6eb23bab94e2a3d9fe615c0adceb1509e28494e0`，原七个 checks success。已跟踪文件无未提交修改；四项原有未跟踪资产保持原状。旧实现/监督任务均 idle，旧 `linksend` heartbeat 为 PAUSED；过期 supervisor/executor JSON 标为 superseded 并保留历史字段，以当前任务 `01a0c8e2-a09d-79f0-9947-2c346172bfc9` 和唯一 TODO 续接。指定 Astra 提示词已从原项目同步，未覆盖其他工作树文件。

@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/Wen5555/LinkSend/internal/app"
+	"github.com/Wen5555/LinkSend/internal/protocol"
 )
 
 func TestUnimplementedCrossProcessTaskCommandsHaveNoSideEffects(t *testing.T) {
@@ -15,6 +20,43 @@ func TestUnimplementedCrossProcessTaskCommandsHaveNoSideEffects(t *testing.T) {
 				t.Fatalf("command %q returned %v, want NOT_IMPLEMENTED", command, err)
 			}
 		})
+	}
+}
+
+func TestDirectFailureJSONIncludesBoundedDiagnostic(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	previous := os.Stdout
+	os.Stdout = writer
+	defer func() { os.Stdout = previous; _ = writer.Close() }()
+	result := app.DirectTransferResult{FailurePhase: "quic_handshake", FailureDiagnostic: &app.TaskFailureDiagnostic{Stage: "quic_handshake", Category: "udp_socket", Code: "0x2751"}}
+	err = printDirectFailure(result, protocol.Wrap(protocol.QUICHandshakeFailed, "QUIC handshake failed", errors.New("SECRET_RAW_CAUSE")))
+	_ = writer.Close()
+	os.Stdout = previous
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output struct {
+		FailurePhase string                     `json:"failure_phase"`
+		Diagnostic   *app.TaskFailureDiagnostic `json:"failure_diagnostic"`
+		Error        string                     `json:"error"`
+		Evidence     app.DirectEvidence         `json:"evidence"`
+	}
+	if err = json.Unmarshal(data, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.FailurePhase != "quic_handshake" || output.Diagnostic == nil || output.Diagnostic.Code != "0x2751" || !strings.Contains(output.Error, "QUIC_HANDSHAKE_FAILED") {
+		t.Fatalf("missing CLI evidence: %s", data)
+	}
+	if strings.Contains(string(data), "SECRET_RAW_CAUSE") || output.Evidence.TLSVersion != 0 || output.Evidence.ALPN != "" {
+		t.Fatal("raw cause leaked or TLS fabricated")
 	}
 }
 

@@ -194,7 +194,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		if err != nil {
 			err = app.ClassifyError(err)
 			if *evidence {
-				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
+				_ = printDirectFailure(result, err)
 			}
 			return err
 		}
@@ -235,7 +235,7 @@ func run(ctx context.Context, svc *app.Service, command string, args []string) e
 		if err != nil {
 			err = app.ClassifyError(err)
 			if *evidence {
-				_ = printJSON(map[string]any{"transfer": result.Transfer, "evidence": result.Evidence, "error": err.Error()})
+				_ = printDirectFailure(result, err)
 			}
 			return err
 		}
@@ -355,6 +355,13 @@ func printJSON(value any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(value)
+}
+
+func printDirectFailure(result app.DirectTransferResult, err error) error {
+	return printJSON(struct {
+		app.DirectTransferResult
+		Error string `json:"error"`
+	}{DirectTransferResult: result, Error: err.Error()})
 }
 
 func fatal(err error) {

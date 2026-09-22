@@ -15,8 +15,9 @@
 
 1. **E4-03 / U4：源码已验证。** `7d3bfb8` 修复双方准备就绪但复制次数不同时的新事件被误判；loopback RED→GREEN，lease 因果时钟、兼容/重放/跳跃上限/高时钟续租及 race 通过。物理 Mac 首条失败仍未复验。
 2. **E1-02 / U2：源码已验证。** `1849c31` 修复 `group+lan` outbox 和离线关系；真实服务断线→重启→恢复同步/新 incarnation/保留文件历史及 race 通过。准确 preview.2 的隔离 Windows 启动被工具自动审批在 CreateProcess 前拒绝（`blocked by policy`），GUI 未启动；fixture 已正常停止，UI 包级结果仍 NOT RUN。
-3. **E3-01/02/03 / U6：Windows 源码已验证、Mac 待 CI。** `535a77c` 修复满 64 条记录时重试误报容量；两个适配器先按 ID/内容去重，再对新请求限额。Windows 自测 RED→GREEN，Mac 自测待 CI，签名和正式系统激活仍未验收。
-4. **E5-02：本地检查已通过，GitHub 同步/CI 核实进行中。** 完成双 Go 模块（含 GOWORK=off）、受影响 race、前端 76 tests/检查、Windows 原生构建；同会话取消测试按真实所有权修正（`9f15fba`），跟踪 dist 按锁定工具链刷新（`9953601`）。继续推送原分支、更新同一 Draft PR #8 并核实准确候选。
+3. **E3-01/02/03 / U6：三平台源码自测已验证。** `535a77c` 修复满 64 条记录时重试误报容量；两个适配器先按 ID/内容去重，再对新请求限额。Windows 自测 RED→GREEN，`096d79a` 的 Windows/Mac ARM/Mac Intel packages 自测全 PASS；签名和正式系统激活仍未验收。
+4. **E5-02：阶段已同步，准确候选已核验。** `096d79a` 已推送，Draft PR #8 已更新，七个 CI jobs success；三个 artifact 的四个包 hash/COMMITTED来源/平台与版本全部核对，见最新 DELIVERY。双 Go 模块（含 GOWORK=off）、受影响 race、前端 76 tests/检查、Windows 原生构建均通过；同会话取消测试按真实所有权修正（`9f15fba`），跟踪 dist 按锁定工具链刷新（`9953601`）。
+5. **E5-01 / U5 支撑：跨主机验收 FAIL，诊断源码已验证。** `387b57c`→`096d79a` 的 HK/NL CLI 首轮 525，恢复后 QUIC 握手失败/超时；同新版区分实验仍相同，均 0 bytes，反向 NOT RUN。测试权限与资源已完全收尾，原成员/服务/宿主网络不变。针对实际暴露的网关错误归类和 CLI 失败证据缺失已补源码/回归，根两种模式完整 test、受影响包 race、desktop 两模式检查与 Windows 构建全 PASS；本次提交同步后使用新准确诊断候选获取真实 selected pair / typed cause，不猜测为版本不兼容或直接改网络。完整记录见 E5-S / PROGRESS。
 
 香港/荷兰均完成只读接管核对，无未收尾旧作业。香港仍是已核实 `387b57c`、schema 4、health PASS；本批没有更改服务端源码或部署。Mac 暂不可用、用户暂缓签名及本轮 Windows 启动策略拒绝分别记录，不能把它们合并成“所有工作阻塞”。旧下面账本保留各自历史来源，以本节及最新追加 evidence 为当前状态。
 

@@ -3,6 +3,8 @@ package signaling
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,6 +67,70 @@ func testClient(t *testing.T, raw string, id *identity.Identity) *Client {
 		t.Fatal(err)
 	}
 	return c
+}
+
+func TestClientGatewayFailuresPreserveStatusAndProtocolErrors(t *testing.T) {
+	const privateDetail = "gateway-private-body-marker"
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		code   protocol.Code
+		detail string
+	}{
+		{name: "proxy_525_html", status: 525, body: "<html>" + privateDetail + "</html>", code: protocol.SignalingUnreachable},
+		{name: "gateway_504_empty", status: http.StatusGatewayTimeout, code: protocol.SignalingTimeout},
+		{name: "service_503_unrecognized_json", status: http.StatusServiceUnavailable, body: `{"message":"` + privateDetail + `"}`, code: protocol.SignalingUnreachable},
+		{name: "server_500_oversized_json", status: http.StatusInternalServerError, body: `{"code":"AUTHENTICATION_FAILED","detail":"` + privateDetail + strings.Repeat("x", protocol.MaxMessageBytes) + `"}`, code: protocol.SignalingUnreachable},
+		{name: "forbidden_html_is_not_retryable", status: http.StatusForbidden, body: "<html>" + privateDetail + "</html>", code: protocol.InvalidMessage},
+		{name: "server_500_preserves_authentication", status: http.StatusInternalServerError, body: `{"code":"AUTHENTICATION_FAILED","detail":"pair again"}`, code: protocol.AuthenticationFailed, detail: "pair again"},
+		{name: "gateway_504_preserves_version", status: http.StatusGatewayTimeout, body: `{"code":"VERSION_INCOMPATIBLE","detail":"upgrade the server"}`, code: protocol.VersionIncompatible, detail: "upgrade the server"},
+		{name: "rate_limit_preserves_protocol", status: http.StatusTooManyRequests, body: `{"code":"RATE_LIMITED","detail":"request limit"}`, code: protocol.RateLimited, detail: "request limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, surface := range []string{"signed_http", "wss_handshake"} {
+				t.Run(surface, func(t *testing.T) {
+					h := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.WriteHeader(tc.status)
+						_, _ = io.WriteString(w, tc.body)
+					}))
+					defer h.Close()
+					id, err := identity.Generate()
+					if err != nil {
+						t.Fatal(err)
+					}
+					client, err := New(Config{ServerURL: h.URL, Identity: id, HTTPClient: h.Client()})
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+					defer cancel()
+					if surface == "signed_http" {
+						_, err = client.Devices(ctx)
+					} else {
+						var session *Session
+						session, err = client.Connect(ctx)
+						if session != nil {
+							_ = session.Close()
+						}
+					}
+					var remote *RemoteError
+					if !errors.As(err, &remote) || remote.Status != tc.status {
+						t.Fatalf("HTTP status was lost: %v", err)
+					}
+					if code := protocol.ErrorCode(err); code != tc.code {
+						t.Errorf("HTTP %d classified as %s, want %s", remote.Status, code, tc.code)
+					}
+					if tc.detail != "" && remote.Cause.Detail != tc.detail {
+						t.Errorf("valid protocol detail was changed: %q", remote.Cause.Detail)
+					}
+					if strings.Contains(err.Error(), privateDetail) || strings.Contains(err.Error(), "<html>") {
+						t.Fatal("unrecognized gateway response body leaked into the error")
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestClientRegistrationAndSignedHTTP(t *testing.T) {

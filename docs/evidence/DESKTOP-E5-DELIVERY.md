@@ -4,7 +4,18 @@
 
 在原实现树、原工作分支与 Draft PR #8 上续接 `6eb23ba`，保留全部历史预览与未跟踪文件。当前源码增量：`535a77c` 满容量原生共享幂等；`1849c31` 双重配对关系离线撤销；`7d3bfb8` 剪贴板 lease 因果时钟；`9f15fba` 取消复用测试所有权；`9953601` 锁定工具链重建跟踪的嵌入前端。双模块本地集成检查、race、前端检查和 Windows native build 通过，具体命令与失败保留见 PROGRESS 和 E5-R 验收记录。
 
-本批尚未创建新 Release、移动 tag、合并 main 或部署服务器；Mac 实机暂不可用。GitHub 当前候选的 CI、Mac 原生自测和包来源继续在本节后续核实，不能用先前 `6eb23ba` 的绿灯或 preview.2 的包代替。普通本机构建为上述补丁集的 working-tree 验证（EXE SHA256 `f54a3768e4618cf901405d4bda1ec9087f87c6b01e5e1c9bd5aae74d8654d42b`），不当作 CI COMMITTED 候选交付。
+源码候选固定为 `096d79a9ba6916452c5f12608a184df2d8280ecc`，origin / Draft PR #8 已核对一致。该 SHA 的 core push/PR（35724937047 / 35724941849）、desktop push/PR（35724936978 / 35724941825）和 [packages run 35724937012](https://github.com/Wen5555/LinkSend/actions/runs/35724937012) 全部 success（共七个 job）。Windows 原生交接自测、Mac ARM/Intel 的 provider handoff、幂等、冲突和满队列重试均在各自 runner 实际通过；不是 Mac 实机系统菜单激活证据。
+
+三个 artifact 已下载到 `D:/apps/Osend/.artifacts/astra-r22-096d79a/`。原 `scripts/verify-milestone-packages.ps1` 通过四个载荷 SHA256、包内外 BUILD-INFO、COMMITTED/clean 来源与 workflow head、Windows payload/installer 版本；另核对 target_os/target_arch。机器回执为该目录 `PACKAGE-VERIFICATION.json`、`SOURCE-CI.json`、`WORKFLOW-ARTIFACTS.json`、`SHA256SUMS.txt`。Windows 解压 payload `LinkSend.exe` 为 23,964,672 bytes，SHA256 `4ab7ec499db6bb66d90ead709c24c46a1db32b9eaa54d72e1955df56c550d485`。
+
+| 候选资产 | bytes | SHA256 |
+|---|---:|---|
+| Windows amd64 ZIP | 9,838,814 | `4638cbe87ac4042619370600ba5e1d2d127d32d834241507776e340d6428c8ba` |
+| Windows amd64 安装器 | 75,078,124 | `432791d32a60e542ba67ba77a294e15e78712629bff549d106d3f104beca424b` |
+| macOS arm64 DMG | 9,456,747 | `d01615c4c3ca6c6453a6d972aacf10b4273db9604b8234c3c4324f8d31c4427c` |
+| macOS amd64 DMG | 10,189,370 | `a9a9248c7250e0f98c319ce3356ee2179cff3745e01ecb551ed842f230b7d69f` |
+
+本批没有创建新 Release、移动 tag、合并 main 或部署服务器；Mac 实机暂不可用。Windows unsigned、Mac ad-hoc / 未公证边界保留。普通本机构建为上述补丁集的 working-tree 验证（EXE SHA256 `f54a3768e4618cf901405d4bda1ec9087f87c6b01e5e1c9bd5aae74d8654d42b`），不当作 CI COMMITTED 候选交付。以上包只绑定 `096d79a`，后续仅记录证据的文档提交不改变包来源。
 
 ## 2026-09-20 preview.2 发布与停止交接
 

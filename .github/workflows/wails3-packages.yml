@@ -168,6 +168,7 @@ jobs:
           else
             shasum -a 256 "LinkSend-v${PRODUCT_VERSION}-macos-${{ matrix.arch }}-${{ github.sha }}.dmg" > SHA256SUMS.txt
           fi
+          cat SHA256SUMS.txt
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:

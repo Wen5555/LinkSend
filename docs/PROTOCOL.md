@@ -1,5 +1,11 @@
 # Protocol
 
+## 2026-09-22 本地失败诊断输出
+
+`DirectTransferResult` / CLI `--evidence` 新增可选 `failure_phase` 和 `failure_diagnostic`（stage/category/code/origin），只属于本地 API/JSON，不进入文件、信令或剪贴板 wire。错误时可以保留已经观测到的 session、ICE 候选对和计数；这不表示 QUIC/TLS 或文件传输成功，未协商 TLS 的版本为 0、ALPN 为空。底层 errno/TLS/QUIC 类型使用既有白名单分类，不包含原始错误正文、证书或 ICE 密码。前置文件准备、开流、正文协议和关闭错误按实际边界标明，连接观察器继续向既有 Task 调用方传递。
+
+信令错误优先尊重有界且合法的服务端协议 JSON。没有这种 JSON 的 HTTP 5xx（例如网关 HTML 525）映射为 `SIGNALING_UNREACHABLE`，504 映射为 `SIGNALING_TIMEOUT`，`RemoteError.Status` 仍保留原 HTTP 状态。4xx 与合法的认证/版本/限流 code 不变；不新增重试、不泄露未知 HTTP 正文、不改变 TLS 验证。
+
 ## 2026-09-22 剪贴板租约的逻辑时钟
 
 `lease` 消息复用已有可选 `lamport` 字段，取值为接收端签发该租约时的逻辑时钟。发送端仅在认证会话、授权代次、权限、租约格式和容量检查成功后观察这个时钟，以 `max(local, received)+1` 建立因果顺序；零值或缺失保持旧租约行为。这样，两端开启同步前的复制次数不同时，新复制仍能排在租约签发前的接收端本地事件之后。无效或安装失败的租约不得推进时钟，溢出拒绝且不回绕。

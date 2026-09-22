@@ -219,14 +219,26 @@ func (c *Client) signedRequest(ctx context.Context, method, p string, body []byt
 func decodeError(resp *http.Response) error {
 	defer resp.Body.Close()
 	b, err := readLimitedJSON(resp.Body, protocol.MaxMessageBytes)
+	if err == nil {
+		var e protocol.Error
+		if json.Unmarshal(b, &e) == nil && e.Code != "" {
+			return &RemoteError{Status: resp.StatusCode, Cause: e}
+		}
+	}
+	cause := protocol.Error{Code: protocol.InvalidMessage, Detail: "unrecognized signaling error"}
 	if err != nil {
-		return &RemoteError{Status: resp.StatusCode, Cause: protocol.Error{Code: protocol.InvalidMessage, Detail: "invalid signaling error response"}}
+		cause.Detail = "invalid signaling error response"
 	}
-	var e protocol.Error
-	if json.Unmarshal(b, &e) == nil && e.Code != "" {
-		return &RemoteError{Status: resp.StatusCode, Cause: e}
+	// A gateway can fail before the signaling service handles the request.
+	// Use its status only when no bounded protocol error was decoded, and
+	// never include its HTML or other unrecognized response body in diagnostics.
+	switch {
+	case resp.StatusCode == http.StatusGatewayTimeout:
+		cause = protocol.Error{Code: protocol.SignalingTimeout, Detail: "signaling gateway timed out"}
+	case resp.StatusCode >= http.StatusInternalServerError && resp.StatusCode < 600:
+		cause = protocol.Error{Code: protocol.SignalingUnreachable, Detail: "signaling service temporarily unavailable"}
 	}
-	return &RemoteError{Status: resp.StatusCode, Cause: protocol.Error{Code: protocol.InvalidMessage, Detail: "unrecognized signaling error"}}
+	return &RemoteError{Status: resp.StatusCode, Cause: cause}
 }
 
 func decodeSuccess(resp *http.Response, out any) error {

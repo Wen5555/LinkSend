@@ -4,7 +4,7 @@
 
 两个原生适配器原先都在读取既有 request ID 前检查 64 条 journal 上限，满容量时连完全相同的重试也得到 storage full。Windows 新增真实临时目录自测，修复前 `dotnet run -c Release --project apps/desktop/native-share/windows -- --self-test` 在第 64 条后的原请求重放以 `SHARE_JOURNAL_FULL` 失败；修复后 `PASS share_target_journal` 与 `PASS share_target_full_journal_retry`，exit 0。原始日志分别为执行树 `.artifacts/astra-resume/share-before.log` 与 `share-after.log`。
 
-Windows/C# 和 macOS/Swift 在同一 journal 锁内先核对已有 ID/内容，再对新请求执行原容量限制：一致重试不占新槽，冲突仍拒绝，第 65 条新请求仍拒绝，已存请求字节不变。没有改变交接 schema、复制文件策略、Go 队列所有权或授权边界。两平台自测均已增加满容量幂等/冲突/容量/已有内容保留断言，并接入 packages CI 的对应原生 runner。当前本机 Windows 自测通过；Mac 本机不可用，Swift 测试由本次 CI 验证，不能写为 Mac 物理激活通过。正式签名、系统共享注册/激活与安装生命周期仍保留原缺项。
+Windows/C# 和 macOS/Swift 在同一 journal 锁内先核对已有 ID/内容，再对新请求执行原容量限制：一致重试不占新槽，冲突仍拒绝，第 65 条新请求仍拒绝，已存请求字节不变。没有改变交接 schema、复制文件策略、Go 队列所有权或授权边界。两平台自测均已增加满容量幂等/冲突/容量/已有内容保留断言，并接入 packages CI 的对应原生 runner。本机 Windows 自测及 `096d79a` packages run `35724937012` 的 Windows/ARM Mac/Intel Mac 自测均通过，两个 Mac job 都输出五项 `PASS share_store_*`，完整日志在 `.artifacts/astra-resume/checks/ci-macos-arm64.log` 与 `ci-macos-amd64.log`。Mac 物理机本轮不可用，正式签名、系统共享注册/激活与安装生命周期仍保留原缺项。
 
 日期：2026-09-14。范围 E3-03，状态 **PARTIAL / 签名安装由用户暂缓**。
 

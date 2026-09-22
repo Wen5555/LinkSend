@@ -62,7 +62,7 @@ func TestDiagnosticsRedactsHealthFailure(t *testing.T) {
 	}
 	t.Cleanup(svc.Shutdown)
 	d := svc.Diagnostics(context.Background())
-	if d.ServerHealth != "error" || d.HealthFailure != "INVALID_MESSAGE" {
+	if d.ServerHealth != "error" || d.HealthFailure != string(protocol.SignalingUnreachable) {
 		t.Fatalf("unexpected redacted health: %+v", d)
 	}
 	b, _ := json.Marshal(d)

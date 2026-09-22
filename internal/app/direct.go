@@ -168,7 +168,7 @@ func (p *PeerSession) Evidence() DirectEvidence {
 		signalStats.BytesReceived -= min(signalStats.BytesReceived, p.signalBase.BytesReceived)
 	}
 	p.mu.Unlock()
-	return DirectEvidence{SessionID: p.SessionID, Generation: p.Path.Generation, PeerID: p.PeerID, BaseSocket: p.Path.BaseSocket, Interface: p.Path.Interface, AddressFamily: p.Path.AddressFamily, LocalCandidate: p.Path.LocalCandidate, RemoteCandidate: p.Path.RemoteCandidate, LocalType: p.Path.LocalType, RemoteType: p.Path.RemoteType, RemoteAddress: p.Path.RemoteAddress, ConnectionMethod: p.Path.ConnectionMethod, TransportProtocol: p.Path.TransportProtocol, Relay: p.Path.Relay, STUNBytesSent: stats.STUNBytesSent, STUNBytesReceived: stats.STUNBytesReceived, STUNRequestsSent: stats.STUNRequestsSent, STUNResponsesReceived: stats.STUNResponsesReceived, RejectedPackets: stats.RejectedPackets, SignalingBytesSent: signalStats.BytesSent, SignalingBytesReceived: signalStats.BytesReceived, ICEStateTimeline: append([]connectivity.ICEStateEvent(nil), p.Path.ICEStateTimeline...), TLSVersion: tlsVersion, ALPN: alpn, Timings: p.Timings}
+	return makeDirectEvidence(p.PeerID, p.SessionID, p.Path, p.Timings, stats, signalStats, tlsVersion, alpn)
 }
 
 func durationMS(start time.Time) float64 {
@@ -176,8 +176,10 @@ func durationMS(start time.Time) float64 {
 }
 
 type DirectTransferResult struct {
-	Transfer transfer.Result `json:"transfer"`
-	Evidence DirectEvidence  `json:"evidence"`
+	Transfer          transfer.Result        `json:"transfer"`
+	Evidence          DirectEvidence         `json:"evidence"`
+	FailurePhase      string                 `json:"failure_phase,omitempty"`
+	FailureDiagnostic *TaskFailureDiagnostic `json:"failure_diagnostic,omitempty"`
 }
 
 func (p *PeerSession) Close() error {
@@ -427,6 +429,8 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	stopQUIC()
 	timings.QUICHandshakeMS = durationMS(stageStarted)
 	if err != nil {
+		timings.TotalConnectMS = durationMS(connectStarted)
+		cfg.evidence(makeDirectEvidence(peer.ID, sessionID, path, timings, endpoint.Stats(), signalSession.Stats(), 0, ""))
 		return nil, err
 	}
 	cfg.phase("connected")
@@ -575,6 +579,7 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 }
 
 func (s *Service) establishResponder(ctx context.Context, signalSession directSignalSession, endpoint *connectivity.Endpoint, peer signaling.Device, request protocol.Envelope, phaseBudget time.Duration, cfg DirectConfig) (connectivity.Path, *transport.Session, error) {
+	signalBase := signalSession.Stats()
 	var remote iceDescription
 	if err := json.Unmarshal(request.Payload, &remote); err != nil || remote.Ufrag == "" || remote.Password == "" {
 		return connectivity.Path{}, nil, protocol.Fail(protocol.InvalidMessage, "invalid remote ICE credentials")
@@ -604,15 +609,23 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 	}
 	stopSignal()
 	cfg.phase("ice_checking")
+	stageStarted := time.Now()
 	path, err := connectWithTrickle(ctx, signalSession, endpoint, s.identity, peer, request.SessionID, request.Generation, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, false)
+	timings := DirectTimings{ICEMS: durationMS(stageStarted)}
 	if err != nil {
 		return connectivity.Path{}, nil, err
 	}
 	cfg.phase("quic_handshake")
+	stageStarted = time.Now()
 	quicCtx, stopQUIC := context.WithTimeout(ctx, phaseBudget)
 	data, err := transport.AcceptPrepared(quicCtx, endpoint, path, listener)
 	stopQUIC()
+	timings.QUICHandshakeMS = durationMS(stageStarted)
 	if err != nil {
+		signalStats := signalSession.Stats()
+		signalStats.BytesSent -= min(signalStats.BytesSent, signalBase.BytesSent)
+		signalStats.BytesReceived -= min(signalStats.BytesReceived, signalBase.BytesReceived)
+		cfg.evidence(makeDirectEvidence(peer.ID, request.SessionID, path, timings, endpoint.Stats(), signalStats, 0, ""))
 		return connectivity.Path{}, nil, err
 	}
 	closeListener = false
@@ -717,7 +730,9 @@ func (s *Service) SendFiles(ctx context.Context, peerID string, paths []string, 
 	return detailed.Transfer, err
 }
 
-func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []string, cfg DirectConfig, progress func(transfer.Progress)) (DirectTransferResult, error) {
+func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []string, cfg DirectConfig, progress func(transfer.Progress)) (result DirectTransferResult, err error) {
+	cfg, finish := observeDirectFailure(cfg)
+	defer func() { finish(&result, err) }()
 	cfg.phase("preparing")
 	prepared, peer, err := s.prepareAndConnect(ctx, peerID, paths, cfg)
 	if err != nil {
@@ -725,7 +740,11 @@ func (s *Service) SendFilesDetailed(ctx context.Context, peerID string, paths []
 	}
 	defer prepared.Close()
 	result, sendErr := s.sendPreparedOverPeer(ctx, peer, prepared, cfg, transfer.SendHooks{Progress: progress})
-	return result, s.releasePeerSession(peer, sendErr)
+	err = s.releasePeerSession(peer, sendErr)
+	if sendErr == nil && err != nil {
+		result.FailurePhase = "closing"
+	}
+	return result, err
 }
 
 // SendPreparedDetailed reuses a caller-owned prepared manifest. Recovery uses
@@ -734,9 +753,11 @@ func (s *Service) SendPreparedDetailed(ctx context.Context, peerID string, prepa
 	return s.SendPreparedWithHooksDetailed(ctx, peerID, prepared, cfg, transfer.SendHooks{Progress: progress})
 }
 
-func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID string, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
+func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID string, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (result DirectTransferResult, err error) {
+	cfg, finish := observeDirectFailure(cfg)
+	defer func() { finish(&result, err) }()
 	if prepared == nil {
-		return DirectTransferResult{}, errors.New("INVALID_PREPARED_TRANSFER")
+		return DirectTransferResult{FailurePhase: "preparing"}, errors.New("INVALID_PREPARED_TRANSFER")
 	}
 	if hooks.Progress != nil {
 		hooks.Progress(transfer.Progress{TransferID: prepared.Manifest.TransferID, State: "Preparing", Total: prepared.Manifest.TotalBytes()})
@@ -747,16 +768,20 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 		return DirectTransferResult{}, err
 	}
 	result, sendErr := s.sendPreparedOverPeer(ctx, peer, prepared, cfg, hooks)
-	return result, s.releasePeerSession(peer, sendErr)
+	err = s.releasePeerSession(peer, sendErr)
+	if sendErr == nil && err != nil {
+		result.FailurePhase = "closing"
+	}
+	return result, err
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
 	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
-		return DirectTransferResult{Evidence: peer.Evidence()}, err
+		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "authorization"}, err
 	}
 	options, err := s.sendContentOptions(ctx, prepared, cfg, hooks)
 	if err != nil {
-		return DirectTransferResult{Evidence: peer.Evidence()}, err
+		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
 	}
 	cfg.phase("opening_stream")
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
@@ -767,7 +792,11 @@ func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, p
 	if cfg.contentForceFile {
 		result.FileFallback = true
 	}
-	return DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}, err
+	detailed := DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}
+	if err != nil {
+		detailed.FailurePhase = "transfer"
+	}
+	return detailed, err
 }
 
 type prepareResult struct {
@@ -820,6 +849,9 @@ func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []
 			_ = s.releasePeerSession(connectedResult.peer, nil)
 		}
 		if preparedResult.err != nil && protocol.ErrorCode(preparedResult.err) != protocol.Cancelled {
+			// Preparation and connection run in parallel; identify the selected
+			// error instead of retaining an unrelated connection observation.
+			cfg.phase("preparing")
 			return nil, nil, preparedResult.err
 		}
 		if connectedResult.err != nil {
@@ -867,22 +899,30 @@ func (s *Service) ReceiveOnceDetailed(ctx context.Context, expectedPeerID, direc
 	return s.ReceiveOnceWithOptionsDetailed(ctx, expectedPeerID, cfg, transfer.ReceiveOptions{Directory: directory, Accept: accept, Progress: progress})
 }
 
-func (s *Service) ReceiveOnceWithOptionsDetailed(ctx context.Context, expectedPeerID string, cfg DirectConfig, options transfer.ReceiveOptions) (DirectTransferResult, error) {
+func (s *Service) ReceiveOnceWithOptionsDetailed(ctx context.Context, expectedPeerID string, cfg DirectConfig, options transfer.ReceiveOptions) (result DirectTransferResult, err error) {
+	cfg, finish := observeDirectFailure(cfg)
+	defer func() { finish(&result, err) }()
 	cfg.phase("connecting")
 	peer, err := s.AcceptDirect(ctx, expectedPeerID, cfg)
 	if err != nil {
 		return DirectTransferResult{}, err
 	}
+	cfg.phase("opening_stream")
 	stream, err := peer.Data.Conn.AcceptStream(ctx)
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence()}, errors.Join(err, peer.Close())
 	}
 	options.Peer = peer.PeerID
-	result, err := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
-	detailed := DirectTransferResult{Transfer: result, Evidence: peer.Evidence()}
+	received, err := transfer.ReceiveWithOptions(ctx, transport.WrapStream(stream), options)
+	detailed := DirectTransferResult{Transfer: received, Evidence: peer.Evidence()}
 	if err == nil {
-		return detailed, s.closePeerAfterTransfer(peer)
+		closeErr := s.closePeerAfterTransfer(peer)
+		if closeErr != nil {
+			detailed.FailurePhase = "closing"
+		}
+		return detailed, closeErr
 	}
+	detailed.FailurePhase = "transfer"
 	return detailed, errors.Join(err, peer.Close())
 }
 
