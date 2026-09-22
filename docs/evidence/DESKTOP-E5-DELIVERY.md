@@ -1,5 +1,11 @@
 # Desktop E5 交付记录
 
+## 2026-09-22 Astra 续接同步
+
+在原实现树、原工作分支与 Draft PR #8 上续接 `6eb23ba`，保留全部历史预览与未跟踪文件。当前源码增量：`535a77c` 满容量原生共享幂等；`1849c31` 双重配对关系离线撤销；`7d3bfb8` 剪贴板 lease 因果时钟；`9f15fba` 取消复用测试所有权；`9953601` 锁定工具链重建跟踪的嵌入前端。双模块本地集成检查、race、前端检查和 Windows native build 通过，具体命令与失败保留见 PROGRESS 和 E5-R 验收记录。
+
+本批尚未创建新 Release、移动 tag、合并 main 或部署服务器；Mac 实机暂不可用。GitHub 当前候选的 CI、Mac 原生自测和包来源继续在本节后续核实，不能用先前 `6eb23ba` 的绿灯或 preview.2 的包代替。普通本机构建为上述补丁集的 working-tree 验证（EXE SHA256 `f54a3768e4618cf901405d4bda1ec9087f87c6b01e5e1c9bd5aae74d8654d42b`），不当作 CI COMMITTED 候选交付。
+
 ## 2026-09-20 preview.2 发布与停止交接
 
 按用户“提交、推送相关修改和 release，完成文档后停止”的最新指令，已发布 [v0.5.0-desktop-preview.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-desktop-preview.2)，发布时间为 2026-09-20T04:50:16.0000000Z。这是预览发布，不代表 U1–U7 全部完成；文档同步后停止实施和派发，等待下一次明确启动指令。

@@ -1,3 +1,14 @@
+## 2026-09-22 E5-R Astra 续接与三个缺陷修复
+
+- 安全接管原 `208a/Osend` 实现树，起点 `6eb23ba` 与 origin / Draft PR #8 一致，旧任务 idle、旧 heartbeat PAUSED；同步指定新提示词，唯一 TODO 和过期续接索引已更新。Mac 本轮暂不可用；香港/荷兰只读确认健康服务及旧实验收尾，无部署或宿主网络变更。
+- `1849c31`：修复 `group+lan` 离线目录误标及撤销未入持久 outbox。真实 HTTP listener 关闭/原端点恢复、profile 两次重启、旧快照不复活、旧 outbox 不误撤新 incarnation、保留文件历史和 LAN-only 不删除其他组均通过，保留 RED/GREEN 与 race。
+- `7d3bfb8`：修复两端独立复制历史不同时，双方 ready 但新剪贴板事件被判为旧事件。lease 携带签发时钟，成功安装后观察因果顺序；新增时钟跳跃上限、运算余量、租约重放、固定事件/旧复制/本地复制优先及高时钟多轮续租回归。旧 wire 可解析，完整修复需双方更新；没有证明旧 E5-B 物理失败已解决。
+- `535a77c`：两平台原生共享满 64 条 journal 时先处理既有请求幂等/冲突，再限制新请求；Windows 临时目录自测 RED→GREEN，Mac 自测已加入两种架构 packages CI，实际结果待本批远端核实。签名与系统激活没有冒称通过。
+- `9f15fba`：根完整测试首次在远端取消流的 consent 等待失败；原用例定向三次未复现。发现它绕过 `StartSend` 的 inbox/WSS 所有权交接后，仅修夹具为真实 task API，保留首块门闩/远端取消/同 QUIC session，新增 WSS 不增长与失败诊断，定向 race 三次通过。没有增大超时或修改产品连接路径。
+- `9953601`：通过项目已安装的 Node 24.21.0 / pnpm 12.4.1 重新生成跟踪的 frontend dist，与已有 U7 源码一致；旧嵌入资源停在 `1fa21b4`。没有新增界面功能。
+- 实际集成检查全 PASS：根 `go test ./... -count=1 -timeout 240s`、`GOWORK=off go test ./... -count=1 -timeout 240s`（app 分别 101.012s / 95.877s），根独立 mod verify/vet/build；desktop workspace test、独立 mod verify/vet/build 和最终 `go test -race ./... -count=1 -timeout 180s`；受影响 core race；前端 typecheck/lint/76 tests/build；Wails 3 beta.18 `GOWORK=off wails3 task build ARCH=amd64`；.NET share self-test；gofmt/diff check。日志为 `.artifacts/astra-resume/checks/` 及分项证据，普通本机测试未开启剪贴板正文读写。最初 PATH 的 Node22/pnpm11 检查虽通过，已改用项目锁定工具链完整复核。
+- preview.2 准确 Windows 包哈希再次匹配，但隔离离线启动被自动审批在 CreateProcess 前以 `blocked by policy` 拒绝，GUI 未启动；fixture 正常退出。Windows 包级 U2、Mac 物理双向/剪贴板、签名/系统共享、真实 DPI/键盘/网络恢复仍有缺项。旧 FAIL/NOT RUN 与旧包来源保留，本轮不标整轮完成。
+
 ## 2026-09-20 E5-H 4d36132 候选来源、重配对与设置继承
 
 - 4d `wails3-packages` run `35459981462` 的 Windows artifact 和 Mac arm64 DMG 均已实际下载/核验：Windows outer ZIP `d0344809...c08f37cb`、portable EXE `c22c3d2b...abbc4edd`；Mac DMG `8145ede7...0b4b80c9`，实际 Mac bundle/架构/codesign strict 通过。它们明确属于 4d，不称为后续测试提交的产物。

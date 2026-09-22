@@ -4,6 +4,23 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-22 E5-R：Astra 安全续接与缺陷闭环
+
+接管工作树 `C:/Users/Wen/.codex/worktrees/208a/Osend`，HEAD / origin / Draft PR #8 均为 `6eb23bab94e2a3d9fe615c0adceb1509e28494e0`，原七个 checks success。已跟踪文件无未提交修改；四项原有未跟踪资产保持原状。旧实现/监督任务均 idle，旧 `linksend` heartbeat 为 PAUSED；过期 supervisor/executor JSON 标为 superseded 并保留历史字段，以当前任务 `01a0c8e2-a09d-79f0-9947-2c346172bfc9` 和唯一 TODO 续接。指定 Astra 提示词已从原项目同步，未覆盖其他工作树文件。
+
+preview.2 Windows ZIP 来源 `0229cbf3e8373c544431102ed904c4a19ed02dc4`，本机再次核对 EXE SHA256 为 `c22a8714ffc9bd76a6718e8dd0b2490a3334034a57d31162f192abc999a53831`。真实 loopback 配对 fixture 创建成功且释放了 GUI profile owner；随后以隔离 profile/不可达信令地址启动该准确包的 `exec_command` 被自动审批在 CreateProcess 前拒绝，工具只给出 `blocked by policy`。没有启动 GUI 或点击删除，没有系统剪贴板正文操作，fixture 已通过 stop 文件正常退出。该包本轮 U2/UI 验收为 **NOT RUN**，不把工具拒绝写成产品故障，也不绕过拒绝换入口启动。
+
+用户明确 Mac 暂不可用，本轮未连接 Mac。香港和荷兰只读结果：
+
+| 主机 | 实际结果 | 受管作业 |
+|---|---|---|
+| `hk-main` | public health PASS / relay=false；文件与运行 SHA256 `2c9c352abb13b95cf2a0df48fc892f20488d7960ae48288724ed2004f9c16372`，来源 `387b57c` clean、DB schema 4 / integrity ok；当前 PID 911287，NRestarts=0；56 个旧 job 均收尾 | `/tmp/codex-ssh/linksend-astra-resume-hk-readonly-20260922T113813Z`、`/tmp/codex-ssh/linksend-astra-resume-hk-ownership-20260922T113929Z`，exit 0 |
+| `nl-highdefense` | 16 个旧 job 均收尾；无遗留 LinkSend 进程/namespace/专属网卡，旧双 NAT 归档摘要匹配；宿主地址/路由/规则与基线一致 | `/tmp/codex-ssh/linksend-astra-resume-nl-readonly-20260922T113813Z`、`/tmp/codex-ssh/linksend-astra-resume-nl-ownership-20260922T113929Z`，exit 0 |
+
+完整只读回执在 `.artifacts/astra-resume/remote/remote-handoff-summary.json`。没有部署、服务重启或宿主网络更改，旧备份/回滚边界继续有效。
+
+本轮增量分别记录于 [E1 撤销](DESKTOP-E1-REVOCATION.md)、[E4 剪贴板行为](DESKTOP-E4-CLIPBOARD-BEHAVIOR.md) 和 [E3 原生包](DESKTOP-E3-NATIVE-PACKAGES.md)：双重关系 outbox、lease 逻辑时钟、满容量共享重试均有源码/自动回归，不转写成物理包结果。原生系统共享签名、准确包激活/安装、Mac 双向与网络/睡眠、真实 150% DPI/深色/键盘等缺项继续留在 TODO。
+
 ## 2026-09-19 E5-A：0c59 发布包的物理双向文件
 
 本节只适用于已发布预览 `v0.5.0-desktop-preview.1` 的源提交 `0c59ae255d631b496a3e483e9c558f2998ee314c`、workflow `34803743360`。Windows 使用已核验 ZIP payload `LinkSend.exe` SHA256 `97b3a63a122df148edbf5b3038b225bda84ad9e8d45b3bd0a5c8f598b16e0e3e`，macOS 使用 arm64 DMG SHA256 `ce89b37fea7658c57c58de8e1bb648d8e15d9a580233444e0fdd2c4ffe460ee5`。二者均在新的隔离 profile 和当前 schema 4 / membership-v2 测试组运行；Windows 当前以太网 `10.234.16.254/16`，Mac `en0=10.234.35.5/16`。Mac 连接、审计及所有远程 job 经 `mac-test-102342413` 管理，不修改宿主防火墙、路由、代理或 HK 服务。

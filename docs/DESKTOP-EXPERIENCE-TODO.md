@@ -1,9 +1,9 @@
 # LinkSend 桌面体验全轮 TODO
 
-> **2026-09-20 发布后停止：** preview.2 已发布，源码/产物为 `0229cbf3e8373c544431102ed904c4a19ed02dc4`，发布源码五项 CI 全绿。用户要求完成文档后停止，等待下一次明确启动；不得自动派发或恢复实施。U1–U7 尚未全部验收，Goal 不标完成。发布资产、摘要和恢复入口见 [E5 交付记录](evidence/DESKTOP-E5-DELIVERY.md)。
+> **2026-09-22 恢复实施：** 用户明确要求当前 Astra ultra 接管；旧停止指令已由本次恢复覆盖。实际接管 HEAD 为 `6eb23bab94e2a3d9fe615c0adceb1509e28494e0`，与远端/开放 Draft PR #8 一致，既有七个 check 均成功。preview.2 产物仍绑定 `0229cbf3e8373c544431102ed904c4a19ed02dc4`；旧包验证不迁移到新源码。Mac 本轮暂不可用，香港/荷兰可用；U1–U7 未全部验收，Goal 保持 active。
 
-日期：2026-09-13。唯一产品写入方：执行任务 `/root/desktop_executor_terra`（`gpt-5.6-terra` / `xhigh`；旧执行者已停止且不得并发恢复）。
-总控：`01a096c4-2e59-7db3-a7a8-ec2a125409d6`（local）。工作分支：`codex/desktop-experience-upgrade`。
+创建日期：2026-09-13；当前负责人：`01a0c8e2-a09d-79f0-9947-2c346172bfc9`（local，Astra ultra 当前任务）。旧执行者/旧总控仅作历史来源，不再派发；任务内子代理按文件与机器资源分工，由主代理统一集成和 Git 同步。
+执行树：`C:/Users/Wen/.codex/worktrees/208a/Osend`。工作分支：`codex/desktop-experience-upgrade`；原总控 `01a096c4-2e59-7db3-a7a8-ec2a125409d6` 和旧执行任务均 idle，旧 `linksend` heartbeat 已 PAUSED。
 基线：`3bcb73019d1ac6de1d9f341bb7d22e2813875081`。E4 自动剪贴板源码范围已由总控在 `3363fd5+387b57c` 验收，当前执行 E5 准确包、物理双机、恢复、部署与网络联合验收。
 
 依据：[用户执行提示词](prompts/DESKTOP-EXPERIENCE-GOAL.md)、[完整方案](DESKTOP-EXPERIENCE-IMPROVEMENT-PLAN.md)。
@@ -11,8 +11,17 @@
 
 ## 生命周期与证据规则
 
+### 当前最短实施路径（2026-09-22，沿用原稳定 ID）
+
+1. **E4-03 / U4：源码已验证。** `7d3bfb8` 修复双方准备就绪但复制次数不同时的新事件被误判；loopback RED→GREEN，lease 因果时钟、兼容/重放/跳跃上限/高时钟续租及 race 通过。物理 Mac 首条失败仍未复验。
+2. **E1-02 / U2：源码已验证。** `1849c31` 修复 `group+lan` outbox 和离线关系；真实服务断线→重启→恢复同步/新 incarnation/保留文件历史及 race 通过。准确 preview.2 的隔离 Windows 启动被工具自动审批在 CreateProcess 前拒绝（`blocked by policy`），GUI 未启动；fixture 已正常停止，UI 包级结果仍 NOT RUN。
+3. **E3-01/02/03 / U6：Windows 源码已验证、Mac 待 CI。** `535a77c` 修复满 64 条记录时重试误报容量；两个适配器先按 ID/内容去重，再对新请求限额。Windows 自测 RED→GREEN，Mac 自测待 CI，签名和正式系统激活仍未验收。
+4. **E5-02：本地检查已通过，GitHub 同步/CI 核实进行中。** 完成双 Go 模块（含 GOWORK=off）、受影响 race、前端 76 tests/检查、Windows 原生构建；同会话取消测试按真实所有权修正（`9f15fba`），跟踪 dist 按锁定工具链刷新（`9953601`）。继续推送原分支、更新同一 Draft PR #8 并核实准确候选。
+
+香港/荷兰均完成只读接管核对，无未收尾旧作业。香港仍是已核实 `387b57c`、schema 4、health PASS；本批没有更改服务端源码或部署。Mac 暂不可用、用户暂缓签名及本轮 Windows 启动策略拒绝分别记录，不能把它们合并成“所有工作阻塞”。旧下面账本保留各自历史来源，以本节及最新追加 evidence 为当前状态。
+
 生命周期为：待办 → 执行中 → 待审查 → 验收通过 → 阶段已同步；外部阻塞单列原因与可继续工作。
-只有总控可以判定验收通过。提交、测试通过、原生通过、网络通过、GitHub 同步互不替代。
+只有当前主代理根据证据判定验收通过。提交、测试通过、原生通过、网络通过、GitHub 同步互不替代。
 各验证列使用 NOT RUN / PASS / FAIL / PARTIAL，非适用项须解释 N/A；未运行一律 NOT RUN。
 每份 evidence 记录精确提交/dirty 状态、包 SHA256、OS/架构、真实拓扑、步骤、实际命令/退出码、日志、失败/限制和下一步。
 包级结果不能继承源码测试快照；loopback、指定地址协议探针、真实桌面与双 NAT 分开记录。

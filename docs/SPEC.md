@@ -1,3 +1,5 @@
+2026-09-22 恢复实施增量：双重 `group+lan` 关系与 `group` 一样持久化离线撤销 outbox；剪贴板 lease 兼容携带签发时逻辑时钟，成功安装后才建立因果顺序，防止两端独立复制次数不同导致新事件被误判。极端跳跃、重放、旧复制回灌与写入竞态仍受限制，详见 PROTOCOL / ADR0007。原生共享满容量时已有相同 request 继续幂等，新请求仍受 64 条限制。Mac 本轮暂不可用；本次源码/自动测试不替代既有包级和原生缺项。
+
 2026-09-14 E4-03修复候选：认证QUIC会话只有在双方分别声明`session_reuse`和独立`clipboard_sync`能力后才承载自动剪贴板单向流；双方各自的本地authorization generation可以不同，wire按消息方向绑定接收方实际代次。自动剪贴板持久总开关和全部peer/方向/text|link|image权限默认关闭；lease及event同时绑定permission revision，撤权、暂停、新复制和期限会淘汰旧正文。真实本地复制先推进唯一状态owner，再判断lease、发送权限和格式，因此不会在重连后补发旧内容。发送/接收各最多两路，正文有deadline、分块速率预算，原生图片验证在最终状态锁外完成，mutation前复核暂停、授权、permission revision、OS generation和deadline。loopback QUIC、Windows隔离原生测试与Mac命名pasteboard只证明对应边界，物理Win↔Mac用户剪贴板仍留E5。
 
 # LinkSend protocol V1 implementation specification
