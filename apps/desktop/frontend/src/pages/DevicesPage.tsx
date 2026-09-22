@@ -3,7 +3,7 @@ import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/deskto
 import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
 import { formatPairingCodeInput, shouldClearPairingCode } from '../connection';
-import { deviceName } from '../presentation';
+import { deviceConnectionLabel, deviceName } from '../presentation';
 
 type Props = { devices: DeviceInfo[]; identityID?: string; membership?: MembershipStatus; name: string; run: CommandRunner; op: string; available: boolean };
 type DirectoryKind = 'paired' | 'nearby' | 'removed';
@@ -145,9 +145,9 @@ function DeviceListRow({ kind, device, available, op, run, onOpen, onLANResult }
     if (!confirmRevoke && hadConfirmation.current) retryButton.current?.focus();
     hadConfirmation.current = confirmRevoke;
   }, [confirmRevoke]);
-  const relationship = kind === 'removed' ? pendingRevoke ? '已移除 · 待同步撤销' : '已移除' : device.blocked ? '已屏蔽' : device.trusted ? '已信任' : '附近发现 · 尚未信任';
+  const relationship = kind === 'removed' ? pendingRevoke ? '已移除 · 待同步撤销' : '已移除' : device.blocked ? '已屏蔽' : device.trusted ? '已配对' : '尚未配对';
   return <article className={'device-entry ' + (device.blocked ? 'device-blocked' : '')} data-device-id={device.id}>
-    <div className="device-row"><span className="avatar" aria-hidden="true">{label[0] || '?'}</span><div><strong>{label}</strong>{device.profile.alias && <small>对方名称：{device.name || '未命名设备'}</small>}<small>{relationship} · {device.nearby ? '局域网可达' : device.online ? '在线' : '离线'}</small><div className="device-tags">{device.profile.my_device && <span>我的设备</span>}{device.profile.pinned && <span>固定 · {device.profile.position}</span>}{device.always_accept && !device.blocked && <span>免确认接收</span>}</div><code>身份 {identity}</code></div>
+    <div className="device-row"><span className="avatar" aria-hidden="true">{label[0] || '?'}</span><div><strong>{label}</strong>{device.profile.alias && <small>对方名称：{device.name || '未命名设备'}</small>}<small>{relationship} · {deviceConnectionLabel(device)}</small><div className="device-tags">{device.profile.my_device && <span>我的设备</span>}{device.profile.pinned && <span>固定 · {device.profile.position}</span>}{device.always_accept && !device.blocked && <span>免确认接收</span>}</div><code>身份 {identity}</code></div>
       {kind === 'paired' && <button className="ghost" aria-label={'打开 ' + label + ' 的设备详情，身份 ' + identity} disabled={!available} onClick={event => onOpen(device.id, event.currentTarget)}>详情</button>}
       {kind === 'nearby' && <button className="secondary" aria-label={'请求添加 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => void run('lan-add-' + device.id, async () => { const result = await Backend.RequestLANPair(device.id); onLANResult?.({ name: device.name || '附近设备', server: result.server_state }); })}>请求添加</button>}
       {kind === 'removed' && <span className="inline-actions">{pendingRevoke && !confirmRevoke && <button ref={retryButton} className="secondary" aria-label={'继续撤销 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => setConfirmRevoke(true)}>继续撤销</button>}<button className="secondary" aria-label={'允许重新添加 ' + label + '，身份 ' + identity} disabled={actionsDisabled || confirmRevoke} onClick={() => void run('allow-readd-' + device.id, () => Backend.UnblockDevice(device.id), '已允许重新添加；请重新发起配对')}>允许重新添加</button></span>}

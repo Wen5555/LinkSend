@@ -78,6 +78,7 @@ type Service struct {
 	directPoolLocks         map[string]*sync.Mutex
 	directPoolWG            sync.WaitGroup
 	directPoolBeforePublish func(string)
+	deviceConnections       deviceConnectionRegistry
 	clipboardSync           *clipboardsync.State
 	clipboardAdapterMu      sync.RWMutex
 	clipboardAdapter        ClipboardAdapter
@@ -403,16 +404,13 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	if len(out) == 0 && serverErr != nil {
 		return nil, serverErr
 	}
-	connected := map[string]bool{}
-	for _, task := range s.Tasks() {
-		if task.PeerID != "" && task.SessionID != "" && !isTerminal(task.State) {
-			connected[task.PeerID] = true
-		}
-	}
+	connected := s.deviceConnections.connected(trusted)
 	for index := range out {
-		if connected[out[index].ID] {
+		if out[index].Blocked {
+			out[index].ConnectionState = "blocked"
+		} else if connected[out[index].ID] {
 			out[index].ConnectionState = "connected"
-		} else if out[index].ConnectionState == "" {
+		} else {
 			out[index].ConnectionState = "not_connected"
 		}
 	}

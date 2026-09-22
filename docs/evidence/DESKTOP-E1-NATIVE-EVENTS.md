@@ -1,5 +1,13 @@
 # E1-C3 原生网络与睡眠事件证据
 
+## 2026-09-22 Windows 地址与路由订阅补齐
+
+早期 Windows 实现只订阅 NotifyIpInterfaceChange，五秒快照也不含路由；因此不能把 route-only 变化的及时恢复标为源码已覆盖。本批用固定 x/sys v0.47.0 的 NotifyUnicastIpAddressChange 和 NotifyRouteChange2 补齐，三类 API 均为 AF_UNSPEC，复用原有有界串行事件泵。已核对本机 Windows SDK 10.0.26100.0/netioapi.h 与固定依赖封装。任一注册失败逆序注销之前成功的句柄并保留错误；Stop 并发幂等，CancelMibChangeNotify2 在回调之外执行，不等待自身。
+
+本机 GOWORK=off 专项 test 和 race -count=10、desktop vet/build 全 PASS；真实注册/三种初始通知/注销、任一步失败与清理错误、阻塞恢复处理时的并发回调/停止均有覆盖。测试用 InitialNotification=true 产生真实初始回调，生产仍 false；没有修改宿主地址、路由或防火墙。原始日志 `.artifacts/astra-resume/native-network/`，完整集成见 E5-W。该证据只证明订阅生命周期，实际 DHCP/默认路由变化、VPN、睡眠后的延迟及恢复仍未实测。
+
+## 原 C3 实施记录
+
 候选源码：`codex/desktop-experience-upgrade`，以本证据文件所在的阶段提交为准。
 
 桌面生命周期现把 Wails 3 beta.18 的 `SystemWillSleep`/`SystemDidWake` 原生应用事件接入 Go core。Windows 网络变化使用 `NotifyIpInterfaceChange(AF_UNSPEC)` 并以 `CancelMibChangeNotify2` 注销；macOS 使用 `SCDynamicStore` 订阅全局与各接口 IPv4/IPv6 state key，在独立 CFRunLoop 上回调，并在关闭时 stop、wake、join 后释放 handle。所有回调先进入容量1的串行事件泵，避免阻塞系统回调并合并突发事件；core仍保留250ms门闩及5秒真实接口快照兜底。关闭顺序先注销Wails/系统订阅并等待事件泵退出，再关闭core，避免回调访问已释放服务。

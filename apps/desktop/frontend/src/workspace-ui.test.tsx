@@ -47,16 +47,30 @@ describe('workspace operation surfaces', () => {
     expect(markup).toContain('勾选等待后可加入队列');
     expect(markup).toMatch(/<button class="primary full send-button" disabled="">发送文件<\/button>/);
   });
-  it('treats a LAN-only peer as reachable and mounts LAN consent outside the devices page', () => {
-    const lan = { ...device, online: false, nearby: true };
+  it('allows a discovered LAN peer to attempt a connection without claiming reachability', () => {
+    const lan = { ...device, online: false, nearby: true, service_state: 'unavailable', lan_control_state: 'discovered_unverified' };
     const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [lan], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).not.toContain('对方暂时离线');
+    expect(markup).toContain('已发现 · 连接待验证');
     expect(markup).toMatch(/<button class="primary full send-button">发送文件<\/button>/);
     const client = createQueryClient();
     client.setQueryData(['lan-pair-pending'], [{ request_id: 'request', peer_id: 'peer', peer_name: '另一视图中的设备', expires_at: '' }]);
     const prompt = renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(LANPairPrompt, { run, op: '', available: true })));
     expect(prompt).toContain('另一视图中的设备 想添加此设备');
     expect(prompt).toContain('添加设备');
+  });
+  it('keeps an unknown server state distinct from offline while retaining the waiting choice', () => {
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [{ ...device, online: false, service_state: 'unavailable' }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
+    expect(markup).toContain('连接状态待检查');
+    expect(markup).toContain('尚未确认对方当前是否可连接');
+    expect(markup).not.toContain('对方暂时离线');
+    expect(markup).toMatch(/<button class="primary full send-button" disabled="">发送文件<\/button>/);
+  });
+  it('allows a live authenticated connection to remain useful when server presence is unavailable', () => {
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [{ ...device, online: false, service_state: 'unavailable', connection_state: 'connected' }], run, op: '', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
+    expect(markup).toContain('已连接');
+    expect(markup).not.toContain('尚未确认对方当前是否可连接');
+    expect(markup).toMatch(/<button class="primary full send-button">发送文件<\/button>/);
   });
   it('shows restart confirmation separately from actual running transfer states', () => {
     const markup = renderToStaticMarkup(createElement(Queue, { items: [queueItem('pending', 'needs_attention')], devices: [device], paused: false, run, op: '', available: true }));

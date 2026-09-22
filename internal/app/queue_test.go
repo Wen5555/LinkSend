@@ -142,6 +142,30 @@ func TestQueueOfflinePeerDoesNotBlockOnlinePeerOverQUIC(t *testing.T) {
 	}
 }
 
+func TestQueueConnectionHintDoesNotRequireServerPresence(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	sender, receiver := connectDirectPair(t, f, ctx)
+	defer sender.Close()
+	defer receiver.Close()
+	f.http.Close()
+	source := filepath.Join(t.TempDir(), "connected.txt")
+	if err := os.WriteFile(source, []byte("queue from live authenticated connection"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request := EnqueueRequest{RequestID: "connected-hint", PeerID: f.bID.ID(), Paths: []string{source}}
+	queued, err := f.a.Enqueue(request)
+	if err != nil || queued.State != "queued" || queued.WaitForPeer {
+		t.Fatalf("live connection should allow a new attempt without server presence: item=%+v err=%v", queued, err)
+	}
+	_ = sender.Close()
+	request.RequestID = "closed-connection"
+	if _, err := f.a.Enqueue(request); protocol.ErrorCode(err) != protocol.PeerOffline {
+		t.Fatalf("closed connection must not bypass the waiting choice: %v", err)
+	}
+}
+
 func TestQueueSourceChangeRequiresNewPreparationAndExplicitContinue(t *testing.T) {
 	f := newDirectFixtureServices(t)
 	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}

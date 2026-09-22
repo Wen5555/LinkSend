@@ -5,7 +5,7 @@ import type { DeviceInfo, SendDraft, WorkspaceSnapshot } from '../../bindings/gi
 import type { CommandRunner } from '../hooks/useDesktop';
 import { humanizeBackendError } from '../connection';
 import { EnqueueIdentity } from '../workspace-cache';
-import { deviceName, fileName } from '../presentation';
+import { deviceConnectionLabel, deviceName, fileName } from '../presentation';
 import { Queue } from '../components/Queue';
 import { TaskList } from '../components/Tasks';
 
@@ -30,6 +30,7 @@ export function TransferPage({ workspace, devices, identityID, run, op, controlR
     queryFn: () => Backend.PreviewDraft(), retry: false });
   const peers = devices.filter(device => device.id !== identityID && (device.trusted || device.nearby) && !device.blocked);
   const selected = devices.find(device => device.id === draft?.peer_id);
+  const canAttempt = !!selected && (selected.online || selected.nearby || selected.connection_state === 'connected');
   const disabled = !!op || !available || !workspace?.persistence_available;
   const saveDraft = (patch: Partial<SendDraft>) => {
     if (!draft) return;
@@ -51,12 +52,12 @@ export function TransferPage({ workspace, devices, identityID, run, op, controlR
   return <div className="page-stack transfer-workspace"><div className="view-switch" role="tablist" aria-label="传输视图"><button className={view === 'send' ? 'active' : ''} onClick={() => setView('send')}>发送文件</button><button className={view === 'queue' ? 'active' : ''} onClick={() => setView('queue')}>待发送 <span>{workspace?.queue?.filter(item => !['completed','cancelled','expired'].includes(item.state)).length ?? 0}</span></button><button className={view === 'active' ? 'active' : ''} onClick={() => setView('active')}>进行中</button></div>
     {view === 'send' && <div className="transfer-grid">
       <section className="surface send-surface" data-file-drop-target><div className="section-heading"><div><span className="section-kicker">本机持久草稿</span><h2>准备发送</h2></div><span className="task-count">{paths.length} 项</span></div>
-        <label className="field-label">发送给<select value={draft?.peer_id ?? ''} disabled={disabled} onChange={event => saveDraft({ peer_id: event.target.value })}><option value="">选择设备</option>{draft?.peer_id && !peers.some(device => device.id === draft.peer_id) && <option value={draft.peer_id}>{selected ? deviceName(selected) : '已保存的目标'} · 当前不可发送</option>}{peers.map(device => <option key={device.id} value={device.id}>{deviceName(device)} · {device.nearby ? '附近' : device.online ? '在线' : '离线'}</option>)}</select></label>
+        <label className="field-label">发送给<select value={draft?.peer_id ?? ''} disabled={disabled} onChange={event => saveDraft({ peer_id: event.target.value })}><option value="">选择设备</option>{draft?.peer_id && !peers.some(device => device.id === draft.peer_id) && <option value={draft.peer_id}>{selected ? deviceName(selected) : '已保存的目标'} · 当前不可发送</option>}{peers.map(device => <option key={device.id} value={device.id}>{deviceName(device)} · {deviceConnectionLabel(device)}</option>)}</select></label>
         {selected && <div className="peer-inline"><span className="avatar small">{deviceName(selected)[0]}</span><div><strong>{deviceName(selected)}</strong><small>{selected.blocked ? '已屏蔽，请在设备页解除后重新建立信任' : selected.trusted ? '已信任 · 接收权限由对方决定' : '附近新设备 · 对方确认并完成传输后建立信任'}</small></div></div>}
         <div className="picker-row"><button className="secondary" disabled={disabled} onClick={() => void run('pick-files', async () => { const picked = await Backend.PickFiles(); if (picked?.length && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, ...picked])] }); })}>＋ 选择文件</button><button className="secondary" disabled={disabled} onClick={() => void run('pick-folder', async () => { const path = await Backend.PickSourceDirectory(); if (path && draft) await Backend.SaveDraft({ ...draft, paths: [...new Set([...paths, path])] }); })}>＋ 选择文件夹</button></div>
         <label className="queue-wait"><input type="checkbox" checked={waitForPeer} disabled={disabled} onChange={event => setWaitForPeer(event.target.checked)} /><span>对方离线时，留在队列中等待</span></label>
-        {selected && !selected.online && !selected.nearby && !waitForPeer && <p className="queue-notice">对方暂时离线。勾选等待后可加入队列，也可以稍后再发。</p>}
-        <button className="primary full send-button" disabled={disabled || !draft?.peer_id || !paths.length || !selected || selected.blocked || (!selected.online && !selected.nearby && !waitForPeer)} onClick={enqueue}>{op === 'enqueue' ? '正在核对内容并加入…' : '发送文件'}</button>
+        {selected && !canAttempt && !waitForPeer && <p className="queue-notice">{selected.service_state === 'membership_synced' ? '服务器列表已同步，尚未找到对方在线。请在对方打开 LinkSend。' : '尚未确认对方当前是否可连接，请检查连接状态。'}勾选等待后可加入队列，也可以稍后再发。</p>}
+        <button className="primary full send-button" disabled={disabled || !draft?.peer_id || !paths.length || !selected || selected.blocked || (!canAttempt && !waitForPeer)} onClick={enqueue}>{op === 'enqueue' ? '正在核对内容并加入…' : '发送文件'}</button>
         <div className="file-list compact-file-list">{paths.length ? visiblePaths.map(path => <div className="file-row" data-draft-path={path} key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>尚未选择文件</strong><small>选择窗口取消后不会清空已有草稿。</small></div>}</div>
         {paths.length > pathPageSize && <div className="bounded-pagination" aria-label="发送草稿分页"><button className="ghost" aria-label="草稿上一页" disabled={activePathPage === 0} onClick={() => setPathPage(page => clampPathPage(page - 1, paths.length))}>上一页</button><span>第 {activePathPage + 1} / {pathPageCount} 页 · 每页最多 {pathPageSize} 项</span><button className="ghost" aria-label="草稿下一页" disabled={activePathPage + 1 >= pathPageCount} onClick={() => setPathPage(page => clampPathPage(page + 1, paths.length))}>下一页</button></div>}
         <p className="hint">可将文件或目录拖到这里；系统入口只加入草稿。当前传输不会阻止加入下一项，重启后需确认继续。</p>

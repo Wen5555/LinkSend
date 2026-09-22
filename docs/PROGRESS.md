@@ -1,3 +1,11 @@
+## 2026-09-23 E5-W 事实状态与网络恢复补齐
+
+- 已修复设备页/发送选择器的发现即“可达”、未知即“离线”，以及 Go 将握手前或暂停任务的 SessionID 当作 connected 的误报。现在只认存活且授权代次匹配的认证 QUIC，旧端和无活动任务的空闲复用均覆盖；撤销、旧授权与关闭证据不会变回已连接。
+- 实际 LAN 同意后无需服务器在线记录即可入队；服务不可用但连接存活时也可尝试新任务，连接关闭后恢复等待门槛。发现未配对仍被拒绝，授权与后续握手未绕过。两个入队错误均有 RED→GREEN。
+- Windows 原生事件从仅接口补齐至接口/地址/路由三类，仍使用有界事件泵；真实初始通知/注销、失败逆序清理、并发停止和专项 race 十轮通过，没有修改宿主网络。
+- 根 workspace/off 完整 tests（app 135.906s / 121.008s）、off vet/build 和完整 app race（166.576s），desktop 双模式/完整 race/vet、前端 86 tests/typecheck/lint/build、Windows Wails production build 全 PASS；GitHub 状态的最终回执见 E5-W/DELIVERY。协议及持久 schema 未变，准确包和实机结果不继承。
+- U3 仍有可本机推进的固定 UDP 初始降级、即时记忆地址与重叠网段多路由缺口，已落唯一 TODO；Mac、GUI 策略、宿主防火墙授权和物理矩阵继续分列。
+
 ## 2026-09-22 E5-V 桌面待同步撤销闭环
 
 - `6cb0705` 已提交推送原分支 / Draft PR #8；core/desktop push/PR 和三平台包七个 jobs 全 success，最新包来源与 workflow 摘要已核对。包级完整下载仍固定在 `36302a9`，不覆盖后续 UI；最终纯文档收尾复用该成功源码 CI，使用 `[skip ci]` 避免重复全平台构建。

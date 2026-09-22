@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -55,6 +57,14 @@ func TestLANPairingRequiresRemoteConsentAndCommitsBothPins(t *testing.T) {
 	defer func() { a.lanMu.Lock(); a.lan = nil; a.lanMu.Unlock() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	source := filepath.Join(t.TempDir(), "lan-only.txt")
+	if err = os.WriteFile(source, []byte("LAN pairing queue admission"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	queueRequest := EnqueueRequest{RequestID: "lan-only-enqueue", PeerID: b.identity.ID(), Paths: []string{source}}
+	if _, err = a.Enqueue(queueRequest); protocol.ErrorCode(err) != protocol.AuthenticationFailed {
+		t.Fatalf("discovery without pairing must not authorize enqueue: %v", err)
+	}
 	go func() {
 		select {
 		case incoming := <-bm.Incoming():
@@ -91,6 +101,13 @@ func TestLANPairingRequiresRemoteConsentAndCommitsBothPins(t *testing.T) {
 		if loadErr != nil || len(peers) != 1 || peers[0].GrantKind != "lan" || peers[0].AutoAccept {
 			t.Fatalf("%s trust=%+v err=%v", name, peers, loadErr)
 		}
+	}
+	devices, err := a.Devices(ctx)
+	if err != nil || len(devices) != 1 || devices[0].Online || !devices[0].Nearby || !devices[0].Trusted {
+		t.Fatalf("expected paired LAN evidence without server presence: devices=%+v err=%v", devices, err)
+	}
+	if queued, err := a.Enqueue(queueRequest); err != nil || queued.ID == "" || queued.WaitForPeer || queued.State != "queued" {
+		t.Fatalf("paired nearby peer requires no server-online waiting override: item=%+v err=%v", queued, err)
 	}
 }
 

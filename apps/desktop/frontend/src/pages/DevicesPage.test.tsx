@@ -45,6 +45,35 @@ afterEach(() => {
 });
 
 describe('设备目录和详情', () => {
+  it('keeps discovery, server presence and verified connections distinct as evidence changes', () => {
+    const container = document.createElement('div'); document.body.append(container);
+    const snapshot = makeDevice('status-peer', { online: false, nearby: true, service_state: 'unavailable', lan_control_state: 'discovered_unverified' });
+    const root = renderDevices(container, [snapshot]);
+    const status = () => container.querySelector('article[data-device-id="status-peer"]')!.textContent!;
+    const update = (patch: Partial<DeviceInfo>) => act(() => root.render(<DevicesPage devices={[{ ...snapshot, ...patch }]} identityID="self" name="本机" run={run} op="" available />));
+    expect(status()).toContain('已发现 · 连接待验证');
+    expect(status()).not.toMatch(/局域网可达|已连接|离线/);
+    update({ nearby: false, lan_control_state: 'not_seen' });
+    expect(status()).toContain('连接状态待检查');
+    expect(status()).not.toContain('离线');
+    update({ nearby: false, lan_control_state: 'not_seen', service_state: 'membership_synced' });
+    expect(status()).toContain('未见在线记录');
+    update({ nearby: false, lan_control_state: 'not_seen', online: true, service_state: 'membership_synced' });
+    expect(status()).toContain('在线 · 直连待检查');
+    update({ connection_state: 'connected' });
+    expect(status()).toContain('已连接');
+    expect(status()).not.toContain('连接待验证');
+  });
+
+  it('does not turn a removed device into a reachable peer from stale discovery or session evidence', () => {
+    const container = document.createElement('div'); document.body.append(container);
+    renderDevices(container, [makeDevice('removed-peer', { trusted: false, blocked: true, relationship: 'removed', service_state: 'pending_revoke_sync', nearby: true, online: true, connection_state: 'connected' })]);
+    const row = container.querySelector('article[data-device-id="removed-peer"]')!.textContent!;
+    expect(row).toContain('待同步撤销');
+    expect(row).toContain('已阻止连接');
+    expect(row).not.toMatch(/局域网可达|已连接|直连待检查/);
+  });
+
   it('confirms a pending revocation explicitly without allowing the device to rejoin', async () => {
     backend.RemoveDevice.mockResolvedValue(undefined);
     const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });

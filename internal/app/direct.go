@@ -395,7 +395,9 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 		closeSignal = false
 		closeEndpoint = false
 		description, _ := envelopeICEDescription(*incoming)
-		return &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}, nil
+		result := &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
+		s.deviceConnections.remember(result)
+		return result, nil
 	}
 	if responseWire.Message == nil || responseWire.Message.Type != "connect_response" || responseWire.Message.SessionID != sessionID || responseWire.Message.Generation != firstGeneration || responseWire.Message.Sender != peer.ID || responseWire.Message.Recipient != s.identity.ID() {
 		if responseWire.Message != nil && responseWire.Message.Type == "status" {
@@ -442,7 +444,9 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings}).Evidence())
 	closeSignal = false
 	closeEndpoint = false
-	return &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: remote.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: remote.SessionReuse, ClipboardSync: remote.ClipboardSync && remote.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}, nil
+	result := &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: remote.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: remote.SessionReuse, ClipboardSync: remote.ClipboardSync && remote.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
+	s.deviceConnections.remember(result)
+	return result, nil
 }
 
 // AcceptDirect waits for one authenticated request from expectedPeerID. An
@@ -575,6 +579,7 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 	result := &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, signalBase: signalBase, SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
 	cfg.evidence(result.Evidence())
 	closeEndpoint = false
+	s.deviceConnections.remember(result)
 	return result, nil
 }
 

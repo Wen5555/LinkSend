@@ -2,6 +2,15 @@ import type { DeviceInfo, QueueItem } from '../bindings/github.com/Wen5555/LinkS
 
 export const formatBytes = (n?: number | null) => n == null ? '未知' : n < 1024 ? `${Math.round(n)} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(1)} GB`;
 export const deviceName = (device?: DeviceInfo) => device?.profile.alias || device?.name || '未命名设备';
+export function deviceConnectionLabel(device: DeviceInfo): string {
+  if (device.blocked || device.relationship === 'removed' || device.connection_state === 'blocked') return '已阻止连接';
+  if (device.connection_state === 'connected') return '已连接';
+  // A signed announcement and server presence are hints for a connection attempt,
+  // not proof of a working LAN control or authenticated data connection.
+  if (device.lan_control_state === 'discovered_unverified' || device.nearby) return '已发现 · 连接待验证';
+  if (device.service_state === 'membership_synced') return device.online ? '在线 · 直连待检查' : '未见在线记录';
+  return '连接状态待检查';
+}
 export const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 export const taskLabels: Record<string, string> = {
   preparing: '准备中', awaiting_acceptance: '等待确认', transferring: '传输中', verifying: '校验中',

@@ -4,6 +4,18 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-23 E5-W：事实状态、LAN 入队与 Windows 网络事件
+
+本条来源为本次源码提交（前一 HEAD `ea18774`）；准确安装包未运行。修复三个相连但独立的缺口：
+
+- 设备行与发送选择器不再把附近公告当作 LAN 可达，服务未知不显示离线。Go 只从仍存活、授权代次匹配的真实已认证 QUIC 合成 connected，覆盖普通/旧端/同时发起/空闲复用；SessionID 与旧 TLS 记录仅作诊断。关闭与重新授权使旧连接证据失效，blocked 始终优先。
+- LAN 配对成功且有当前路径时，原 Enqueue 错以没有服务在线记录而拒绝；回归真实复现 PEER_OFFLINE 后修复。入队和调度将 LAN/presence/已有认证连接作为尝试条件，发现未配对不授信。HTTP 关闭时已有认证连接仍可支持入队，关闭连接后恢复显式等待要求；未把入队结果称为文件已传输。
+- Windows 补齐接口、单播地址、路由三类原生订阅。真实 API 初始通知和注销、任一步失败的逆序清理、清理错误保留及并发 stop 已测，未改宿主网络。物理路由切换、DHCP 和睡眠恢复未测。
+
+本机已执行：根 workspace 与 `GOWORK=off go test ./... -count=1 -timeout 240s`（app 135.906s / 121.008s）、根 off vet/build、`GOWORK=off go test -race ./internal/app -count=1 -timeout 300s`（166.576s）；desktop workspace tests、off 全包 race/vet、锁定 Go 1.27.1 / Node 24.21.0 / pnpm 12.4.1 / Wails beta.18 的 Windows production build；前端 86 tests/typecheck/lint/build，全 PASS。Windows 原生专项 race -count=10 PASS，新增设备状态/关闭/授权/发布专项 race PASS。原始 RED/GREEN、各检查日志在 `.artifacts/astra-resume/device-state/` 和 `native-network/`。跟踪的 frontend dist 已重建；独立生命周期/授权审查未发现确定问题。
+
+完整 U3 差异核查另发现固定 UDP 初始 bind 失败仍耦合 TLS 生命周期、当前 Manager 未立即记住新增地址、重叠私网探测会在首条 Write 成功后停止，已列唯一 TODO E1-04 的可实施下一批。Mac 暂不可用、Windows GUI 自动审批限制、临时宿主规则待授权及准确包/物理验收仍独立保留，不标 U1–U7 完成。
+
 ## 2026-09-22 E5-V：桌面待同步撤销入口（源码 PASS）
 
 准确源码提交 `6cb0705aaeb2bae6b5ebde13a2d65ec35c8d5b07` 的七个 CI jobs 全 success；三平台新包已构建并核对 workflow/artifact 来源，未下载新载荷，详见 DELIVERY。

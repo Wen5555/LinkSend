@@ -177,11 +177,13 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	ctx, cancel := context.WithTimeout(s.workCtx, 5*time.Second)
 	devices, deviceErr := s.Devices(ctx)
 	cancel()
-	known, online := false, false
+	known, canAttempt := false, false
 	for _, device := range devices {
 		if device.ID == request.PeerID {
 			known = device.Trusted || device.Nearby
-			online = device.Online
+			// Presence and a current LAN route each permit an attempt. Neither
+			// replaces the grant check above or authentication during connection.
+			canAttempt = !device.Blocked && (device.Online || device.Nearby || device.ConnectionState == "connected")
 			break
 		}
 	}
@@ -191,7 +193,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		}
 		return QueueItem{}, protocol.Fail(protocol.Unpaired, "queue target is not verified or nearby")
 	}
-	if !online && !request.WaitForPeer {
+	if !canAttempt && !request.WaitForPeer {
 		return QueueItem{}, protocol.Fail(protocol.PeerOffline, "explicit waiting choice required")
 	}
 	prepared, err := transfer.Prepare(s.workCtx, paths, 0)
@@ -225,7 +227,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	state := "queued"
-	if !online {
+	if !canAttempt {
 		state = "waiting_peer"
 	}
 	id := protocol.RandomID()
@@ -423,7 +425,7 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 	}
 	online := map[string]bool{}
 	for _, device := range devices {
-		online[device.ID] = !device.Blocked && device.Trusted && (device.Online || device.Nearby)
+		online[device.ID] = !device.Blocked && device.Trusted && (device.Online || device.Nearby || device.ConnectionState == "connected")
 	}
 	for _, item := range runnable {
 		if !online[item.PeerID] {
