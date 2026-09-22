@@ -5,7 +5,45 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
+	"time"
 )
+
+func TestLeaseClockWireCompatibility(t *testing.T) {
+	for _, clock := range []uint64{0, 41} {
+		lease := Message{Type: "lease", LeaseID: "lease", SessionID: "session", Generation: 3, Grants: []Grant{{Kind: Text, Revision: 1}}, TTLMillis: 10_000, Lamport: clock}
+		var wire bytes.Buffer
+		if err := Write(&wire, lease, nil); err != nil {
+			t.Fatal(err)
+		}
+		if omitted := !bytes.Contains(wire.Bytes(), []byte(`"lamport"`)); omitted != (clock == 0) {
+			t.Fatal("lease clock optional encoding changed")
+		}
+		got, _, err := Read(&wire)
+		if err != nil || got.Lamport != clock {
+			t.Fatalf("optional lease clock=%d: got=%d err=%v", clock, got.Lamport, err)
+		}
+		// The previous endpoint already decoded Lamport, but its lease path
+		// called InstallScoped without observing it. Preserve that accepted
+		// behavior while the updated endpoint observes the optional field.
+		legacy := New("legacy", nil)
+		legacy.Reset(false, 1)
+		if err = legacy.InstallScoped(got.LeaseID, "peer", got.SessionID, got.Generation, got.Grants, time.Duration(got.TTLMillis)*time.Millisecond, 1); err != nil || legacy.lamport != 0 {
+			t.Fatal("new lease incompatible with previous install path", err)
+		}
+		updated := New("updated", nil)
+		updated.Reset(false, 1)
+		if err = updated.InstallScopedWithClock(got.LeaseID, "peer", got.SessionID, got.Generation, got.Grants, time.Duration(got.TTLMillis)*time.Millisecond, 1, got.Lamport); err != nil {
+			t.Fatal(err)
+		}
+		want := clock
+		if clock != 0 {
+			want++
+		}
+		if updated.lamport != want {
+			t.Fatalf("observed clock=%d want=%d", updated.lamport, want)
+		}
+	}
+}
 
 func TestLeaseAndEventWireRoundTrip(t *testing.T) {
 	lease := Message{Type: "lease", LeaseID: "lease", SessionID: "session", Generation: 3, Kinds: []Kind{Text, Image}, TTLMillis: 10_000}

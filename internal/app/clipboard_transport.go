@@ -582,7 +582,7 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			if adapter.Generation == nil {
 				continue
 			}
-			if err := s.clipboardSync.InstallScoped(message.LeaseID, peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, grants, time.Duration(message.TTLMillis)*time.Millisecond, adapter.Generation()); err == nil {
+			if err := s.clipboardSync.InstallScopedWithClock(message.LeaseID, peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, grants, time.Duration(message.TTLMillis)*time.Millisecond, adapter.Generation(), message.Lamport); err == nil {
 				s.setClipboardReady(peer, "send", true)
 			}
 		case "event":
@@ -711,7 +711,7 @@ func (s *Service) sendClipboardLease(parent context.Context, peer *PeerSession) 
 	if hook := s.clipboardLeaseBeforeWrite; hook != nil {
 		hook()
 	}
-	message := clipboardsync.Message{Type: "lease", LeaseID: lease.ID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, Grants: grants, TTLMillis: uint32(clipboardLeaseTTL / time.Millisecond)}
+	message := clipboardsync.Message{Type: "lease", LeaseID: lease.ID, SessionID: peer.SessionID, Generation: peer.AuthorizationGeneration, Grants: grants, TTLMillis: uint32(clipboardLeaseTTL / time.Millisecond), Lamport: lease.Lamport}
 	done, watcherDone := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(watcherDone)

@@ -100,6 +100,8 @@ macOS 单调时间源需包含睡眠时长（例如 mach_continuous_time 的正�
 
 Lamport clock 独立表示逻辑因果顺序：本机新复制先将 clock 加一；观察通过身份/代际/lease/去重检查的远端事件时更新为 max(local, received)+1；重复/无效事件不推进。计数溢出明确停止该代际并重新建立会话，不回绕。远端事件的排序键保留发送时的 (lamport, origin ID, origin boot generation, origin_sequence)，不改写为接收方更新后的 clock；同类型/同正文也按事件身份区分。
 
+2026-09-22 补充：租约也建立因果顺序。接收方在签发 lease 的同一状态锁内拍下逻辑时钟，通过已有可选 `lamport` 字段传递；发送方成功安装后以 `max(local, received)+1` 观察非零值。否则，开启同步前已有更多本地复制的接收端会持续把另一端的真实新事件判为旧事件，即使双向状态已 ready。观察 lease 不能重写已经创建的事件、复活无 lease 时的旧复制或绕过 OS/application revision 门闩。零值/缺字段兼容旧端，双方升级后提供完整修复；不假设混合版本已解决偏移。
+
 接收解码可并行，但原生剪贴板提交只有一个 owner。每个候选保存开始时的 OS clipboard generation 和应用提交 revision；最终在**同一串行落板门闩**内重验当前OS generation/revision、锁屏/暂停、授权generation、lease期限、来源去重高水位与候选排序，再执行原生写入并登记新OS generation/提交revision/回环抑制信息。授权撤销与该门闩协调：撤销持久提交之前已线性化的写入可完成，提交之后的候选一律不能落板。
 
 本机新复制优先于在其前已开始接收的远端候选：OS generation变化立即使那些候选失效。若另一远端已经提交，其他并行候选即使都通过过早先的检查，也因应用revision改变而丢弃；不得在旧检查结果上继续写入。对同一revision尚未提交的候选按上述稳定键选胜者；不能为等待可能还未到达的事件无限延迟。已提交键的高水位拒绝随后抵达的更旧事件；晚到的新候选仍必须满足全部新鲜度与本机generation检查。

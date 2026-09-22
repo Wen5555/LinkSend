@@ -15,6 +15,9 @@ const (
 	MaxTextBytes  = 64 << 10
 	MaxImageBytes = 32 << 20
 	MaxLeases     = 2
+	// Bound a remote observation's forward jump rather than its absolute clock,
+	// so ordinary renewals remain valid as both peers' clocks advance together.
+	MaxLeaseLamportAdvance = uint64(1 << 32)
 )
 
 var (
@@ -35,6 +38,7 @@ const (
 type Lease struct {
 	ID, PeerID, SessionID string
 	Generation            uint64
+	Lamport               uint64
 	Kinds                 map[Kind]bool
 	revisions             map[Kind]uint64
 	issued, deadline      time.Time
@@ -143,7 +147,7 @@ func (s *State) issueLocked(peerID, sessionID string, generation uint64, grants 
 		return Lease{}, ErrStale
 	}
 	now := s.now()
-	lease := Lease{ID: hex.EncodeToString(nonce[:]), PeerID: peerID, SessionID: sessionID, Generation: generation, Kinds: allowed, revisions: revisions, issued: now, deadline: now.Add(ttl), baseline: s.osGen}
+	lease := Lease{ID: hex.EncodeToString(nonce[:]), PeerID: peerID, SessionID: sessionID, Generation: generation, Lamport: s.lamport, Kinds: allowed, revisions: revisions, issued: now, deadline: now.Add(ttl), baseline: s.osGen}
 	s.leases[lease.ID] = lease
 	return lease, nil
 }
@@ -166,6 +170,46 @@ func (s *State) InstallScoped(id, peerID, sessionID string, generation uint64, g
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline, true)
+}
+
+// InstallScopedWithClock observes the receiver's clock at lease issue. A new
+// local copy can then follow the receiver's earlier history even when the two
+// devices have observed different numbers of independent clipboard changes.
+// Zero preserves leases from peers that do not provide a clock. The clock and
+// lease installation commit together; failed validation cannot advance either.
+func (s *State) InstallScopedWithClock(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline, receivedLamport uint64) error {
+	for _, grant := range grants {
+		if grant.Revision == 0 {
+			return ErrStale
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.leases[id]; exists {
+		return ErrStale
+	}
+	nextLamport := s.lamport
+	if receivedLamport != 0 {
+		if receivedLamport > nextLamport {
+			if receivedLamport-nextLamport > MaxLeaseLamportAdvance {
+				return ErrLimit
+			}
+			nextLamport = receivedLamport
+		}
+		// Reserve receipt, the next copy and its receiver's clock advance.
+		if nextLamport >= math.MaxUint64-2 {
+			return ErrLimit
+		}
+		nextLamport++
+	}
+	if err := s.installLocked(id, peerID, sessionID, generation, grants, ttl, baseline, true); err != nil {
+		return err
+	}
+	lease := s.leases[id]
+	lease.Lamport = receivedLamport
+	s.leases[id] = lease
+	s.lamport = nextLamport
+	return nil
 }
 
 func (s *State) installLocked(id, peerID, sessionID string, generation uint64, grants []Grant, ttl time.Duration, baseline uint64, replaceChangedPolicy bool) error {

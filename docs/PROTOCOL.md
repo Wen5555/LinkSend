@@ -1,5 +1,13 @@
 # Protocol
 
+## 2026-09-22 剪贴板租约的逻辑时钟
+
+`lease` 消息复用已有可选 `lamport` 字段，取值为接收端签发该租约时的逻辑时钟。发送端仅在认证会话、授权代次、权限、租约格式和容量检查成功后观察这个时钟，以 `max(local, received)+1` 建立因果顺序；零值或缺失保持旧租约行为。这样，两端开启同步前的复制次数不同时，新复制仍能排在租约签发前的接收端本地事件之后。无效或安装失败的租约不得推进时钟，溢出拒绝且不回绕。
+
+一次租约观察允许远端时钟领先当前本地时钟最多 `2^32` 次事件，超出这一差值以 `CLIPBOARD_CONTENT_LIMIT` 拒绝且不修改窗口；本地 `uint64` 接近耗尽时同样先拒绝，保留下一次复制/提交的运算余量。采用差值限制，已经同步的高时钟仍能正常续租。接收端的新版安装入口还拒绝重复现存 lease ID，不能重复推进时钟、刷新 OS baseline 或延长该租约的本地期限。旧 `Install` / `InstallScoped` API 保留其原有兼容语义；新传输入口统一使用含时钟的安装检查。
+
+时钟观察不产生复制事件、不改变 origin sequence、OS generation 或已固定事件的排序键，也不改变原始 10 秒期限。安装前的复制仍不能绑定新租约，本地新复制仍使之前开始的远端候选失效。文件 V1、`LSCB01`、能力名、header 上限和 event digest 不变。旧实现能够解析该字段但忽略它在 lease 上的含义；新实现继续接受旧 lease，双方升级后才具备完整的时钟对齐修复，混合版本不保证修复这个丢弃问题。
+
 ## 2026-09-14 E4 自动剪贴板 wire
 
 只有双方在连接请求与响应中显式声明 `session_reuse` 和独立的 `clipboard_sync`，已认证 QUIC 会话才启动自动剪贴板单向流owner；只声明旧 `session_reuse` 的端不会进入剪贴板协议。ICE描述同时携带发送端对认证peer的本地 `authorization_generation`，两端数值不要求相等。每条单向流以 ASCII magic `LSCB01`、4-byte big-endian JSON header 长度、最多 8 KiB header 和可选原始 payload 组成；消息类型仅为 `lease` 或 `event`。文件双向流和原 V1 文件帧不变，剪贴板正文不进入 WSS、信令、JavaScript IPC、HTTP 或第三方中继。

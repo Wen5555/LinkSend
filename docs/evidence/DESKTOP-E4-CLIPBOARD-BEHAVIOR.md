@@ -1,5 +1,15 @@
 # E4-03 自动剪贴板行为证据
 
+## 2026-09-22 独立复制历史的因果顺序
+
+在真实 loopback Pion ICE/QUIC 用例中，接收端先发生 19 次不发送正文的本地剪贴板变化。双方 `SendReady/ReceiveReady=true` 后，发送端新的文本仍在 5 秒等待内无法落板。原测试 exit 1，见 `.artifacts/astra-resume/clipboard/lamport-before.log`。这证明一个可复现源码缺陷，不能据此认定它就是旧 E5-B Mac 系统消费者失败的根因。
+
+修复在签发 lease 的状态锁内保存逻辑时钟，通过已有可选 `lamport` 字段传递。成功安装才观察 `max(local,received)+1`，后续真实复制因此具有因果顺序；不更改已有 event/digest、origin sequence、OS generation、固定期限或稳定提交顺序。旧 lease 的零/缺失值兼容，完整修复需双方升级。极端向前跳跃超过 `2^32`、自然计数即将耗尽、重复现存 lease ID 均在窗口修改前拒绝。审查中的绝对时钟上限方案被高时钟第二轮续租回归证实会误拒绝，最终采用相对跳跃限制；该 RED 保留于 `renewal-boundary-before.log`。
+
+回归覆盖首条新复制、同事件重放、旧复制不回灌/不改绑、已固定事件不改写、接收期间本地复制优先、失败安装不修改时钟/窗口、极限输入拒绝后下一次正常复制可用，以及已有高时钟和最大允许差值的多轮续租/复制。定向 core race、完整状态机 race 与桌面独立模块 race 的实际命令/日志见 `.artifacts/astra-resume/clipboard/RESULT.md`；本机原生正文读写 opt-in 均关闭，不读取或覆盖日常剪贴板。
+
+旧 E5-B 的物理 FAIL 继续保留；Mac 本轮不可用，准确包双向系统文本/链接/图片、并发复制/防回环、锁屏和文件并存仍需原生复验。
+
 日期：2026-09-14
 
 候选分支：`codex/desktop-experience-upgrade`

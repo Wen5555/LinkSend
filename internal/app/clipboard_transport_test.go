@@ -700,6 +700,15 @@ func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
 			return expected + 1, nil
 		},
 	})
+	// The receive-only local history predates session establishment. A fresh
+	// copy made after lease exchange must not be ordered before that history
+	// just because the sender observed fewer earlier clipboard changes.
+	for generation := uint64(2); generation <= 20; generation++ {
+		bGeneration.Store(generation)
+		if err := f.b.ClipboardChanged(ctx, ClipboardChange{Generation: generation}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, item := range []struct {
 		service *Service
 		peerID  string

@@ -98,4 +98,8 @@ M5 内容原生动作按 task ID 重新验证已确认接收、原 manifest、�
 
 event digest 覆盖 lease ID、origin device/boot/sequence、Lamport、类型、发送端 OS generation、正文长度与正文。接收方在读取大正文前验证 header，并在读取后再次验证 digest、状态 revision、OS generation 和稳定顺序。Windows 使用本应用有效 HWND 打开剪贴板，在分配和验证数据后执行 generation CAS、deadline 复核、`EmptyClipboard` 与 `SetClipboardData`；macOS 在解码后紧邻 mutation 复核 `changeCount` 与 deadline，但 NSPasteboard 不提供跨进程原子 CAS，仍存在检查与写入之间的系统级窄竞态。该限制必须保留在验收记录中。
 
+2026-09-22 起，lease 的可选 `lamport` 只从已认证且当前授权的 QUIC peer 接收，成功安装租约后才推进逻辑时钟。安装失败、权限/代次不符、暂停或溢出不得推进；时钟更新不改变已固定事件或给旧正文新的寿命。该兼容扩展解决复制次数不同造成的新事件误判，不降低稳定排序、撤权、解码后 revision 或本地复制优先的检查。它不证明旧 Mac 实机失败已修复，仍需双方准确候选的原生复验。
+
+远端 lease 时钟最多允许领先本地 `2^32`，拒绝单次极端跳跃，且在 `uint64` 自然计数即将耗尽时先拒绝而不回绕。按相对差值限制，已同步的高时钟不会在下一次续租被绝对上限误拒绝。新版传输入口拒绝现存 nonce 重放，不重复推进时钟或更新租约期限/采集基线；全部拒绝均先于窗口替换。该边界不承诺抵御已授权对端对自身连接的所有拒绝服务行为。
+
 文字/链接 64 KiB、PNG 32 MiB，并复用 40MP/尺寸和 URL/UTF-8 校验。header 最多 8 KiB，每方向最多两个 lease，全局最多两个接收正文/解码槽；正文只驻留受限内存，不写入临时文件。最坏情况下两个 32 MiB 图片正文及解码对象可同时存在，因此物理平台内存矩阵仍需 E5 测量。原生回写通知按 generation 与 payload digest 仅抑制一次，防止回环同时允许用户真实重复复制相同内容。
