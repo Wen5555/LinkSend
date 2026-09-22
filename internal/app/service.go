@@ -365,7 +365,7 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		}
 		_, isNearby := nearbyByID[peer.ID]
 		relationship := "lan_paired"
-		if peer.GrantKind == "group" {
+		if peer.GrantKind == "group" || peer.GrantKind == "group+lan" {
 			relationship = "group_paired"
 		}
 		out = append(out, DeviceInfo{ID: peer.ID, Name: peer.Name, PublicKey: hex.EncodeToString(peer.PublicKey), Online: false, Trusted: true, AlwaysAccept: peer.AutoAccept, Nearby: isNearby, Relationship: relationship, ServiceState: "unavailable", LANControlState: map[bool]string{true: "discovered_unverified", false: "not_seen"}[isNearby], ConnectionState: "not_connected"})
@@ -617,7 +617,7 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 		}
 		return errors.New("UNPAIRED: current membership grant required")
 	}
-	if peer.GrantKind != "group" || len(peer.PeerIncarnation) != 32 || peer.MembershipRevision == 0 {
+	if (peer.GrantKind != "group" && peer.GrantKind != "group+lan") || len(peer.PeerIncarnation) != 32 || peer.MembershipRevision == 0 {
 		if err = s.BlockPeer(deviceID); err != nil {
 			return err
 		}
