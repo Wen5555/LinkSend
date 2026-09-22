@@ -1,5 +1,6 @@
 ## 2026-09-22 E5-V 桌面待同步撤销闭环
 
+- `6cb0705` 已提交推送原分支 / Draft PR #8；core/desktop push/PR 和三平台包七个 jobs 全 success，最新包来源与 workflow 摘要已核对。包级完整下载仍固定在 `36302a9`，不覆盖后续 UI；最终纯文档收尾复用该成功源码 CI，使用 `[skip ci]` 避免重复全平台构建。
 - 核对实际 UI 后补齐 pending 的显示与显式操作：已删除行只在 `pending_revoke_sync` 时显示“继续撤销”，确认后调用既有 RemoveDevice / Revoke；忙碌、不可用、取消、失败、同 ID 新成员状态均按真实边界处理，不使用 Unblock 来恢复删除。
 - 源码回归先 4 FAIL，再 GREEN；含成员/焦点边界共 82 tests 全 PASS，typecheck/lint/build 通过。Playwright source fixture 实测 960×640 / 1100×720 长中文名、无横向溢出、确认与取消可见；修复 body 焦点后，取消默认焦点、Enter 取消回焦与 Shift+Tab/Enter 明确确认通过。模拟 backend 只验证页面行为，不声称准确包或真实网络调用通过。
 - desktop workspace test、off 完整 race/vet、Windows Wails production build 全 PASS；frontend dist 已按项目锁定工具链更新。根 Go 源码未变，复用 `36302a9` 的完整 root workspace/off/race 与七个成功 CI。source fixture 浏览器和 Vite server 已按所有权关闭。

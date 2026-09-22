@@ -1,5 +1,18 @@
 # Desktop E5 交付记录
 
+## 2026-09-22 桌面撤销入口候选 6cb0705（CI PASS，未下载新包）
+
+源码 `6cb0705aaeb2bae6b5ebde13a2d65ec35c8d5b07` 已推送原分支，Draft PR #8 的 head 已核对。core push/PR `35746382731 / 35746390830`、desktop push/PR `35746382814 / 35746390799`、[packages 35746382748](https://github.com/Wen5555/LinkSend/actions/runs/35746382748) 共七个 jobs 全 success。Windows / Mac ARM / Mac Intel 的 artifact 来源 SHA、归档 digest 与 workflow 日志一致，原生共享自测与构建通过；没有下载或执行该候选的新载荷。
+
+| 载荷 | workflow 输出 SHA256（不是本地重新验包） |
+|---|---|
+| Windows ZIP | `e86e50a382cdae853aa515a3415177fcf4f508bd6bfc7efbcdc50590bf95f9ab` |
+| Windows installer | `7be9c1b20a882b1b66d0ed40ade1eb3b03007ef913fc002b69cbbd21d2eb7b43` |
+| Mac arm64 DMG | `6ba4808a8d77a9844c9d3c2514756f2ed9213656a27489f9abbf939e1c7eeb00` |
+| Mac amd64 DMG | `ccd2c6dea2a626386e18c647afa1c8ae321103ab8f9ba0be54cffc8ea24f21c6` |
+
+完整 CI 回执为 `.artifacts/astra-resume/ci-6cb0705/CI-PROVENANCE-RECEIPT.json`。下面 `36302a9` 的四包完整校验保持原来源，不能视作包含本次 UI 增量。后续纯文档收尾提交使用 `[skip ci]`，复用本节准确源码的成功检查，避免重跑无关全平台构建；不把文档 head 表述为另一次已执行的 CI 或新包来源。
+
 ## 2026-09-22 撤销恢复候选 36302a9（完整下载验包 PASS）
 
 准确来源 `36302a9252a5d8052a83bbdee51ccf74fe766084`；core push/PR `35737802899 / 35737811087`、desktop push/PR `35737802946 / 35737810962`、[packages 35737802990](https://github.com/Wen5555/LinkSend/actions/runs/35737802990) 共七个 jobs 全 success。三平台的原生交接自测、源码检查和包构建均通过。

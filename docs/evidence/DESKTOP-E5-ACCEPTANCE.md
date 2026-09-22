@@ -6,6 +6,8 @@
 
 ## 2026-09-22 E5-V：桌面待同步撤销入口（源码 PASS）
 
+准确源码提交 `6cb0705aaeb2bae6b5ebde13a2d65ec35c8d5b07` 的七个 CI jobs 全 success；三平台新包已构建并核对 workflow/artifact 来源，未下载新载荷，详见 DELIVERY。
+
 核心的旧 pending 恢复要求新的明确删除操作，但原“已删除设备”行只提供允许重新添加，未显示 `pending_revoke_sync` 的含义。现在该行显示“已移除 · 待同步撤销”，仅 pending 项提供“继续撤销”；确认后调用现有 `Backend.RemoveDevice → Service.Revoke`，取消不提交，失败仍保留待同步状态，不调用 Unblock。忙碌/后端不可用时禁用；同 ID 的 group/incarnation/relationship 或 pending 状态变化会取消旧确认。确认默认聚焦“取消”，关闭后回到“继续撤销”，避免展开确认后键盘焦点遗失到 body。
 
 四项入口回归先 RED 后 GREEN，补齐成员变化与焦点断言后前端 **82 tests** 全 PASS，typecheck/lint/build 通过；跟踪 dist 使用锁定 Node 24.21.0 / pnpm 12.4.1 重建。desktop workspace test、`GOWORK=off` 全包 race/vet 与 Windows Wails production build 全 PASS。根 Go 与协议未变，复用 `36302a9` 的完整双模式/race/CI，不将低影响前端操作重复表述成核心新验证。

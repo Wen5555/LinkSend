@@ -20,7 +20,7 @@
 5. **E5-01 / U5 支撑：跨主机验收 FAIL，诊断已同步。** `8c6e1e8` 七个 CI jobs 全 PASS；新同版单轮在 HTTP 525 / signaling_connect 退出，未进入 QUIC，旧 `096d79a` 握手失败仍未定位。源站同时段存在 Cloudflare 网段的 TLS read timeout，但无请求关联证据。独立短期 HTTPS 入口的 HK 本地验证通过、NL 唯一访问超时，未启动配对/文件；全部实验资源已收尾，生产和宿主网络保持，各轮来源与限制见 E5-S/T/U。不可将新诊断、旧双 NAT 或本机测试替代仍失败的实际路径。
 6. **E1-02 / U2：组版本冲突源码及 CLI 现场收尾已验证。** `36302a9` 的 helper、actor 持久绑定、legacy 明确新意图/CAS 已完成 RED→GREEN、完整双模块/race/Windows 构建及独立安全审查。准确 CLI 通过正常 API 撤销 NL legacy pending，新的明确请求/原 incarnation/actor 绑定持久为 revision 22；HK 独立复核两目标 revoked、原 23 条设备和 owner 不变。没有手改 trust/DB；准确桌面 GUI 的离线删除仍 NOT RUN。
 7. **E5-01 / 网络后续：宿主规则变更待明确授权。** 只读核对证实 HK 外部 NEW TCP80 会落现有 nftables INPUT 默认 DROP。一次仅 NL 单一 IP→HK TCP80、600 秒自动撤销的 runtime 规则提案已写 E5-U，并按提示词第 6 节的授权排除向用户单独询问；没有执行规则或新探针。此条件只涉及隔离 HTTPS 入口，不将它归作旧 QUIC 故障的根因。
-8. **E1-02 / U2 桌面入口：源码已验证。** pending 行现在显示待同步状态并提供明确确认的“继续撤销”，可进入新 Revoke 路径；取消、失败、忙碌/不可用、成员变化和键盘焦点均覆盖。82 tests/typecheck/lint/build、desktop 双模式/race/vet/Windows build 与 Playwright 页面夹具检查通过，见 E5-V；准确桌面包仍待独立验收。
+8. **E1-02 / U2 桌面入口：阶段已同步。** `6cb0705` 的 pending 显示、确认“继续撤销”、成员变化与键盘焦点已完成 82 tests/typecheck/lint/build、desktop 双模式/race/vet/Windows build、Playwright 页面夹具与七个 CI jobs。新三平台 artifact 来源与日志摘要已核对，未下载新载荷；准确桌面包仍待独立验收。最终纯文档提交复用该源码检查，见 E5-V / DELIVERY。
 
 香港/荷兰均完成只读接管核对，无未收尾旧作业。香港仍是已核实 `387b57c`、schema 4、health PASS；本批没有更改服务端源码或部署。Mac 暂不可用、用户暂缓签名及本轮 Windows 启动策略拒绝分别记录，不能把它们合并成“所有工作阻塞”。旧下面账本保留各自历史来源，以本节及最新追加 evidence 为当前状态。
 
