@@ -396,8 +396,11 @@ func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T)
 		t.Fatal(err)
 	}
 	waitFor(t, 5*time.Second, func() bool { return f.a.InboxStatus().Listening && f.b.InboxStatus().Listening }, "inboxes not ready")
+	connectionsBefore := f.wsConnections.Load()
 	chunkSent, releaseChunk := make(chan struct{}), make(chan struct{})
-	var once sync.Once
+	var once, releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseChunk) }) }
+	defer release()
 	sendCfg := cfg
 	sendCfg.onChunkSent = func(transfer.ChunkTransmission) {
 		once.Do(func() { close(chunkSent) })
@@ -407,22 +410,17 @@ func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T)
 	if err := os.WriteFile(path, make([]byte, 2*transfer.DefaultChunkSize+1), 0600); err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := transfer.Prepare(t.Context(), []string{path}, 0)
+	// The task API owns the sender inbox handoff before dialing. Calling the
+	// lower-level prepared-send API here would race its WSS with that inbox.
+	first, err := f.a.StartSend(f.bID.ID(), []string{path}, sendCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer prepared.Close()
-	type directSendResult struct {
-		result DirectTransferResult
-		err    error
-	}
-	firstResult := make(chan directSendResult, 1)
-	go func() {
-		result, sendErr := f.a.SendPreparedWithHooksDetailed(context.Background(), f.bID.ID(), prepared, sendCfg, transfer.SendHooks{ChunkSent: sendCfg.onChunkSent})
-		firstResult <- directSendResult{result: result, err: sendErr}
-	}()
 	var incoming string
 	waitFor(t, 10*time.Second, func() bool {
+		if sent, ok := f.a.Task(first.ID); ok && (isTerminal(sent.State) || sent.ErrorCode != "") {
+			t.Fatalf("sender stopped before remote cancellation consent: state=%s phase=%s error=%s", sent.State, sent.Phase, sent.ErrorCode)
+		}
 		for _, task := range f.b.Tasks() {
 			if task.Direction == "receive" && task.State == "awaiting_acceptance" {
 				incoming = task.ID
@@ -447,32 +445,31 @@ func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T)
 		got, ok := f.b.Task(incoming)
 		return ok && isTerminal(got.State)
 	}, "receiver did not cancel its stream")
-	close(releaseChunk)
-	var cancelled directSendResult
-	select {
-	case cancelled = <-firstResult:
-		if cancelled.err == nil {
-			t.Fatal("remote stream cancellation returned success")
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("sender did not observe remote stream cancellation")
+	release()
+	var cancelled TaskSnapshot
+	waitFor(t, 10*time.Second, func() bool {
+		var ok bool
+		cancelled, ok = f.a.Task(first.ID)
+		// A remotely reset file can retain a resumable task. Its worker must
+		// have relinquished the session before starting the next file.
+		return ok && !f.a.tasks.hasActive()
+	}, "sender did not observe remote stream cancellation")
+	if cancelled.State == "completed" || cancelled.ErrorCode == "" {
+		t.Fatalf("remote stream cancellation returned success: %+v", cancelled)
 	}
 	nextPath := filepath.Join(t.TempDir(), "after-remote-cancel.txt")
 	if err := os.WriteFile(nextPath, []byte("healthy after remote reset"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	nextPrepared, err := transfer.Prepare(t.Context(), []string{nextPath}, 0)
+	next, err := f.a.StartSend(f.bID.ID(), []string{nextPath}, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nextPrepared.Close()
-	nextResult := make(chan directSendResult, 1)
-	go func() {
-		result, sendErr := f.a.SendPreparedWithHooksDetailed(context.Background(), f.bID.ID(), nextPrepared, cfg, transfer.SendHooks{})
-		nextResult <- directSendResult{result: result, err: sendErr}
-	}()
 	var nextIncoming string
 	waitFor(t, 10*time.Second, func() bool {
+		if sent, ok := f.a.Task(next.ID); ok && (isTerminal(sent.State) || sent.ErrorCode != "") {
+			t.Fatalf("next sender stopped before consent: state=%s phase=%s error=%s", sent.State, sent.Phase, sent.ErrorCode)
+		}
 		for _, task := range f.b.Tasks() {
 			if task.ID != incoming && task.Direction == "receive" && task.State == "awaiting_acceptance" {
 				nextIncoming = task.ID
@@ -485,17 +482,20 @@ func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T)
 	if _, err := f.b.AcceptIncomingDefault(nextIncoming, nextPending.AttemptID, nextPending.Revision, false); err != nil {
 		t.Fatal(err)
 	}
-	var completed directSendResult
-	select {
-	case completed = <-nextResult:
-		if completed.err != nil {
-			t.Fatal("next stream failed after remote reset:", completed.err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("next stream did not complete after remote reset")
+	var completed TaskSnapshot
+	waitFor(t, 10*time.Second, func() bool {
+		var ok bool
+		completed, ok = f.a.Task(next.ID)
+		return ok && isTerminal(completed.State)
+	}, "next stream did not complete after remote reset")
+	if completed.State != "completed" {
+		t.Fatalf("next stream failed after remote reset: state=%s error=%s", completed.State, completed.ErrorCode)
 	}
-	if cancelled.result.Evidence.SessionID == "" || completed.result.Evidence.SessionID != cancelled.result.Evidence.SessionID {
-		t.Fatalf("remote stream reset closed healthy session: first=%s next=%s", cancelled.result.Evidence.SessionID, completed.result.Evidence.SessionID)
+	if cancelled.SessionID == "" || completed.SessionID != cancelled.SessionID {
+		t.Fatalf("remote stream reset closed healthy session: first=%s next=%s", cancelled.SessionID, completed.SessionID)
+	}
+	if connections := f.wsConnections.Load(); connections != connectionsBefore {
+		t.Fatalf("task sends competed with the persistent inbox WSS: before=%d after=%d", connectionsBefore, connections)
 	}
 }
 
