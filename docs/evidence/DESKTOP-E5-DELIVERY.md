@@ -1,5 +1,20 @@
 # Desktop E5 交付记录
 
+## 2026-09-22 撤销恢复候选 36302a9（完整下载验包 PASS）
+
+准确来源 `36302a9252a5d8052a83bbdee51ccf74fe766084`；core push/PR `35737802899 / 35737811087`、desktop push/PR `35737802946 / 35737810962`、[packages 35737802990](https://github.com/Wen5555/LinkSend/actions/runs/35737802990) 共七个 jobs 全 success。三平台的原生交接自测、源码检查和包构建均通过。
+
+三个 artifact 已完整下载至 `D:/apps/Osend/.artifacts/astra-r22-36302a9/`，归档 SHA256 与 GitHub metadata 一致；原 `scripts/verify-milestone-packages.ps1` 和补充来源/平台核对通过四载荷 hash、包内外 BUILD-INFO、COMMITTED/clean、源码与 workflow head、target_os/target_arch、Windows 程序与 installer 版本。机器回执为 `PROVENANCE-VERIFICATION.json`、`PACKAGE-VERIFICATION.json`、`SOURCE-CI.json`、`WORKFLOW-ARTIFACTS.json`、`SHA256SUMS.txt`。包内 Windows EXE SHA256 为 `5617b923a9b2fc1d88674157512f616690923cfaf4b6f1820ab86bffc77a623c`。
+
+| 候选载荷 | bytes | SHA256 |
+|---|---:|---|
+| Windows ZIP | 9,848,404 | `eb1ef5b00e896393c689e2a015298bb3f3723bd079da846e1e33b0a17bfa16e8` |
+| Windows installer | 75,091,386 | `90ddd769771c9b5824050eca946e653bbdd5405ea9eff7c88cc5ae28fd3d66aa` |
+| Mac arm64 DMG | 9,468,551 | `df50411d9d63c4c58eacb419fc3b26325711170cddfafb50869b738346e4c484` |
+| Mac amd64 DMG | 10,201,196 | `280742d8eeb71047c8d7b6f703e05c43c0e01c52a86868a332f113996ba97945` |
+
+Windows 大归档下载较慢；同源 Range/aria2 尝试 exit 22 且完整摘要不匹配，已明确排除其 partial，最终使用成功的原下载。一个额外脚本曾假定 ZIP 内一定有 SHA256SUMS，但实际布局不包含该可选文件，记 N/A，不修改或放宽原验包器。所有下载进程已收尾，没有安装或运行程序、挂载 DMG；完整下载验证不等于签名/系统激活/物理验收。本候选包含 core 撤销与诊断修复，**不包含随后 E5-V 的桌面“继续撤销”按钮**；后续源码和 CI 必须保留各自来源。
+
 ## 2026-09-22 诊断候选 8c6e1e8
 
 源码 `8c6e1e8738073922d0a0291cc2a01101178c38a7` 已推送同一分支及 Draft PR #8。core push/PR `35733082354 / 35733088915`、desktop push/PR `35733082368 / 35733088944` 与 [packages 35733082293](https://github.com/Wen5555/LinkSend/actions/runs/35733082293) 全 success，Windows/Mac ARM/Mac Intel 三个原生交接自测与打包 job 均成功。

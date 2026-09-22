@@ -1,10 +1,19 @@
+## 2026-09-22 E5-V 桌面待同步撤销闭环
+
+- 核对实际 UI 后补齐 pending 的显示与显式操作：已删除行只在 `pending_revoke_sync` 时显示“继续撤销”，确认后调用既有 RemoveDevice / Revoke；忙碌、不可用、取消、失败、同 ID 新成员状态均按真实边界处理，不使用 Unblock 来恢复删除。
+- 源码回归先 4 FAIL，再 GREEN；含成员/焦点边界共 82 tests 全 PASS，typecheck/lint/build 通过。Playwright source fixture 实测 960×640 / 1100×720 长中文名、无横向溢出、确认与取消可见；修复 body 焦点后，取消默认焦点、Enter 取消回焦与 Shift+Tab/Enter 明确确认通过。模拟 backend 只验证页面行为，不声称准确包或真实网络调用通过。
+- desktop workspace test、off 完整 race/vet、Windows Wails production build 全 PASS；frontend dist 已按项目锁定工具链更新。根 Go 源码未变，复用 `36302a9` 的完整 root workspace/off/race 与七个成功 CI。source fixture 浏览器和 Vite server 已按所有权关闭。
+- `36302a9` 的三平台四包已完整下载，原验包器及来源/平台补充核对全部 PASS，详见 DELIVERY；该候选不含本节后续 UI 增量。Mac 实机、Windows GUI 策略限制和待授权的临时宿主规则仍分别保留，不标 U1–U7 全完成。
+
 ## 2026-09-22 E5-T 撤销组版本冲突与原 actor 绑定
 
 - `8c6e1e8` 已同步原分支 / Draft PR #8，core push/PR、desktop push/PR 与三平台 packages 七个 jobs 全 success；四个包的 CI 输出摘要、artifact metadata 和来源 SHA 已核对，尚未下载该候选完整验包，见最新 DELIVERY。
 - 新同版 HK→NL 单轮在 WSS 阶段 HTTP 525 退出，新诊断正确记录 `SIGNALING_UNREACHABLE / signaling_connect`、0 bytes、未建立 session/TLS；未进入 QUIC。13:34:15Z 源站有来自官方 Cloudflare 网段的 TCP/TLS read timeout，落在接收进程窗口内，但无请求关联 ID，不能断言具体请求或链路根因。生产进程/配置/TLS 未改，现有诊断不支持调整 TLS 版本。
 - 收尾连续删除暴露 U2 缺陷：HK 删除使组 revision 20→21，NL 仍用 20 被服务端严格 CAS 拒绝，pending 无法恢复。新客户端在特定 403 后仅核对一次完整认证快照并重试一次；自动同步固定原 actor group/incarnation、原 target incarnation、原 request ID。actor 被撤销后重入不得复用旧删除意图；schema 2 新增可选 actor 绑定，legacy 缺绑定不自动猜填。只有新的显式删除经核验后通过 CAS 建立新请求，旧返回不得覆盖新意图。没有放宽服务端 CAS、改变 wire 或改写文件历史。
 - 实际集成全 PASS：根 workspace/off `go test ./... -count=1 -timeout 240s`（app 103.607s / 111.246s）、off vet/build；off `go test -race ./internal/app ./internal/identity -count=1 -timeout 300s`（159.567s / 7.040s）；desktop workspace test、off 完整 race/vet；锁定工具链 Windows `wails3 task build ARCH=amd64`。定向真实 HTTP 的连续/离线版本冲突、actor 重入、legacy 重启、新意图与迟到回写、15 项负例均通过；独立授权审查通过。日志 `.artifacts/astra-resume/checks-revoke/` 和 `revoke-diagnosis/SUMMARY.md`，前端源/依赖未变，复用已通过的 76 tests/lint，Wails 重跑 typecheck/build。
-- 源码与文档本批提交后，将使用该准确提交构建的 CLI 以明确删除操作完成 NL legacy pending 的正常 API 收尾。HK 已确认 revoked；NL profile 停止并保留，未直接编辑 trust/DB。另一个独立临时 HTTPS 信令实验用于区分入口路径与 QUIC 数据路径，生产服务与数据库保持不变；其结果单独留证，不计作 Mac、准确桌面包或双 NAT。
+- `36302a9` 已提交推送。准确 archive 构建的 Windows CLI 于 14:08Z 以明确删除操作成功处理 NL legacy pending：新 request ID、原目标 incarnation、当前 actor 绑定，pending=false / revision 22。HK 独立确认两精确目标均 revoked、原 23 条设备和 owner 不变；原实验资源已清理，没有手工编辑 trust/DB 或恢复旧备份。
+- 独立临时 HTTPS 信令实验 E5-U 使用 HK 已知空闲 80 端口、独立 DB/CA/IP SAN 与进程内信任：HK 本地验证通过，NL 唯一请求 curl 28 / HTTP 000，未进入 bootstrap/join 或文件传输。临时服务正常停止，私钥/DB/配置/fixture/profile/bin 已清理，80 监听消失；一次 HK cleanup 的 SSH 255 在确认原 job missing 后恢复，完整失败/收尾回执保留。生产和宿主地址/路由/rule 均保持。此结果不证明原 QUIC 根因，Mac、原生系统与物理网络缺项继续分列。
+- 后续只读策略核对确认 HK 的 NEW IPv4 TCP80 会落现有 INPUT 默认 DROP；NL 主机 INPUT/OUTPUT 为 ACCEPT，历史 ICE 五元组仍缺失。E5-U 已准备仅 NL 单一源 IP→HK TCP80、最多 600 秒且按唯一 handle 自动撤销的 runtime 提案。该宿主规则变更明确在原提示词授权外，已单独询问用户，未执行。源码候选 `36302a9` 七个 CI jobs 均 success，完整四包下载校验另记 DELIVERY。
 
 ## 2026-09-22 E5-S 跨主机失败取证与诊断修补
 

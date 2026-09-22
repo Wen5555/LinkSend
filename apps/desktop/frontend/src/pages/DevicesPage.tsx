@@ -135,12 +135,24 @@ function DeviceDirectorySection({ kind, title, total, devices, page, query, avai
 function DeviceListRow({ kind, device, available, op, run, onOpen, onLANResult }: { kind: DirectoryKind; device: DeviceInfo; available: boolean; op: string; run: CommandRunner; onOpen: (id: string, trigger: HTMLButtonElement) => void; onLANResult?: (result: { name: string; server: string }) => void }) {
   const label = deviceName(device);
   const identity = device.id.slice(0, 12);
+  const pendingRevoke = kind === 'removed' && device.service_state === 'pending_revoke_sync';
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const hadConfirmation = useRef(false);
+  const actionsDisabled = !!op || !available;
+  useEffect(() => { setConfirmRevoke(false); }, [device.id, device.group_id, device.incarnation, device.relationship, pendingRevoke]);
+  useEffect(() => {
+    if (!confirmRevoke && hadConfirmation.current) retryButton.current?.focus();
+    hadConfirmation.current = confirmRevoke;
+  }, [confirmRevoke]);
+  const relationship = kind === 'removed' ? pendingRevoke ? '已移除 · 待同步撤销' : '已移除' : device.blocked ? '已屏蔽' : device.trusted ? '已信任' : '附近发现 · 尚未信任';
   return <article className={'device-entry ' + (device.blocked ? 'device-blocked' : '')} data-device-id={device.id}>
-    <div className="device-row"><span className="avatar" aria-hidden="true">{label[0] || '?'}</span><div><strong>{label}</strong>{device.profile.alias && <small>对方名称：{device.name || '未命名设备'}</small>}<small>{device.blocked ? '已屏蔽' : device.trusted ? '已信任' : '附近发现 · 尚未信任'} · {device.nearby ? '局域网可达' : device.online ? '在线' : '离线'}</small><div className="device-tags">{device.profile.my_device && <span>我的设备</span>}{device.profile.pinned && <span>固定 · {device.profile.position}</span>}{device.always_accept && !device.blocked && <span>免确认接收</span>}</div><code>身份 {identity}</code></div>
+    <div className="device-row"><span className="avatar" aria-hidden="true">{label[0] || '?'}</span><div><strong>{label}</strong>{device.profile.alias && <small>对方名称：{device.name || '未命名设备'}</small>}<small>{relationship} · {device.nearby ? '局域网可达' : device.online ? '在线' : '离线'}</small><div className="device-tags">{device.profile.my_device && <span>我的设备</span>}{device.profile.pinned && <span>固定 · {device.profile.position}</span>}{device.always_accept && !device.blocked && <span>免确认接收</span>}</div><code>身份 {identity}</code></div>
       {kind === 'paired' && <button className="ghost" aria-label={'打开 ' + label + ' 的设备详情，身份 ' + identity} disabled={!available} onClick={event => onOpen(device.id, event.currentTarget)}>详情</button>}
       {kind === 'nearby' && <button className="secondary" aria-label={'请求添加 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => void run('lan-add-' + device.id, async () => { const result = await Backend.RequestLANPair(device.id); onLANResult?.({ name: device.name || '附近设备', server: result.server_state }); })}>请求添加</button>}
-      {kind === 'removed' && <button className="secondary" aria-label={'允许重新添加 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => void run('allow-readd-' + device.id, () => Backend.UnblockDevice(device.id), '已允许重新添加；请重新发起配对')}>允许重新添加</button>}
+      {kind === 'removed' && <span className="inline-actions">{pendingRevoke && !confirmRevoke && <button ref={retryButton} className="secondary" aria-label={'继续撤销 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => setConfirmRevoke(true)}>继续撤销</button>}<button className="secondary" aria-label={'允许重新添加 ' + label + '，身份 ' + identity} disabled={actionsDisabled || confirmRevoke} onClick={() => void run('allow-readd-' + device.id, () => Backend.UnblockDevice(device.id), '已允许重新添加；请重新发起配对')}>允许重新添加</button></span>}
     </div>
+    {pendingRevoke && confirmRevoke && <div className="queue-notice device-remove-confirm" role="alert"><div><strong>继续撤销此设备？</strong><p>本机已移除该设备，服务端尚未确认。继续将再次提交删除请求，历史记录和已接收文件会保留。</p></div><div className="inline-actions"><button className="ghost danger" aria-label={'确认继续撤销 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => void run('retry-revoke-' + device.id, () => Backend.RemoveDevice(device.id), '已完成撤销同步').then(ok => { if (ok) setConfirmRevoke(false); })}>确认继续撤销</button><button autoFocus className="secondary" aria-label={'取消继续撤销 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => setConfirmRevoke(false)}>取消</button></div></div>}
   </article>;
 }
 

@@ -8,7 +8,7 @@ import { DevicesPage } from './DevicesPage';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), SaveDeviceProfile: vi.fn() }));
+const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn() }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const run: CommandRunner = async (_key, action, _message, onError) => {
@@ -45,6 +45,77 @@ afterEach(() => {
 });
 
 describe('设备目录和详情', () => {
+  it('confirms a pending revocation explicitly without allowing the device to rejoin', async () => {
+    backend.RemoveDevice.mockResolvedValue(undefined);
+    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+    const container = document.createElement('div'); document.body.append(container);
+    const root = renderDevices(container, [pending]);
+    expect(container.textContent).toContain('待同步撤销');
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
+    expect(backend.RemoveDevice).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(container.querySelector('button[aria-label^="取消继续撤销 "]'));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="取消继续撤销 "]'));
+    expect(backend.RemoveDevice).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(container.querySelector('button[aria-label^="继续撤销 "]'));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]'));
+    await settle();
+    expect(backend.RemoveDevice).toHaveBeenCalledExactlyOnceWith(pending.id);
+    expect(backend.UnblockDevice).not.toHaveBeenCalled();
+    const synced = { ...pending, service_state: 'revoked' };
+    act(() => root.render(<DevicesPage devices={[synced]} identityID="self" name="本机" run={run} op="" available />));
+    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeNull();
+    expect(container.textContent).not.toContain('待同步撤销');
+    expect(container.querySelector('button[aria-label^="允许重新添加 "]')).toBeTruthy();
+  });
+
+  it('keeps a failed revocation pending and clears stale confirmation when the status changes', async () => {
+    backend.RemoveDevice.mockRejectedValue(new Error('SIGNALING_UNREACHABLE'));
+    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+    const container = document.createElement('div'); document.body.append(container);
+    const root = renderDevices(container, [pending]);
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]'));
+    await settle();
+    expect(backend.RemoveDevice).toHaveBeenCalledTimes(1);
+    expect(backend.UnblockDevice).not.toHaveBeenCalled();
+    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeTruthy();
+    act(() => root.render(<DevicesPage devices={[{ ...pending, service_state: 'revoked' }]} identityID="self" name="本机" run={run} op="" available />));
+    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} op="" available />));
+    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
+    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeTruthy();
+  });
+
+  it.each([{ available: false, op: '' }, { available: true, op: 'another-operation' }])('disables pending revocation when the backend is unavailable or busy: %j', state => {
+    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+    const container = document.createElement('div'); document.body.append(container);
+    const root = renderDevices(container, [pending]);
+    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} {...state} />));
+    const retry = container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]');
+    expect(retry?.disabled).toBe(true);
+    click(retry);
+    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
+    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} op="" available />));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
+    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} {...state} />));
+    const confirm = container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]');
+    expect(confirm?.disabled).toBe(true);
+    click(confirm);
+    expect(backend.RemoveDevice).not.toHaveBeenCalled();
+  });
+
+  it.each([{ group_id: 'new-group' }, { incarnation: 'new-incarnation' }])('discards confirmation when the same identity changes its membership: %j', membership => {
+    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+    const container = document.createElement('div'); document.body.append(container);
+    const root = renderDevices(container, [pending]);
+    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
+    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeTruthy();
+    act(() => root.render(<DevicesPage devices={[{ ...pending, ...membership }]} identityID="self" name="本机" run={run} op="" available />));
+    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
+    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeTruthy();
+    expect(backend.RemoveDevice).not.toHaveBeenCalled();
+  });
+
   it('keeps a large paired directory to ten DOM rows and removes the exact searched identity', async () => {
     backend.ClipboardGrants.mockResolvedValue([]);
     backend.RemoveDevice.mockResolvedValue(undefined);

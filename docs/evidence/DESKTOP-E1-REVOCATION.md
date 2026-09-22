@@ -10,6 +10,8 @@ HK/NL 新诊断候选收尾暴露真实问题：同一快照为两个测试身�
 
 定向 app race 11.118s、identity 全包 race 5.001s、受影响 vet 全 PASS。完整实际命令及最初失败（含修正前的夹具断言、actor 字段放置错误）均保留于 `.artifacts/astra-resume/revoke-diagnosis/SUMMARY.md`；综合双模块检查及真实旧 pending 收尾结果由本轮 PROGRESS / E5 记录单独列明，不把本地测试当作桌面准确包验收。
 
+准确 `36302a9` Windows CLI 已实际通过正常 `revoke --id` 完成现场 NL legacy pending 的新显式删除：新 request ID、原目标 incarnation、当前 actor 绑定持久化，pending=false / revision 22；HK 独立只读核实新请求和 revoked 记录，原 23 条其他设备与 owner 保持。这是 CLI→现有 `387b57c` 生产控制面及本地持久化证据，仍不等于准确桌面 GUI 的离线删除路径。来源/hash/回执详见 E5-T。
+
 ## 2026-09-22 双重关系的离线撤销
 
 新增真实 HTTP 服务关闭 listener、恢复原端点和隔离 profile 重启的回归，复现 `group+lan` 被离线目录误标为 `lan_paired`、删除绕过 membership-v2 outbox：原结果 `LocalBlock=true`，目标 incarnation/request ID 为空且 `PendingSync=false`。修复仅在 `Service.Devices` 和 `Service.Revoke` 两处把 `group+lan` 纳入设备组关系。原协议、身份校验和 incarnation 作用范围不变。

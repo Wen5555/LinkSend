@@ -4,6 +4,36 @@
 
 本页只记录准确候选包和真实验收事实。源码、loopback QUIC、命名 pasteboard、浏览器布局与物理准确包验收分开；未执行的项目保持 `NOT RUN`。
 
+## 2026-09-22 E5-V：桌面待同步撤销入口（源码 PASS）
+
+核心的旧 pending 恢复要求新的明确删除操作，但原“已删除设备”行只提供允许重新添加，未显示 `pending_revoke_sync` 的含义。现在该行显示“已移除 · 待同步撤销”，仅 pending 项提供“继续撤销”；确认后调用现有 `Backend.RemoveDevice → Service.Revoke`，取消不提交，失败仍保留待同步状态，不调用 Unblock。忙碌/后端不可用时禁用；同 ID 的 group/incarnation/relationship 或 pending 状态变化会取消旧确认。确认默认聚焦“取消”，关闭后回到“继续撤销”，避免展开确认后键盘焦点遗失到 body。
+
+四项入口回归先 RED 后 GREEN，补齐成员变化与焦点断言后前端 **82 tests** 全 PASS，typecheck/lint/build 通过；跟踪 dist 使用锁定 Node 24.21.0 / pnpm 12.4.1 重建。desktop workspace test、`GOWORK=off` 全包 race/vet 与 Windows Wails production build 全 PASS。根 Go 与协议未变，复用 `36302a9` 的完整双模式/race/CI，不将低影响前端操作重复表述成核心新验证。
+
+Playwright CLI 在专属 source fixture（模拟 backend、不是 Wails 准确包）实际检查 960×640 / 1100×720、长中文设备名、确认/取消控件可见、无水平溢出；Enter 取消回焦、再次 Enter 展开、Shift+Tab 到确认并 Enter 后，模拟快照从 pending 变 revoked、重试入口消失。浏览器首轮发现 body 焦点后已修复并重新检查。截图与页面夹具保留于 `output/playwright/revoke-ui-20260922/`，检查日志为 `.artifacts/astra-resume/u2-revoke-ui/`。浏览器和 owned Vite server 已关闭；未启动准确桌面包、调用真实移除或操作系统剪贴板。这里不替代 Windows GUI、真实 DPI 或物理系统验收。
+
+## 2026-09-22 E5-U：隔离 HTTPS 信令入口（不可达，未启动传输）
+
+为区分生产 Cloudflare 入口与此前 QUIC 失败，使用两端准确 `8c6e1e8` CLI 和与生产逐字节相同的 `387b57c` rendezvous，在 HK 已知且复核空闲、无 systemd socket 保留的 `109.66.88.204:80` 临时运行独立 HTTPS 实例。独占 root 为 `/tmp/codex-ssh/linksend-astra-quic-isolated-8c6e1e8-20260922T1356Z/`，单独 DB/config/临时 CA 与 IP SAN，仅本进程 `SSL_CERT_FILE` 信任该 CA，不改系统信任、生产证书/数据库/服务或网络策略。fixture 为 1 MiB，SHA256 `db2f1b450a9eb4956951ff9b1a0e106d5b31c51e6daec493cd9abbc78dd612d5`，实际没有发送。
+
+服务 job `...quic-isolated-8c6e1e8-server-20260922T140420Z` 设置 600 秒硬上限，实际运行 14:04:35–14:09:38Z。HK 本地 CA/IP SAN 校验与 health 通过；NL 唯一一次 verified-HTTPS 请求 job `...nl-single-health-20260922T140717Z` 得到 curl exit 28 / HTTP 000，尚未取得证书或 HTTP 响应。按预定边界停止，没有换端口或重试，没有执行 bootstrap/join、没有新设备组/身份/邀请码，也没有启动文件或 QUIC 传输。该结果只证明这次 NL→HK:80 请求超时，不能断言主机防火墙、路由或原 QUIC 失败的根因，更不是双 NAT / Mac / 桌面验收。
+
+STOP marker 使本轮临时服务正常 exit 0，80 监听和 owned 进程均消失。NL cleanup `...20260922T141155Z`、HK cleanup retry `...20260922T141419Z` 均 exit 0，隔离 DB/config/私钥/证书/profile/fixture/bin 已清理，宿主地址/路由/rule 与基线一致，生产 PID 911287 / SHA256 / health 保持。首次 HK cleanup 在 manager mkdir 阶段 SSH 255；先查询原 job 为 missing、确认脚本未执行后才重试，原失败不隐藏。脱敏归档 SHA256 HK `ce1e5974b27909b766ae70e1e35d2fca9bb1f33db9f19c2e488d7f0c71c5637a`、NL `821178bdfe13ff3e4c79b72c3247c161cbf67243ba2e2b9341607deabedca938`。详细回执在 `.artifacts/astra-resume/quic-isolated-8c6e1e8/`。
+
+### E5-U 只读策略核对与待授权方案
+
+后续只读 job `...firewall-hk-final-facts-20260922T143952Z` 确认 HK `inet filter input` 的 policy 为 DROP；10 条规则中，handle 4 仅接受 established/related，5 仅 loopback，6 为 `ip protocol icmp accept`，7 为 `ip6 nexthdr ipv6-icmp accept`，三条 TCP allow 均为非 80 的单端口，其余为 UDP，未发现 named-set 隐藏匹配。因此 `157.254.234.182 → 109.66.88.204:80` 的外部 NEW IPv4 TCP 流进入此链会落默认 DROP，形成明确宿主阻挡条件。配置来源 `/etc/nftables.conf:3`，文件 SHA256 `8521f97fa50c6b352bf09aee8ed959f882d90e5074d3ed2941171433cf3cdd99`，mtime 为 2026-09-08；不是本次实验写入的规则。NL 的主机 INPUT/OUTPUT 为 ACCEPT 且没有附加 filter 规则，Docker FORWARD 与主机流量分开看待。没有包/计数器基线或可靠旧 ICE 五元组，静态允许不证明送达，也不能把 TCP80 的阻挡归作原 QUIC 根因。
+
+**以下仅为待用户授权的一次诊断方案，尚未执行。** [执行提示词第 6 节](../prompts/DESKTOP-EXPERIENCE-GOAL.md) 明确排除宿主防火墙变更。候选变更仅是一条 runtime rule，不写 `/etc/nftables.conf`，不改 SSH/443、默认 policy、UDP、路由或代理：
+
+```sh
+nft insert rule inet filter input ip saddr 157.254.234.182 ip daddr 109.66.88.204 tcp dport 80 ct state new counter accept comment 'linksend-diag-tcp80-36302a9'
+```
+
+执行前重新核对单源/单目的地址、空闲 80 端口和规则基线；先创建并确认独立于 SSH 会话的 600 秒自动撤销守护，守护未就绪不添加规则。规则添加后记录其唯一 comment、完整匹配条件及实际 handle；正常结束和守护到期都只删除该 handle（再次验证 comment/条件），命令为 `nft delete rule inet filter input handle <本次实际 handle>`。不 flush/reload 规则集，不恢复整份规则覆盖其他新写入。
+
+本次隔离 HTTPS 服务同样最多运行 600 秒，使用新的独占目录、独立 DB/身份和临时 CA/IP SAN；仅在 NL 的一次严格 HTTPS 检查通过后做一次 HK→NL 1 MiB 传输，失败不改变 UDP 或追加端口。退出时停止本次进程、删除该临时规则、清理私钥/测试数据并独立复核生产服务、原规则和配置。该临时放行只为获取诊断证据，不保证文件传输成功。
+
 ## 2026-09-22 E5-T：准确诊断候选与撤销版本冲突
 
 HK/NL 两端 CLI 源码均为 `8c6e1e8738073922d0a0291cc2a01101178c38a7`，干净 archive SHA256 `5effc716a2a2dcb46508fea8741ea4dd6c2723a9bfc996ddb1562bd42639eb5e`，Linux amd64 binary SHA256 `92fd9653803d2f7e14449105fe14d95f0e8d0ed3840f8fea49eec44dd4da599b`（Go 1.27.1，构建命令同 E5-S）。唯一方向 HK→NL、1 MiB fixture SHA256 `2b2eab9bf44b6e705c724c7b21164b05eea461628d3f876bf52f32efea704b63`，信令/STUN/ICE/ECN 参数保持，两个新身份与独占 root `/tmp/codex-ssh/linksend-astra-quic-8c6e1e8-20260922T1325Z/`。
@@ -14,7 +44,11 @@ HK 443 由部署 `387b57c` / PID 911287 直接提供 TLS，无本机反代；日
 
 入组前新在线备份 `/opt/linksend-lan-test/backups/20260922T1325Z-astra-quic-8c6e1e8/server.db` SHA256 `8108ec075c82add73e9d0329553d3d7dbc29ba277e126ceba8184caa97e98cba`，schema 4 / integrity ok；完整非本轮基线为 23 条（包括前轮已撤销墓碑）。撤销时 HK incarnation `ff1e16f47effa6155501064223a9613c` 已正常 revoked，原 request `d0848688569b261fd2d273601340295a` 返回 revision 21；NL incarnation `f845c293e7be44017f408c835fab3236` 的旧 expected_revision=20 被拒绝，原 request `1f4fb194c5bdc311ac33c758579f0059` 保留 pending。批量脚本最后 exit 1 属第二项 NL，早期把它当首项失败的解释已纠正，真实记录未删除。
 
-这个现场缺陷引出 [E1-02 的版本与 actor 修复](DESKTOP-E1-REVOCATION.md)。代码/完整本地检查通过后提交，再以该提交的准确 CLI 对 NL 发起新的显式删除操作；当前两端测试进程均停止、身份/profile 暂留待正常收尾，邀请码已消费删除，本机仅留空受限目录。原生产数据未回滚覆盖。完整记录位于 `.artifacts/astra-resume/quic-8c6e1e8/`。
+这个现场缺陷引出 [E1-02 的版本与 actor 修复](DESKTOP-E1-REVOCATION.md)，提交为 `36302a9252a5d8052a83bbdee51ccf74fe766084`。由干净 archive（SHA256 `87bba5b301c2e68e2d032dffd81d18e3f4bed4f2a2bea2acad2dc5b245281885`）构建的 Windows CLI SHA256 `c9900b4052f32a66425d7f540f6d71bedf83f48fb79d06dab99f64af7ef15e26`，在 14:08:00Z 通过正常显式 `revoke --id` 处理 NL legacy pending：exit 0，原目标 incarnation 保持，新的明确请求 `a28bd320d6520709e266533b65625ebe` 绑定 owner incarnation `64dbe1a45a18b6987f4151faac730dc0`，返回 revision 22，pending=false。没有手工编辑 trust 或生产数据库。
+
+HK 独立只读 job `...quic-8c6e1e8-hk-verify-cleanup-20260922T141023Z` exit 0，确认两项精确 incarnation 均 revoked、两条成功请求分别为 revision 21/22、原 23 条非本轮设备记录逐行不变，owner、PID 911287、部署 SHA、schema 4 / integrity / health 保持。邀请码已消费删除，本机仅留空受限目录；备份没有恢复覆盖生产数据。完整本机回执为 `.artifacts/astra-resume/quic-8c6e1e8/owner-explicit-revoke-36302a9.json`，最终资源清理记录保留在同目录。
+
+E5-T 两端 cleanup（HK `...hk-cleanup-20260922T141507Z`、NL `...nl-cleanup-20260922T141419Z`）均 exit 0；profile/receive/fixture/bin、邀请和进程均已清理，宿主地址/路由/rule 不变，仅 root-only 原日志及脱敏归档留存。两归档 SHA256 分别 `25ade0fed1776a61efae94976bace959d3ea5e44fb88f5072fe892ee3549dfb4` / `784c56be1c45f6bc727f74ba2cd0620f750c7fc84876821166b82bc1d68c2a96`。E5-T 与 E5-U 资源分开收尾，均无继续运行的实验。
 
 ## 2026-09-22 E5-S：HK/NL 混合版本失败与诊断修补
 

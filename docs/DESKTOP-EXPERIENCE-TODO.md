@@ -16,9 +16,11 @@
 1. **E4-03 / U4：源码已验证。** `7d3bfb8` 修复双方准备就绪但复制次数不同时的新事件被误判；loopback RED→GREEN，lease 因果时钟、兼容/重放/跳跃上限/高时钟续租及 race 通过。物理 Mac 首条失败仍未复验。
 2. **E1-02 / U2：源码已验证。** `1849c31` 修复 `group+lan` outbox 和离线关系；真实服务断线→重启→恢复同步/新 incarnation/保留文件历史及 race 通过。准确 preview.2 的隔离 Windows 启动被工具自动审批在 CreateProcess 前拒绝（`blocked by policy`），GUI 未启动；fixture 已正常停止，UI 包级结果仍 NOT RUN。
 3. **E3-01/02/03 / U6：三平台源码自测已验证。** `535a77c` 修复满 64 条记录时重试误报容量；两个适配器先按 ID/内容去重，再对新请求限额。Windows 自测 RED→GREEN，`096d79a` 的 Windows/Mac ARM/Mac Intel packages 自测全 PASS；签名和正式系统激活仍未验收。
-4. **E5-02：阶段已同步，准确候选已核验。** `096d79a` 已推送，Draft PR #8 已更新，七个 CI jobs success；三个 artifact 的四个包 hash/COMMITTED来源/平台与版本全部核对，见最新 DELIVERY。双 Go 模块（含 GOWORK=off）、受影响 race、前端 76 tests/检查、Windows 原生构建均通过；同会话取消测试按真实所有权修正（`9f15fba`），跟踪 dist 按锁定工具链刷新（`9953601`）。
-5. **E5-01 / U5 支撑：跨主机验收 FAIL，诊断已同步。** `8c6e1e8` 七个 CI jobs 全 PASS；新同版单轮在 HTTP 525 / signaling_connect 退出，未进入 QUIC，旧 `096d79a` 握手失败仍未定位。真实验证了网关新归类；源站同时段存在 Cloudflare 网段的 TLS read timeout，但无请求关联证据。继续一个独立短期 HTTPS 信令实验，不改生产或宿主网络；各轮来源与失败分别见 E5-S/T。
-6. **E1-02 / U2：组版本冲突源码已验证，现场收尾待新提交。** 两个真实测试身份连续删除时，第一项成功把 revision 20→21，第二项旧 revision 被拒绝；新 helper、actor 持久绑定、legacy 明确新意图/CAS 已完成 RED→GREEN、完整双模块/race/Windows 构建和独立安全审查。提交后以准确 CLI 正常撤销剩余 NL legacy pending，HK 已 revoked；不手改 trust/DB，不将未收尾写作完成。
+4. **E5-02：阶段已同步，准确候选已核验。** `096d79a` 与 `36302a9` 各自七个 CI jobs success，三平台四包均已完整下载并分别核对 hash/COMMITTED来源/平台与版本，见最新 DELIVERY。双 Go 模块（含 GOWORK=off）、受影响 race 与 Windows 构建均通过；最新 `36302a9` 包不含后续 E5-V 的“继续撤销”UI。历史包验证不迁移到后续源码。
+5. **E5-01 / U5 支撑：跨主机验收 FAIL，诊断已同步。** `8c6e1e8` 七个 CI jobs 全 PASS；新同版单轮在 HTTP 525 / signaling_connect 退出，未进入 QUIC，旧 `096d79a` 握手失败仍未定位。源站同时段存在 Cloudflare 网段的 TLS read timeout，但无请求关联证据。独立短期 HTTPS 入口的 HK 本地验证通过、NL 唯一访问超时，未启动配对/文件；全部实验资源已收尾，生产和宿主网络保持，各轮来源与限制见 E5-S/T/U。不可将新诊断、旧双 NAT 或本机测试替代仍失败的实际路径。
+6. **E1-02 / U2：组版本冲突源码及 CLI 现场收尾已验证。** `36302a9` 的 helper、actor 持久绑定、legacy 明确新意图/CAS 已完成 RED→GREEN、完整双模块/race/Windows 构建及独立安全审查。准确 CLI 通过正常 API 撤销 NL legacy pending，新的明确请求/原 incarnation/actor 绑定持久为 revision 22；HK 独立复核两目标 revoked、原 23 条设备和 owner 不变。没有手改 trust/DB；准确桌面 GUI 的离线删除仍 NOT RUN。
+7. **E5-01 / 网络后续：宿主规则变更待明确授权。** 只读核对证实 HK 外部 NEW TCP80 会落现有 nftables INPUT 默认 DROP。一次仅 NL 单一 IP→HK TCP80、600 秒自动撤销的 runtime 规则提案已写 E5-U，并按提示词第 6 节的授权排除向用户单独询问；没有执行规则或新探针。此条件只涉及隔离 HTTPS 入口，不将它归作旧 QUIC 故障的根因。
+8. **E1-02 / U2 桌面入口：源码已验证。** pending 行现在显示待同步状态并提供明确确认的“继续撤销”，可进入新 Revoke 路径；取消、失败、忙碌/不可用、成员变化和键盘焦点均覆盖。82 tests/typecheck/lint/build、desktop 双模式/race/vet/Windows build 与 Playwright 页面夹具检查通过，见 E5-V；准确桌面包仍待独立验收。
 
 香港/荷兰均完成只读接管核对，无未收尾旧作业。香港仍是已核实 `387b57c`、schema 4、health PASS；本批没有更改服务端源码或部署。Mac 暂不可用、用户暂缓签名及本轮 Windows 启动策略拒绝分别记录，不能把它们合并成“所有工作阻塞”。旧下面账本保留各自历史来源，以本节及最新追加 evidence 为当前状态。
 
