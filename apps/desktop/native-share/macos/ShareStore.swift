@@ -191,11 +191,6 @@ final class ShareStore {
             }
             usleep(10_000)
         }
-        let existing = try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        guard existing.count <= 128,
-              existing.filter({ $0.pathExtension == "json" }).count < 64 else {
-            throw ShareStoreError.storageFull
-        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(ShareRequest(version: 2, request_id: requestID, peer_id: peerID,
@@ -205,6 +200,12 @@ final class ShareStore {
         if manager.fileExists(atPath: final.path) {
             if try readBounded(final, maximum: 1024 * 1024) == data { return }
             throw ShareStoreError.requestConflict
+        }
+        // A repeated request needs no new journal slot and remains idempotent at capacity.
+        let existing = try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        guard existing.count <= 128,
+              existing.filter({ $0.pathExtension == "json" }).count < 64 else {
+            throw ShareStoreError.storageFull
         }
         let temporary = directory.appendingPathComponent(requestID + ".pending")
         try data.write(to: temporary, options: .withoutOverwriting)

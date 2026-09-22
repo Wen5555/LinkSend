@@ -63,6 +63,22 @@ jobs:
       - name: Verify core module
         shell: bash
         run: GOWORK=off go test ./...
+      - name: Verify Windows share handoff
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          dotnet run -c Release --project apps/desktop/native-share/windows -- --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify macOS share handoff
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_BIN="$RUNNER_TEMP/linksend-share-store-tests"
+          xcrun swiftc -swift-version 5 -framework Cocoa -framework UniformTypeIdentifiers \
+            apps/desktop/native-share/macos/ShareStore.swift \
+            apps/desktop/native-share/macos/ShareStoreTests.swift -o "$TEST_BIN"
+          "$TEST_BIN"
       - name: Build Windows amd64
         if: matrix.os == 'windows'
         working-directory: apps/desktop

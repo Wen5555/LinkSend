@@ -72,8 +72,6 @@ internal static class ShareJournal
             throw new InvalidDataException("SHARE_JOURNAL_REPARSE_POINT");
         var lockPath = Path.Combine(directory, ".lock");
         using var journalLock = AcquireLock(lockPath, TimeSpan.FromSeconds(2));
-        if (Directory.EnumerateFiles(directory, "*.json").Take(65).Count() >= 64)
-            throw new InvalidOperationException("SHARE_JOURNAL_FULL");
         var data = JsonSerializer.SerializeToUtf8Bytes(request);
         if (data.Length > 1024 * 1024) throw new InvalidDataException("SHARE_REQUEST_SIZE");
         var final = Path.Combine(directory, request.request_id + ".json");
@@ -83,6 +81,9 @@ internal static class ShareJournal
             if (saved.AsSpan().SequenceEqual(data)) return;
             throw new InvalidOperationException("SHARE_REQUEST_CONFLICT");
         }
+        // Replays reuse an existing entry, even while the bounded journal is full.
+        if (Directory.EnumerateFiles(directory, "*.json").Take(65).Count() >= 64)
+            throw new InvalidOperationException("SHARE_JOURNAL_FULL");
         var temporary = Path.Combine(directory, request.request_id + ".pending");
         using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
             64 * 1024, FileOptions.WriteThrough))

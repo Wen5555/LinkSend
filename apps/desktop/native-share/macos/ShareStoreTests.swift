@@ -50,9 +50,30 @@ enum ShareStoreTests {
         guard manager.fileExists(atPath: root.appendingPathComponent("desktop-activations-v1/" + request + ".json").path) else {
             fatalError("request missing")
         }
+        for index in 1..<64 {
+            let requestID = String(repeating: "0", count: 30) + String(format: "%02x", index)
+            try store.persist(requestID: requestID, peerID: "peer", paths: [source.path], bookmarks: [""])
+        }
+        let journal = root.appendingPathComponent("desktop-activations-v1")
+        let savedRequest = journal.appendingPathComponent(request + ".json")
+        let original = try Data(contentsOf: savedRequest)
+        try store.persist(requestID: request, peerID: "peer", paths: [source.path], bookmarks: [""])
+        do {
+            try store.persist(requestID: request, peerID: "other", paths: [source.path], bookmarks: [""])
+            fatalError("full journal accepted conflicting replay")
+        } catch ShareStoreError.requestConflict {}
+        do {
+            try store.persist(requestID: String(repeating: "f", count: 32), peerID: "peer",
+                              paths: [source.path], bookmarks: [""])
+            fatalError("journal capacity exceeded")
+        } catch ShareStoreError.storageFull {}
+        let entries = try manager.contentsOfDirectory(at: journal, includingPropertiesForKeys: nil)
+        guard entries.filter({ $0.pathExtension == "json" }).count == 64,
+              try Data(contentsOf: savedRequest) == original else { fatalError("full replay changed journal") }
         print("PASS share_store_devices")
         print("PASS share_store_provider_handoff")
         print("PASS share_store_idempotency")
         print("PASS share_store_conflict")
+        print("PASS share_store_full_journal_retry")
     }
 }

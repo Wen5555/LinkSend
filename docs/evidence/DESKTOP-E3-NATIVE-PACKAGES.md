@@ -1,5 +1,11 @@
 # E3 双平台原生包生命周期
 
+## 2026-09-22 满容量交接重试
+
+两个原生适配器原先都在读取既有 request ID 前检查 64 条 journal 上限，满容量时连完全相同的重试也得到 storage full。Windows 新增真实临时目录自测，修复前 `dotnet run -c Release --project apps/desktop/native-share/windows -- --self-test` 在第 64 条后的原请求重放以 `SHARE_JOURNAL_FULL` 失败；修复后 `PASS share_target_journal` 与 `PASS share_target_full_journal_retry`，exit 0。原始日志分别为执行树 `.artifacts/astra-resume/share-before.log` 与 `share-after.log`。
+
+Windows/C# 和 macOS/Swift 在同一 journal 锁内先核对已有 ID/内容，再对新请求执行原容量限制：一致重试不占新槽，冲突仍拒绝，第 65 条新请求仍拒绝，已存请求字节不变。没有改变交接 schema、复制文件策略、Go 队列所有权或授权边界。两平台自测均已增加满容量幂等/冲突/容量/已有内容保留断言，并接入 packages CI 的对应原生 runner。当前本机 Windows 自测通过；Mac 本机不可用，Swift 测试由本次 CI 验证，不能写为 Mac 物理激活通过。正式签名、系统共享注册/激活与安装生命周期仍保留原缺项。
+
 日期：2026-09-14。范围 E3-03，状态 **PARTIAL / 签名安装由用户暂缓**。
 
 Windows Wails 构建任务会发布 self-contained `LinkSend.ShareTarget`，正式 manifest 同时声明产品宿主与 Share Target；macOS bundle 任务会编译并嵌入 `LinkSendShare.appex`，宿主和扩展保留同一正式 App Group entitlement，宿主 Info.plist 注册 `linksend-share` 唤起 URL。两平台适配器与 Go 使用相同的 schema 2 request ID，持久交接仍由 Go 的唯一 profile owner 消费。

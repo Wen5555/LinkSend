@@ -265,7 +265,20 @@ internal static class SelfTest
             ShareJournal.Persist(root, request); ShareJournal.Persist(root, request);
             try { ShareJournal.Persist(root, request with { peer_id = "other" }); throw new Exception("CONFLICT_TEST_FAILED"); }
             catch (InvalidOperationException error) when (error.Message == "SHARE_REQUEST_CONFLICT") { }
+            for (var index = 1; index < 64; index++)
+                ShareJournal.Persist(root, request with { request_id = index.ToString("x32") });
+            var journal = Path.Combine(root, "desktop-activations-v1");
+            var original = File.ReadAllBytes(Path.Combine(journal, request.request_id + ".json"));
+            ShareJournal.Persist(root, request); // A retry consumes no additional capacity.
+            try { ShareJournal.Persist(root, request with { peer_id = "other" }); throw new Exception("FULL_CONFLICT_TEST_FAILED"); }
+            catch (InvalidOperationException error) when (error.Message == "SHARE_REQUEST_CONFLICT") { }
+            try { ShareJournal.Persist(root, request with { request_id = new string('f', 32) }); throw new Exception("CAPACITY_TEST_FAILED"); }
+            catch (InvalidOperationException error) when (error.Message == "SHARE_JOURNAL_FULL") { }
+            if (Directory.EnumerateFiles(journal, "*.json").Count() != 64
+                || !File.ReadAllBytes(Path.Combine(journal, request.request_id + ".json")).AsSpan().SequenceEqual(original))
+                throw new Exception("FULL_RETRY_CHANGED_JOURNAL");
             Console.WriteLine("PASS share_target_journal");
+            Console.WriteLine("PASS share_target_full_journal_retry");
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
