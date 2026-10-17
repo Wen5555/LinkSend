@@ -285,8 +285,25 @@ func (s *Service) rememberLANPeer(peer *PeerSession) error {
 		return nil
 	}
 	s.trustMu.Lock()
-	defer s.trustMu.Unlock()
-	return identity.TrustPairedPeer(s.cfg.DataDir, identity.TrustedPeer{ID: peer.PeerID, Name: peer.peerName, PublicKey: peer.peerPublicKey, LastLANAddress: peer.lanAddress})
+	err := identity.TrustPairedPeer(s.cfg.DataDir, identity.TrustedPeer{ID: peer.PeerID, Name: peer.peerName, PublicKey: peer.peerPublicKey, LastLANAddress: s.lanRememberAddress(peer.lanAddress)})
+	s.trustMu.Unlock()
+	if err == nil {
+		s.rememberLANAddressForDiscovery(peer.lanAddress)
+	}
+	return err
+}
+
+// Add a hint only after authenticated pairing or address persistence succeeds.
+// The current manager must not wait for an application restart to re-probe it.
+// A full or unavailable discovery provider cannot undo that durable result;
+// remembered probes remain on-link, bounded and subject to identity checks.
+func (s *Service) rememberLANAddressForDiscovery(address string) {
+	if address == "" {
+		return
+	}
+	if manager := s.lanManager(); manager != nil {
+		_ = manager.RememberAddress(address)
+	}
 }
 
 func lanRemoteAddress(session directSignalSession) string {

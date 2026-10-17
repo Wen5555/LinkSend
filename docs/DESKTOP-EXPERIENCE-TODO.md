@@ -1,5 +1,24 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-18 A–E Goal（已启动）
+
+本聊天 Goal 已通过平台 `create_goal` 创建，状态 active；用户明确执行[目标文档](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)。起点 `638b2aa`，工作分支 `codex/lan-rebuild-ae`，沿用 Draft PR #9。不恢复旧代理/heartbeat；保留 `.playwright-cli/`、`apps/desktop/build/ios/`、`apps/desktop/build/linux/` 未跟踪内容。
+
+| 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
+|---|---|---|---|---|---|
+| A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | NOT RUN | 待阶段同步 | [端口恢复/旧reader/多源/即时记忆](evidence/DESKTOP-AE-LAN-RECOVERY.md)已修；下一步固定双机修复前基线、刷新合并与真实独立旅程 |
+| B 新信令/客户端恢复/备份 | 现场核对完成 | NOT RUN | SSH只读通过 | NOT RUN | 别名已备份修正；核对精确 DNS/Origin TLS，准备专属站点和持久库事务 |
+| B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
+| C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
+| C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
+| D / N3 文件正文限速 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 设计进程级可取消预算，独立于控制/剪贴板 |
+| D / N4 托盘快速发送 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go owner，独立于主草稿 |
+| E 同提交候选/最终回归/文档 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 按阶段验证/提交/推送，同一 Draft PR 交付 |
+
+阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
+
+运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
+
 > **2026-10-18 A–E Goal提示词：** 用户要求撰写覆盖A、B、B2、C、D、E所有任务的执行提示词，并明确授权较大改动完成后阶段commit/push。见[完整执行提示词](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)。N1–N4均列必做；本次撰写/同步提示词不等于已启动功能实施，明确执行后再更新本Goal状态。
 
 > **2026-10-18 前提与P0修正：** 用户确认原信令数据已丢失，改为日本猫猫机重建新控制库和显式重新配对；此前“迁移原组/旧数据库”方案已被替代。局域网独立发现、同意/配对、双向传输及性能优化列为P0，测试必须覆盖信令/STUN不可达，不以新服务完成为前置。完整开发/测试范围见[重建方案](DESKTOP-RESUMPTION-PLAN.md#4-信令服务重建与客户端恢复)和[LAN主线](DESKTOP-RESUMPTION-PLAN.md#5-局域网独立开发与优化主线p0)。本次仍为规划修订。

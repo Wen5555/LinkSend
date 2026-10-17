@@ -1,6 +1,7 @@
 // Package discovery finds LinkSend peers on directly connected IPv4 networks.
 // It carries only bounded, signed control metadata; file bytes never enter this
-// package. Discovery establishes reachability, not trust or transfer consent.
+// package. Announcements provide candidate routes, not proof of control or
+// QUIC connectivity, trust, or transfer consent.
 package discovery
 
 import (
@@ -40,6 +41,7 @@ const (
 	maxFrameBytes    = protocol.MaxMessageBytes
 	maxPeers         = 512
 	maxRoutesPerPeer = 16
+	maxProbeRoutes   = 32
 	discoveryMethod  = "LINKSEND-LAN"
 	discoveryPath    = "/v1/discovery"
 )
@@ -164,28 +166,21 @@ func Start(cfg Config) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("LAN control listen: %w", err)
 	}
-	udp, err := net.ListenPacket("udp4", net.JoinHostPort(net.IPv4zero.String(), fmt.Sprint(cfg.Port)))
+	udp, temporary, err := listenDiscoveryUDP(cfg.Port)
 	if err != nil {
 		_ = tcp.Close()
-		return nil, fmt.Errorf("LAN multicast listen: %w", err)
+		return nil, fmt.Errorf("LAN discovery UDP listen: %w", err)
+	}
+	packet, channelErrors := configureDiscoveryUDP(udp)
+	if temporary {
+		channelErrors["listen"] = "fixed_port_unavailable"
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: ipv4.NewPacketConn(udp), tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, joinSignatures: map[int]string{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: map[string]string{}, remembered: map[string]rememberedProbe{}}
+	m := &Manager{cfg: cfg, ctx: ctx, cancel: cancel, udp: udp, packet: packet, tcp: tcp, port: tcp.Addr().(*net.TCPAddr).Port, incoming: make(chan Incoming, 16), peers: map[string]*peerRecord{}, ifaces: map[string]interfaceRoute{}, joined: map[int]*net.Interface{}, joinSignatures: map[int]string{}, replays: map[string]time.Time{}, lastResp: map[string]time.Time{}, acceptSlots: make(chan struct{}, 32), responseSlots: make(chan struct{}, 32), channelErrors: channelErrors, remembered: map[string]rememberedProbe{}}
 	m.tlsCfg, err = cfg.Identity.TLSServerConfig(m.allowedPeer)
 	if err != nil {
 		m.Close()
 		return nil, err
-	}
-	// Darwin/Linux expose the receiving interface index. Windows does not
-	// implement this control message, so routeForSource falls back to exact
-	// local-subnet matching across the joined interfaces.
-	_ = m.packet.SetControlMessage(ipv4.FlagInterface, true)
-	if err = m.packet.SetMulticastTTL(1); err != nil {
-		m.channelErrors["multicast"] = "ttl_configuration_failed"
-	}
-	_ = m.packet.SetMulticastLoopback(false)
-	if err = enableBroadcast(m.udp); err != nil {
-		m.channelErrors["broadcast"] = "socket_configuration_failed"
 	}
 	if err = m.refreshInterfaces(); err != nil {
 		m.channelErrors["interfaces"] = "initial_refresh_failed"
@@ -238,6 +233,9 @@ func (m *Manager) Close() error {
 }
 
 func (m *Manager) Refresh() error {
+	// A failed fixed-port retry is a provider status, not a reason to stop
+	// announcing from the still-live temporary socket.
+	_ = m.restoreFixedUDPSocket()
 	if err := m.refreshInterfaces(); err != nil {
 		return err
 	}
@@ -376,6 +374,9 @@ func (m *Manager) Dial(ctx context.Context, id string) (*Session, Device, Route,
 func (m *Manager) refreshInterfaces() error {
 	m.refreshMu.Lock()
 	defer m.refreshMu.Unlock()
+	if m.ctx != nil && m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return err
@@ -490,8 +491,7 @@ func (m *Manager) announceLoop() {
 		case <-fast.C:
 			_ = m.sendAnnouncement(true, nil)
 		case <-ticker.C:
-			_ = m.refreshInterfaces()
-			_ = m.sendAnnouncement(true, nil)
+			_ = m.Refresh()
 			m.probeKnownPeers()
 			m.probeRememberedAddresses()
 		case <-cleanup.C:
@@ -561,29 +561,42 @@ func (m *Manager) readLoop() {
 			if m.ctx.Err() != nil {
 				return
 			}
+			m.mu.RLock()
+			replaced := m.packet != packetConn
+			m.mu.RUnlock()
+			if replaced {
+				consecutiveErrors = 0
+				continue
+			}
 			consecutiveErrors++
 			if consecutiveErrors >= 8 {
-				m.mu.Lock()
-				m.channelErrors["receive"] = "socket_read_degraded"
-				m.mu.Unlock()
+				if !m.markReceiveDegraded(packetConn) {
+					consecutiveErrors = 0
+					continue
+				}
 				delay := time.Duration(min(consecutiveErrors, 32)) * 25 * time.Millisecond
 				select {
 				case <-time.After(delay):
 				case <-m.ctx.Done():
 					return
 				}
-				if consecutiveErrors >= 32 && m.rebuildUDPSocket() == nil {
+				if consecutiveErrors >= 32 && m.rebuildUDPSocket(packetConn) == nil {
 					consecutiveErrors = 0
 				}
 			}
 			continue
 		}
-		if consecutiveErrors != 0 {
-			m.mu.Lock()
-			delete(m.channelErrors, "receive")
+		m.mu.Lock()
+		if m.packet != packetConn {
 			m.mu.Unlock()
 			consecutiveErrors = 0
+			continue
 		}
+		if consecutiveErrors != 0 {
+			delete(m.channelErrors, "receive")
+			consecutiveErrors = 0
+		}
+		m.mu.Unlock()
 		if n == 0 || n > maxPacketBytes {
 			continue
 		}
@@ -611,40 +624,16 @@ func (m *Manager) readLoop() {
 	}
 }
 
-func (m *Manager) rebuildUDPSocket() error {
-	if m.ctx.Err() != nil {
-		return m.ctx.Err()
-	}
-	m.writeMu.Lock()
-	defer m.writeMu.Unlock()
-	if m.udp != nil {
-		_ = m.udp.Close()
-	}
-	udp, err := net.ListenPacket("udp4", net.JoinHostPort(net.IPv4zero.String(), fmt.Sprint(m.cfg.Port)))
-	if err != nil {
-		return err
-	}
-	if m.ctx.Err() != nil {
-		_ = udp.Close()
-		return m.ctx.Err()
-	}
-	packet := ipv4.NewPacketConn(udp)
-	_ = packet.SetControlMessage(ipv4.FlagInterface, true)
-	_ = packet.SetMulticastTTL(1)
-	_ = packet.SetMulticastLoopback(false)
-	_ = enableBroadcast(udp)
+func (m *Manager) markReceiveDegraded(failed *ipv4.PacketConn) bool {
 	m.mu.Lock()
-	m.udp, m.packet = udp, packet
-	m.joined = map[int]*net.Interface{}
-	m.joinSignatures = map[int]string{}
-	m.mu.Unlock()
-	if err = m.refreshInterfaces(); err != nil {
-		return err
+	defer m.mu.Unlock()
+	// Check and publish under the same lock as socket installation. A reader
+	// may have passed readLoop's first check before Refresh replaced it.
+	if m.packet != failed || m.ctx.Err() != nil {
+		return false
 	}
-	m.mu.Lock()
-	delete(m.channelErrors, "receive")
-	m.mu.Unlock()
-	return nil
+	m.channelErrors["receive"] = "socket_read_degraded"
+	return true
 }
 
 func (m *Manager) networkGeneration() uint64 {
@@ -733,20 +722,32 @@ func (m *Manager) sendAnnouncementOnRoute(announce bool, destination *net.UDPAdd
 	}
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()
+	if m.ctx != nil && m.ctx.Err() != nil {
+		return m.ctx.Err()
+	}
 	if destination != nil {
 		routes := m.routesForDestination(destination.IP, preferred)
 		if len(routes) == 0 {
 			return errors.New("LAN discovery has no on-link route for destination")
 		}
+		if len(routes) > maxProbeRoutes {
+			return errors.New("LAN discovery on-link route limit reached")
+		}
+		var errs []error
+		sent := false
 		for _, route := range routes {
-			if err = m.writeOnRoute(body, destination, route); err == nil {
-				return nil
+			if err = m.writeOnRoute(body, destination, route); err != nil {
+				errs = append(errs, err)
+			} else {
+				sent = true
 			}
 		}
-		if err == nil {
-			return errors.New("LAN discovery packet was not sent")
+		// A successful UDP write is only a dispatched probe, never proof that
+		// this route works. Try every bounded matching source before returning.
+		if sent {
+			return nil
 		}
-		return err
+		return errors.Join(errs...)
 	}
 	m.mu.RLock()
 	routes := make([]interfaceRoute, 0, len(m.ifaces))

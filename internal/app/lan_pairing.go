@@ -175,6 +175,7 @@ func (s *Service) RequestLANPair(ctx context.Context, peerID string) (LANPairRes
 	if err = identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce); err != nil {
 		return LANPairResult{}, err
 	}
+	s.rememberLANAddressForDiscovery(route.RemoteAddress)
 	serverState := s.consumeLANCredential(ctx, session, peer.PublicKey, peerID, requestID, nonce)
 	return LANPairResult{PeerID: peerID, State: "lan_paired", ServerState: serverState}, nil
 }
@@ -205,7 +206,7 @@ func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager
 	if time.Now().Unix() >= expires {
 		return false, ""
 	}
-	session, _, _, err := manager.Dial(ctx, peer.ID)
+	session, _, route, err := manager.Dial(ctx, peer.ID)
 	if err != nil {
 		return false, ""
 	}
@@ -223,6 +224,7 @@ func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager
 				return false, ""
 			}
 		}
+		s.rememberLANAddressForDiscovery(route.RemoteAddress)
 		return true, s.consumeLANCredential(ctx, session, peer.PublicKey, peer.ID, requestID, nonce)
 	}
 	if wire.LANPair.Phase != "ready" {
@@ -238,6 +240,7 @@ func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager
 	if identity.CommitProvisionalLAN(s.cfg.DataDir, requestID, nonce) != nil {
 		return false, ""
 	}
+	s.rememberLANAddressForDiscovery(route.RemoteAddress)
 	return true, s.consumeLANCredential(ctx, session, peer.PublicKey, peer.ID, requestID, nonce)
 }
 
@@ -253,6 +256,7 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 		}
 		if err := incoming.Session.SendLANPair(ctx, newLANPairFrame(status, request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, request.Generation, request.ExpiresAt)); err != nil || status == "done" {
 			if err == nil && status == "done" {
+				s.rememberLANAddressForDiscovery(incoming.Route.RemoteAddress)
 				s.sendRecoveredLANCredential(ctx, incoming, request)
 			}
 			return
@@ -264,6 +268,7 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 		if err = identity.CommitProvisionalLAN(s.cfg.DataDir, request.RequestID, request.Nonce); err != nil {
 			return
 		}
+		s.rememberLANAddressForDiscovery(incoming.Route.RemoteAddress)
 		_ = incoming.Session.SendLANPair(ctx, newLANPairFrame("done", request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, request.Generation, request.ExpiresAt))
 		s.sendRecoveredLANCredential(ctx, incoming, request)
 		return
@@ -357,6 +362,7 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 	if err = identity.CommitProvisionalLAN(s.cfg.DataDir, request.RequestID, request.Nonce); err != nil {
 		return
 	}
+	s.rememberLANAddressForDiscovery(incoming.Route.RemoteAddress)
 	if err = incoming.Session.SendLANPair(ctx, newLANPairFrame("done", request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, generation, request.ExpiresAt)); err != nil {
 		return
 	}
