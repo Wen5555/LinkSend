@@ -129,6 +129,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .queue-actions .ghost { padding-inline: 10px; }
 .queue-empty, .loading-status { color: var(--muted); padding: 18px 0; font-size: 13px; }
 .queue-notice { padding: 11px 13px; margin: 10px 0; border-left: 3px solid var(--blue); background: var(--blue-soft); color: var(--text); font-size: 12px; line-height: 1.6; }
+.membership-recovery { margin-top: 12px; }
+.membership-recovery .checkbox-label { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; }
+.membership-recovery .checkbox-label input { width: 16px; height: 16px; min-height: 0; margin: 2px 0 0; flex: 0 0 16px; accent-color: var(--blue); }
 .queue-wait { display: flex; gap: 9px; align-items: center; margin: 16px 0; font-size: 12px; color: var(--text); }
 .queue-wait input, .preference-checks input { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--blue); }
 .draft-status { display: block; margin-top: 10px; color: var(--muted); font-size: 11px; }

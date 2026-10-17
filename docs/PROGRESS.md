@@ -1,3 +1,9 @@
+## 2026-10-18 B 显式客户端恢复候选
+
+- 新增持久Prepare/Continue/Cancel/Status、同URL空库正常初始化/新码加入、回执丢失后核对/暂停/重启，以及真实Wails绑定和设备页入口。恢复和普通上下文替换升级trust schema3，退休旧快照并保留LAN/LocalBlock，旧queue/outbox不借新context自动发送；升级精确备份，旧库拒绝schema3。wire/控制库/任务库保持，详见[ADR0008](adr/0008-membership-recovery-and-retired-contexts.md)与[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
+- 正常新码重配保留，撤销首次DELETE前验证live actor/原目标；成员快照完整读取/应用串行，LAN签发/补组在恢复期间跳过，独立LAN不因恢复失去授权。并发入队误拒候选已修复，race五轮通过。核心off完整test/vet/build、desktop workspace/off-race/vet/build、前端90tests/typecheck/lint/build和旧库只读兼容均通过；最终identity/app完整race终态exit0，app122.250s。
+- 浏览器夹具检查960浅色/1100深色及Tab/Enter，入口已移至页首；owned浏览器/Vite/临时页面已收尾。不将该结果替代准确包原生、跨NAT或整个A–E完成。STUN补充授权仍待答、宿主规则保持；接着回到A的刷新/早期host ICE与真实双机，再继续B2/N1–N4。
+
 ## 2026-10-18 B 客户端恢复前置授权屏障修复
 
 - 已复现group+lan跨组降为LAN不提升代次导致旧活动任务未取消，及成员刷新丢LAN request ID/换上下文丢地址历史与GrantedAt归零。补齐授权代次/时间屏障、保留独立LAN证据、代次耗尽原子拒绝；旧队列重启后仍不能重绑，新显式LAN入队可用。修复前FAIL、修复后定向/完整off核心/完整identity+app race/两模式desktop及vet/build均PASS；见[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。wire/schema未改。

@@ -38,6 +38,7 @@ export type {
     InvitationInfo,
     LANPairRequestInfo,
     LANPairResult,
+    MembershipRecoveryStatus,
     MembershipStatus,
     QueueItem,
     ResendInboxRequest,

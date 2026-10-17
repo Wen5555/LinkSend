@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18 B客户端恢复候选：显式Prepare/Continue/Cancel与桌面恢复面板、同URL空库初始化/新码加入、响应丢失后核对/暂停/重启、持久旧context退休与outbox首发live-actor检查已实现。普通新码重配保持，组/本机incarnation替换同样退休旧快照；独立LAN不因恢复补组失败失去授权。trust升级schema3并精确备份、旧端明确拒绝，wire/控制库/任务库保持。准确包原生与真实跨NAT仍单列待验，见ADR0008和本轮证据。
+
 2026-10-18 B恢复前置修复：成员上下文切换或旧group+lan降为独立LAN均提升授权代次/时间屏障，旧任务、队列及剪贴板权限不能借保留LAN关系继续。保留独立LAN地址/历史/request证据，普通同上下文刷新不丢同意；不改wire/schema。完整灾后恢复仍单列待实施，见ADR0007与TODO。
 
 2026-10-18 A 首批恢复：发现固定 UDP 端口不可用时使用临时源端口，保留有界组播/广播/单播与独立 TLS 控制入口，并暴露 `listen=fixed_port_unavailable`；既有刷新/公告定时器在端口释放后恢复固定监听。旧 socket reader 不能覆盖替代 socket 的状态或触发其重建。受限单播对所有匹配源路由尝试（最多32条），成功写入 UDP 只表示发出探测。已认证配对/恢复成功后立即更新当前发现器的记忆地址；拒绝配对不添加地址，记忆失败不撤销已持久授权。文件 wire、身份校验与明确同意边界未变；本批自动测试不代表物理网络验收完成。

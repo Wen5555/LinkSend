@@ -347,6 +347,13 @@ export interface LANPairResult {
     "server_state": string;
 }
 
+export interface MembershipRecoveryStatus {
+    "state": string;
+    "id"?: string;
+    "mode"?: string;
+    "message"?: string;
+}
+
 export interface MembershipStatus {
     /**
      * pending, member, not_member, auth_failed, unavailable

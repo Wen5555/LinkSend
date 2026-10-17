@@ -97,7 +97,7 @@ func TestLegacyTrustPolicyMigratesWithoutLosingPreferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := parseTrustFile(data)
-	if err != nil || f.SchemaVersion != trustSchemaVersion || len(f.Peers) != 2 || !f.Peers[0].AutoAccept || f.Peers[0].LastLANAddress != a.LastLANAddress || f.Peers[1].AutoAccept {
+	if err != nil || f.SchemaVersion != 2 || len(f.Peers) != 2 || !f.Peers[0].AutoAccept || f.Peers[0].LastLANAddress != a.LastLANAddress || f.Peers[1].AutoAccept {
 		t.Fatalf("migrated policy lost unrelated preferences: %+v %v", f, err)
 	}
 }
@@ -252,7 +252,8 @@ func TestRevocationCannotBeRolledBackByAutomaticBackupRecovery(t *testing.T) {
 			case "missing":
 				err = os.Remove(path)
 			case "future schema":
-				err = os.WriteFile(path, []byte(`{"schema_version":3,"peers":[]}`), 0600)
+				future, _ := json.Marshal(TrustFile{SchemaVersion: trustSchemaVersion + 1, Peers: []TrustedPeer{}})
+				err = os.WriteFile(path, future, 0600)
 			}
 			if err != nil {
 				t.Fatal(err)

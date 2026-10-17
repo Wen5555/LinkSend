@@ -90,6 +90,12 @@ func TestMembershipTransitionFencesTasksAndPreservesIndependentLAN(t *testing.T)
 					t.Fatalf("retained LAN grant kept old membership: %+v", actual)
 				}
 			}
+			if mode != "ordinary_refresh" {
+				late := []TrustedPeer{makeGrant(local, "old", localInc, 9999), makeGrant(peer, "old", localInc, 9999)}
+				if err = ApplyMembershipSnapshot(dir, local.ID, late); err == nil {
+					t.Fatal("superseded ordinary membership context revived through a higher old snapshot")
+				}
+			}
 		})
 	}
 }

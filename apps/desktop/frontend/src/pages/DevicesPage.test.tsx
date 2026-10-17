@@ -8,7 +8,7 @@ import { DevicesPage } from './DevicesPage';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn() }));
+const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })) }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const run: CommandRunner = async (_key, action, _message, onError) => {

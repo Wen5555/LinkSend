@@ -1,4 +1,10 @@
 # Security
+
+## 2026-10-18 显式成员恢复
+
+恢复不由401、网络错误或缓存推断触发；用户确认后先持久旧任务授权屏障，正常API核对新组并原子退休旧context。独立LAN和LocalBlock保留，旧queue/task不会重绑新权限，邀请码只在本次调用内存。schema3的退休/intent状态由旧客户端明确拒绝；升级前原字节备份和失败关闭标记保留，不能自动回退旧策略。
+
+首次DELETE也必须证明live actor和固定原目标；旧actor/legacy后台请求不借新成员权限发送。新actor仅在用户新删除动作下CAS换新request ID，原actor最多一次revision重试。完整服务快照与成员变更串行，LAN补组不会穿越恢复屏障。状态、遗留策略范围和边界见[ADR0008](adr/0008-membership-recovery-and-retired-contexts.md)；源码/夹具结果不代替原生或双NAT。
 ## 2026-09-14 E3 原生共享交接
 
 系统共享适配器只能读取 Go 最近发布的已授权设备 ID、用户别名和可达性，不得到公钥、token、信令凭据或数据库。选择结果不直接授予权限：v2 本机交接记录持久化 `request_id/peer_id/paths/bookmarks/source`，Go 消费后仍调用现有 `Enqueue` 重验 peer grant generation，并以同一 request ID 做数据库幂等。记录提交失败、损坏、未来或同 ID 不同内容时保留证据且不发送；正文不进入 JSON、JavaScript、WSS 或第三方服务。

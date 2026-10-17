@@ -186,20 +186,52 @@ func (s *Service) consumeLANCredential(ctx context.Context, session *discovery.S
 	credentialWire, credentialErr := session.Read(credentialCtx)
 	cancelCredential()
 	if credentialErr == nil && credentialWire.Type == "lan_pair" && credentialWire.LANPair != nil && credentialWire.LANPair.Phase == "credential" && credentialWire.LANPair.RequestID == requestID && credentialWire.LANPair.Nonce == nonce && credentialWire.LANPair.Verify(peerKey, s.identity.ID(), time.Now()) == nil {
-		if c, clientErr := s.client(); clientErr == nil {
-			if _, joinErr := c.Join(ctx, credentialWire.LANPair.Credential, s.name("")); joinErr == nil {
-				if devices, listErr := c.Devices(ctx); listErr == nil {
-					_ = s.syncPairedDevices(devices)
-					serverState = "joined"
-				}
-			} else if protocol.ErrorCode(joinErr) == protocol.PairingIdentityConflict {
-				serverState = "switch_required"
-			} else {
-				serverState = "pending"
-			}
-		}
+		return s.joinLANMembershipCredential(ctx, credentialWire.LANPair.Credential)
 	}
 	return serverState
+}
+
+func (s *Service) joinLANMembershipCredential(ctx context.Context, credential string) string {
+	if !s.membershipMu.TryLock() {
+		return "pending"
+	}
+	defer s.membershipMu.Unlock()
+	if s.requireNoMembershipRecovery() != nil {
+		return "pending"
+	}
+	c, err := s.client()
+	if err != nil {
+		return "not_joined"
+	}
+	if _, err = c.Join(ctx, credential, s.name("")); err != nil {
+		if protocol.ErrorCode(err) == protocol.PairingIdentityConflict {
+			return "switch_required"
+		}
+		return "pending"
+	}
+	devices, err := c.Devices(ctx)
+	if err != nil || s.syncPairedDevices(devices) != nil {
+		return "pending"
+	}
+	return "joined"
+}
+
+func (s *Service) issueLANMembershipCredential(ctx context.Context, peerKey []byte, request, approval signaling.LANPairFrame) (string, error) {
+	if !s.membershipMu.TryLock() {
+		return "", identity.ErrMembershipRecoveryPending
+	}
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return "", err
+	}
+	c, err := s.client()
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	invitation, err := c.CreateLANCredential(ctx, peerKey, request, approval)
+	return invitation.Token, err
 }
 
 func (s *Service) recoverLANPair(ctx context.Context, manager *discovery.Manager, peer discovery.Device, requestID, nonce string, generation uint64, expires int64) (bool, string) {
@@ -331,11 +363,9 @@ func (s *Service) handleIncomingLANPair(ctx context.Context, incoming discovery.
 	approval := newLANPairFrame(phase, request.RequestID, request.Nonce, s.identity.ID(), incoming.Peer.ID, generation, request.ExpiresAt)
 	approval.Signature = s.identity.Sign(approval.SigningBytes())
 	if accepted {
-		if c, clientErr := s.client(); clientErr == nil {
-			if invitation, credentialErr := c.CreateLANCredential(ctx, incoming.Peer.PublicKey, request, approval); credentialErr == nil {
-				credential = invitation.Token
-				_ = identity.SetProvisionalLANCredential(s.cfg.DataDir, request.RequestID, request.Nonce, credential)
-			}
+		if issued, credentialErr := s.issueLANMembershipCredential(ctx, incoming.Peer.PublicKey, request, approval); credentialErr == nil {
+			credential = issued
+			_ = identity.SetProvisionalLANCredential(s.cfg.DataDir, request.RequestID, request.Nonce, credential)
 		}
 	}
 	if err = incoming.Session.SendLANPair(ctx, approval); err != nil || !accepted {

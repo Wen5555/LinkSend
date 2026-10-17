@@ -995,15 +995,8 @@ func (s *Service) trustedDevice(ctx context.Context, id string) (signaling.Devic
 	// A newly joined group member may not be pinned by this already-running
 	// device yet. Refresh only on a local miss; established peers stay off the
 	// latency-sensitive HTTP devices path.
-	c, err := s.client()
+	devices, err := s.refreshMembershipDevices(ctx)
 	if err != nil {
-		return signaling.Device{}, err
-	}
-	devices, err := c.Devices(ctx)
-	if err != nil {
-		return signaling.Device{}, err
-	}
-	if err = s.syncPairedDevices(devices); err != nil {
 		return signaling.Device{}, err
 	}
 	peers, err = identity.LoadTrust(s.cfg.DataDir)

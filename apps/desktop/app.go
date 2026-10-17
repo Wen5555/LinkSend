@@ -837,6 +837,44 @@ func (a *App) SwitchMembership(token, name string) (linksendapp.DeviceInfo, erro
 	return a.core.SwitchMembership(ctx, token, name)
 }
 
+func (a *App) MembershipRecoveryStatus() (linksendapp.MembershipRecoveryStatus, error) {
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.MembershipRecoveryStatus()
+}
+
+func (a *App) PrepareMembershipRecovery(mode string, confirmed bool) (linksendapp.MembershipRecoveryStatus, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.MembershipRecoveryStatus{}, err
+	}
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.PrepareMembershipRecovery(mode, confirmed)
+}
+
+func (a *App) ContinueMembershipRecovery(requestID, code, name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.ContinueMembershipRecovery(ctx, requestID, code, name)
+}
+
+func (a *App) CancelMembershipRecovery(requestID string) (linksendapp.MembershipRecoveryStatus, error) {
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.CancelMembershipRecovery(requestID)
+}
+
 // PairDevice is the user-facing alias for the simplified pairing-code flow.
 // JoinGroup remains for CLI/binding compatibility with existing clients.
 func (a *App) PairDevice(code, name string) (linksendapp.DeviceInfo, error) {

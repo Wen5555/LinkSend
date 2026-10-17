@@ -1,5 +1,11 @@
 # Protocol
 
+## 2026-10-18 本地成员恢复与退休
+
+信令membership_v2、文件V1与剪贴板wire保持；客户端trust最大schema3，显式恢复/成员上下文替换时升级，其他普通schema2策略写入保持兼容。新增恢复intent、128项退休上下文上限和最近幂等收据；邀请码不持久化。旧客户端拒绝schema3，缺失/损坏策略不自动使用旧备份。
+
+恢复仅经正常Initialize/Join/Devices；先持久旧任务generation屏障，成功后原子退休旧group/local-incarnation，高revision旧快照也不能复活。有效LAN、本地拒绝、identity、文件、历史和偏好保留，新关系不继承免确认/剪贴板。普通撤销在首次DELETE前验证live actor/原目标，新actor仅通过用户新意图和CAS更新；原actor最多一次revision重试。状态、取消、兼容和独立LAN见[ADR0008](adr/0008-membership-recovery-and-retired-contexts.md)。
+
 ## 2026-09-22 本地失败诊断输出
 
 `DirectTransferResult` / CLI `--evidence` 新增可选 `failure_phase` 和 `failure_diagnostic`（stage/category/code/origin），只属于本地 API/JSON，不进入文件、信令或剪贴板 wire。错误时可以保留已经观测到的 session、ICE 候选对和计数；这不表示 QUIC/TLS 或文件传输成功，未协商 TLS 的版本为 0、ALPN 为空。底层 errno/TLS/QUIC 类型使用既有白名单分类，不包含原始错误正文、证书或 ICE 密码。前置文件准备、开流、正文协议和关闭错误按实际边界标明，连接观察器继续向既有 Task 调用方传递。

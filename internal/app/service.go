@@ -41,6 +41,7 @@ type Service struct {
 	signal                     *signaling.Client
 	mu                         sync.RWMutex
 	trustMu                    sync.Mutex
+	membershipMu               sync.Mutex // Serializes membership mutations/outbox; never nests operationMu across IO.
 	clipboardGrantMu           sync.Mutex
 	clipboardGrantBeforeCommit func()
 	clipboardLeaseBeforeWrite  func()
@@ -138,7 +139,7 @@ type InvitationInfo struct {
 }
 
 type MembershipStatus struct {
-	State   string `json:"state"` // pending, member, not_member, auth_failed, unavailable
+	State   string `json:"state"` // pending, member, not_member, auth_failed, unavailable, recovery_pending
 	Role    string `json:"role"`  // unknown, member, admin
 	Message string `json:"message,omitempty"`
 }
@@ -220,6 +221,16 @@ func (s *Service) Identity() IdentityInfo {
 }
 
 func (s *Service) Bootstrap(ctx context.Context, token, name string) (DeviceInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return DeviceInfo{}, workErr
+	}
+	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return DeviceInfo{}, err
+	}
 	c, err := s.client()
 	if err != nil {
 		return DeviceInfo{}, err
@@ -229,8 +240,21 @@ func (s *Service) Bootstrap(ctx context.Context, token, name string) (DeviceInfo
 }
 
 func (s *Service) InitializeMembership(ctx context.Context, name string) (DeviceInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return DeviceInfo{}, workErr
+	}
+	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return DeviceInfo{}, err
+	}
 	c, err := s.client()
 	if err != nil {
+		return DeviceInfo{}, err
+	}
+	if err = s.checkMembershipRegistrationContext(ctx, c); err != nil {
 		return DeviceInfo{}, err
 	}
 	d, err := c.Initialize(ctx, s.name(name))
@@ -246,6 +270,11 @@ func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, err
 		return DeviceInfo{}, workErr
 	}
 	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return DeviceInfo{}, err
+	}
 	c, err := s.client()
 	if err != nil {
 		return DeviceInfo{}, err
@@ -270,6 +299,11 @@ func (s *Service) SwitchMembership(ctx context.Context, token, name string) (Dev
 		return DeviceInfo{}, workErr
 	}
 	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return DeviceInfo{}, err
+	}
 	c, err := s.client()
 	if err != nil {
 		return DeviceInfo{}, err
@@ -303,6 +337,16 @@ func (s *Service) SwitchMembership(ctx context.Context, token, name string) (Dev
 }
 
 func (s *Service) CreateInvitation(ctx context.Context) (InvitationInfo, error) {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return InvitationInfo{}, workErr
+	}
+	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	if err := s.requireNoMembershipRecovery(); err != nil {
+		return InvitationInfo{}, err
+	}
 	c, err := s.client()
 	if err != nil {
 		return InvitationInfo{}, err
@@ -324,13 +368,24 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	c, err := s.client()
 	var devices []signaling.Device
 	serverErr := err
-	if err == nil {
-		s.flushPendingRevocations(ctx, c)
-		devices, serverErr = c.Devices(ctx)
-		if serverErr == nil {
-			if err = s.syncPairedDevices(devices); err != nil {
-				return nil, err
+	if err == nil && s.membershipMu.TryLock() {
+		refreshErr := func() error {
+			defer s.membershipMu.Unlock()
+			if pendingErr := s.requireNoMembershipRecovery(); pendingErr != nil {
+				serverErr = pendingErr
+				return nil
 			}
+			s.flushPendingRevocationsLocked(ctx, c)
+			devices, serverErr = c.Devices(ctx)
+			if serverErr == nil {
+				if syncErr := s.syncPairedDevices(devices); syncErr != nil {
+					return syncErr
+				}
+			}
+			return nil
+		}()
+		if refreshErr != nil {
+			return nil, refreshErr
 		}
 	}
 	peers, err := identity.LoadTrust(s.cfg.DataDir)
@@ -418,6 +473,12 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 }
 
 func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Client) {
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
+	s.flushPendingRevocationsLocked(ctx, c)
+}
+
+func (s *Service) flushPendingRevocationsLocked(ctx context.Context, c *signaling.Client) {
 	denied, err := identity.LoadDeniedPeers(s.cfg.DataDir)
 	if err != nil {
 		return
@@ -426,7 +487,7 @@ func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Clie
 		if !pending.PendingSync || pending.RequestID == "" || pending.TargetIncarnation == "" || pending.SeenRevision == 0 {
 			continue
 		}
-		requestID, revision, revokeErr := s.revokeMembershipWithRefresh(ctx, c, pending, false)
+		requestID, revision, revokeErr := s.revokeMembershipWithRefreshLocked(ctx, c, pending, false)
 		if revokeErr != nil {
 			continue
 		}
@@ -440,9 +501,6 @@ func (s *Service) flushPendingRevocations(ctx context.Context, c *signaling.Clie
 // successful pairing-service membership pins every returned device key. This
 // removes the manual fingerprint step while still rejecting later key changes.
 func (s *Service) syncPairedDevices(devices []signaling.Device) error {
-	s.clipboardGrantMu.Lock()
-	s.trustMu.Lock()
-	before, beforeErr := identity.LoadTrust(s.cfg.DataDir)
 	var local signaling.Device
 	for _, d := range devices {
 		if d.ID == s.identity.ID() {
@@ -451,30 +509,31 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		}
 	}
 	if local.ID == "" {
-		s.trustMu.Unlock()
-		s.clipboardGrantMu.Unlock()
 		return protocol.Fail(protocol.VersionIncompatible, "membership_v2 local incarnation missing")
 	}
 	snapshot := make([]identity.TrustedPeer, 0, len(devices))
 	for _, d := range devices {
 		snapshot = append(snapshot, identity.TrustedPeer{ID: d.ID, Name: d.Name, PublicKey: d.PublicKey, GroupID: d.GroupID, PeerIncarnation: d.Incarnation, LocalIncarnation: local.Incarnation, MembershipRevision: d.MembershipRevision})
 	}
-	err := identity.ApplyMembershipSnapshot(s.cfg.DataDir, s.identity.ID(), snapshot)
+	return s.mutateMembershipTrust(func() error { return identity.ApplyMembershipSnapshot(s.cfg.DataDir, s.identity.ID(), snapshot) })
+}
+
+func (s *Service) mutateMembershipTrust(mutate func() error) error {
+	s.clipboardGrantMu.Lock()
+	s.trustMu.Lock()
+	before, beforeErr := identity.LoadTrust(s.cfg.DataDir)
+	err := mutate()
 	after, afterErr := identity.LoadTrust(s.cfg.DataDir)
 	s.trustMu.Unlock()
-	if err != nil {
-		s.clipboardGrantMu.Unlock()
-		return err
-	}
 	var changed []string
-	if beforeErr == nil && afterErr == nil {
+	if beforeErr == nil {
 		current := make(map[string]uint64, len(after))
 		for _, peer := range after {
 			current[peer.ID] = peer.GrantGeneration
 		}
 		for _, peer := range before {
-			if generation, ok := current[peer.ID]; !ok || generation != peer.GrantGeneration {
-				_ = s.clearClipboardGrantsLocked(peer.ID)
+			if generation, ok := current[peer.ID]; afterErr != nil || !ok || generation != peer.GrantGeneration {
+				err = errors.Join(err, s.clearClipboardGrantsLocked(peer.ID))
 				changed = append(changed, peer.ID)
 			}
 		}
@@ -484,12 +543,17 @@ func (s *Service) syncPairedDevices(devices []signaling.Device) error {
 		s.closePooledSessions(peerID)
 		s.cancelPeerTasks(peerID)
 	}
-	return nil
+	return errors.Join(err, beforeErr, afterErr)
 }
 
 // Membership reports only evidence returned by the authenticated server. A
 // merged 401 remains auth_failed; it is never guessed to mean not_member.
 func (s *Service) Membership(ctx context.Context) MembershipStatus {
+	if intent, _, err := identity.LoadMembershipRecovery(s.cfg.DataDir); err != nil {
+		return membershipFailure(err)
+	} else if intent != nil {
+		return MembershipStatus{State: "recovery_pending", Role: "unknown", Message: "正在显式恢复设备组；旧任务已隔离，请在恢复面板继续。"}
+	}
 	c, err := s.client()
 	if err != nil {
 		return MembershipStatus{State: "unavailable", Role: "unknown", Message: "服务地址尚未配置或当前不可达"}
@@ -580,6 +644,13 @@ func (s *Service) alwaysAccept(deviceID string) bool {
 }
 
 func (s *Service) Revoke(ctx context.Context, deviceID string) error {
+	done, workErr := s.beginProfileWork()
+	if workErr != nil {
+		return workErr
+	}
+	defer done()
+	s.membershipMu.Lock()
+	defer s.membershipMu.Unlock()
 	peers, err := identity.LoadTrust(s.cfg.DataDir)
 	if err != nil {
 		return err
@@ -607,7 +678,7 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 			if clientErr != nil {
 				return clientErr
 			}
-			requestID, revision, retryErr := s.revokeMembershipWithRefresh(ctx, c, prior, true)
+			requestID, revision, retryErr := s.revokeMembershipWithRefreshLocked(ctx, c, prior, true)
 			if retryErr != nil {
 				return retryErr
 			}
@@ -645,7 +716,21 @@ func (s *Service) Revoke(ctx context.Context, deviceID string) error {
 	if err != nil {
 		return errors.Join(err, grantErr)
 	}
-	requestID, revision, err := s.revokeMembershipWithRefresh(ctx, c, identity.DeniedPeer{ID: deviceID, TargetIncarnation: peer.PeerIncarnation, ActorGroupID: peer.GroupID, ActorIncarnation: peer.LocalIncarnation, SeenRevision: peer.MembershipRevision, RequestID: requestID}, false)
+	denied, loadErr := identity.LoadDeniedPeers(s.cfg.DataDir)
+	if loadErr != nil {
+		return errors.Join(loadErr, grantErr)
+	}
+	var pending identity.DeniedPeer
+	for _, candidate := range denied {
+		if candidate.ID == deviceID && candidate.RequestID == requestID {
+			pending = candidate
+			break
+		}
+	}
+	if pending.ID == "" {
+		return errors.Join(protocol.Fail(protocol.AuthenticationFailed, "persisted revocation changed before dispatch"), grantErr)
+	}
+	requestID, revision, err := s.revokeMembershipWithRefreshLocked(ctx, c, pending, false)
 	if err != nil {
 		return errors.Join(err, grantErr)
 	}

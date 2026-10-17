@@ -42,6 +42,10 @@ export function BlockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(1661110154, id);
 }
 
+export function CancelMembershipRecovery(requestID: string): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(887065632, requestID);
+}
+
 export function CancelQueue(id: string, revision: number): $CancellablePromise<void> {
     return $Call.ByID(3632256226, id, revision);
 }
@@ -92,6 +96,10 @@ export function ContentSettings(): $CancellablePromise<app$0.ContentSettings> {
 
 export function ContentTask(taskID: string): $CancellablePromise<app$0.ContentTaskInfo> {
     return $Call.ByID(2173688711, taskID);
+}
+
+export function ContinueMembershipRecovery(requestID: string, code: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(3912033515, requestID, code, name);
 }
 
 export function CopyReceivedText(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
@@ -182,6 +190,10 @@ export function Membership(): $CancellablePromise<app$0.MembershipStatus> {
     return $Call.ByID(3247912641);
 }
 
+export function MembershipRecoveryStatus(): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(3129518668);
+}
+
 export function NetworkChanged(reason: string): $CancellablePromise<void> {
     return $Call.ByID(465047923, reason);
 }
@@ -232,6 +244,10 @@ export function Preferences(): $CancellablePromise<$models.DesktopPreferences> {
 
 export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStatus> {
     return $Call.ByID(2639668847);
+}
+
+export function PrepareMembershipRecovery(mode: string, confirmed: boolean): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(2419553939, mode, confirmed);
 }
 
 export function PreviewDraft(): $CancellablePromise<app$0.DraftPreview> {

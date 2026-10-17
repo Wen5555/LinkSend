@@ -4,6 +4,7 @@ import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, Members
 import type { CommandRunner } from '../hooks/useDesktop';
 import { formatPairingCodeInput, shouldClearPairingCode } from '../connection';
 import { deviceConnectionLabel, deviceName } from '../presentation';
+import { MembershipRecoveryPanel } from './MembershipRecoveryPanel';
 
 type Props = { devices: DeviceInfo[]; identityID?: string; membership?: MembershipStatus; name: string; run: CommandRunner; op: string; available: boolean };
 type DirectoryKind = 'paired' | 'nearby' | 'removed';
@@ -93,6 +94,7 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
   return <div className="page-stack">
     <div className="page-intro"><div><p className="eyebrow">可信设备</p><h2>设备</h2><p>配对关系与当前连接状态分开显示。</p></div>{membership?.state === 'not_member' ? <button className="primary" disabled={!!op} onClick={() => void run('initialize', () => Backend.InitializeMembership(name || 'LinkSend desktop'), '本机设备组已初始化')}>初始化本机</button> : <button className="primary" disabled={!!op || membership?.state !== 'member'} onClick={() => void run('invite', async () => setInvite(await Backend.CreateInvitation()))}>生成配对码</button>}</div>
     {invite && <InvitationPanel key={invite.token} invite={invite} run={run} />}
+    <MembershipRecoveryPanel available={available} membershipState={membership?.state} name={name} run={run} op={op} />
     <div className="device-columns">
       <section className="surface device-directory" aria-label="设备目录">
         <div className="section-heading compact"><div><h2>设备目录</h2><small className="field-help">搜索结果按类别分页显示。</small></div><span className="task-count">{paired.length + nearby.length + removed.length} 台</span></div>
