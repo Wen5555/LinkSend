@@ -55,3 +55,5 @@ job `/tmp/codex-ssh/job-linksend-ae-jp-restart-backup-drill-20261018-01`：主�
 Windows准确包owned PID135152、Mac owned PID31256均已停止，剪贴板master=false、测试接收目录为空，保留profile和包供后续核对。Mac UI辅助访问拒绝、Windows UI点击未形成可验证导航，未当作原生旅程PASS。生产专属服务/备份timer是用户要求的持续资源，不随测试进程停止。
 
 Mac单进程对照 `curl -4 --noproxy '*'` 仍以28/SSL connection timeout失败；job `/tmp/codex-ssh/job-linksend-ae-mac-public-health-v4-20261018-01` 已终态。未改系统代理/TUN/路由，也未跳过证书。下一步先核对该域名在Mac的实际解析与指定CF IPv4的进程级对照；不能把JP/Windows公共成功迁移为Mac成功。
+
+最终CI回读：b8ad809的core push/PR `39065123673` / `39065127909`、desktop push/PR `39065123733` / `39065127766`、三平台包 `39065123767` 均success。包job Windows amd64与Mac arm64/amd64均通过；它们是该提交构建证据，未替代上述d541264原生包边界或剩余物理网络验收。

@@ -7,7 +7,7 @@
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：核对准确原生包进程上下文，继续刷新合并与真实独立旅程 |
-| B 新信令/客户端恢复/备份 | 新服务/精确DNS/备份恢复已上线 | Win/Debian备份回归通过 | JP/Win公共HTTPS；JP WSS/重启/恢复/撤销PASS；Mac公网TLS失败 | b8ad809已推送，部分CI运行中 | [证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：继续客户端灾后恢复、STUN与Mac路径诊断；双NAT缺项保留 |
+| B 新信令/客户端恢复/备份 | 新服务/精确DNS/备份恢复已上线 | Win/Debian备份回归通过 | JP/Win公共HTTPS；JP WSS/重启/恢复/撤销PASS；Mac公网TLS失败 | b8ad809五项workflow通过 | [证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：继续客户端灾后恢复、STUN与Mac路径诊断；双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
 | C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
