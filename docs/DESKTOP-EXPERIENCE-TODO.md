@@ -25,7 +25,7 @@
 
 Mac公共curl TLS失败，IPv4无proxy单进程对照job `/tmp/codex-ssh/job-linksend-ae-mac-public-health-v4-20261018-01` 也已exit28/SSL timeout；不得改宿主代理/TUN。下一动作：核对Mac精确解析/CF IPv4进程对照，STUN-only部署/实际srflx、客户端灾后恢复开发，再推进B2/N1–N4。当前无运行中的测试probe/恢复unit；生产服务和备份timer按目标保留。全部资源/回退位置见信令重建证据。
 
-B/STUN准备：Debian coturn4.6.1-2已安装，标准coturn.service保持masked/inactive，3478无监听；安装日志与包校验保留在 `/var/backups/linksend/coturn-install-20261017T201809Z`。新增独立STUN-only资产和生产Pion探针待部署验证；不将安装或本机fixture算作外部UDP/双NAT通过。固定Node24.21.0/pnpm12.4.1均已实际运行，工具隔离在 `.tools`。
+B/STUN现场：18a88f2/eb421f9已推送。新独立STUN-only服务本机Pion srflx/Binding/TURN负例通过，User=turnserver、PID285596、67/96 tasks、约7MiB；标准coturn.service保持masked/inactive。首轮TasksMax64导致auth线程创建失败，已安全停用后准确unit事务修复，证据/回退见信令重建文档。外部Windows/Mac UDP无响应，JP UFW只开放TCP22/80/443；已异步询问仅UDP3478授权，答复前不改规则/不切STUN DNS。旧默认STUN在Windows可取得srflx，Mac假IP/TUN公网路径仍失败；不替代双NAT文件。固定Node24.21.0/pnpm12.4.1及嵌套命令已核验，86前端测试和其余检查通过。
 
 B来源记录：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。首次部署/恢复及DNS已完成，原preflight仍保留独立历史。
 

@@ -57,3 +57,29 @@ Windows准确包owned PID135152、Mac owned PID31256均已停止，剪贴板mast
 Mac单进程对照 `curl -4 --noproxy '*'` 仍以28/SSL connection timeout失败；job `/tmp/codex-ssh/job-linksend-ae-mac-public-health-v4-20261018-01` 已终态。未改系统代理/TUN/路由，也未跳过证书。下一步先核对该域名在Mac的实际解析与指定CF IPv4的进程级对照；不能把JP/Windows公共成功迁移为Mac成功。
 
 最终CI回读：b8ad809的core push/PR `39065123673` / `39065127909`、desktop push/PR `39065123733` / `39065127766`、三平台包 `39065123767` 均success。包job Windows amd64与Mac arm64/amd64均通过；它们是该提交构建证据，未替代上述d541264原生包边界或剩余物理网络验收。
+
+## STUN-only 实际安装、修复与外部限制（2026-10-18 04:39）
+
+此节更新上节“尚未安装”的历史现场。Debian coturn4.6.1-2已在标准unit预先mask后精确安装，原unit保持masked/inactive；包SHA256 `cb55194d0118d26035aa39aa7306fd810a47069643266724357e8da2a22612e0`，包安装备份 `/var/backups/linksend/coturn-install-20261017T201809Z`。
+
+新增生产Pion探针与首次安装事务来源 `18a88f2a18e7a7e28fc1adde3c09de59f8b75c49`，已推送核对远端SHA。源码归档SHA256 `e771f115a1b52d200b367f61f0e0af406137ecc7cfdf55f4930606e9876c547a`；在Git仓库外导出、Go1.27.1/CGO0构建并注入该sourceCommit。三平台probe SHA256：
+
+| 平台 | SHA256 |
+|---|---|
+| Windows amd64 | a5490803dd2a7a4d13cbe333b865e56fdae9453b26d46b99d3296c330cbef77f |
+| Linux amd64 | a693d0ca46c15fe505cdb4ed58931979be5536f261901001d29d329db404928a |
+| macOS arm64 | a13fd8ec59ed50edb8142ce47b81b9b7dcacbe11b5bec8ca168d625c159f1988 |
+
+首轮job `/tmp/codex-ssh/job-linksend-ae-jp-stun-deploy-18a88f2-20261018-01` 在就绪检查exit1，已停止并禁用本任务unit、保留配置/备份，未切DNS。备份 `/var/backups/linksend/stun-20261017T203445Z`。日志明确 `Cannot create auth thread`；目标nproc=2但内核可见128 CPU，核对 [coturn4.6.1源代码](https://github.com/coturn/coturn/blob/4.6.1/src/apps/relay/netengine.c) 的auth worker数为CPU/2+1，超过TasksMax64。
+
+仅本项目unit的TasksMax改为96，来源 `eb421f9e4d81919fa8af9461d210a398d6a6c602` 已推送。恢复事务先校验现有unit/config/probe原SHA、inactive/disabled/3478空闲，备份回读后安装准确unit；job `/tmp/codex-ssh/job-linksend-ae-jp-stun-recover-eb421f9-20261018-01` exit0，备份 `/var/backups/linksend/stun-recover-eb421f9-20261017T203647Z`。服务User=turnserver、PID285596、67 tasks、约7MiB、NRestarts0，仅UDP `85.149.217.165:3478`；信令/备份均active。配置SHA256 `4186318767e38eec4c05dc6ed5530e5f5fb121243bd8e597c9293d89e6f69ee8`，unitSHA256 `cf19ee35fdd65cc7a4d0edf1d349dbcc865598af96fb90b93f77b5f40849130e`。
+
+本机生产Endpoint取得host+srflx，STUN sent20/received64 bytes、1次响应；独立socket的Binding成功，带UDP RequestedTransport的TURN Allocate在2秒窗口无响应，未观察到分配。probe退出时Pion打印closed-network-connection，发生在检查完成后的Endpoint关闭，不将该日志写作传输失败或忽略未完成检查。
+
+外部Windows和Mac直接IP探针均无STUN响应/无srflx、exit1。只读UFW检查确认默认deny incoming，只放行TCP22/80/443，没有UDP3478；未安装抓包工具或修改规则。精确 `stun.oooai.de` DNS仍为A109.66.88.204、DNS-only、TTL1、记录ID `5c1ea68231bc7a694cb2d889a7c07d01`。Windows对这个旧STUN实际取得srflx，228ms、Binding成功、Allocate负例通过；Google对照也取得srflx，但其Binding响应缺fingerprint而不能满足本探针严格STUN-only检查，不计完整PASS。
+
+目标文档第3节将宿主防火墙排除授权；已向用户异步请求仅JP UDP3478入站的精确补充授权，答复前不添加规则/不切STUN DNS。新STUN外部项为待授权，不能称跨NAT文件通过。其他客户端开发继续。
+
+Mac默认STUN解析为198.18.1.50，实际失败；公共信令解析为198.18.1.49。单进程严格证书 `curl -4 --noproxy '*' --resolve linksend.oooai.de:443:104.21.45.36` 及172.67.208.195均SSL timeout28；job `/tmp/codex-ssh/job-linksend-ae-mac-stun-default-tls-20261018-01` exit1。没有改DNS/TUN/代理/路由；该结果定位到当前Mac进程公网路径仍不可用，不证明原生包LAN或整个产品均失败。
+
+本批核心off完整test/vet/build、probe普通/race、desktop workspace/off test及off vet/build、固定Node24.21.0/pnpm12.4.1下前端86 tests/typecheck/lint/build均PASS。18a88f2的两core/两desktop CI success，package run因后续提交并发策略cancelled；最终三平台包以eb421f9及后续回读为准。服务本机结果、外部UDP、原生文件和双NAT分列，不相互替代。

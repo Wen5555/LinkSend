@@ -1,5 +1,6 @@
 ## 2026-10-18 B STUN-only 首轮部署修复
 
+- eb421f9准确unit恢复事务exit0，本机srflx/Binding与TURN Allocate负例通过，67/96 tasks、约7MiB、独立UDP3478、无TCP；信令/备份保持active。外部Win/Mac均超时，只读确认UFW仅放行TCP22/80/443；精确UDP3478授权异步待答，未改规则/未切STUN DNS。旧默认STUN在Windows成功，Mac假IP解析及两个严格CF IPv4进程对照仍失败。完整来源/hash/job/备份见[信令重建证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md#stun-only-实际安装修复与外部限制2026-10-18-0439)，客户端工作继续。
 - `18a88f2` 已推送并核对远端SHA。新unit首轮就绪失败后事务已停用，未切DNS；信令/备份保持active。日志明确 `Cannot create auth thread`，核对coturn4.6.1源码 `netengine.c` 按可见CPU/2+1创建auth worker；目标虽nproc=2但可见0–127 CPU，超过TasksMax64。专属unit改为有界96，不改宿主cgroup/CPU/安全策略；待准确资产再次事务复验。
 
 ## 2026-10-18 B STUN-only 准备
