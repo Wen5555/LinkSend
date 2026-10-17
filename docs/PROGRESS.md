@@ -1,3 +1,7 @@
+## 2026-10-18 B STUN-only 首轮部署修复
+
+- `18a88f2` 已推送并核对远端SHA。新unit首轮就绪失败后事务已停用，未切DNS；信令/备份保持active。日志明确 `Cannot create auth thread`，核对coturn4.6.1源码 `netengine.c` 按可见CPU/2+1创建auth worker；目标虽nproc=2但可见0–127 CPU，超过TasksMax64。专属unit改为有界96，不改宿主cgroup/CPU/安全策略；待准确资产再次事务复验。
+
 ## 2026-10-18 B STUN-only 准备
 
 - 新增独立 coturn STUN-only unit、精确IPv4配置、首次安装备份/验证/停用回退事务，以及复用生产Pion的 `scripts/stunprobe`。目前是工具准备，实际UDP/DNS部署验收尚未完成。标准coturn服务已在安装前mask并保持inactive，Debian精确安装4.6.1-2；本批不改宿主防火墙、路由、代理。

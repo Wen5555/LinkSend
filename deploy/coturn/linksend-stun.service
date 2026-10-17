@@ -20,7 +20,9 @@ ProtectHome=true
 RestrictAddressFamilies=AF_INET AF_UNIX
 CapabilityBoundingSet=
 MemoryMax=128M
-TasksMax=64
+# coturn 4.6.1 creates 1 + visible CPUs/2 authentication threads even in
+# STUN-only mode (128 visible CPUs on this target). Keep a finite headroom.
+TasksMax=96
 LogNamespace=linksend
 LogRateLimitIntervalSec=30s
 LogRateLimitBurst=100
