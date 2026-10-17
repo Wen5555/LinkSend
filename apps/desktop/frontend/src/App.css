@@ -328,3 +328,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .source-selection select, .source-selection textarea { background: rgba(0,0,0,.22); color: var(--text); border-color: var(--line-strong); }
   .source-selection .secondary { background: rgba(255,255,255,.08); color: var(--text); border-color: var(--line-strong); }
 }
+.batch-targets { margin-block: .8rem; }
+.batch-target-list { display: grid; gap: .35rem; margin-block: .65rem; }
+.batch-target-choice { display: flex; align-items: center; gap: .65rem; min-height: 42px; padding: .35rem; }
+.batch-target-choice input { width: 17px; height: 17px; flex: 0 0 17px; }
+.batch-target-choice span { min-width: 0; }
+.batch-target-choice strong, .batch-target-choice small { display: block; overflow-wrap: anywhere; }
+.batch-target-choice small { font-size: 11px; color: var(--muted); margin-top: .2rem; }
+.batch-summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-block: .65rem; }

@@ -1,5 +1,9 @@
 # Protocol
 
+## 2026-10-18 本地多目标批次
+
+文件/manifest V1、信令和剪贴板wire保持。多目标与批次仅为Go本地控制元数据；任务库10→11新增有序目标、parent与子队列关联，兼容旧单目标。`EnqueueBatch`绑定精确持久草稿revision，原子创建全部目标并保留幂等收据；子项独立保留原授权代次/规则/内容摘要，派发时重验。取消与重启不授权继续，旧schema10端明确拒绝11。具体API/迁移及完成回执优先规则见[ADR0010](adr/0010-atomic-device-batches.md)。
+
 ## 2026-10-18 本地目录预设
 
 文件/manifest V1与信令、剪贴板wire保持。`source_selection`仅本地草稿、队列与任务恢复元数据；Go生成正常的选中文件manifest，接收端沿用原有确认、hash与安全落盘。任务库9→10，筛选发送恢复记录version2；版本1完整发送兼容。规范化规则参与队列内容身份，精确草稿来源/revision与内容摘要原子保存；未支持规则拒绝，不能退成完整发送。语义和迁移见[ADR0009](adr/0009-versioned-source-selection.md)。

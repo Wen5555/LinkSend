@@ -20,6 +20,23 @@ export interface AcceptIncomingDefaultResult {
     "message"?: string;
 }
 
+export interface BatchSnapshot {
+    "id": string;
+    "request_id": string;
+    "draft_id": string;
+    "draft_revision": number;
+    "revision": number;
+    "created_at": string;
+    "cancelled": boolean;
+    "state": string;
+    "total": number;
+    "completed": number;
+    "waiting": number;
+    "running": number;
+    "needs_attention": number;
+    "stopped": number;
+}
+
 export interface ClipboardGrant {
     "peer_id": string;
     "direction": string;
@@ -175,6 +192,14 @@ export interface DraftPreview {
     "bytes": number;
     "complete": boolean;
     "problem"?: string;
+}
+
+export interface EnqueueBatchRequest {
+    "request_id": string;
+    "draft_id": string;
+    "draft_revision": number;
+    "wait_for_peer": boolean;
+    "expires_at": string;
 }
 
 export interface EnqueueContentRequest {
@@ -378,6 +403,8 @@ export interface MembershipStatus {
 }
 
 export interface QueueItem {
+    "batch_id"?: string;
+    "batch_position"?: number;
     "draft_id"?: string;
     "draft_revision"?: number;
     "source_selection"?: transfer$0.SourceSelection | null;
@@ -409,6 +436,7 @@ export interface ResendInboxRequest {
  * persisting a draft does not authorise a send or open any of its file bodies.
  */
 export interface SendDraft {
+    "peer_ids"?: string[] | null;
     "source_selection"?: transfer$0.SourceSelection | null;
     "id": string;
     "paths": string[] | null;
@@ -439,6 +467,8 @@ export interface TaskPhaseEvent {
 }
 
 export interface TaskSnapshot {
+    "batch_id"?: string;
+
     /**
      * compatibility alias for task_id
      */
@@ -522,6 +552,7 @@ export interface WorkspaceChange {
  * recovery maps, checkpoint paths and file/image bytes never cross this DTO.
  */
 export interface WorkspaceSnapshot {
+    "batches"?: BatchSnapshot[] | null;
     "epoch": string;
     "revision": number;
     "draft": SendDraft;

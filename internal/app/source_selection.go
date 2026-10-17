@@ -13,13 +13,17 @@ import (
 // The queue's content digest and canonical policy are committed with the exact
 // saved draft revision. A metadata preview does not freeze source file bytes.
 func checkSourceDraftBinding(row *sql.Row, request EnqueueRequest, paths, selection string) error {
-	var savedPaths, savedPeer, savedSelection string
+	var savedPaths, savedPeer, savedSelection, savedPeers string
 	var revision uint64
-	if err := row.Scan(&savedPaths, &savedPeer, &revision, &savedSelection); err != nil {
+	if err := row.Scan(&savedPaths, &savedPeer, &revision, &savedSelection, &savedPeers); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrMetadataConflict
 		}
 		return err
+	}
+	var peers []string
+	if len(savedPeers) > 2048 || json.Unmarshal([]byte(savedPeers), &peers) != nil || peers == nil || len(peers) > 1 || len(peers) == 1 && peers[0] != savedPeer {
+		return ErrMetadataConflict
 	}
 	if revision != request.DraftRevision || savedPeer != request.PeerID || savedPaths != paths || savedSelection != selection {
 		return ErrMetadataConflict

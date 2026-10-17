@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 10
+const taskStoreSchema = 11
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -200,6 +200,11 @@ func historyDB(path string) (*sql.DB, error) {
 					return rollback(err)
 				}
 			}
+		}
+	}
+	if schema < 11 {
+		if err = migrateBatchMetadata(tx); err != nil {
+			return rollback(err)
 		}
 	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {

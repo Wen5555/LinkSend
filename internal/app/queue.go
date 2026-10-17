@@ -19,6 +19,8 @@ import (
 )
 
 type QueueItem struct {
+	BatchID                 string                    `json:"batch_id,omitempty"`
+	BatchPosition           int                       `json:"batch_position,omitempty"`
 	DraftID                 string                    `json:"draft_id,omitempty"`
 	DraftRevision           uint64                    `json:"draft_revision,omitempty"`
 	SourceSelection         *transfer.SourceSelection `json:"source_selection,omitempty"`
@@ -67,17 +69,20 @@ type queueManager struct {
 	done          chan struct{}
 }
 
-const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer,authorization_generation,source_selection,draft_id,draft_revision`
+const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer,authorization_generation,source_selection,draft_id,draft_revision,batch_id,batch_position`
 
 func scanQueue(row interface{ Scan(...any) error }) (queueRecord, error) {
 	var item queueRecord
 	var paths, selection string
-	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer, &item.AuthorizationGeneration, &selection, &item.DraftID, &item.DraftRevision)
+	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer, &item.AuthorizationGeneration, &selection, &item.DraftID, &item.DraftRevision, &item.BatchID, &item.BatchPosition)
 	if err == nil {
 		err = json.Unmarshal([]byte(paths), &item.paths)
 		item.SourceSummary = sourceSummary(item.paths)
 		if err == nil {
 			item.SourceSelection, err = decodeSourceSelection(selection)
+		}
+		if err == nil && (item.BatchID == "" && item.BatchPosition != 0 || item.BatchID != "" && (len(item.BatchID) != 32 || item.BatchPosition < 1 || item.BatchPosition > maxBatchTargets)) {
+			err = ErrMetadataInvalid
 		}
 	}
 	return item, err
@@ -194,7 +199,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		return QueueItem{}, err
 	}
 	if request.DraftID != "" {
-		if err = checkSourceDraftBinding(s.store.db.QueryRow(`SELECT source_paths,peer_id,revision,source_selection FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
+		if err = checkSourceDraftBinding(s.store.db.QueryRow(`SELECT source_paths,peer_id,revision,source_selection,peer_ids FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
 			return QueueItem{}, err
 		}
 	}
@@ -255,7 +260,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 			return QueueItem{}, err
 		}
 		if existingCount == 0 {
-			if err = checkSourceDraftBinding(tx.QueryRow(`SELECT source_paths,peer_id,revision,source_selection FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
+			if err = checkSourceDraftBinding(tx.QueryRow(`SELECT source_paths,peer_id,revision,source_selection,peer_ids FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
 				return QueueItem{}, err
 			}
 		}
@@ -273,7 +278,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		state = "waiting_peer"
 	}
 	id := protocol.RandomID()
-	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?,?,?,?,?) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer, authorizationGeneration, selection, request.DraftID, request.DraftRevision)
+	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?,?,?,?,?,'',0) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer, authorizationGeneration, selection, request.DraftID, request.DraftRevision)
 	if err != nil {
 		return QueueItem{}, err
 	}
@@ -373,6 +378,11 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 	if s.isClosing() || ctx.Err() != nil {
 		return
 	}
+	if err := s.reconcileCancelledBatchReceipts(); err != nil {
+		s.queue.persistFailed = true
+		s.queue.paused = true
+		return
+	}
 	items, err := s.queueItems()
 	if err != nil {
 		return
@@ -420,6 +430,10 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 	var runnable []QueueItem
 	for _, item := range items {
 		if item.State != "queued" && item.State != "waiting_peer" {
+			continue
+		}
+		if err := s.requireBatchAllowed(item.BatchID); err != nil {
+			_ = s.setQueueState(item.ID, "cancelled", err.Error())
 			continue
 		}
 		if deadline, e := time.Parse(time.RFC3339Nano, item.ExpiresAt); e != nil || !deadline.After(time.Now()) {
@@ -489,6 +503,7 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 		cfg.contentAllowFallback = allowFallback
 		cfg.expectedSourceDigest = record.digest
 		cfg.sourceSelection = cloneSourceSelection(record.SourceSelection)
+		cfg.originBatchID = record.BatchID
 		cfg.expectedAuthorizationGeneration = record.AuthorizationGeneration
 		cfg.beforeDispatch = func(task TaskSnapshot) error {
 			if !task.HistoryPersisted {
@@ -580,6 +595,9 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 	defer s.queue.mu.Unlock()
 	item, err := scanQueue(s.store.db.QueryRow(`SELECT `+queueColumns+` FROM send_queue WHERE id=?`, id))
 	if err != nil {
+		return err
+	}
+	if err = s.requireBatchAllowed(item.BatchID); err != nil {
 		return err
 	}
 	if item.Revision != revision || item.State != "needs_attention" {

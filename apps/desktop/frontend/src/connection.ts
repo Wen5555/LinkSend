@@ -151,6 +151,8 @@ export function humanizeBackendError(raw: unknown): string {
     APP_CLOSING: '应用正在保存并退出，暂不接受新操作。',
     RESOURCE_LIMIT: '已达到可处理数量上限，请减少文件或队列项后重试。',
     INVALID_SOURCE_SELECTION: '排除规则无效：请使用相对路径、每行一条，最多 32 条；不支持取反或括号表达式。',
+    BATCH_CANCELLED: '此批次已取消，旧子任务不能继续。需要重新发送时请创建新的发送草稿。',
+    BATCH_TARGET_REQUIRES_CONFIRMATION: '请在待发送队列中确认此批次目标；已完成的其他目标不会重发。',
     INVALID_ARGUMENT: '输入不完整，请选择设备、文件和接收目录后重试。',
     DESKTOP_NOT_READY: '桌面窗口尚未准备好，请稍后重试。',
     BACKEND_UNAVAILABLE: '桌面服务尚未启动完成，请稍后重试。',

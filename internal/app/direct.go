@@ -26,6 +26,7 @@ const firstGeneration uint64 = 1
 const candidateExchangeBudget = 10 * time.Second
 
 type DirectConfig struct {
+	originBatchID                   string
 	sourceSelection                 *transfer.SourceSelection
 	BindAddress                     string
 	InterfacePriority               []string

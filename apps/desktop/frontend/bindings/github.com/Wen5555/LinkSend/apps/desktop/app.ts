@@ -42,6 +42,10 @@ export function BlockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(1661110154, id);
 }
 
+export function CancelBatch(id: string, revision: number): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(3900665653, id, revision);
+}
+
 export function CancelMembershipRecovery(requestID: string): $CancellablePromise<app$0.MembershipRecoveryStatus> {
     return $Call.ByID(887065632, requestID);
 }
@@ -142,12 +146,20 @@ export function Enqueue(request: app$0.EnqueueRequest): $CancellablePromise<app$
     return $Call.ByID(2200678053, request);
 }
 
+export function EnqueueBatch(request: app$0.EnqueueBatchRequest): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(2722231227, request);
+}
+
 export function EnqueueContent(request: app$0.EnqueueContentRequest): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(3042055810, request);
 }
 
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
     return $Call.ByID(2230930606, records);
+}
+
+export function GetBatch(id: string): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(144054913, id);
 }
 
 export function GetTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {

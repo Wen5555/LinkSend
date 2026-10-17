@@ -77,6 +77,25 @@ func (a *App) Enqueue(request coreapp.EnqueueRequest) (coreapp.QueueItem, error)
 	}
 	return a.core.Enqueue(request)
 }
+
+func (a *App) EnqueueBatch(request coreapp.EnqueueBatchRequest) (coreapp.BatchSnapshot, error) {
+	if err := a.workspaceAvailable(); err != nil {
+		return coreapp.BatchSnapshot{}, err
+	}
+	return a.core.EnqueueBatch(request)
+}
+func (a *App) GetBatch(id string) (coreapp.BatchSnapshot, error) {
+	if err := a.workspaceAvailable(); err != nil {
+		return coreapp.BatchSnapshot{}, err
+	}
+	return a.core.GetBatch(id)
+}
+func (a *App) CancelBatch(id string, revision uint64) (coreapp.BatchSnapshot, error) {
+	if err := a.workspaceAvailable(); err != nil {
+		return coreapp.BatchSnapshot{}, err
+	}
+	return a.core.CancelBatch(id, revision)
+}
 func (a *App) CancelQueue(id string, revision uint64) error {
 	if err := a.workspaceAvailable(); err != nil {
 		return err

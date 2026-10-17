@@ -39,6 +39,7 @@ type TaskFailureDiagnostic struct {
 }
 
 type TaskSnapshot struct {
+	BatchID                  string                       `json:"batch_id,omitempty"`
 	ID                       string                       `json:"id"` // compatibility alias for task_id
 	TaskID                   string                       `json:"task_id"`
 	AttemptID                string                       `json:"attempt_id"`
@@ -125,6 +126,7 @@ type taskRecord struct {
 }
 
 type taskRecovery struct {
+	BatchID                 string                    `json:"batch_id,omitempty"`
 	SourceSelection         *transfer.SourceSelection `json:"source_selection,omitempty"`
 	ContentSnapshotID       string                    `json:"content_snapshot_id,omitempty"`
 	ContentMode             string                    `json:"content_mode,omitempty"`
@@ -202,7 +204,7 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.PhaseTimeline = append(s.PhaseTimeline, TaskPhaseEvent{Phase: s.Phase, At: now})
 	s.Revision = 1
 	s.HistoryPersisted = m.historyAvailable()
-	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory, AuthorizationGeneration: s.AuthorizationGeneration}}
+	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{BatchID: s.BatchID, Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory, AuthorizationGeneration: s.AuthorizationGeneration}}
 	if s.Direction == "receive" {
 		t.decision = make(chan bool, 1)
 	}
@@ -521,6 +523,9 @@ func (t *taskRecord) recoverWithCode(attemptID string, code protocol.Code, phase
 }
 
 func recoveryUsable(recovery taskRecovery) bool {
+	if recovery.BatchID != "" && (len(recovery.BatchID) != 32 || recovery.Direction != "send") {
+		return false
+	}
 	selection, selectionErr := transfer.NormalizeSourceSelection(recovery.SourceSelection)
 	if selectionErr != nil || (recovery.Version != 1 && recovery.Version != 2) || recovery.Version == 1 && selection != nil || recovery.Version == 2 && (selection == nil || recovery.Direction != "send") || recovery.Direction == "" || recovery.PeerID == "" || recovery.PeerFingerprint != recovery.PeerID || len(recovery.TransferID) != 32 || len(recovery.ManifestDigest) != 64 || recovery.ChunkSize < 64<<10 || recovery.ChunkSize > 8<<20 || recovery.TotalBytes < 0 {
 		return false
@@ -737,10 +742,13 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if s.isClosing() {
 		return TaskSnapshot{}, errors.New("APP_CLOSING")
 	}
+	if err := s.requireBatchAllowed(cfg.originBatchID); err != nil {
+		return TaskSnapshot{}, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	base := make([]string, len(paths))
 	copy(base, paths)
-	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
+	t, err := s.tasks.create(TaskSnapshot{BatchID: cfg.originBatchID, Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
 		s.ensureInboxLocked()
@@ -1108,6 +1116,14 @@ func (s *Service) PauseTask(id string) error {
 }
 
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batch, err := s.taskBatchID(id); err != nil {
+		return TaskSnapshot{}, err
+	} else if batch != "" && cfg.beforeDispatch == nil {
+		return TaskSnapshot{}, errors.New("BATCH_TARGET_REQUIRES_CONFIRMATION")
+	}
 	s.signalHandoffMu.Lock()
 	defer s.signalHandoffMu.Unlock()
 	if s.isClosing() || s.workCtx.Err() != nil {
@@ -1140,6 +1156,10 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	if t == nil {
 		s.ensureInboxLocked()
 		return TaskSnapshot{}, errors.New("TASK_NOT_FOUND")
+	}
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		s.ensureInboxLocked()
+		return TaskSnapshot{}, err
 	}
 	t.mu.Lock()
 	if t.cancel != nil || !t.snap.CanResume || !recoveryUsable(t.recovery) {
@@ -1360,6 +1380,14 @@ func (s *Service) decideTask(id string, accepted bool) error {
 	return nil
 }
 func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batch, err := s.taskBatchID(id); err != nil {
+		return TaskSnapshot{}, err
+	} else if batch != "" {
+		return TaskSnapshot{}, errors.New("BATCH_TARGET_REQUIRES_CONFIRMATION")
+	}
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()
@@ -1371,6 +1399,14 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 		return TaskSnapshot{}, errors.New("TASK_NOT_RETRYABLE")
 	}
 	cfg := t.cfg
+	batchID, err := s.taskBatchID(id)
+	if err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batchID != "" {
+		cfg.originBatchID = batchID
+	}
+	cfg.expectedAuthorizationGeneration = snap.AuthorizationGeneration
 	cfg.sourceSelection = cloneSourceSelection(t.recoverySnapshot().SourceSelection)
 	return s.StartSend(t.peerID, t.paths, cfg)
 }

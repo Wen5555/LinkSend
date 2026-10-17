@@ -1,3 +1,9 @@
+## 2026-10-18 N2 原子多设备分发候选
+
+- Go从精确持久草稿读取2–16目标、路径和N1规则，预检后单事务创建parent/全部子项；8并发幂等、第三子项真实SQLite故障全回滚。任务库10→11校验备份迁移，旧schema10真实库拒绝且DB hash不变，草稿清空后仍可核对原批次收据。
+- 独立子项继续原顺序队列，源变化/撤权单项确认；持久取消覆盖重启与直接RPC，durable完成优先且发状态通知。真实同机Pion/QUIC三目标验证混合上线、拒绝后仅重试对应目标、中文/空目录/筛选/hash与无意外提交副本。
+- 核心off完整test/vet/build、desktop workspace/off-race/vet/build、完整app race225.334s和最新批次race23.751s、前端100tests/typecheck/lint/build均PASS；真实绑定95methods/66models。浏览器夹具与准确包/物理分别记录，详见[ADR0010](adr/0010-atomic-device-batches.md)和[证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)。N3/N4及A–E原生/网络缺项继续，Goal active。
+
 ## 2026-10-18 C/N1 目录预设候选
 
 - 共用Go规则/受限遍历、源码预设/有限自定义、数量体积/有界展开与恢复完整发送已实现；规则快照贯穿草稿、入队、派发、暂停/重启恢复、重试与历史重发。schema9→10备份迁移，筛选恢复记录version2，文件wire与身份边界保持。队列内容摘要绑定规范化规则与已保存草稿的精确revision，提交事务再次检查，草稿清空后幂等收据保持。见[ADR0009](adr/0009-versioned-source-selection.md)和[证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)。

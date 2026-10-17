@@ -37,9 +37,10 @@ function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: De
     </div>
     <div className="task-actions">{t.direction === 'receive' && t.state === 'completed' && t.bilateral_confirmed && <ReceivedContentActions taskID={t.id} revision={t.revision} run={run} op={op} available={true} />}
       {t.can_pause && <button className="secondary" aria-label={`暂停传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}
-      {t.can_resume && <button className="primary" aria-label={`恢复传输 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
+      {t.can_resume && !t.batch_id && <button className="primary" aria-label={`恢复传输 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
       {t.can_cancel && t.state !== 'awaiting_acceptance' && <button className="ghost" aria-label={`取消传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}
-      {t.can_retry && <button className="secondary" aria-label={`重新发送 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
+      {t.can_retry && !t.batch_id && <button className="secondary" aria-label={`重新发送 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
+      {t.batch_id && (t.can_resume || t.can_retry) && <small className="field-help">请在待发送队列中确认此批次目标。</small>}
       {t.state === 'completed' && t.direction === 'receive' && <button className="secondary" aria-label={`打开 ${t.id} 的文件夹`} disabled={!!op} onClick={() => void run(t.id, () => Backend.OpenTaskDirectory(t.id))}>打开文件夹</button>}
     </div>
   </article>;
