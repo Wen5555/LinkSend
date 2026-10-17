@@ -1,0 +1,17 @@
+[Unit]
+Description=Consistent online backup of LinkSend control database
+After=linksend.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/linksend/tools/linksend-backup.py backup --database /var/lib/linksend/control.db --directory /var/backups/linksend/database --keep 14
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/linksend /var/backups/linksend/database
+RestrictAddressFamilies=AF_UNIX
+TimeoutStartSec=90s
+LogNamespace=linksend

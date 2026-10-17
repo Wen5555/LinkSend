@@ -1,3 +1,10 @@
+## 2026-10-18 B 部署与恢复工具准备
+
+- 新增专属 systemd 服务/备份 timer、Nginx 精确站点、本地 CA 严格上游 TLS、独立日志 namespace 和首次安装事务。安装遇到已有目标即停止；失败停本项目并移除自己创建的站点链接，始终保留新库。工具和操作契约见[日本猫猫机部署](DEPLOY-JP.md)。此条为工具准备，尚不代表实际部署或 DNS 切换。
+- 在线备份使用 SQLite backup API，校验 integrity/foreign keys/SHA256，保留14份完整自有快照；隔离 restore 拒绝覆盖。Windows 首轮测试暴露只读 fd 的 fsync 与 SQLite context manager 不关闭句柄问题，已用可写 fsync 和显式 closing 修复。Windows 与目标 Debian 两项测试均通过，后者同时 `sh -n` 通过；job `/tmp/codex-ssh/job-linksend-ae-jp-deploy-preflight-20261018-01`。CI增加真实备份/恢复测试，不用复制活跃 DB 冒充一致性备份。
+- 服务器候选源码固定 `d541264`。Git内部archive构建仍会发现父Git并被标记dirty，两个尝试均不部署；仓库外导出重建的二进制SHA256为 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`，源归档 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，Go1.27.1 linux/amd64、CGO0。来源由导出提交+归档/二进制hash证明，不编造(devel)二进制内嵌的VCS字段。
+- `d541264` 准确 Windows portable 与Mac arm64 DMG/二进制来源和SHA256已核验；在专用profile、不可达信令/STUN下启动，剪贴板master=false。Mac package codesign/arm64/本地网络说明字段核对通过并监听53318及TLS；Windows UI显示LAN接收在线。Mac System Events报辅助访问拒绝(-25211)，Windows Computer Use尚未形成可验证设备页导航，未声称原生配对或文件通过；保留owned进程信息供收尾。
+
 ## 2026-10-18 A–E Goal 启动与首批 LAN 恢复
 
 - `d541264` 已提交/推送并核对远端SHA；五项源码/desktop/三平台包workflow均success，包run `39060667017`。原生产发现模块修复前十轮harness：Windows/Mac自动发现各10/10，中位数226ms/141ms（从各自ready，含启动顺序差，范围106–444/21–1061ms）；Windows→Mac固定身份TLS10/10，Mac→Windows TCP dial均EHOSTUNREACH。系统nc同端口/同源对照成功，尚在核对后台工具/原生包上下文，不能称双向文件通过。原始证据与边界已加入本轮LAN证据。

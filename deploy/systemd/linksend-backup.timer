@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily LinkSend database backup (14 verified copies)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=5m
+Persistent=true
+Unit=linksend-backup.service
+
+[Install]
+WantedBy=timers.target
