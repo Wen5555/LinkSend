@@ -1,3 +1,8 @@
+## 2026-10-18 B 客户端恢复前置授权屏障修复
+
+- 已复现group+lan跨组降为LAN不提升代次导致旧活动任务未取消，及成员刷新丢LAN request ID/换上下文丢地址历史与GrantedAt归零。补齐授权代次/时间屏障、保留独立LAN证据、代次耗尽原子拒绝；旧队列重启后仍不能重绑，新显式LAN入队可用。修复前FAIL、修复后定向/完整off核心/完整identity+app race/两模式desktop及vet/build均PASS；见[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。wire/schema未改。
+- 这批是安全前置修复，显式灾后恢复intent/API/UI、旧快照退休、旧pending revoke发送前上下文隔离仍待实现。B/Goal保持未完成；JP UDP3478授权异步待答，现有宿主规则及STUN DNS未动。
+
 ## 2026-10-18 B STUN-only 首轮部署修复
 
 - eb421f9准确unit恢复事务exit0，本机srflx/Binding与TURN Allocate负例通过，67/96 tasks、约7MiB、独立UDP3478、无TCP；信令/备份保持active。外部Win/Mac均超时，只读确认UFW仅放行TCP22/80/443；精确UDP3478授权异步待答，未改规则/未切STUN DNS。旧默认STUN在Windows成功，Mac假IP解析及两个严格CF IPv4进程对照仍失败。完整来源/hash/job/备份见[信令重建证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md#stun-only-实际安装修复与外部限制2026-10-18-0439)，客户端工作继续。

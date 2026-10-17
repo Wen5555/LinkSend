@@ -27,6 +27,8 @@ Mac公共curl TLS失败，IPv4无proxy单进程对照job `/tmp/codex-ssh/job-lin
 
 B/STUN现场：18a88f2/eb421f9已推送。新独立STUN-only服务本机Pion srflx/Binding/TURN负例通过，User=turnserver、PID285596、67/96 tasks、约7MiB；标准coturn.service保持masked/inactive。首轮TasksMax64导致auth线程创建失败，已安全停用后准确unit事务修复，证据/回退见信令重建文档。外部Windows/Mac UDP无响应，JP UFW只开放TCP22/80/443；已异步询问仅UDP3478授权，答复前不改规则/不切STUN DNS。旧默认STUN在Windows可取得srflx，Mac假IP/TUN公网路径仍失败；不替代双NAT文件。固定Node24.21.0/pnpm12.4.1及嵌套命令已核验，86前端测试和其余检查通过。
 
+B客户端：group+lan降为LAN及换上下文的旧授权屏障与LAN证据保留已修复，定向RED→GREEN、完整off核心/identity+app race/desktop两个模式/vet/build通过；[客户端恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。显式恢复intent/API/UI、旧快照退休、旧pending revoke发送前隔离仍待实施，不标完整恢复通过。STUN资产修复eb421f9的五项workflow及三平台包均success，18a88f2 package被后续提交的并发策略cancelled。
+
 B来源记录：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。首次部署/恢复及DNS已完成，原preflight仍保留独立历史。
 
 > **2026-10-18 A–E Goal提示词：** 用户要求撰写覆盖A、B、B2、C、D、E所有任务的执行提示词，并明确授权较大改动完成后阶段commit/push。见[完整执行提示词](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)。N1–N4均列必做；本次撰写/同步提示词不等于已启动功能实施，明确执行后再更新本Goal状态。

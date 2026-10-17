@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18 B恢复前置修复：成员上下文切换或旧group+lan降为独立LAN均提升授权代次/时间屏障，旧任务、队列及剪贴板权限不能借保留LAN关系继续。保留独立LAN地址/历史/request证据，普通同上下文刷新不丢同意；不改wire/schema。完整灾后恢复仍单列待实施，见ADR0007与TODO。
+
 2026-10-18 A 首批恢复：发现固定 UDP 端口不可用时使用临时源端口，保留有界组播/广播/单播与独立 TLS 控制入口，并暴露 `listen=fixed_port_unavailable`；既有刷新/公告定时器在端口释放后恢复固定监听。旧 socket reader 不能覆盖替代 socket 的状态或触发其重建。受限单播对所有匹配源路由尝试（最多32条），成功写入 UDP 只表示发出探测。已认证配对/恢复成功后立即更新当前发现器的记忆地址；拒绝配对不添加地址，记忆失败不撤销已持久授权。文件 wire、身份校验与明确同意边界未变；本批自动测试不代表物理网络验收完成。
 
 2026-09-14 E3 源码候选：Windows `windows.shareTarget` 与 macOS `com.apple.share-services` 使用原生小面板选择真实已配对设备。两端把有界路径/bookmark 元数据以本机 `request_id` 持久交给 Go，Go 再经现有授权代际和幂等队列派发；文件正文不经 JavaScript、信令或本地 IPC。macOS 只在系统给出临时表示时于回调期限内复制，原位文件使用 security-scoped bookmark。正式 App Group 和 Windows package identity 的签名安装实测按用户要求暂缓，不将无签名注册或模拟交接记为通过；文件 wire 仍为 V1。

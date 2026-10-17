@@ -877,12 +877,22 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 			peer.GrantGeneration = existing.GrantGeneration
 			peer.GrantedAt = existing.GrantedAt
 		} else {
+			if existing.GrantGeneration == ^uint64(0) {
+				return authenticationError("peer grant generation exhausted")
+			}
 			peer.AutoAccept = false
 			peer.LastLANAddress = ""
-			peer.GrantGeneration = max(generation, existing.GrantGeneration+1)
+			peer.GrantGeneration = max(generation, max(uint64(1), existing.GrantGeneration)+1)
+			peer.GrantedAt = time.Now().UTC()
 		}
 		if existing.GrantKind == "lan" || existing.GrantKind == "group+lan" {
 			peer.GrantKind = "group+lan"
+			// Membership responses carry no independent LAN consent metadata.
+			// Keep that evidence across a refresh or a new group/incarnation,
+			// while the new generation and GrantedAt fence all earlier tasks.
+			peer.LastLANAddress = existing.LastLANAddress
+			peer.LANAddressHistory = existing.LANAddressHistory
+			peer.LANRequestID = existing.LANRequestID
 		} else {
 			peer.GrantKind = "group"
 		}
@@ -939,6 +949,14 @@ snapshotReady:
 			continue
 		}
 		if peer.GrantKind == "group+lan" {
+			if peer.GrantGeneration == ^uint64(0) {
+				return authenticationError("peer grant generation exhausted")
+			}
+			// A queue/task is bound to the aggregate authorization generation,
+			// not just the remaining LAN pin. Retiring group authority must not
+			// let old work silently continue through the independent LAN grant.
+			f.Peers[index].GrantGeneration = max(uint64(1), peer.GrantGeneration) + 1
+			f.Peers[index].GrantedAt = time.Now().UTC()
 			f.Peers[index].GroupID, f.Peers[index].PeerIncarnation, f.Peers[index].LocalIncarnation, f.Peers[index].MembershipRevision, f.Peers[index].GrantKind, f.Peers[index].AutoAccept = "", "", "", 0, "lan", false
 			continue
 		}
