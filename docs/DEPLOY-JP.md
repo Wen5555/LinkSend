@@ -32,3 +32,19 @@ python3 /opt/linksend/tools/linksend-backup.py restore \
 restore 拒绝覆盖任何已有目标。恢复演练必须用新隔离目录及独立进程/监听，不替换运行中的控制库。部署失败时安装器停本项目服务/定时器、只移除自己新增且 target 一致的站点 symlink，验证并重载原 Nginx；配置、二进制、日志和新库均保留作恢复证据。已发生新写入后，后续回退应保留新库、回退兼容二进制，不能以空库或早期备份覆盖业务。
 
 每次改动均保存 manager jobPath/requestId。重连先使用 job_status/read_job；观测超时不是任务停止，不重复启动部署。
+
+## 独立 STUN-only
+
+`deploy/coturn/install-stun-only-jp.sh LOCAL_IPV4 PROBE PROBE_SHA256 SOURCE_COMMIT` 只接受首次安装。先精确安装发行版 coturn 并保持标准 `coturn.service` masked/inactive，再以独立 `linksend-stun.service` / `turnserver` 用户启动；不把该用户加入能读取信令 TLS 私钥的 linksend 组。
+
+配置绑定单个本机公共 IPv4 的 UDP3478，使用成熟 coturn 的 `stun-only`，关闭 TCP/TLS/DTLS/CLI/RFC5780。它不提供 TURN、文件代理或信令功能。复用项目有界 journal namespace，不改全局日志、宿主防火墙、路由或代理。
+
+安装前核对端口/用户/目标不存在、probe SHA256及来源提交，保存发行版版本和全部部署资产到 `/var/backups/linksend/stun-<UTC时间>` 并回读校验。安装后检查 unit、唯一 UDP 监听、实际 STUN Binding 与 TURN Allocate 负例；失败停止并禁用本任务 unit，保留配置和备份供检查，不删除已有数据。成功后仍须在外部机器验证 UDP，再切 `stun.oooai.de` 精确 A（DNS-only），保留原记录用于回退。
+
+`scripts/stunprobe` 复用生产 `connectivity.Endpoint` / Pion 收集候选，保持共享 ICE/QUIC UDP 所有权；只输出候选和计数元数据。另一个控制 socket 先验证正确 transaction/fingerprint 的 Binding 成功，再检查有效 Allocate 无成功响应；无响应只表示本次2秒窗口没有分配证据。构建须注入准确 `main.sourceCommit`，禁止用该探针冒充双 NAT 文件传输通过。
+
+```sh
+stunprobe -bind <本机真实IPv4> -stun stun:stun.oooai.de:3478 -timeout 10s
+```
+
+`-require-srflx=false` 仅用于服务本机的同地址自检；外部验收保留默认 true。自动测试覆盖 TURN 成功分配误报、Binding失败、错误transaction、损坏fingerprint和取消，不用本机fixture替代外部UDP结果。

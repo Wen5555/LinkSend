@@ -1,0 +1,29 @@
+[Unit]
+Description=LinkSend STUN-only (no TURN allocations or file relay)
+After=network.target
+
+[Service]
+Type=simple
+User=turnserver
+Group=turnserver
+ExecStart=/usr/bin/turnserver -c /etc/linksend-stun/stun-only.conf
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+UMask=0077
+RuntimeDirectory=linksend-stun
+RuntimeDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=128M
+TasksMax=64
+LogNamespace=linksend
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target

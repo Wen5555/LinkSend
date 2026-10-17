@@ -1,3 +1,10 @@
+## 2026-10-18 B STUN-only 准备
+
+- 新增独立 coturn STUN-only unit、精确IPv4配置、首次安装备份/验证/停用回退事务，以及复用生产Pion的 `scripts/stunprobe`。目前是工具准备，实际UDP/DNS部署验收尚未完成。标准coturn服务已在安装前mask并保持inactive，Debian精确安装4.6.1-2；本批不改宿主防火墙、路由、代理。
+- 固定项目工具链已实际确认 Node24.21.0 / pnpm12.4.1；pnpm12使用真实 `bin/pnpm.mjs` 包装入口并取得原生binary。它们位于忽略的 `.tools`，不修改全局PATH。
+- 核心 `GOWORK=off go test -count=1 -timeout 5m ./...`、vet/build及探针普通/race通过。Debian `sh -n` / `systemd-analyze verify` 通过，job `/tmp/codex-ssh/job-linksend-ae-jp-stun-assets-check-20261018-01`；临时Windows tar权限提示不影响语法结果，正式安装unit使用0644。精确STUN DNS目前仍指旧IP且DNS-only，不在实际外部验证前切换。
+- 桌面Go模块workspace/off两次test及off vet/build通过；准确固定工具链前端86 tests、typecheck、lint、build通过，嵌套pnpm也已验证为12.4.1/Node24.21.0。首次嵌套命令曾误调用系统pnpm11.25，已修正隔离入口并重跑，未改项目依赖版本或全局工具链。
+
 ## 2026-10-18 B 实际重建与恢复演练修复
 
 - b8ad809的新备份helper已备份/原子安装/活跃库验证；完整隔离恢复v2、公共撤销跨重启、包含最新撤销记录的再次隔离恢复全部PASS。恢复服务使用非特权linksend和独立8788，结束后unit/监听停止，主库未覆盖，主服务及每日备份timer保持active。原失败保留为修复前证据。Mac公网curl本轮TLS失败，单进程IPv4/无proxy对照待原job读回，不改宿主网络；客户端恢复/STUN/跨NAT仍待继续。
