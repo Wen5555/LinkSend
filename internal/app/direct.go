@@ -783,6 +783,10 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
+	return s.sendPreparedOverPeerAttempt(ctx, peer, prepared, cfg, hooks, true)
+}
+
+func (s *Service) sendPreparedOverPeerAttempt(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks, reconnectBeforeOffer bool) (DirectTransferResult, error) {
 	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "authorization"}, err
 	}
@@ -791,8 +795,25 @@ func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, p
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
 	}
 	cfg.phase("opening_stream")
+	if hook := s.beforeFileOpen; hook != nil {
+		hook(peer)
+	}
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
 	if err != nil {
+		// A remote idle timer can close a cached connection after acquire checked
+		// it. No stream/offer/body has been emitted here, so one newly authenticated
+		// connection is safe. Never replay a transfer after its offer was written.
+		if reconnectBeforeOffer && ctx.Err() == nil && peer.SessionReuse && peer.Data.Conn.Context().Err() != nil {
+			s.removePeerSession(peer)
+			_ = peer.Close()
+			cfg.expectedAuthorizationGeneration = peer.AuthorizationGeneration
+			replacement, connectErr := s.acquirePeerSession(ctx, peer.PeerID, cfg)
+			if connectErr != nil {
+				return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "connecting"}, connectErr
+			}
+			result, sendErr := s.sendPreparedOverPeerAttempt(ctx, replacement, prepared, cfg, hooks, false)
+			return result, s.releasePeerSession(replacement, sendErr)
+		}
 		return DirectTransferResult{Evidence: peer.Evidence()}, err
 	}
 	result, err := transfer.SendWithOptions(ctx, transport.WrapStream(stream), prepared, options)

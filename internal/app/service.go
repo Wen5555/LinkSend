@@ -79,6 +79,7 @@ type Service struct {
 	directPoolLocks         map[string]*sync.Mutex
 	directPoolWG            sync.WaitGroup
 	directPoolBeforePublish func(string)
+	beforeFileOpen          func(*PeerSession)
 	deviceConnections       deviceConnectionRegistry
 	clipboardSync           *clipboardsync.State
 	clipboardAdapterMu      sync.RWMutex

@@ -10,14 +10,14 @@
 | B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | e43043d五项CI及三平台包success | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：准确包/双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过；JP路径/链接5项无SKIP | 浏览器夹具通过；原生/物理待验 | 0499cb5五项CI及三平台包success | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：准确包/物理缺项保留，继续N2 |
-| C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过 | 浏览器元数据夹具通过；原生/物理待验 | 本轮待阶段推送 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：核对阶段CI，继续N3 |
+| C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过 | 浏览器元数据夹具通过；原生/物理待验 | 77b831b四项源码CI success；包Windows旧流测试FAIL，两Mac成功 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：缓存连接首offer前过期RED→GREEN，修复同步后核对CI；N3实施中 |
 | D / N3 文件正文限速 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 设计进程级可取消预算，独立于控制/剪贴板 |
 | D / N4 托盘快速发送 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go owner，独立于主草稿 |
 | E 同提交候选/最终回归/文档 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 按阶段验证/提交/推送，同一 Draft PR 交付 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近已核对源码同步：`0499cb5200ade5e37cd7f923c20d0058f129f8c1`，五项CI/三平台包success；文档HEAD为8f1d69f。N2本地源码/完整race/兼容和前端检查已通过，本轮收束提交；最新完成通知定向race23.751s。下一具体动作是核对N2远端/CI后实施N3进程级正文限速，不重做已验证大样本。JP组件test binary及job证据保留，生产信令/备份/STUN按原目标保留；宿主规则待授权缺项不变。
+最近源码同步：`77b831bd8897c5e567a706af82ffba9cd49bfba3`，远端一致；四项源码CI success、两Mac包success，Windows包旧远端取消测试FAIL，run39079813168保留。首offer前缓存连接过期已有确定RED→GREEN和组合race五轮，修复另阶段同步；N3正文预算/偏好/界面与实QUIC样本本地已实现，完整检查和界面收束中。下一动作是修复CI并完成N3阶段推送，再N4。JP生产组件/证据保留，宿主规则待授权缺项不变。
 
 运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
 

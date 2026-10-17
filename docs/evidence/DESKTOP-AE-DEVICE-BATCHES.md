@@ -33,4 +33,10 @@ Playwright技能独立session ae-batch，生产BatchTargets/Queue/CSS与明确mo
 
 console为0 errors/1 warning，warning是Wails自带Browser Environment Detected提示。两次用于进一步滚动截图的临时CLI片段解析失败，未形成额外截图/动作，不算新的检查结果。owned浏览器PID153812/session与Vite exec91603已停止，临时HTML/TSX移除；保留原`.playwright-cli`及ios/linux目录。无系统网络或剪贴板修改。
 
-阶段SHA/CI在推送后补齐。原生Windows/Mac RPC、物理多目标与双NAT均未由上述夹具证明；N3/N4和其他A–E缺项继续。
+## 阶段同步与Windows CI失败修复
+
+N2源码`77b831bd8897c5e567a706af82ffba9cd49bfba3`已推送且远端SHA一致。core push/PR `39079813148/39079816009`、desktop push/PR `39079813113/39079815913`均success。包run `39079813168`为failure：两Mac job success，Windows在Verify core module的旧`TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile`失败，下一sender为opening_stream/DIRECT_FAILED；Windows包未生成，不称三平台包全通过。
+
+原始CI没有足够时间线确认其准确关连接者。进一步故障夹具在缓存连接检查后、首个offer前令对端关闭，确定复现同一opening_stream/DIRECT_FAILED（`pool-expiry-red.log`）。修复仅在OpenStreamSync失败且连接已关闭、context仍有效时，最多新建一次认证连接，固定原authorization generation；尚无offer/body，不重放已发起的传输。取消/撤权不借新授权，发送开始后仍走原恢复语义。
+
+故障夹具、原远端取消测试与N3真实限速/控制组合race五轮PASS（58.504s）；补充固定原generation后另有最终定向回归。该修复另作源码提交、核对CI，不能把原失败run改称success。原生Windows/Mac RPC、物理多目标与双NAT均未由上述夹具证明；N3/N4和其他A–E缺项继续。
