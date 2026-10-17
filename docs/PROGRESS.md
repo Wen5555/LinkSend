@@ -1,3 +1,9 @@
+## 2026-10-18 B 实际重建与恢复演练修复
+
+- 新信令实际部署并切换 `linksend.oooai.de` 精确A到日本猫猫机；Cloudflare只对本hostname追加strict源站校验，整区Full保持。Origin正常Initialize/Join、邀请码重放准确拒绝、两路WSS，公共路径同profile与WSS、Windows公共HTTPS、主服务重启后组/incarnation/密钥保持均通过。首次reload后404触发安全回退，恢复事务补有界就绪验证后成功；切换窗口401未触发profile重置。详见[真实命令与job证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)。
+- 隔离恢复服务首轮实际失败：副本遗留root600的WAL/SHM，非特权linksend无法打开DB。新增回归取得Windows FAIL，修复仅归一完成副本journal并immutable读取完成快照，源WAL不变；Windows/Debian新回归通过，待安装并完整重验。不把SQLite校验或批次退出替代服务可恢复结果，旧失败与原库保留。
+- 源码资产 `b6db1b2` 五项workflow已全部success。客户端灾后恢复、STUN、真实双NAT及其他A–E功能继续，不标B或Goal完成。
+
 ## 2026-10-18 B 部署与恢复工具准备
 
 - 新增专属 systemd 服务/备份 timer、Nginx 精确站点、本地 CA 严格上游 TLS、独立日志 namespace 和首次安装事务。安装遇到已有目标即停止；失败停本项目并移除自己创建的站点链接，始终保留新库。工具和操作契约见[日本猫猫机部署](DEPLOY-JP.md)。此条为工具准备，尚不代表实际部署或 DNS 切换。

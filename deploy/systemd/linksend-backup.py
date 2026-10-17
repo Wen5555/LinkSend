@@ -65,15 +65,17 @@ def exclusive_text(path: Path, text: str) -> None:
         os.fsync(stream.fileno())
 
 
-def checked_connection(path: Path) -> sqlite3.Connection:
+def checked_connection(path: Path, immutable: bool = False) -> sqlite3.Connection:
     regular_file(path)
-    connection = sqlite3.connect(path.absolute().as_uri() + "?mode=ro", uri=True, timeout=10)
+    options = "?mode=ro" + ("&immutable=1" if immutable else "")
+    connection = sqlite3.connect(path.absolute().as_uri() + options, uri=True, timeout=10)
     connection.execute("PRAGMA query_only=ON")
     return connection
 
 
 def verify(path: Path) -> None:
-    with closing(checked_connection(path)) as connection:
+    # Only closed, standalone copies are verified here, never the live source.
+    with closing(checked_connection(path, immutable=True)) as connection:
         integrity = connection.execute("PRAGMA integrity_check").fetchall()
         if integrity != [("ok",)]:
             raise ValueError("SQLite integrity_check failed")
@@ -81,7 +83,7 @@ def verify(path: Path) -> None:
             raise ValueError("SQLite foreign_key_check failed")
 
 
-def copy_database(source: Path, destination: Path) -> None:
+def copy_database(source: Path, destination: Path, source_immutable: bool = False) -> None:
     descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(descriptor)
     deadline = time.monotonic() + 60
@@ -91,9 +93,16 @@ def copy_database(source: Path, destination: Path) -> None:
             raise TimeoutError("SQLite backup exceeded its 60 second budget")
 
     try:
-        with closing(checked_connection(source)) as reader, closing(sqlite3.connect(destination)) as writer:
+        with closing(checked_connection(source, immutable=source_immutable)) as reader, closing(sqlite3.connect(destination)) as writer:
             reader.backup(writer, pages=128, progress=progress, sleep=0.05)
             writer.commit()
+            # Normalize this copy only. A WAL-mode header in a detached backup
+            # can create root-owned -wal/-shm files during verification/restore,
+            # preventing the runtime user from opening its restored database.
+            if writer.execute("PRAGMA journal_mode=DELETE").fetchone() != ("delete",):
+                raise ValueError("could not make the snapshot standalone")
+        if any(Path(str(destination) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+            raise ValueError("snapshot retained journal sidecars")
         verify(destination)
         with destination.open("r+b") as stream:
             os.fsync(stream.fileno())
@@ -101,6 +110,8 @@ def copy_database(source: Path, destination: Path) -> None:
     except BaseException:
         # This function created the file exclusively; never remove the source.
         destination.unlink(missing_ok=True)
+        for suffix in ("-wal", "-shm", "-journal"):
+            Path(str(destination) + suffix).unlink(missing_ok=True)
         raise
 
 
@@ -158,7 +169,7 @@ def restore(source: Path, destination: Path) -> dict:
     private_directory(destination.parent)
     if destination.exists() or destination.is_symlink():
         raise FileExistsError("restore destination already exists; refusing overwrite")
-    copy_database(source, destination)
+    copy_database(source, destination, source_immutable=True)
     return {"operation": "restore", "source_sha256": actual, "path": str(destination), "integrity": "ok", "overwrote_existing": False}
 
 

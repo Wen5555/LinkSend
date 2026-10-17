@@ -18,7 +18,7 @@
 
 服务为专属无登录用户 `linksend`，systemd 管理；私有持久目录 `/var/lib/linksend`。日志使用独立 journal namespace，持久日志32MiB、临时日志8MiB、保留7天并限频；该站点禁用 access log，独立 error log 配置 logrotate。未改全局 journal、安全策略、宿主防火墙、路由或代理。
 
-`/opt/linksend/tools/linksend-backup.py` 使用 SQLite 在线 backup API，不复制活跃 DB/WAL 原文件。每份先做 integrity_check / foreign_key_check，再发布 checksum 收据；每日 timer 保留14份校验有效的本工具备份。未完成、损坏、符号链接或非本工具命名文件不参与自动清理。单机备份能用于隔离恢复，不能称异机灾备。
+`/opt/linksend/tools/linksend-backup.py` 使用 SQLite 在线 backup API，不复制活跃 DB/WAL 原文件。完成副本转为DELETE journal，并以immutable方式只读校验，避免验证生成root sidecar影响非特权恢复；活跃源的WAL模式保持。每份先做 integrity_check / foreign_key_check，再发布 checksum 收据；每日 timer 保留14份校验有效的本工具备份。未完成、损坏、符号链接或非本工具命名文件不参与自动清理。单机备份能用于隔离恢复，不能称异机灾备。
 
 ```sh
 python3 /opt/linksend/tools/linksend-backup.py backup \

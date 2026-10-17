@@ -7,7 +7,7 @@
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：核对准确原生包进程上下文，继续刷新合并与真实独立旅程 |
-| B 新信令/客户端恢复/备份 | 首次部署工具就绪 | 在线备份/恢复Win与Debian通过；sh语法通过 | Origin证书/精确路径已核验 | 本轮工具随PR同步 | [部署契约](DEPLOY-JP.md)：固定提交资产后安装独立systemd/严格TLS/新库；严格源站验证后才切精确DNS |
+| B 新信令/客户端恢复/备份 | 新服务/精确DNS已上线；恢复副本修复中 | 备份新回归Win/Debian通过 | 公共HTTPS/WSS/初始化加入/重启PASS；隔离恢复首轮FAIL | b6db1b2五项CI通过 | [证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：安装standalone备份修复，重做服务级恢复/撤销；再补客户端灾后恢复与STUN |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
 | C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
@@ -19,7 +19,9 @@
 
 运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
 
-当前原生候选来源：`d5412642e49460413fdda249f77d03647075f41c`，源码/桌面/包共五项workflow success，包run `39060667017`。测量器与基线同步提交为 `d70d923`。修复前发现harness十轮已收束，job `/tmp/codex-ssh/job-linksend-ae-lan-baseline-batch-20261018-01` 完成；子probe Mac反控失败不能随批次exit0标PASS。Windows/Mac准确候选包已在隔离profile启动，剪贴板关闭；Mac辅助访问拒绝，Windows UI输入暂未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256，收尾按PID及精确路径停止。
+当前原生候选来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
+
+服务现场：`linksend.oooai.de` 已指85.149.217.165并仅该hostname启用Cloudflare strict；后端127.0.0.1:8787，源站/公共WSS及重启通过。生产服务/备份timer active。完整恢复job `.../job-linksend-ae-jp-restart-backup-drill-20261018-01` 已exit1，根因是副本root sidecar权限；新版回归已PASS，待事务安装和新隔离目录复验。无遗留8788恢复监听。全部job/备份/回退位置见信令重建证据，旧失败保留。
 
 B准备：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。部署工具Debian预检job `/tmp/codex-ssh/job-linksend-ae-jp-deploy-preflight-20261018-01` 已exit0，尚未安装或切DNS。
 

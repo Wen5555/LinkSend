@@ -21,12 +21,16 @@ class BackupTests(unittest.TestCase):
                 live.execute("INSERT INTO events(data) VALUES('committed')")
                 live.commit()
                 receipt = backup_tool.backup(database, root / "backups", 2)
+                self.assertEqual(list((root / "backups").glob("*-wal")), [], "snapshot must not need WAL sidecars")
+                self.assertEqual(list((root / "backups").glob("*-shm")), [], "snapshot must not leave root-owned shared memory")
+                self.assertEqual(live.execute("PRAGMA journal_mode").fetchone()[0], "wal", "never change the live database journal mode")
                 live.execute("INSERT INTO events(data) VALUES('later')")
                 live.commit()
                 restored = root / "isolated" / "control.db"
                 backup_tool.restore(Path(receipt["path"]), restored)
                 with closing(sqlite3.connect(restored)) as copy:
                     self.assertEqual(copy.execute("SELECT data FROM events").fetchall(), [("committed",)])
+                    self.assertEqual(copy.execute("PRAGMA journal_mode").fetchone()[0], "delete")
                 with self.assertRaises(FileExistsError):
                     backup_tool.restore(Path(receipt["path"]), restored)
                 self.assertEqual(live.execute("SELECT count(*) FROM events").fetchone()[0], 2)

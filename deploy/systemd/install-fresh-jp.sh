@@ -118,8 +118,12 @@ PY
 ln -s /etc/nginx/sites-available/linksend.conf /etc/nginx/sites-enabled/linksend.conf
 nginx -t
 systemctl reload nginx
-curl --noproxy '*' --silent --show-error --fail --max-time 10 --cacert /etc/nginx/ssl/cloudflare/origin-ca-rsa-root.pem --resolve linksend.oooai.de:443:127.0.0.1 https://linksend.oooai.de/healthz > "$backup/origin-health.json"
-cmp "$backup/backend-health.json" "$backup/origin-health.json"
+ready=false
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if curl --noproxy '*' --silent --show-error --fail --max-time 3 --cacert /etc/nginx/ssl/cloudflare/origin-ca-rsa-root.pem --resolve linksend.oooai.de:443:127.0.0.1 https://linksend.oooai.de/healthz > "$backup/origin-health.json" 2> "$backup/origin-health.err" && cmp -s "$backup/backend-health.json" "$backup/origin-health.json"; then ready=true; break; fi
+    sleep 1
+done
+"$ready"
 systemctl start linksend-backup.service
 systemctl enable --now linksend-backup.timer
 systemctl is-active --quiet linksend.service linksend-backup.timer
