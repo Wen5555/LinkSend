@@ -36,10 +36,22 @@ job `/tmp/codex-ssh/job-linksend-ae-jp-restart-backup-drill-20261018-01`：主�
 
 但首轮独立恢复服务启动 FAIL：`unable to open database file (14)`。辅助文件检查实际发现恢复主DB已归linksend，`-shm`/`-wal`仍为root600；受限用户读取也失败。旧恢复进程已退出、8788无监听，生产服务和库保持运行。该轮不能标端到端恢复通过，后续撤销测试也尚未执行。
 
-新增回归在Windows准确复现备份残留 `.partial-*.db-wal` 的FAIL。修复只将完成的备份/恢复**副本**归一为DELETE journal，并对已完成副本用immutable只读校验；活跃源继续读真实WAL，不修改其journal模式。普通恢复拒绝覆盖，复制失败仅回收自己创建的目标和sidecar。Windows及Debian新版回归均PASS，并确认源仍WAL；Debian job `.../job-linksend-ae-jp-backup-fix-preflight-20261018-02`。新版工具尚待安装和完整重做独立服务演练，再验证撤销跨重启。
+新增回归在Windows准确复现备份残留 `.partial-*.db-wal` 的FAIL。修复只将完成的备份/恢复**副本**归一为DELETE journal，并对已完成副本用immutable只读校验；活跃源继续读真实WAL，不修改其journal模式。普通恢复拒绝覆盖，复制失败仅回收自己创建的目标和sidecar。Windows及Debian新版回归均PASS，并确认源仍WAL；Debian job `.../job-linksend-ae-jp-backup-fix-preflight-20261018-02`。
+
+## 修复后的服务级恢复与撤销闭环
+
+新版helper来源 `b8ad80961804e1c2e329ffa0f04da2bf1c93fcb8`，SHA256 `05dfe7f4536d55bddb832b72eeb7257c633a4bf68626eb43ef392dfb4489a677`。安装先核对旧工具与b6来源一致、backup unit未运行，备份/回读后原子替换；立即对活跃生产库备份，确认2成员且副本无WAL/SHM。job `.../job-linksend-ae-jp-backup-helper-install-b8ad809-20261018-01`，备份 `/var/backups/linksend/backup-helper-fix-b8ad809-20261017T200513Z`；服务/备份timer保持active。
+
+`.../job-linksend-ae-jp-backup-drill-v2-20261018-01` 完整exit0：在线快照SHA256 `d7b5cf90f2fe17815dbb3651edb19ab3a847122f328500faeabf15471a1a9dc1`，恢复到新目录 `/var/backups/linksend/restore-drill-20261017T200516Z`。以同一非特权linksend用户启动独立8788服务，严格TLS/WSS验证2成员、组/incarnation/公钥与原fixture一致；停止transient unit后8788无监听，生产库没有被替换。随后在公共API真实撤销B，成员从2变1、B认证被拒绝；重启主服务后继续拒绝B，PASS。
+
+最新撤销状态再生成快照并重做独立服务：`.../job-linksend-ae-jp-revoked-restore-drill-20261018-03` 完整exit0，快照SHA256 `13aa56167771365bce72382eb82efaab48cf29416f07e5f1b836b595cee0b6c7`，隔离目录 `/var/backups/linksend/revoked-restore-drill-20261017T200648Z`。恢复服务与公共主服务均看到1成员并拒绝已撤销身份；测试unit停止，无8788残留，主服务最终PID283864、User=linksend、LogNamespace=linksend、active，备份timer active。
+
+这里校验备份文件SHA256与恢复后的逻辑身份/撤销状态；服务按原配置重新启用WAL后，物理DB字节变化不等于恢复数据损坏。没有改生产目录权限、覆盖主库或放开身份校验。
 
 ## 当前限制与资源
 
-服务实际运行、公共HTTPS/WSS和主服务重启已验；完整隔离恢复及撤销测试仍待上述修复部署。客户端旧profile灾后恢复、旧队列/撤销上下文隔离、STUN、真实双NAT、双机原生文件旅程：未闭合。STUN仅查到Debian候选coturn4.6.1-2，当前未安装且3478无监听，不能称跨NAT已恢复。
+服务实际运行，公共HTTPS/WSS、主服务重启、完整隔离恢复、撤销跨重启/最新快照恢复已验。客户端旧profile灾后恢复、旧队列/撤销上下文隔离、STUN、真实双NAT、双机原生文件旅程仍未闭合。STUN仅查到Debian候选coturn4.6.1-2，当前未安装且3478无监听，不能称跨NAT已恢复。Mac系统curl公共HTTPS本轮报LibreSSL SSL_ERROR_SYSCALL（job `.../job-linksend-ae-mac-public-health-20261018-01`），该平台公网旅程不计PASS，继续做进程级IPv4/解析诊断。
 
 Windows准确包owned PID135152、Mac owned PID31256均已停止，剪贴板master=false、测试接收目录为空，保留profile和包供后续核对。Mac UI辅助访问拒绝、Windows UI点击未形成可验证导航，未当作原生旅程PASS。生产专属服务/备份timer是用户要求的持续资源，不随测试进程停止。
+
+Mac单进程对照 `curl -4 --noproxy '*'` 仍以28/SSL connection timeout失败；job `/tmp/codex-ssh/job-linksend-ae-mac-public-health-v4-20261018-01` 已终态。未改系统代理/TUN/路由，也未跳过证书。下一步先核对该域名在Mac的实际解析与指定CF IPv4的进程级对照；不能把JP/Windows公共成功迁移为Mac成功。

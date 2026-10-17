@@ -7,7 +7,7 @@
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：核对准确原生包进程上下文，继续刷新合并与真实独立旅程 |
-| B 新信令/客户端恢复/备份 | 新服务/精确DNS已上线；恢复副本修复中 | 备份新回归Win/Debian通过 | 公共HTTPS/WSS/初始化加入/重启PASS；隔离恢复首轮FAIL | b6db1b2五项CI通过 | [证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：安装standalone备份修复，重做服务级恢复/撤销；再补客户端灾后恢复与STUN |
+| B 新信令/客户端恢复/备份 | 新服务/精确DNS/备份恢复已上线 | Win/Debian备份回归通过 | JP/Win公共HTTPS；JP WSS/重启/恢复/撤销PASS；Mac公网TLS失败 | b8ad809已推送，部分CI运行中 | [证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：继续客户端灾后恢复、STUN与Mac路径诊断；双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
 | C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
@@ -21,7 +21,9 @@
 
 当前原生候选来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
 
-服务现场：`linksend.oooai.de` 已指85.149.217.165并仅该hostname启用Cloudflare strict；后端127.0.0.1:8787，源站/公共WSS及重启通过。生产服务/备份timer active。完整恢复job `.../job-linksend-ae-jp-restart-backup-drill-20261018-01` 已exit1，根因是副本root sidecar权限；新版回归已PASS，待事务安装和新隔离目录复验。无遗留8788恢复监听。全部job/备份/回退位置见信令重建证据，旧失败保留。
+服务现场：`linksend.oooai.de` 已指85.149.217.165并仅该hostname启用Cloudflare strict；后端127.0.0.1:8787，源站/公共WSS及重启通过。b8ad809的standalone备份修复已事务安装；v2完整恢复及最新撤销快照恢复均exit0，主库未替换，8788测试监听已停止。主服务最终PID283864、备份timer active。首轮root sidecar失败保留，不覆盖历史。
+
+Mac公共curl TLS失败，IPv4无proxy单进程对照job `/tmp/codex-ssh/job-linksend-ae-mac-public-health-v4-20261018-01` 也已exit28/SSL timeout；不得改宿主代理/TUN。下一动作：核对Mac精确解析/CF IPv4进程对照，STUN-only部署/实际srflx、客户端灾后恢复开发，再推进B2/N1–N4。当前无运行中的测试probe/恢复unit；生产服务和备份timer按目标保留。全部资源/回退位置见信令重建证据。
 
 B准备：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。部署工具Debian预检job `/tmp/codex-ssh/job-linksend-ae-jp-deploy-preflight-20261018-01` 已exit0，尚未安装或切DNS。
 
