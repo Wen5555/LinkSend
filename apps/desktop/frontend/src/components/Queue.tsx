@@ -26,6 +26,7 @@ export function Queue({ items, devices, paused, run, op, available }: { items: Q
       const device = devices.find(row => row.id === item.peer_id);
       return <li className="queue-row" data-queue-id={item.id} key={item.id}>
         <div className="queue-details"><strong>{item.source_summary || '文件或文件夹'}</strong><span>发送给 {device ? deviceName(device) : item.peer_id.slice(0, 10)} · {queueLabels[item.state] || item.state}</span>
+          {item.source_selection && <small>{item.source_selection.preset === 'source' ? '源码目录' : '自定义排除'} · 规则版本 {item.source_selection.version} · 恢复沿用此范围</small>}
           {item.state === 'needs_attention' && <p>{item.last_error === 'SOURCE_CHANGED' ? '源内容已变化，请核对原始文件后确认。' : '请核对文件与目标设备，确认后继续原有待办。'}</p>}
           {item.last_error && <small>{humanizeBackendError(item.last_error)}</small>}
           {item.expires_at && <small>到期时间：{new Date(item.expires_at).toLocaleString()}</small>}

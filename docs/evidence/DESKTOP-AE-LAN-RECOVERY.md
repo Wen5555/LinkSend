@@ -80,3 +80,5 @@ Mac 十轮均在 TCP dial 阶段以 `LAN_CONTROL_UNREACHABLE` / `no route to hos
 本地日志 `trickle-host-before.log`、`trickle-host-after.log`、`refresh-verified-race.log` 保留修复前后。新增测试覆盖65个并发刷新只派发一次、失败限频后重试、在途等待取消、抖动范围、provider到Inbox/诊断与页面恢复隐藏、设备页重渲染不重复发现。已有端口冲突/释放、reader/close测试继续通过。新增诊断断言曾暴露启动覆盖具体错误，已保留具体状态；旧FAIL日志保留。首次desktop与前端build同时运行造成旧embed资产暂缺，已改为dist稳定后复验，不把编排失败算产品失败或通过。
 
 前端准确Node24.21.0/pnpm12.4.1：92tests/typecheck/lint/build通过；真实Wails beta.18绑定重新生成。核心off完整test（app67.027s）、vet/build通过；desktop workspace test、off-race/vet/build和最终dist稳定后的off build通过。发现完整race三轮通过（18.914s）；最终发现刷新/应用定向race三轮通过（5.333/10.530s）。最新日志为`refresh-verified-{core,race,desktop,frontend-*}.log`，不使用之前FAIL日志替代终态。未把源码候选替代准确包原生或真实双机。owned持久服务/监听未新增，普通夹具结束关闭自身socket；外部STUN授权与Mac公网/反控限制保持。
+
+阶段实现提交`2b9ee1c6336d44a2a05ddbd88479145dcdebf518`已推送，远端SHA一致，Draft PR #9保持。core push/PR `39074114051` / `39074117912`、desktop push/PR `39074113965` / `39074117897`、[三平台包39074113978](https://github.com/Wen5555/LinkSend/actions/runs/39074113978)全部success，Windows amd64和Mac arm64/amd64 job均success。后续N1不借这些包结果。

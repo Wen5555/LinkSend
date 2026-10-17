@@ -320,3 +320,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .settings-shell { padding-top: 6px; }
   .settings-nav { padding-bottom: 5px; }
 }
+.source-selection { display: grid; gap: .65rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); min-width: 0; }
+.source-selection textarea { width: 100%; resize: vertical; min-height: 5rem; }
+.source-selection-entries { max-height: 14rem; overflow: auto; padding-left: 1.25rem; overflow-wrap: anywhere; }
+.source-selection-entries li { margin: .35rem 0; }
+@media (prefers-color-scheme: dark) {
+  .source-selection select, .source-selection textarea { background: rgba(0,0,0,.22); color: var(--text); border-color: var(--line-strong); }
+  .source-selection .secondary { background: rgba(255,255,255,.08); color: var(--text); border-color: var(--line-strong); }
+}

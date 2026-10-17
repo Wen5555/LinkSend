@@ -35,7 +35,7 @@ go test -count=1 ./internal/identity ./internal/app -run 'TestMembershipTransiti
 
 ## 显式恢复、通用退休与桌面入口候选（2026-10-18）
 
-上述“尚无恢复API/schema2保持”仅指edb67ef。本次候选新增Prepare/Continue/Cancel/Status及真实Wails绑定、设备页恢复面板；设计与状态详见[ADR0008](../adr/0008-membership-recovery-and-retired-contexts.md)。wire、控制库schema4与桌面任务库schema7保持，trust在恢复或成员上下文替换时升级至schema3。
+上述“尚无恢复API/schema2保持”仅指edb67ef。本次候选新增Prepare/Continue/Cancel/Status及真实Wails绑定、设备页恢复面板；设计与状态详见[ADR0008](../adr/0008-membership-recovery-and-retired-contexts.md)。wire、控制库schema4与桌面任务库schema9保持，trust在恢复或成员上下文替换时升级至schema3。任务库9已按e43043d的history.go核对，先前写7为文档笔误，本恢复批次没有任务库迁移。
 
 ### 已运行的控制/存储夹具
 

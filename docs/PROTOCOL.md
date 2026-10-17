@@ -1,5 +1,9 @@
 # Protocol
 
+## 2026-10-18 本地目录预设
+
+文件/manifest V1与信令、剪贴板wire保持。`source_selection`仅本地草稿、队列与任务恢复元数据；Go生成正常的选中文件manifest，接收端沿用原有确认、hash与安全落盘。任务库9→10，筛选发送恢复记录version2；版本1完整发送兼容。规范化规则参与队列内容身份，精确草稿来源/revision与内容摘要原子保存；未支持规则拒绝，不能退成完整发送。语义和迁移见[ADR0009](adr/0009-versioned-source-selection.md)。
+
 ## 2026-10-18 本地成员恢复与退休
 
 信令membership_v2、文件V1与剪贴板wire保持；客户端trust最大schema3，显式恢复/成员上下文替换时升级，其他普通schema2策略写入保持兼容。新增恢复intent、128项退休上下文上限和最近幂等收据；邀请码不持久化。旧客户端拒绝schema3，缺失/损坏策略不自动使用旧备份。

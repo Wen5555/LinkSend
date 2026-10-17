@@ -49,11 +49,12 @@ type DeviceProfile struct {
 // SendDraft is local metadata. Paths are never used as file-content IPC, and
 // persisting a draft does not authorise a send or open any of its file bodies.
 type SendDraft struct {
-	ID        string   `json:"id"`
-	Paths     []string `json:"paths"`
-	PeerID    string   `json:"peer_id"`
-	Revision  uint64   `json:"revision"`
-	UpdatedAt string   `json:"updated_at"`
+	SourceSelection *transfer.SourceSelection `json:"source_selection,omitempty"`
+	ID              string                    `json:"id"`
+	Paths           []string                  `json:"paths"`
+	PeerID          string                    `json:"peer_id"`
+	Revision        uint64                    `json:"revision"`
+	UpdatedAt       string                    `json:"updated_at"`
 }
 
 type desktopStore struct {
@@ -266,11 +267,11 @@ func (s *desktopStore) Draft(id string) (SendDraft, error) {
 	if err != nil {
 		return SendDraft{}, err
 	}
-	return scanSendDraft(s.db.QueryRow(`SELECT id,source_paths,peer_id,revision,updated_at FROM send_drafts WHERE id=?`, id))
+	return scanSendDraft(s.db.QueryRow(`SELECT id,source_paths,peer_id,revision,updated_at,source_selection FROM send_drafts WHERE id=?`, id))
 }
 
 func (s *desktopStore) Drafts() ([]SendDraft, error) {
-	rows, err := s.db.Query(`SELECT id,source_paths,peer_id,revision,updated_at FROM send_drafts ORDER BY updated_at DESC,id`)
+	rows, err := s.db.Query(`SELECT id,source_paths,peer_id,revision,updated_at,source_selection FROM send_drafts ORDER BY updated_at DESC,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -288,8 +289,8 @@ func (s *desktopStore) Drafts() ([]SendDraft, error) {
 
 func scanSendDraft(row metadataScanner) (SendDraft, error) {
 	var d SendDraft
-	var paths string
-	if err := row.Scan(&d.ID, &paths, &d.PeerID, &d.Revision, &d.UpdatedAt); err != nil {
+	var paths, selection string
+	if err := row.Scan(&d.ID, &paths, &d.PeerID, &d.Revision, &d.UpdatedAt, &selection); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = ErrMetadataNotFound
 		}
@@ -298,11 +299,21 @@ func scanSendDraft(row metadataScanner) (SendDraft, error) {
 	if len(paths) > maxDraftPathsJSON || json.Unmarshal([]byte(paths), &d.Paths) != nil || d.Paths == nil || len(d.Paths) > maxDraftPaths {
 		return SendDraft{}, fmt.Errorf("%w: invalid stored draft paths", ErrMetadataInvalid)
 	}
-	return d, nil
+	var err error
+	d.SourceSelection, err = decodeSourceSelection(selection)
+	return d, err
 }
 
 func (s *desktopStore) SaveDraft(d SendDraft, workingDir string) (SendDraft, error) {
 	var err error
+	d.SourceSelection, err = transfer.NormalizeSourceSelection(d.SourceSelection)
+	if err != nil {
+		return SendDraft{}, err
+	}
+	selection, err := encodeSourceSelection(d.SourceSelection)
+	if err != nil {
+		return SendDraft{}, err
+	}
 	d.ID, err = normalizeDraftID(d.ID)
 	if err != nil || !validMetadataRevision(d.Revision) || (d.PeerID != "" && !validMetadataPeerID(d.PeerID)) {
 		return SendDraft{}, ErrMetadataInvalid
@@ -323,10 +334,10 @@ func (s *desktopStore) SaveDraft(d SendDraft, workingDir string) (SendDraft, err
 	defer tx.Rollback()
 	var result sql.Result
 	if d.Revision == 0 {
-		result, err = tx.Exec(`INSERT INTO send_drafts(id,source_paths,peer_id,revision,updated_at) VALUES(?,?,?,1,?)
-			ON CONFLICT(id) DO NOTHING`, d.ID, string(paths), d.PeerID, d.UpdatedAt)
+		result, err = tx.Exec(`INSERT INTO send_drafts(id,source_paths,peer_id,revision,updated_at,source_selection) VALUES(?,?,?,1,?,?)
+			ON CONFLICT(id) DO NOTHING`, d.ID, string(paths), d.PeerID, d.UpdatedAt, selection)
 	} else {
-		result, err = tx.Exec(`UPDATE send_drafts SET source_paths=?,peer_id=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?`, string(paths), d.PeerID, d.UpdatedAt, d.ID, d.Revision)
+		result, err = tx.Exec(`UPDATE send_drafts SET source_paths=?,peer_id=?,revision=revision+1,updated_at=?,source_selection=? WHERE id=? AND revision=?`, string(paths), d.PeerID, d.UpdatedAt, selection, d.ID, d.Revision)
 	}
 	if err != nil {
 		return SendDraft{}, err

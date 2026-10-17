@@ -19,30 +19,36 @@ import (
 )
 
 type QueueItem struct {
-	ID                      string            `json:"id"`
-	RequestID               string            `json:"request_id"`
-	PeerID                  string            `json:"peer_id"`
-	SourceSummary           string            `json:"source_summary"`
-	State                   string            `json:"state"`
-	Position                int64             `json:"position"`
-	TaskID                  string            `json:"task_id"`
-	ExpiresAt               string            `json:"expires_at"`
-	Revision                uint64            `json:"revision"`
-	CreatedAt               string            `json:"created_at"`
-	UpdatedAt               string            `json:"updated_at"`
-	LastError               string            `json:"last_error"`
-	WaitForPeer             bool              `json:"wait_for_peer"`
-	Content                 *content.Snapshot `json:"content,omitempty"`
-	AuthorizationGeneration uint64            `json:"authorization_generation,omitempty"`
+	DraftID                 string                    `json:"draft_id,omitempty"`
+	DraftRevision           uint64                    `json:"draft_revision,omitempty"`
+	SourceSelection         *transfer.SourceSelection `json:"source_selection,omitempty"`
+	ID                      string                    `json:"id"`
+	RequestID               string                    `json:"request_id"`
+	PeerID                  string                    `json:"peer_id"`
+	SourceSummary           string                    `json:"source_summary"`
+	State                   string                    `json:"state"`
+	Position                int64                     `json:"position"`
+	TaskID                  string                    `json:"task_id"`
+	ExpiresAt               string                    `json:"expires_at"`
+	Revision                uint64                    `json:"revision"`
+	CreatedAt               string                    `json:"created_at"`
+	UpdatedAt               string                    `json:"updated_at"`
+	LastError               string                    `json:"last_error"`
+	WaitForPeer             bool                      `json:"wait_for_peer"`
+	Content                 *content.Snapshot         `json:"content,omitempty"`
+	AuthorizationGeneration uint64                    `json:"authorization_generation,omitempty"`
 }
 
 type EnqueueRequest struct {
-	RequestID            string   `json:"request_id"`
-	PeerID               string   `json:"peer_id"`
-	Paths                []string `json:"paths"`
-	WaitForPeer          bool     `json:"wait_for_peer"`
-	ExpiresAt            string   `json:"expires_at"`
-	ExpectedSourceDigest string   `json:"-"` // internal resend preflight; never trusted from JS
+	DraftID              string                    `json:"draft_id,omitempty"`
+	DraftRevision        uint64                    `json:"draft_revision,omitempty"`
+	SourceSelection      *transfer.SourceSelection `json:"source_selection,omitempty"`
+	RequestID            string                    `json:"request_id"`
+	PeerID               string                    `json:"peer_id"`
+	Paths                []string                  `json:"paths"`
+	WaitForPeer          bool                      `json:"wait_for_peer"`
+	ExpiresAt            string                    `json:"expires_at"`
+	ExpectedSourceDigest string                    `json:"-"` // internal resend preflight; never trusted from JS
 	content              *contentQueueIntent
 }
 
@@ -61,15 +67,18 @@ type queueManager struct {
 	done          chan struct{}
 }
 
-const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer,authorization_generation`
+const queueColumns = `id,request_id,peer_id,source_paths,source_digest,state,position,task_id,expires_at,revision,created_at,updated_at,last_error,wait_for_peer,authorization_generation,source_selection,draft_id,draft_revision`
 
 func scanQueue(row interface{ Scan(...any) error }) (queueRecord, error) {
 	var item queueRecord
-	var paths string
-	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer, &item.AuthorizationGeneration)
+	var paths, selection string
+	err := row.Scan(&item.ID, &item.RequestID, &item.PeerID, &paths, &item.digest, &item.State, &item.Position, &item.TaskID, &item.ExpiresAt, &item.Revision, &item.CreatedAt, &item.UpdatedAt, &item.LastError, &item.WaitForPeer, &item.AuthorizationGeneration, &selection, &item.DraftID, &item.DraftRevision)
 	if err == nil {
 		err = json.Unmarshal([]byte(paths), &item.paths)
 		item.SourceSummary = sourceSummary(item.paths)
+		if err == nil {
+			item.SourceSelection, err = decodeSourceSelection(selection)
+		}
 	}
 	return item, err
 }
@@ -129,6 +138,22 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		return QueueItem{}, err
 	}
 	defer done()
+	request.SourceSelection, err = transfer.NormalizeSourceSelection(request.SourceSelection)
+	if err != nil {
+		return QueueItem{}, err
+	}
+	selection, err := encodeSourceSelection(request.SourceSelection)
+	if err != nil || request.content != nil && selection != "" {
+		return QueueItem{}, ErrMetadataInvalid
+	}
+	if request.DraftID != "" {
+		request.DraftID, err = normalizeDraftID(request.DraftID)
+		if err != nil || request.DraftRevision == 0 || !validMetadataRevision(request.DraftRevision) || request.content != nil {
+			return QueueItem{}, ErrMetadataInvalid
+		}
+	} else if request.DraftRevision != 0 {
+		return QueueItem{}, ErrMetadataInvalid
+	}
 	if request.RequestID == "" || len(request.RequestID) > 128 || !utf8.ValidString(request.RequestID) || strings.ContainsAny(request.RequestID, "\x00\r\n") {
 		return QueueItem{}, errors.New("INVALID_ARGUMENT: idempotency request ID required")
 	}
@@ -152,7 +177,8 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	s.queue.mu.Unlock()
 	if err == nil {
 		saved, _ := json.Marshal(existing.paths)
-		if existing.PeerID != request.PeerID || string(saved) != string(encoded) || existing.WaitForPeer != request.WaitForPeer || existing.AuthorizationGeneration != authorizationGeneration {
+		savedSelection, _ := encodeSourceSelection(existing.SourceSelection)
+		if existing.PeerID != request.PeerID || string(saved) != string(encoded) || existing.WaitForPeer != request.WaitForPeer || existing.AuthorizationGeneration != authorizationGeneration || savedSelection != selection || existing.DraftID != request.DraftID || existing.DraftRevision != request.DraftRevision {
 			return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
 		}
 		var contentCount int
@@ -166,6 +192,11 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return QueueItem{}, err
+	}
+	if request.DraftID != "" {
+		if err = checkSourceDraftBinding(s.store.db.QueryRow(`SELECT source_paths,peer_id,revision,source_selection FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
+			return QueueItem{}, err
+		}
 	}
 	expires := time.Now().UTC().Add(7 * 24 * time.Hour)
 	if request.ExpiresAt != "" {
@@ -196,11 +227,11 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	if !canAttempt && !request.WaitForPeer {
 		return QueueItem{}, protocol.Fail(protocol.PeerOffline, "explicit waiting choice required")
 	}
-	prepared, err := transfer.Prepare(s.workCtx, paths, 0)
+	prepared, err := transfer.PrepareSelected(s.workCtx, paths, 0, request.SourceSelection)
 	if err != nil {
 		return QueueItem{}, classifyTaskError(err)
 	}
-	digest := queueSourceDigest(prepared.Manifest)
+	digest := selectedQueueSourceDigest(prepared.Manifest, request.SourceSelection)
 	_ = prepared.Close()
 	if request.ExpectedSourceDigest != "" && inboxSourceDigest(prepared.Manifest) != request.ExpectedSourceDigest {
 		return QueueItem{}, classifyTaskError(transfer.ErrChanged)
@@ -218,6 +249,17 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		return QueueItem{}, err
 	}
 	defer tx.Rollback()
+	if request.DraftID != "" {
+		var existingCount int
+		if err = tx.QueryRow("SELECT count(*) FROM send_queue WHERE request_id=?", request.RequestID).Scan(&existingCount); err != nil {
+			return QueueItem{}, err
+		}
+		if existingCount == 0 {
+			if err = checkSourceDraftBinding(tx.QueryRow(`SELECT source_paths,peer_id,revision,source_selection FROM send_drafts WHERE id=?`, request.DraftID), request, string(encoded), selection); err != nil {
+				return QueueItem{}, err
+			}
+		}
+	}
 	var count int
 	if err = tx.QueryRow(`SELECT COUNT(*) FROM send_queue WHERE state NOT IN ('completed','cancelled','expired')`).Scan(&count); err != nil {
 		return QueueItem{}, err
@@ -231,7 +273,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		state = "waiting_peer"
 	}
 	id := protocol.RandomID()
-	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?,?) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer, authorizationGeneration)
+	_, err = tx.Exec(`INSERT INTO send_queue(`+queueColumns+`) VALUES(?,?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM send_queue),'',?,1,?,?,'',?,?,?,?,?) ON CONFLICT(request_id) DO NOTHING`, id, request.RequestID, request.PeerID, string(encoded), digest, state, expires.Format(time.RFC3339Nano), now, now, request.WaitForPeer, authorizationGeneration, selection, request.DraftID, request.DraftRevision)
 	if err != nil {
 		return QueueItem{}, err
 	}
@@ -240,7 +282,8 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 		return QueueItem{}, err
 	}
 	saved, _ := json.Marshal(item.paths)
-	if item.PeerID != request.PeerID || string(saved) != string(encoded) || item.WaitForPeer != request.WaitForPeer {
+	savedSelection, _ := encodeSourceSelection(item.SourceSelection)
+	if item.PeerID != request.PeerID || string(saved) != string(encoded) || item.WaitForPeer != request.WaitForPeer || savedSelection != selection || item.DraftID != request.DraftID || item.DraftRevision != request.DraftRevision || item.AuthorizationGeneration != authorizationGeneration {
 		return QueueItem{}, errors.New("IDEMPOTENCY_CONFLICT")
 	}
 	if err = persistContentQueue(tx, item.QueueItem, request.content); err != nil {
@@ -445,6 +488,7 @@ func (s *Service) dispatchQueue(ctx context.Context) {
 		cfg.contentSnapshot = contentSnapshot
 		cfg.contentAllowFallback = allowFallback
 		cfg.expectedSourceDigest = record.digest
+		cfg.sourceSelection = cloneSourceSelection(record.SourceSelection)
 		cfg.expectedAuthorizationGeneration = record.AuthorizationGeneration
 		cfg.beforeDispatch = func(task TaskSnapshot) error {
 			if !task.HistoryPersisted {
@@ -559,11 +603,11 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 	if _, _, err = s.loadQueueContent(s.workCtx, item.ID); err != nil {
 		return err
 	}
-	prepared, err := transfer.Prepare(s.workCtx, item.paths, 0)
+	prepared, err := transfer.PrepareSelected(s.workCtx, item.paths, 0, item.SourceSelection)
 	if err != nil {
 		return classifyTaskError(err)
 	}
-	digest := queueSourceDigest(prepared.Manifest)
+	digest := selectedQueueSourceDigest(prepared.Manifest, item.SourceSelection)
 	_ = prepared.Close()
 	_, err = s.store.db.Exec(`UPDATE send_queue SET state='queued',task_id='',source_digest=?,last_error='',revision=revision+1,updated_at=? WHERE id=? AND revision=?`, digest, time.Now().UTC().Format(time.RFC3339Nano), id, revision)
 	if err == nil {

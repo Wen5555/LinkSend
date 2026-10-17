@@ -1,3 +1,9 @@
+## 2026-10-18 C/N1 目录预设候选
+
+- 共用Go规则/受限遍历、源码预设/有限自定义、数量体积/有界展开与恢复完整发送已实现；规则快照贯穿草稿、入队、派发、暂停/重启恢复、重试与历史重发。schema9→10备份迁移，筛选恢复记录version2，文件wire与身份边界保持。队列内容摘要绑定规范化规则与已保存草稿的精确revision，提交事务再次检查，草稿清空后幂等收据保持。见[ADR0009](adr/0009-versioned-source-selection.md)和[证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
+- 实际Pion+固定身份QUIC接收集合/中文/空目录/hash、真实首块暂停重启后原transfer恢复、入选源变化拒绝等通过，排除子树没有落盘。核心off完整test/vet/build、完整app+transfer race（169.926/14.049s）、desktop两模式/off-race/vet/build及95前端测试/typecheck/lint/build通过。旧schema9真实库拒绝10且DB hash不变；浏览器窄窗/深色/键盘检查通过。Windows符号链接权限不足明确SKIP。候选待阶段同步，原生/物理继续单列。
+- 2b9ee1c的五项workflow与Windows/Mac三平台包全部success。恢复阶段任务库仍为9（此前ADR0008写7为笔误已纠正）；本N1才迁移到10。N2/N3/N4和原生/物理矩阵继续，Goal active。
+
 ## 2026-10-18 A 刷新调度、降级诊断与早期host路径候选
 
 - 发现刷新共享单一在途结果，完成后750ms内合并重复请求；周期公告及记忆地址退避加入有界±12.5%抖动。设备页进入/后端重连主动请求发现，重渲染不反复发起；固定端口、网卡、组播/广播发送等降级通过Inbox/诊断DTO到页面，保留手动IP入口与明确配对要求。

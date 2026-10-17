@@ -6,10 +6,10 @@
 
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
-| A LAN 独立主流程 | 端口/reader/记忆修复；刷新合并/抖动、设备页触发/provider状态与早期host候选完成 | 新Pion计时RED→GREEN、定向race三轮、92前端与两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过；新候选待同步 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：阶段同步核对CI，准确原生独立旅程继续 |
+| A LAN 独立主流程 | 端口/reader/记忆修复；刷新合并/抖动、设备页触发/provider状态与早期host候选完成 | 新Pion计时RED→GREEN、定向race三轮、92前端与两模块通过 | 原发现模块10/10；Mac反控FAIL | 2b9ee1c五项CI及三平台包success | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：准确原生独立旅程继续 |
 | B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | e43043d五项CI及三平台包success | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：准确包/双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
-| C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
+| C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过 | 浏览器夹具通过；原生/物理待验 | 待阶段同步 | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：阶段推送并核对CI/准确包，继续N2 |
 | C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
 | D / N3 文件正文限速 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 设计进程级可取消预算，独立于控制/剪贴板 |
 | D / N4 托盘快速发送 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go owner，独立于主草稿 |

@@ -150,6 +150,7 @@ export function humanizeBackendError(raw: unknown): string {
     QUEUE_RESTART_CONFIRMATION_REQUIRED: '应用已重启，请核对文件与目标设备后确认继续。',
     APP_CLOSING: '应用正在保存并退出，暂不接受新操作。',
     RESOURCE_LIMIT: '已达到可处理数量上限，请减少文件或队列项后重试。',
+    INVALID_SOURCE_SELECTION: '排除规则无效：请使用相对路径、每行一条，最多 32 条；不支持取反或括号表达式。',
     INVALID_ARGUMENT: '输入不完整，请选择设备、文件和接收目录后重试。',
     DESKTOP_NOT_READY: '桌面窗口尚未准备好，请稍后重试。',
     BACKEND_UNAVAILABLE: '桌面服务尚未启动完成，请稍后重试。',

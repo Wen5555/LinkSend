@@ -6,7 +6,7 @@
 
 同一信令 URL 的控制库重建后，旧 identity 的 Devices 返回401。401也可能表示普通成员被撤销，不能据此自动初始化或清空 profile。普通 SwitchMembership 需要当前服务成员证明，不能处理空库。用户需要显式选择新建组或使用新邀请码加入，同时保留 identity、文件、历史、偏好、明确本地拒绝与有效独立LAN。
 
-文件 V1、membership_v2、控制库schema4、桌面任务库schema7保持。恢复调用只携带控制元数据；文件和剪贴板正文仍由Go经已认证P2P传输，relay=false。
+文件 V1、membership_v2、控制库schema4、桌面任务库schema9保持（任务库版本以当时源码history.go核对；先前写7为笔误）。恢复调用只携带控制元数据；文件和剪贴板正文仍由Go经已认证P2P传输，relay=false。
 
 ## 本地策略与状态
 

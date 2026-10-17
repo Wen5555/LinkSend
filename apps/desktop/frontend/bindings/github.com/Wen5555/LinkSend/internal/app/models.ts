@@ -164,6 +164,11 @@ export interface DirectTimings {
 }
 
 export interface DraftPreview {
+    "excluded_files"?: number;
+    "excluded_directories"?: number;
+    "excluded_bytes"?: number;
+    "entries"?: transfer$0.SourcePreviewEntry[] | null;
+    "entries_truncated"?: boolean;
     "revision": number;
     "files": number;
     "directories": number;
@@ -183,6 +188,9 @@ export interface EnqueueContentRequest {
 }
 
 export interface EnqueueRequest {
+    "draft_id"?: string;
+    "draft_revision"?: number;
+    "source_selection"?: transfer$0.SourceSelection | null;
     "request_id": string;
     "peer_id": string;
     "paths": string[] | null;
@@ -370,6 +378,9 @@ export interface MembershipStatus {
 }
 
 export interface QueueItem {
+    "draft_id"?: string;
+    "draft_revision"?: number;
+    "source_selection"?: transfer$0.SourceSelection | null;
     "id": string;
     "request_id": string;
     "peer_id": string;
@@ -398,6 +409,7 @@ export interface ResendInboxRequest {
  * persisting a draft does not authorise a send or open any of its file bodies.
  */
 export interface SendDraft {
+    "source_selection"?: transfer$0.SourceSelection | null;
     "id": string;
     "paths": string[] | null;
     "peer_id": string;

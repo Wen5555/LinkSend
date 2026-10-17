@@ -8,6 +8,7 @@ import { EnqueueIdentity } from '../workspace-cache';
 import { deviceConnectionLabel, deviceName, fileName } from '../presentation';
 import { Queue } from '../components/Queue';
 import { TaskList } from '../components/Tasks';
+import { SourceSelectionPanel } from '../components/SourceSelectionPanel';
 
 type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean; initialView?: 'send' | 'queue' | 'active' };
 const pathPageSize = 10;
@@ -38,7 +39,7 @@ export function TransferPage({ workspace, devices, identityID, run, op, controlR
   };
   const enqueue = () => {
     if (!draft) return;
-    const payload = { peer_id: draft.peer_id, paths, wait_for_peer: waitForPeer, expires_at: '' };
+    const payload = { peer_id: draft.peer_id, paths, source_selection: draft.source_selection, draft_id: draft.id, draft_revision: draft.revision, wait_for_peer: waitForPeer, expires_at: '' };
     void run('enqueue', async () => {
       // A new Go draft revision is a deliberate new draft. Retain the previous
       // id if a successful mutation is followed by a lost/stale snapshot read.
@@ -61,7 +62,7 @@ export function TransferPage({ workspace, devices, identityID, run, op, controlR
         <div className="file-list compact-file-list">{paths.length ? visiblePaths.map(path => <div className="file-row" data-draft-path={path} key={path}><span className="file-icon" aria-hidden="true">▧</span><span title={path}>{fileName(path)}</span><button disabled={disabled} aria-label={`移除 ${fileName(path)}`} onClick={() => saveDraft({ paths: paths.filter(item => item !== path) })}>×</button></div>) : <div className="empty-picker"><strong>尚未选择文件</strong><small>选择窗口取消后不会清空已有草稿。</small></div>}</div>
         {paths.length > pathPageSize && <div className="bounded-pagination" aria-label="发送草稿分页"><button className="ghost" aria-label="草稿上一页" disabled={activePathPage === 0} onClick={() => setPathPage(page => clampPathPage(page - 1, paths.length))}>上一页</button><span>第 {activePathPage + 1} / {pathPageCount} 页 · 每页最多 {pathPageSize} 项</span><button className="ghost" aria-label="草稿下一页" disabled={activePathPage + 1 >= pathPageCount} onClick={() => setPathPage(page => clampPathPage(page + 1, paths.length))}>下一页</button></div>}
         <p className="hint">可将文件或目录拖到这里；系统入口只加入草稿。当前传输不会阻止加入下一项，重启后需确认继续。</p>
-        {preview.data && preview.data.revision === draft?.revision && <p className="hint">{preview.data.complete ? '' : '已统计 '} {preview.data.files} 个文件 · {preview.data.directories} 个目录 · {(preview.data.bytes / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB{preview.data.problem && ` · ${preview.data.problem}`}</p>}
+        {draft && <SourceSelectionPanel draft={draft} preview={preview.data} disabled={disabled} save={saveDraft} />}
         {draft && <small className="draft-status">{draft.updated_at ? `草稿已保存 · ${new Date(draft.updated_at).toLocaleTimeString()}` : '选择内容后保存草稿'}</small>}
       </section>
     </div>}

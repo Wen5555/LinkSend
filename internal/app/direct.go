@@ -26,6 +26,7 @@ const firstGeneration uint64 = 1
 const candidateExchangeBudget = 10 * time.Second
 
 type DirectConfig struct {
+	sourceSelection                 *transfer.SourceSelection
 	BindAddress                     string
 	InterfacePriority               []string
 	ExcludedInterfaces              []string
@@ -823,7 +824,7 @@ func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []
 	preparedCh := make(chan prepareResult, 1)
 	peerCh := make(chan peerResult, 1)
 	go func() {
-		prepared, err := transfer.Prepare(parallelCtx, paths, 0)
+		prepared, err := transfer.PrepareSelected(parallelCtx, paths, 0, cfg.sourceSelection)
 		preparedCh <- prepareResult{prepared: prepared, err: err}
 	}()
 	go func() {
