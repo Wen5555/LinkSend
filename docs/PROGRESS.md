@@ -1,7 +1,8 @@
 ## 2026-10-18 C/N1 目录预设候选
 
 - 共用Go规则/受限遍历、源码预设/有限自定义、数量体积/有界展开与恢复完整发送已实现；规则快照贯穿草稿、入队、派发、暂停/重启恢复、重试与历史重发。schema9→10备份迁移，筛选恢复记录version2，文件wire与身份边界保持。队列内容摘要绑定规范化规则与已保存草稿的精确revision，提交事务再次检查，草稿清空后幂等收据保持。见[ADR0009](adr/0009-versioned-source-selection.md)和[证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
-- 实际Pion+固定身份QUIC接收集合/中文/空目录/hash、真实首块暂停重启后原transfer恢复、入选源变化拒绝等通过，排除子树没有落盘。核心off完整test/vet/build、完整app+transfer race（169.926/14.049s）、desktop两模式/off-race/vet/build及95前端测试/typecheck/lint/build通过。旧schema9真实库拒绝10且DB hash不变；浏览器窄窗/深色/键盘检查通过。Windows符号链接权限不足明确SKIP。候选待阶段同步，原生/物理继续单列。
+- 实际Pion+固定身份QUIC接收集合/中文/空目录/hash、真实首块暂停重启后原transfer恢复、入选源变化拒绝等通过，排除子树没有落盘。核心off完整test/vet/build、完整app+transfer race（169.926/14.049s）、desktop两模式/off-race/vet/build及95前端测试/typecheck/lint/build通过。旧schema9真实库拒绝10且DB hash不变；浏览器窄窗/深色/键盘检查通过。Windows链接权限不足明确SKIP，已在JP专用TMPDIR以linksend低权限用户补验5项全部PASS/无SKIP，job及hash见证据。
+- N1提交0499cb5已推送并核对远端SHA；两项core、两项desktop和三平台package workflow39076292203均success。临时浏览器/Vite/入口已收尾，原生/物理继续单列。N2仅完成[设计](adr/0010-atomic-device-batches.md)，接着实施多目标草稿和原子批次/回滚，再接界面；不以UI循环入队或阶段记录替代实际功能。
 - 2b9ee1c的五项workflow与Windows/Mac三平台包全部success。恢复阶段任务库仍为9（此前ADR0008写7为笔误已纠正）；本N1才迁移到10。N2/N3/N4和原生/物理矩阵继续，Goal active。
 
 ## 2026-10-18 A 刷新调度、降级诊断与早期host路径候选
