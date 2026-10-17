@@ -131,6 +131,9 @@ func TestDiscoveryFixedPortConflictKeepsTLSAndRestores(t *testing.T) {
 	}
 	discoveryHeartbeat(t, peer, m)
 	_ = blocker.Close()
+	// A user refresh storm is coalesced; the released port recovers on the
+	// next eligible wave rather than forcing a new probe for every click.
+	time.Sleep(refreshMinInterval)
 	_ = m.Refresh()
 	m.mu.RLock()
 	restored := m.udp.LocalAddr().(*net.UDPAddr).Port == port

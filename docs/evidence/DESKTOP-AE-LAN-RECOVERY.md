@@ -70,3 +70,13 @@ Mac 十轮均在 TCP dial 阶段以 `LAN_CONTROL_UNREACHABLE` / `no route to hos
 本机原始jsonl/摘要：`.artifacts/ae-20261018/baseline-{02..11}-{win,mac}.jsonl`、`baseline-batch-results.json`、`baseline-summary.json`。Mac原始日志：`~/.codex/supervision/linksend-ae-20261018/baseline-{02..11}.{jsonl,err}`。管理job：`/tmp/codex-ssh/job-linksend-ae-lan-baseline-batch-20261018-01`（完成）；反向对照：`.../job-linksend-ae-mac-reverse-20261018-01`，签名/TCC：`.../job-linksend-ae-mac-lnp-20261018-01`。所有probe已按有界期限退出，未启动剪贴板，未产生测试文件内容。
 
 因此，上节“真实自动发现NOT RUN”已由本节限定为**原生桌面包完整旅程仍NOT RUN**；harness的生产发现模块已取得修复前实机基线，配对/文件、优化后对照及最终准确包仍待继续。
+
+## 刷新合并、provider可见与早期host候选（2026-10-18）
+
+重复刷新共用单个在途调用与同一结果（包括失败），完成后750ms内不重复枚举/公告；下次正常刷新仍重试失败provider，Close/cancel后拒绝。周期公告与记忆地址退避均±12.5%有界抖动，不改变端口恢复或单源读写所有权。设备页进入/后端重新就绪主动发现，目录数据更新不额外触发；provider状态进入Inbox与可导出诊断，页面说明临时端口/组播等限制、手动IP与配对边界。组播/广播发送分别记录，任一失败不取消另一provider。
+
+真实Pion Agent、共享UDP Endpoint和签名候选管道，配合绑定但不回应的STUN UDP sink，复现连接已nominate host↔host后仍等3.0012372s。原判断只对`lan_direct`早停；loopback和其他证据为`direct_unknown`的真实host pair仍等待。改为根据已选pair两端均host及时结束trickle，保留真实路由分类、签名/代次与QUIC pin边界。修复后race三轮ready分别12.4926、8.9137、10.0052ms；STUN sink实际被探测且不回复，无TURN/正文中继。这里只证明局部时序，无真实LAN吞吐收益或NAT成功主张。
+
+本地日志 `trickle-host-before.log`、`trickle-host-after.log`、`refresh-verified-race.log` 保留修复前后。新增测试覆盖65个并发刷新只派发一次、失败限频后重试、在途等待取消、抖动范围、provider到Inbox/诊断与页面恢复隐藏、设备页重渲染不重复发现。已有端口冲突/释放、reader/close测试继续通过。新增诊断断言曾暴露启动覆盖具体错误，已保留具体状态；旧FAIL日志保留。首次desktop与前端build同时运行造成旧embed资产暂缺，已改为dist稳定后复验，不把编排失败算产品失败或通过。
+
+前端准确Node24.21.0/pnpm12.4.1：92tests/typecheck/lint/build通过；真实Wails beta.18绑定重新生成。核心off完整test（app67.027s）、vet/build通过；desktop workspace test、off-race/vet/build和最终dist稳定后的off build通过。发现完整race三轮通过（18.914s）；最终发现刷新/应用定向race三轮通过（5.333/10.530s）。最新日志为`refresh-verified-{core,race,desktop,frontend-*}.log`，不使用之前FAIL日志替代终态。未把源码候选替代准确包原生或真实双机。owned持久服务/监听未新增，普通夹具结束关闭自身socket；外部STUN授权与Mac公网/反控限制保持。

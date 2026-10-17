@@ -159,6 +159,7 @@ type Diagnostics struct {
 	TrustedPeers             int                   `json:"trusted_peers"`
 	GeneratedAt              string                `json:"generated_at"`
 	HealthFailure            string                `json:"health_failure,omitempty"`
+	LANProviderErrors        map[string]string     `json:"lan_provider_errors,omitempty"`
 }
 
 func New(cfg Config) (*Service, error) {
@@ -755,6 +756,9 @@ func (s *Service) Diagnostics(ctx context.Context) Diagnostics {
 	d.HistoryPersisted = s.tasks.historyAvailable()
 	d.RestartRecoverySupported = d.HistoryPersisted
 	d.ByteResumeSupported = true
+	if manager := s.lanManager(); manager != nil {
+		d.LANProviderErrors = manager.ChannelErrors()
+	}
 	if s.tasks.historyError() != nil {
 		d.HistoryError = "TASK_STORE_UNAVAILABLE"
 	}

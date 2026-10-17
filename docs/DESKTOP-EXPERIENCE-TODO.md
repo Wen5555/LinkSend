@@ -6,8 +6,8 @@
 
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
-| A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：核对准确原生包进程上下文，继续刷新合并与真实独立旅程 |
-| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | edb67ef五项success；新候选待同步 | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：阶段推送并核对CI，准确包/双NAT缺项保留 |
+| A LAN 独立主流程 | 端口/reader/记忆修复；刷新合并/抖动、设备页触发/provider状态与早期host候选完成 | 新Pion计时RED→GREEN、定向race三轮、92前端与两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过；新候选待同步 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：阶段同步核对CI，准确原生独立旅程继续 |
+| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | e43043d五项CI及三平台包success | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：准确包/双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
 | C / N2 多设备分发 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用单 owner 队列，持久化批次/原子入队/幂等 |
@@ -27,7 +27,7 @@ Mac公共curl TLS失败，IPv4无proxy单进程对照job `/tmp/codex-ssh/job-lin
 
 B/STUN现场：18a88f2/eb421f9已推送。新独立STUN-only服务本机Pion srflx/Binding/TURN负例通过，User=turnserver、PID285596、67/96 tasks、约7MiB；标准coturn.service保持masked/inactive。首轮TasksMax64导致auth线程创建失败，已安全停用后准确unit事务修复，证据/回退见信令重建文档。外部Windows/Mac UDP无响应，JP UFW只开放TCP22/80/443；已异步询问仅UDP3478授权，答复前不改规则/不切STUN DNS。旧默认STUN在Windows可取得srflx，Mac假IP/TUN公网路径仍失败；不替代双NAT文件。固定Node24.21.0/pnpm12.4.1及嵌套命令已核验，86前端测试和其余检查通过。
 
-B客户端：显式intent/API/UI、已退休context永久拒绝、首次DELETE前live-actor检查和完整快照/成员操作所有权已实现；独立LAN、LocalBlock、identity/文件/历史/偏好保留。schema3精确备份及旧库拒绝通过；正常新码重配保持，旧队列/撤销不自动重绑。核心off/desktop/前端90tests、并发race五轮等已通过，最终identity/app完整race终态exit0（app122.250s），阶段待同步；[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。客户端原生与新服务实际恢复旅程仍待准确包，不能标B整体完成。edb67ef、STUN资产修复eb421f9的五项workflow均success，18a88f2 package被后续并发策略cancelled。
+B客户端：显式intent/API/UI、已退休context永久拒绝、首次DELETE前live-actor检查和完整快照/成员操作所有权已实现；独立LAN、LocalBlock、identity/文件/历史/偏好保留。schema3精确备份及旧库拒绝通过；正常新码重配保持，旧队列/撤销不自动重绑。核心off/desktop/前端90tests、并发race五轮等已通过，最终identity/app完整race终态exit0（app122.250s），e43043d已推送且五项workflow/三平台包success；[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。客户端原生与新服务实际恢复旅程仍待准确包，不能标B整体完成。edb67ef、STUN资产修复eb421f9的五项workflow均success，18a88f2 package被后续并发策略cancelled。
 
 B来源记录：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。首次部署/恢复及DNS已完成，原preflight仍保留独立历史。
 

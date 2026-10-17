@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18 A增量：重复发现刷新共享在途结果并在完成后750ms内限频，周期公告/记忆退避有界抖动。设备页进入主动触发并显示provider降级，手动IP仍不等于自动发现成功。真实Pion已检查并选中的host↔host可及时结束trickle，不等待无关STUN；连接方法仍按真实路由证据分类，不将host类型等同LAN。wire与身份、文件完整性契约保持；物理验收另记。
+
 2026-10-18 B客户端恢复候选：显式Prepare/Continue/Cancel与桌面恢复面板、同URL空库初始化/新码加入、响应丢失后核对/暂停/重启、持久旧context退休与outbox首发live-actor检查已实现。普通新码重配保持，组/本机incarnation替换同样退休旧快照；独立LAN不因恢复补组失败失去授权。trust升级schema3并精确备份、旧端明确拒绝，wire/控制库/任务库保持。准确包原生与真实跨NAT仍单列待验，见ADR0008和本轮证据。
 
 2026-10-18 B恢复前置修复：成员上下文切换或旧group+lan降为独立LAN均提升授权代次/时间屏障，旧任务、队列及剪贴板权限不能借保留LAN关系继续。保留独立LAN地址/历史/request证据，普通同上下文刷新不丢同意；不改wire/schema。完整灾后恢复仍单列待实施，见ADR0007与TODO。

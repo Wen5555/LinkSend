@@ -76,3 +76,7 @@ Go实际版本 `go1.27.1 windows/amd64`，默认workspace为 `D:\apps\Osend\go.w
 Playwright独立session `ae-recovery` 对真实DevicesPage/RecoveryPanel、生产CSS和明确mock控制API做960×640浅色、1100×720深色检查。首次窄窗口发现恢复入口位于设备目录之后，已移到页首。深色中输入合成码并Tab/Enter完成，记录一次continue、无重复prepare，页面无水平溢出、console Errors0/Warnings0。960窄窗口内容较长，完整原生DPI/键盘矩阵仍留E。
 
 截图与mock脚本仅本地 `output/playwright/ae-recovery-20261018/`，未入Git；合成码不是服务邀请码。浏览器PID143716与Vite session53768已停止，19345无监听；临时HTML已移除，原有根 `.playwright-cli/` 未动。浏览器结果不替代Windows/macOS原生RPC、实际系统入口或跨网文件验证。
+
+### 阶段同步与CI
+
+实现提交 `e43043d25c0cbb03ece846b093297dc47069a711` 已推送 `codex/lan-rebuild-ae`，远端SHA一致，沿用Draft PR #9。core push/PR `39073187230` / `39073189614`、desktop push/PR `39073187229` / `39073189666`、[三平台包39073187228](https://github.com/Wen5555/LinkSend/actions/runs/39073187228)均success；Windows amd64、Mac arm64/amd64均success。后续A源码改动需自己的准确包，不能把这些包结果迁移过去。

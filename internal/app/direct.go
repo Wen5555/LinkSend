@@ -1229,10 +1229,11 @@ func connectWithTrickle(ctx context.Context, session candidateSession, endpoint 
 		case connected = <-connectCh:
 			if connected.err != nil {
 				cancel()
-			} else if connected.path.ConnectionMethod == "lan_direct" {
-				// A verified on-link host path is already the preferred V1 LAN
-				// result. End trickle cleanly instead of waiting for unrelated
-				// public STUN candidates.
+			} else if connected.path.LocalType == "host" && connected.path.RemoteType == "host" {
+				// Pion has checked and nominated the signed host pair. Route
+				// classification is diagnostic evidence, not a prerequisite
+				// for using that live pair. End trickle cleanly without waiting
+				// for unrelated STUN (including direct_unknown host paths).
 				close(stopGathering)
 			}
 		}

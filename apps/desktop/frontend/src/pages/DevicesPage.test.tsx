@@ -4,11 +4,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClipboardGrant, DeviceInfo } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
-import { DevicesPage } from './DevicesPage';
+import { DevicesPage, LANDiscoveryNotice } from './DevicesPage';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })) }));
+const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })), RefreshLANDiscovery: vi.fn(async () => {}) }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const run: CommandRunner = async (_key, action, _message, onError) => {
@@ -45,6 +45,31 @@ afterEach(() => {
 });
 
 describe('设备目录和详情', () => {
+  it('requests discovery on entry and reconnect, without refreshing on every directory render', async () => {
+    const container = document.createElement('div'); document.body.append(container);
+    const root = renderDevices(container, []);
+    await settle();
+    expect(backend.RefreshLANDiscovery).toHaveBeenCalledTimes(1);
+    const update = (available: boolean) => act(() => root.render(<DevicesPage devices={[]} name="本机" run={run} op="" available={available} />));
+    update(true);
+    await settle();
+    expect(backend.RefreshLANDiscovery).toHaveBeenCalledTimes(1);
+    update(false); update(true);
+    await settle();
+    expect(backend.RefreshLANDiscovery).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows degraded providers without claiming discovery established trust', () => {
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    act(() => root.render(<LANDiscoveryNotice inbox={{ lan_provider_errors: { listen: 'fixed_port_unavailable', multicast: 'join_failed' } }} />));
+    expect(container.textContent).toContain('临时端口');
+    expect(container.textContent).toContain('组播发现受限');
+    expect(container.textContent).toContain('仍需明确配对');
+    act(() => root.render(<LANDiscoveryNotice inbox={{ lan_provider_errors: {} }} />));
+    expect(container.textContent).toBe('');
+  });
+
   it('keeps discovery, server presence and verified connections distinct as evidence changes', () => {
     const container = document.createElement('div'); document.body.append(container);
     const snapshot = makeDevice('status-peer', { online: false, nearby: true, service_state: 'unavailable', lan_control_state: 'discovered_unverified' });

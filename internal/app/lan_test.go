@@ -35,6 +35,12 @@ func TestRememberLANPeerUpdatesCurrentManagerAfterPersistence(t *testing.T) {
 			defer manager.Close()
 			s.lan = &lanRuntime{manager: manager}
 			defer func() { s.lanMu.Lock(); s.lan = nil; s.lanMu.Unlock() }()
+			if status := s.InboxStatus(); !status.LANAvailable || status.LANProviderErrors["interfaces"] != "no_eligible_address" {
+				t.Fatalf("inbox hid the unavailable interface provider: %+v", status)
+			}
+			if status := s.Diagnostics(context.Background()); status.LANProviderErrors["interfaces"] != "no_eligible_address" {
+				t.Fatal("exportable diagnostics hid provider degradation")
+			}
 			if mode == "denied" {
 				if err := identity.RevokePeer(s.cfg.DataDir, peer.ID()); err != nil {
 					t.Fatal(err)

@@ -128,6 +128,7 @@ type Manager struct {
 	close          sync.Once
 	writeMu        sync.Mutex
 	refreshMu      sync.Mutex
+	refresh        refreshGate
 	mu             sync.RWMutex
 	peers          map[string]*peerRecord
 	ifaces         map[string]interfaceRoute
@@ -183,7 +184,9 @@ func Start(cfg Config) (*Manager, error) {
 		return nil, err
 	}
 	if err = m.refreshInterfaces(); err != nil {
-		m.channelErrors["interfaces"] = "initial_refresh_failed"
+		if m.channelErrors["interfaces"] == "" {
+			m.channelErrors["interfaces"] = "initial_refresh_failed"
+		}
 	}
 	m.wg.Add(3)
 	go m.readLoop()
@@ -233,6 +236,10 @@ func (m *Manager) Close() error {
 }
 
 func (m *Manager) Refresh() error {
+	return m.refresh.run(m.ctx, time.Now(), m.refreshDiscovery)
+}
+
+func (m *Manager) refreshDiscovery() error {
 	// A failed fixed-port retry is a provider status, not a reason to stop
 	// announcing from the still-live temporary socket.
 	_ = m.restoreFixedUDPSocket()
@@ -479,7 +486,7 @@ func (m *Manager) announceLoop() {
 	defer m.wg.Done()
 	_ = m.sendAnnouncement(true, nil)
 	fast := time.NewTimer(350 * time.Millisecond)
-	ticker := time.NewTicker(announceEvery)
+	ticker := time.NewTimer(jitterInterval(announceEvery))
 	cleanup := time.NewTicker(3 * time.Second)
 	defer fast.Stop()
 	defer ticker.Stop()
@@ -494,6 +501,7 @@ func (m *Manager) announceLoop() {
 			_ = m.Refresh()
 			m.probeKnownPeers()
 			m.probeRememberedAddresses()
+			ticker.Reset(jitterInterval(announceEvery))
 		case <-cleanup.C:
 			m.expirePeers()
 		}
@@ -523,7 +531,7 @@ func (m *Manager) probeRememberedAddresses() {
 		} else {
 			state.backoff = min(max(state.backoff, 5*time.Second)*2, time.Minute)
 		}
-		state.next = now.Add(state.backoff)
+		state.next = now.Add(jitterInterval(state.backoff))
 		m.remembered[address] = state
 		m.mu.Unlock()
 	}
@@ -757,8 +765,10 @@ func (m *Manager) sendAnnouncementOnRoute(announce bool, destination *net.UDPAdd
 	m.mu.RUnlock()
 	var errs []error
 	sent := false
+	multicastAttempted, multicastSent, broadcastAttempted, broadcastSent := false, false, false, false
 	for _, route := range routes {
 		if route.iface.Flags&net.FlagMulticast != 0 {
+			multicastAttempted = true
 			if err = m.packet.SetMulticastInterface(route.iface); err != nil {
 				errs = append(errs, err)
 			} else {
@@ -767,18 +777,30 @@ func (m *Manager) sendAnnouncementOnRoute(announce bool, destination *net.UDPAdd
 					errs = append(errs, err)
 				} else {
 					sent = true
+					multicastSent = true
 				}
 			}
 		}
 		if route.broadcast != nil && !route.broadcast.Equal(route.address) {
+			broadcastAttempted = true
 			destination := &net.UDPAddr{IP: route.broadcast, Port: m.cfg.Port}
 			if err = m.writeOnRoute(body, destination, route); err != nil {
 				errs = append(errs, err)
 			} else {
 				sent = true
+				broadcastSent = true
 			}
 		}
 	}
+	m.mu.Lock()
+	for provider, failed := range map[string]bool{"multicast_send": multicastAttempted && !multicastSent, "broadcast_send": broadcastAttempted && !broadcastSent, "announcement": !sent} {
+		if failed {
+			m.channelErrors[provider] = "send_unavailable"
+		} else {
+			delete(m.channelErrors, provider)
+		}
+	}
+	m.mu.Unlock()
 	if sent {
 		return nil
 	}

@@ -150,6 +150,7 @@ export interface Diagnostics {
     "trusted_peers": number;
     "generated_at": string;
     "health_failure"?: string;
+    "lan_provider_errors"?: { [_ in string]?: string } | null;
 }
 
 export interface DirectTimings {
@@ -278,6 +279,7 @@ export interface InboxStatus {
     "lan_available": boolean;
     "lan_peer_count": number;
     "lan_last_error"?: string;
+    "lan_provider_errors"?: { [_ in string]?: string } | null;
 }
 
 export interface IncomingFile {
@@ -356,7 +358,7 @@ export interface MembershipRecoveryStatus {
 
 export interface MembershipStatus {
     /**
-     * pending, member, not_member, auth_failed, unavailable
+     * pending, member, not_member, auth_failed, unavailable, recovery_pending
      */
     "state": string;
 

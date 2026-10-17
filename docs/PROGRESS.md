@@ -1,3 +1,9 @@
+## 2026-10-18 A 刷新调度、降级诊断与早期host路径候选
+
+- 发现刷新共享单一在途结果，完成后750ms内合并重复请求；周期公告及记忆地址退避加入有界±12.5%抖动。设备页进入/后端重连主动请求发现，重渲染不反复发起；固定端口、网卡、组播/广播发送等降级通过Inbox/诊断DTO到页面，保留手动IP入口与明确配对要求。
+- 真实Pion/shared UDP及签名候选夹具复现已选host↔host仍等待STUN约3.001s；改为按实际host nomination结束trickle，保持真实路由分类及pin，race三轮就绪8.9–12.5ms。这是loopback时序夹具，不是物理LAN性能收益。首次新增诊断测试暴露启动时具体原因被initial_refresh_failed覆盖，已保留具体原因并复验；首次桌面并发前端重建缺embed文件是检查编排失败，已在dist稳定后重跑。见[证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)。
+- B恢复e43043d的五项workflow与三平台包均success，远端SHA一致。准确包原生LAN/恢复、跨NAT与B2/N1–N4仍继续；宿主规则/STUN DNS保持，Goal active。
+
 ## 2026-10-18 B 显式客户端恢复候选
 
 - 新增持久Prepare/Continue/Cancel/Status、同URL空库正常初始化/新码加入、回执丢失后核对/暂停/重启，以及真实Wails绑定和设备页入口。恢复和普通上下文替换升级trust schema3，退休旧快照并保留LAN/LocalBlock，旧queue/outbox不借新context自动发送；升级精确备份，旧库拒绝schema3。wire/控制库/任务库保持，详见[ADR0008](adr/0008-membership-recovery-and-retired-contexts.md)与[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
