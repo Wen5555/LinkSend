@@ -1,5 +1,9 @@
 # Protocol
 
+## 2026-10-18 本地文件正文预算
+
+wire与任务库11保持，正文帧仍为相同长度头与字节。进程共享预算仅延迟文件正文分段写入，不限制ICE/QUIC/控制或自动剪贴板；file fallback与应用级文件块重传计费。桌面format1增加可选file_send_bytes_per_second，缺省0；旧程序忽略该字段而不具有限速，不能将回退解释为保留该能力。数值/CAS/生效/突发边界见[ADR0011](adr/0011-process-file-body-budget.md)。
+
 ## 2026-10-18 本地多目标批次
 
 文件/manifest V1、信令和剪贴板wire保持。多目标与批次仅为Go本地控制元数据；任务库10→11新增有序目标、parent与子队列关联，兼容旧单目标。`EnqueueBatch`绑定精确持久草稿revision，原子创建全部目标并保留幂等收据；子项独立保留原授权代次/规则/内容摘要，派发时重验。取消与重启不授权继续，旧schema10端明确拒绝11。具体API/迁移及完成回执优先规则见[ADR0010](adr/0010-atomic-device-batches.md)。

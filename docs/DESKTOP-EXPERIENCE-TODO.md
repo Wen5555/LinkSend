@@ -11,7 +11,7 @@
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过；JP路径/链接5项无SKIP | 浏览器夹具通过；原生/物理待验 | 0499cb5五项CI及三平台包success | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：准确包/物理缺项保留，继续N2 |
 | C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过 | 浏览器元数据夹具通过；原生/物理待验 | 77b831b四项源码CI success；包Windows旧流测试FAIL，两Mac成功 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：缓存连接首offer前过期RED→GREEN，修复同步后核对CI；N3实施中 |
-| D / N3 文件正文限速 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 设计进程级可取消预算，独立于控制/剪贴板 |
+| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面候选完成 | 假时钟/两模块/完整race/101前端；真实QUIC粗略速率、剪贴板并存和控制通过 | 浏览器夹具通过；原生/物理待验 | 本轮待阶段推送 | [证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：核对CI与准确包，继续N4 |
 | D / N4 托盘快速发送 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go owner，独立于主草稿 |
 | E 同提交候选/最终回归/文档 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 按阶段验证/提交/推送，同一 Draft PR 交付 |
 

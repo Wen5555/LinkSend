@@ -1,3 +1,9 @@
+## 2026-10-18 N3 正文预算候选
+
+- 进程共享文件正文预算、分类CAS偏好、KiB/MiB界面与动态生效完成；突发有界、恢复/应用级重传计费，控制/自动剪贴板独立，不宣称精确UDP线速。任务库11/wire保持，旧偏好默认不限速；旧程序忽略可选限速字段。
+- 假时钟、帧兼容/真实重复块计费、非法偏好无修改、两模块/core off/vet/build、完整app/transfer race195.242s/10.617s、101前端tests及typecheck/lint/build通过。1MiB/256KiB/s真实QUIC首末块间隔3.763s、hash一致；1KiB/s文件等待时剪贴板夹具7.129ms提交，暂停/恢复/取消通过。均不替代物理双机/OS剪贴板。
+- 浏览器960浅色/1100深色、键盘单位换算与非法值通过；截图发现的深色focus对比问题已局部修复再验。CI、准确包与剩余N4/原生网络分别继续，见[ADR0011](adr/0011-process-file-body-budget.md)及[证据](evidence/DESKTOP-AE-FILE-BUDGET.md)。
+
 ## 2026-10-18 N2 Windows CI首流过期负例
 
 - N2提交77b831b四项源码workflow通过，包39079813168两Mac成功、Windows旧远端取消后立即发送测试失败于opening_stream。故障夹具确定复现缓存检查后远端关闭的同类窗口，原CI准确关连接者仍未知。

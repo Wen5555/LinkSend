@@ -794,6 +794,7 @@ func (s *Service) sendPreparedOverPeerAttempt(ctx context.Context, peer *PeerSes
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
 	}
+	options.BodyBudget = processFileBudget
 	cfg.phase("opening_stream")
 	if hook := s.beforeFileOpen; hook != nil {
 		hook(peer)

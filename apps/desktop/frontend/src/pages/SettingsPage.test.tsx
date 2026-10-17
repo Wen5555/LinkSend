@@ -139,6 +139,30 @@ describe('SettingsPage save lifecycle', () => {
   });
 });
 
+describe('file body limit preferences', () => {
+  it('saves exact bytes in an isolated category and rejects empty or excessive limits', async () => {
+    const { container, root } = renderSettings(undefined, {category:'sending',revision:1}); roots.push(root);
+    const toggle=container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    act(()=>toggle.click());
+    const input=container.querySelector<HTMLInputElement>('input[aria-label="正文速率上限"]')!;
+    act(()=>change(input,''));
+    expect(button(container,'保存文件发送设置').disabled).toBe(true);
+    act(()=>change(input,'2048'));
+    backend.SavePreferencesSection.mockResolvedValueOnce({...basePreferences,revision:3,file_send_bytes_per_second:2097152});
+    await act(async()=>button(container,'保存文件发送设置').click());
+    expect(backend.SavePreferencesSection).toHaveBeenLastCalledWith('sending',2,expect.objectContaining({file_send_bytes_per_second:2097152}));
+    const units=container.querySelector<HTMLSelectElement>('select[aria-label="正文速率单位"]')!;
+    act(()=>{units.value='1048576';units.dispatchEvent(new Event('change',{bubbles:true}));});
+    expect(input.value).toBe('2');
+    act(()=>change(input,'1025'));
+    expect(button(container,'保存文件发送设置').disabled).toBe(true);
+    act(()=>toggle.click());
+    backend.SavePreferencesSection.mockResolvedValueOnce({...basePreferences,revision:4,file_send_bytes_per_second:0});
+    await act(async()=>button(container,'保存文件发送设置').click());
+    expect(backend.SavePreferencesSection).toHaveBeenLastCalledWith('sending',3,expect.objectContaining({file_send_bytes_per_second:0}));
+  });
+});
+
 describe('SettingsPage navigation requests', () => {
   it('opens receive settings for every explicit request without remounting local preferences state', () => {
     const { container, root } = renderSettings(undefined, { category: 'general', revision: 0 });

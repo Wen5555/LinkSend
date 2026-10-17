@@ -336,3 +336,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .batch-target-choice strong, .batch-target-choice small { display: block; overflow-wrap: anywhere; }
 .batch-target-choice small { font-size: 11px; color: var(--muted); margin-top: .2rem; }
 .batch-summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-block: .65rem; }
+.file-send-limit .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
+.file-send-limit .toggle-row strong, .file-send-limit .toggle-row small { display: block; }
+.file-send-limit .toggle-row small { color: var(--muted); margin-top: .3rem; }
+.file-send-limit .toggle-row input { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; }
+.file-send-limit .picker-row { flex-wrap: wrap; align-items: flex-start; }
+@media (prefers-color-scheme: dark) {
+  .file-send-limit .field-label input, .file-send-limit .field-label select,
+  .file-send-limit .field-label input:focus, .file-send-limit .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }
+}

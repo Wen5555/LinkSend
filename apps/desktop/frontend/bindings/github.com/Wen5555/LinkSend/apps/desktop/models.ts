@@ -50,6 +50,7 @@ export interface DesktopEntryStatus {
 }
 
 export interface DesktopPreferences {
+    "file_send_bytes_per_second"?: number;
     "format_version": number;
     "revision": number;
     "server_url": string;
