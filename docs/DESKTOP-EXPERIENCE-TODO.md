@@ -6,7 +6,7 @@
 
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
-| A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | NOT RUN | 待阶段同步 | [端口恢复/旧reader/多源/即时记忆](evidence/DESKTOP-AE-LAN-RECOVERY.md)已修；下一步固定双机修复前基线、刷新合并与真实独立旅程 |
+| A LAN 独立主流程 | 首批修复 | 普通/race/两模块通过 | 原发现模块10/10；Mac反控FAIL | d541264五项CI通过 | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：核对准确原生包进程上下文，继续刷新合并与真实独立旅程 |
 | B 新信令/客户端恢复/备份 | 现场核对完成 | NOT RUN | SSH只读通过 | NOT RUN | 别名已备份修正；核对精确 DNS/Origin TLS，准备专属站点和持久库事务 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
 | C / N1 目录预设 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go 清单/草稿，设计有界一致筛选 |
@@ -18,6 +18,8 @@
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
 运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
+
+最近push：`d5412642e49460413fdda249f77d03647075f41c`，源码/桌面/包共五项workflow success，包run `39060667017`。修复前生产发现模块harness十轮已收束，job `/tmp/codex-ssh/job-linksend-ae-lan-baseline-batch-20261018-01` 完成，子probe Mac反控失败不能随批次exit0标PASS。下一步使用该提交准确原生包核对上下文（原harness为SSH下无Info.plist的a.out身份），同时准备B；不可用`.artifacts/ae-20261018/rendezvous-d541264-linux-amd64`作为干净部署包，其build metadata为dirty，须从已验证提交的干净archive重建。已保留全部原始证据/备份，当前probe均已退出。
 
 > **2026-10-18 A–E Goal提示词：** 用户要求撰写覆盖A、B、B2、C、D、E所有任务的执行提示词，并明确授权较大改动完成后阶段commit/push。见[完整执行提示词](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)。N1–N4均列必做；本次撰写/同步提示词不等于已启动功能实施，明确执行后再更新本Goal状态。
 

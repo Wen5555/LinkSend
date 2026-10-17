@@ -1,5 +1,7 @@
 ## 2026-10-18 A–E Goal 启动与首批 LAN 恢复
 
+- `d541264` 已提交/推送并核对远端SHA；五项源码/desktop/三平台包workflow均success，包run `39060667017`。原生产发现模块修复前十轮harness：Windows/Mac自动发现各10/10，中位数226ms/141ms（从各自ready，含启动顺序差，范围106–444/21–1061ms）；Windows→Mac固定身份TLS10/10，Mac→Windows TCP dial均EHOSTUNREACH。系统nc同端口/同源对照成功，尚在核对后台工具/原生包上下文，不能称双向文件通过。原始证据与边界已加入本轮LAN证据。
+
 - 用户明确执行目标文档后，通过平台创建 active Goal，沿用 `codex/lan-rebuild-ae` / Draft PR #9，不恢复旧自动化或代理。唯一 TODO 新增 A/B/B2/C/D/E 及 N1–N4 当前状态，全部必交付证据满足前不标 complete。
 - 核对旧 U3 九个文件 SHA256 与保存收据及原工作树一致，逐文件复用候选；复现固定端口冲突导致 LAN 全停用，以及候选旧 reader 晚到覆盖新 socket 降级状态。补齐同锁代际检查、临时监听及固定端口恢复、多源有界探测、Windows 响应 worker 关闭、配对后立即记忆；不使用 `.invalid-eol.patch`。命令与边界见[本轮 LAN 证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)。
 - 修复后 discovery 普通/race、app LAN 普通/race、关键关闭/旧 reader race 五轮通过；核心 `GOWORK=off go test -count=1 -timeout 5m ./...`、vet/build 和桌面 `GOWORK=off` test/vet/build 通过。未改前端，本批不重新声明前端或准确包结果。

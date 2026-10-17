@@ -43,3 +43,30 @@ Mac `192.168.1.243` / macOS26.5 arm64：en0 `/24`，另有 `utun1024`，未运�
 ## 尚未覆盖
 
 真实 Windows↔Mac 自动发现/明确同意/双向文件、同条件性能、准确包与双 NAT：NOT RUN。源码回归不是上述物理/原生结论。A 后续仍需刷新合并/抖动、设备页触发、外部服务不可达独立旅程及实际测量；B/B2/C/D/E 和 N1–N4 按唯一 TODO 继续。
+
+## 阶段推送与 CI
+
+首批源码提交 `d5412642e49460413fdda249f77d03647075f41c` 已推送正确分支，本地和远端 SHA 一致，沿用 [Draft PR #9](https://github.com/Wen5555/LinkSend/pull/9)。该提交五项 workflow 均 success：core push/PR `39060667110` / `39060670788`；desktop push/PR `39060667283` / `39060670904`；[三平台包构建39060667017](https://github.com/Wen5555/LinkSend/actions/runs/39060667017)。Windows amd64、Mac amd64/arm64 job 均通过；构建通过仍不等于物理包验收。
+
+## 修复前双机发现基线（10轮，harness 边界）
+
+从 `638b2aa` 的 `git archive` 导出原生产源码，加入同一 `scripts/lanprobe/main.go` 控制面测量器后分别交叉构建 Windows amd64、Darwin arm64。测量器不接信令/STUN，不授予文件或剪贴板权限，不传正文，不使用手动 IP 探测、记忆地址或注入候选；双方 expected identity 只经 SSH 交换已公开的 ID，以防串测。它调用原 `discovery.Manager`，不是原生桌面包。
+
+测量器 SHA256 `31417502a11d468b2f99cc31a662c82ef69b038bad22d37627e4691fe410da7e`；Windows probe SHA256 `bbbb99a53d7c255034df881fecdbb5d48881fbc68fe587e95eff7859bff637f4`，Mac probe `93c5f6f2803cafc76dcfa97a0d4614195818a046a7420263ed74eedee7a9a09e`。原生产源码与同一测量器的构建/哈希分别可复核；不得将附加测量器叫作原提交已有程序。
+
+专用进程每轮12秒，Mac/Windows各先启动5轮，顺序交替，10轮均为新内存identity。`ready_to_seen_ms` 从**本进程 Manager 就绪**计至首次发现，每20ms轮询；它包含先启动一端等待后启动一端的自动编排时间，不是双端ready后的纯网络耗时。刷新指标只证明调用Refresh后观察到更新公告，不将它伪称有请求关联的ACK。
+
+| 指标 | Windows | Mac |
+|---|---|---|
+| 自动发现 | 10/10 | 10/10 |
+| 本进程ready至发现，中位数/范围 | 226ms / 106–444ms | 141ms / 21–1061ms |
+| 刷新后观察到新公告 | 10/10 | 10/10 |
+| 向对端发起固定身份TLS控制 | 10/10 | 0/10 |
+
+Mac 十轮均在 TCP dial 阶段以 `LAN_CONTROL_UNREACHABLE` / `no route to host`（0–1ms）失败。包装批次exit0仅表示十轮均完成收集，不能改写子probe的失败。最早pilot01缺少细粒度错误且失败后提前退出，保留但不计入n=10。
+
+在同一正在运行的 Windows owned listener 上，Mac系统 `/usr/bin/nc` 普通连接和显式绑定 `192.168.1.243` 均成功；Mac route/ARP明确走en0，Application Firewall状态disabled。未改任何网络/安全配置。这排除了“所有进程都无法连接该端口”的前提，尚不能证明具体拒绝原因。probe为linker ad-hoc签名、`Identifier=a.out`、无绑定Info.plist；TCC日志显示SSH responsible attribution。Apple DTS 有[类似后台工具Local Network行为的说明](https://developer.apple.com/forums/thread/778457)，仅作待验证假设；不能据此判定当前原生LinkSend包也失败，或自行改安全策略。现有桌面plist已经有NSLocalNetworkUsageDescription，下一步应在准确原生包上下文核对。
+
+本机原始jsonl/摘要：`.artifacts/ae-20261018/baseline-{02..11}-{win,mac}.jsonl`、`baseline-batch-results.json`、`baseline-summary.json`。Mac原始日志：`~/.codex/supervision/linksend-ae-20261018/baseline-{02..11}.{jsonl,err}`。管理job：`/tmp/codex-ssh/job-linksend-ae-lan-baseline-batch-20261018-01`（完成）；反向对照：`.../job-linksend-ae-mac-reverse-20261018-01`，签名/TCC：`.../job-linksend-ae-mac-lnp-20261018-01`。所有probe已按有界期限退出，未启动剪贴板，未产生测试文件内容。
+
+因此，上节“真实自动发现NOT RUN”已由本节限定为**原生桌面包完整旅程仍NOT RUN**；harness的生产发现模块已取得修复前实机基线，配对/文件、优化后对照及最终准确包仍待继续。
