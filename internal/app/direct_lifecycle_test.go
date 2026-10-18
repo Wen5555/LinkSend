@@ -20,8 +20,9 @@ type candidateSessionStub struct {
 }
 
 // Real Pion agents, live shared UDP sockets and signed candidates. A bound UDP
-// STUN sink never answers, so successful nomination must not wait for its 3s
-// gathering deadline. Loopback is a timing fixture, not physical LAN evidence.
+// STUN sink never answers. The application candidate streams intentionally never
+// close: successful nominated host paths must end exchange without relying on
+// gathering completion. Loopback is not physical LAN or a throughput benchmark.
 func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 	blackhole, err := net.ListenPacket("udp4", "127.0.0.1:0")
 	if err != nil {
@@ -74,15 +75,39 @@ func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 	defer cancel()
+	holdGatheringEnd := func(source <-chan connectivity.Candidate) <-chan connectivity.Candidate {
+		out := make(chan connectivity.Candidate)
+		go func() {
+			// Deliberately do not close out even when Pion finishes gathering.
+			// The only successful exit in candidate exchange must be nomination.
+			for {
+				select {
+				case candidate, ok := <-source:
+					if !ok {
+						return
+					}
+					select {
+					case out <- candidate:
+					case <-ctx.Done():
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		return out
+	}
+	aCandidates, bCandidates := holdGatheringEnd(a.Candidates()), holdGatheringEnd(b.Candidates())
 	start := time.Now()
 	id := protocol.RandomID()
 	results := make(chan pathResult, 2)
 	go func() {
-		path, err := connectWithTrickle(ctx, pipe(aID, ab, ba), a, aID, bPeer, id, firstGeneration, b.Credentials(), true)
+		path, err := connectWithCandidateStream(ctx, pipe(aID, ab, ba), a, aCandidates, aID, bPeer, id, firstGeneration, b.Credentials(), true)
 		results <- pathResult{path, err}
 	}()
 	go func() {
-		path, err := connectWithTrickle(ctx, pipe(bID, ba, ab), b, bID, aPeer, id, firstGeneration, a.Credentials(), false)
+		path, err := connectWithCandidateStream(ctx, pipe(bID, ba, ab), b, bCandidates, bID, aPeer, id, firstGeneration, a.Credentials(), false)
 		results <- pathResult{path, err}
 	}()
 	for range 2 {
@@ -95,10 +120,7 @@ func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 		}
 	}
 	elapsed := time.Since(start)
-	t.Logf("real nominated host pair ready in %v; STUN sink never answered", elapsed)
-	if elapsed >= 2*time.Second {
-		t.Fatalf("nominated host pair waited for unrelated STUN: %v", elapsed)
-	}
+	t.Logf("real nominated host pair ready in %v with both gathering ends withheld; STUN sink never answered", elapsed)
 	if a.Stats().STUNRequestsSent == 0 || b.Stats().STUNRequestsSent == 0 {
 		t.Fatal("STUN sink was never probed")
 	}

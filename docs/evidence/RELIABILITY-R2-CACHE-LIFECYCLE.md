@@ -33,6 +33,8 @@
 
 ## 来源核对与接续
 
+本增量提交`1bc92e0754805b01fd6a15b78fdfa3b840bc4f55`已推送且远端SHA一致。core `39172841253`/desktop `39172841256`成功；包 `39172841244` 的Windows amd64/Intel Mac成功，Mac arm64在既有直连墙钟断言失败，整体包FAIL。已继续定位并改为不交付候选结束通知的因果回归，独立Mac普通100/race50轮、负例与双模块矩阵通过，详见[因果检查](RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。不把旧包失败写成PASS，新提交CI另核对。
+
 基线`c4910f9`三组CI现均completed/success：core [39170491604](https://github.com/Wen5555/LinkSend/actions/runs/39170491604)、desktop [39170491601](https://github.com/Wen5555/LinkSend/actions/runs/39170491601)、packages [39170491614](https://github.com/Wen5555/LinkSend/actions/runs/39170491614)，Windows amd64及Mac arm64/amd64三个包job全部success。它们是上一持久owner增量的准确构建，不是本批CI或原生通过。
 
 继续实现安全的大对象/未封存崩溃对账、可靠原生交接结束许可及双平台真实键盘粘贴/重启/回收。R1物理LAN/恢复/跨网、R3诊断、R4安装退出、R5临时分享与R6同候选收尾保持必做，不用本批局部回收抵扣完成。

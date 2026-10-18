@@ -1232,13 +1232,17 @@ type pathResult struct {
 // checks. It still waits for both exchange directions to close cleanly before
 // handing the signaling session to the established peer.
 func connectWithTrickle(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, sender *identity.Identity, peer signaling.Device, sessionID string, generation uint64, remote connectivity.Credentials, controlling bool) (connectivity.Path, error) {
+	return connectWithCandidateStream(ctx, session, endpoint, endpoint.Candidates(), sender, peer, sessionID, generation, remote, controlling)
+}
+
+func connectWithCandidateStream(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, local <-chan connectivity.Candidate, sender *identity.Identity, peer signaling.Device, sessionID string, generation uint64, remote connectivity.Credentials, controlling bool) (connectivity.Path, error) {
 	phaseCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	exchangeCh := make(chan error, 1)
 	connectCh := make(chan pathResult, 1)
 	stopGathering := make(chan struct{})
 	go func() {
-		exchangeCh <- exchangeCandidateStreamWithBudget(phaseCtx, session, endpoint, endpoint.Candidates(), sender, peer, sessionID, generation, stopGathering, candidateExchangeBudget)
+		exchangeCh <- exchangeCandidateStreamWithBudget(phaseCtx, session, endpoint, local, sender, peer, sessionID, generation, stopGathering, candidateExchangeBudget)
 	}()
 	go func() {
 		path, err := endpoint.ConnectProvisional(phaseCtx, remote, controlling)

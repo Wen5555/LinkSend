@@ -1,3 +1,8 @@
+## 2026-10-19 可靠性 Goal Mac候选交换因果检查
+
+- `1bc92e0`已推送且远端一致；core/desktop CI成功，包CI39172841244的Mac arm64旧墙钟断言FAIL，Windows/Intel Mac包success。准确记录失败，没有用本机重跑覆盖。
+- 透传真实Pion候选但故意不交付收集结束通知，验证选中host对后交换能独立结束；保留原6秒父期限，另用禁用结束分支的独立Mac负例证明6秒准确超时。Mac普通100/race50轮、两模块workspace/off完整12命令通过，Windows交换相关普通/race30轮通过。详见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新提交CI待核对，物理跨网/键盘粘贴未抵扣。
+
 ## 2026-10-19 可靠性 Goal R2 未发布对象生命周期
 
 - 同profile owner活动引用持续至真实句柄关闭，Go-only关闭观察器提供实际存储来源；当前worker在native前封存完整未发布清单，再接入有界分页、压力、启动继续删除意图及退避。取消/UI终态不释放引用，未知条目和用户改动不递归删除；具体测试、早期失败及预算见[证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。
