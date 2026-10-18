@@ -15,18 +15,59 @@ const draft: SendDraft={id:'quick',peer_id:'paired',paths:['C:\\fixture\\快速.
 const device={id:'paired',name:'常用设备',trusted:true,blocked:false,online:true,profile:{alias:''}} as DeviceInfo;
 const roots: Root[]=[];
 afterEach(()=>{for(const root of roots.splice(0))act(()=>root.unmount());document.body.replaceChildren();vi.resetAllMocks();});
-async function mount(devices=[device]) {
-  backend.QuickSendDraft.mockResolvedValue(draft);
+async function mount(devices=[device], options: { identityID?: string; draft?: SendDraft } = { identityID: 'self' }) {
+  backend.QuickSendDraft.mockResolvedValue(options.draft ?? draft);
   const close=vi.fn();const container=document.createElement('div');document.body.append(container);const root=createRoot(container);roots.push(root);
   const client=createQueryClient();
-  await act(async()=>{root.render(<QueryClientProvider client={client}><QuickSendDialog devices={devices} available busy={false} lanes={new CommandLanes()} refresh={async()=>{}} close={close}/></QueryClientProvider>);await new Promise(resolve=>setTimeout(resolve,10));});
+  const lanes=new CommandLanes();
+  const render=(identityID?:string)=>root.render(<QueryClientProvider client={client}><QuickSendDialog devices={devices} identityID={identityID} available busy={false} lanes={lanes} refresh={async()=>{}} close={close}/></QueryClientProvider>);
+  await act(async()=>{render(options.identityID);await new Promise(resolve=>setTimeout(resolve,10));});
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));});
-  return {container,close};
+  return {container,close,render};
 }
 const button=(container:HTMLElement,label:string)=>Array.from(container.querySelectorAll('button')).find(button=>button.textContent===label)!;
 async function click(container:HTMLElement,label:string){await act(async()=>{button(container,label).click();await new Promise(resolve=>setTimeout(resolve,10));});}
 
 describe('独立快速发送面板',()=>{
+  it('excludes this device from trusted target choices',async()=>{
+    const {container}=await mount([{...device,id:'self',name:'本机'},device]);
+    const select=container.querySelector<HTMLSelectElement>('select')!;
+    expect(Array.from(select.options).map(option=>option.value)).toEqual(['','paired']);
+    expect(button(container,'加入发送队列').disabled).toBe(false);
+  });
+  it('preserves a saved self target but prevents sending even with offline waiting',async()=>{
+    const {container}=await mount([{...device,id:'self',name:'本机'},device],{identityID:'self',draft:{...draft,peer_id:'self'}});
+    const select=container.querySelector<HTMLSelectElement>('select')!;
+    expect(select.value).toBe('self');
+    expect(button(container,'加入发送队列').disabled).toBe(true);
+    act(()=>container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    await click(container,'加入发送队列');
+    expect(backend.EnqueueQuickSend).not.toHaveBeenCalled();
+    expect(backend.SaveQuickSendDraft).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('当前不可发送');
+  });
+  it('waits for local identity before offering targets or enabling a saved target',async()=>{
+    const {container}=await mount([{...device,id:'self',name:'本机'},device],{});
+    const select=container.querySelector<HTMLSelectElement>('select')!;
+    expect(select.disabled).toBe(true);
+    expect(Array.from(select.options).some(option=>option.value==='self')).toBe(false);
+    act(()=>container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    await click(container,'加入发送队列');
+    expect(button(container,'加入发送队列').disabled).toBe(true);
+    expect(backend.EnqueueQuickSend).not.toHaveBeenCalled();
+    expect(backend.SaveQuickSendDraft).not.toHaveBeenCalled();
+  });
+  it('enables only the paired peer when local identity arrives after the directory',async()=>{
+    const {container,render}=await mount([{...device,id:'self',name:'本机'},device],{});
+    expect(button(container,'加入发送队列').disabled).toBe(true);
+    act(()=>render('self'));
+    const select=container.querySelector<HTMLSelectElement>('select')!;
+    expect(select.disabled).toBe(false);
+    expect(select.value).toBe('paired');
+    expect(Array.from(select.options).map(option=>option.value)).toEqual(['','paired']);
+    expect(button(container,'加入发送队列').disabled).toBe(false);
+    expect(backend.SaveQuickSendDraft).not.toHaveBeenCalled();
+  });
   it('cancels without mutating any persistent draft and restores focus',async()=>{
     const previous=document.createElement('button');document.body.append(previous);previous.focus();
     const {container,close}=await mount();

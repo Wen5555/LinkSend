@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18 N4目标边界增量：快速发送排除本机；身份尚未读取时等待，保存为本机的草稿保留但不可发送。最终Go授权、文件wire与schema保持；准确包原生结果另列。
+
 2026-10-18原生错误提示增量：识别Wails `RuntimeError`与信令HTTP包装后的稳定协议码，继续使用既有中文配对提示；不显示已识别码后的原始诊断详情。只修改桌面展示，不改变配对请求、授权、wire或schema；准确包原生恢复结果单列。
 
 2026-10-18原生picker修复：Windows锁定Wails beta.18取消精确错误在picker边界归一为空选择，不显示失败也不改变草稿；真实错误保持。无wire/schema改变，见[原生检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。

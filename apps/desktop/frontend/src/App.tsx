@@ -101,7 +101,7 @@ export default function App() {
           <SettingsPage initialCategory={settingsRequest.category} categoryRequest={settingsRequest} sendToSupported={shell?.entries.send_to_supported} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} background={shell?.background} clipboard={shell?.clipboard} run={command.run} controlRun={control.run} op={command.op || control.op} available={desktop.enabled} onOpenLegacyQueue={() => { setTransferInitialView('queue'); setTab('transfer'); }} />}
     </section>
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
-    {!incoming && quickOpen && <QuickSendDialog devices={devices} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}
+    {!incoming && quickOpen && <QuickSendDialog devices={devices} identityID={config?.identity.id || shell?.status.identity} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}
     {!incoming && <LANPairPrompt run={control.run} op={control.op} available={desktop.enabled} />}
   </div>;
 }

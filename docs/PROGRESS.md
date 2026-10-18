@@ -1,3 +1,8 @@
+## 2026-10-18 N4本机目标边界修复
+
+- 三项新增回归在旧实现真实失败：候选包含本机、保存本机目标发送按钮可用、本机身份未加载仍可选/可发。App传入配置身份或shell身份，面板过滤本机，身份未知时等待，保留不可发送的旧目标/路径；新增身份晚到正常恢复回归。Go授权/wire/schema无变化。
+- 前端119项tests、typecheck/lint/build通过；核心off test/build、desktop workspace/off test/vet与最新dist后的off build通过。新源码CI/准确包原生仍待，旧0ae7cdf与98469ce证据不迁移，见[N4记录](evidence/DESKTOP-AE-QUICK-SEND.md)。
+
 ## 2026-10-18 0ae7cdf准确包修复复验与N4原生负例
 
 - 0ae7cdf五项CI/三平台包与四资产完整核验通过；新准确Mac在同profile/URL使原先卡住的设备RPC恢复，菜单quick识别离线B，两次打开唯一面板、未等待禁发送，实际勾等待/入队形成唯一waiting_peer。原生picker补回文件/取消重开/main保持、后台关闭菜单唤起/真实重启需确认、远端撤权后即使勾等待仍禁发送均通过；tasks=0，无本轮文件或物理通过声明。

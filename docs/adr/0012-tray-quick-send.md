@@ -10,6 +10,8 @@ macOS菜单栏显示`LinkSend`文字，并保留Wails beta.18的主点击菜单�
 
 最近/常用设备复用Go已配对目录的pin/last-used排序，可搜索完整identity；排序不产生新信任。离线目标需明确等待，撤权和源变化仍受原Enqueue/派发屏障。一次入队稳定request ID，CAS失败/响应丢失不静默重复；取消面板不冒充取消已提交队列。
 
+快速面板从配置身份（缺失时用shell状态）取得本机identity，只提供其他已配对目标。本机身份尚未读取时暂不提供候选或启用发送；历史草稿若保存为本机，保留该目标与路径并显示不可发送，不自动改选或清空。最终授权仍由Go入队/派发时核验。
+
 桌面命令为OpenQuickSend、QuickSendDraft、SaveQuickSendDraft、EnqueueQuickSend；主窗口通过typed quick-send:open事件及时打开面板，BackgroundStatus.quick_send_revision轮询可补偿错过事件。旧事件revision不重复打开；单个App状态只渲染一个面板，来件确认优先。面板查询按草稿revision拒绝旧快照覆盖刚保存状态，Tab/Shift+Tab闭环与Escape/关闭恢复焦点。
 
 入队命令只携带quick草稿revision和等待选择，Go读路径与peer，并以quick-send-v1加revision派生稳定请求ID。同revision改变等待策略与已提交请求冲突，未提交离线失败后可改为明确等待；清空路径或重启后仍返回原队列收据。并发重复只生成一项，底层全部预检/源hash/派发/取消仍归现有队列。JS不持有文件正文。

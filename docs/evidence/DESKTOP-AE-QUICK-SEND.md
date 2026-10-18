@@ -2,6 +2,14 @@
 
 契约见[ADR0012](../adr/0012-tray-quick-send.md)，当前状态由[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。源码增加托盘/菜单栏“快速发送文件”，唤起既有窗口中的轻量对话面板；没有新实例/快捷键权限/传输队列。
 
+## 本机目标与身份加载边界修复（2026-10-18）
+
+旧QuickSendDialog仅按trusted/blocked筛选，核心目录中的本机同样trusted。新增三个真实回归先RED：本机出现在候选中、保存本机目标的发送按钮启用、identity尚未读取时仍启用目标。后端授权并未被绕过，这里修复的是用户可见候选与发送入口。
+
+App传配置identity（缺失时shell身份），面板排除自身；identity未加载时禁用目标选择/发送并显示等待；历史self草稿保留目标与路径、明确不可发送。入队处理也核对当前界面条件，最终仍由Go授权。第四个回归验证目录先到、identity后到时正常peer恢复可选/发送且未改草稿；原有离线等待、撤权、取消、picker取消、异步选择与重复点击均保持。
+
+实际命令：固定Node24.21.0/pnpm12.4.1，`pnpm test src/components/QuickSendDialog.test.tsx`先3FAIL/7PASS，修复及第四例后完整`pnpm test`为12files/119PASS；`pnpm typecheck`、`pnpm lint`、`pnpm build`均exit0。核心`GOWORK=off go test ./...`和`go build ./...`通过；desktop workspace/off `go test ./...`、off vet和新dist后的off build通过。无Go/wire/schema/宿主网络修改，新提交CI/准确包原生仍待；旧准确包结果保持各自来源。
+
 ## 实际行为
 
 - quick草稿和main为不同持久行；打开/重复打开不改草稿，取消保留quick与main，选择器取消保留来源，提交成功后只清quick路径。SaveQuickSendDraft拒绝main、多目标和筛选元数据。

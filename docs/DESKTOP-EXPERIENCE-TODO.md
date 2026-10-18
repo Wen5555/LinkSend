@@ -12,7 +12,7 @@
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
-| D / N4 托盘快速发送 | quick/Go入队、菜单主点击及共享存储隔离完成 | 两模块/off-race/115前端边界；目录副作用/隔离回归RED→GREEN | 0ae7cdf准确Mac同现场修复PASS；离线明确等待唯一入队/原生picker/取消重开/后台唤回/重启/撤权禁发/原生退出PASS；98469ce旧31B文件保持来源 | 0ae7cdf五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Win托盘、快速双击送达与物理/完整同提交矩阵继续 |
+| D / N4 托盘快速发送 | quick/Go入队、菜单主点击/共享存储隔离；新增本机目标边界修复 | 两模块/off测试构建、119前端；本机/身份加载回归RED→GREEN | 0ae7cdf准确Mac同现场修复PASS；离线明确等待唯一入队/原生picker/取消重开/后台唤回/重启/撤权禁发/原生退出PASS；98469ce旧31B文件保持来源 | 0ae7cdf五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：新目标修复CI/准确包、Win托盘、快速双击送达与物理/完整同提交矩阵继续 |
 | E 同提交候选/最终回归/文档 | 0ae7cdf四资产/来源核验；原包分项保留来源 | 核心off/desktop/off-race/vet/build/115前端CI边界通过 | 新Mac目录恢复/N4离线撤权/后台重启退出PASS；旧文件/恢复保持原准确来源，物理仍待验 | 同一Draft PR #9、0ae7cdf五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
@@ -21,7 +21,7 @@
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 
-运行现场：原Windows/Mac旧包及N4 loopback fixture/CLI均正常终态。Mac准确98469ce同一app/profile转入公共恢复：根`/Users/wen/.codex/supervision/linksend-ae-20261018/quick-native-98469ce`，当前owned PID43588，从根下owned-pid.txt读取并核对app路径；post-quick完整profile备份为before-public-recovery-profile-a。原生prepare/cancel/重启保持已验，当前intent=started，公共独立对端确认仍2成员/测试身份未加入；无最后完成收据。自动键入合成9字符实读18字符、AXValue不匹配，已请用户手动输入ABCD-EFGH且不确认，等待观察；不重做prepare或绕过原生调用。同started intent进一步真实重启保持，新码字段现为空；cf19349独立错误测试app43357已停，profile/received空和清理收据保留。clipboard=false、源/接收/草稿/completed队列保留，结束时按精确PID/path收尾。无Windows公用网络弹窗、宿主网络不改，Mac录屏未授权且未请求。
+运行现场：前述98469ce公共恢复及6f29814同URL恢复均已按原生步骤完成并收尾；用户手动ABCD-EFGH已读回核对且未提交。最新0ae7cdf离线/撤权app已原生菜单退出，fixture已再次核对finished/exit0，端口关闭，clipboard=false；本轮没有新app/receiver，旧profile/文件/备份保持。Windows启动策略限制与Mac录屏未授权保持。
 
 早期原生候选（历史检查点）来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
 
