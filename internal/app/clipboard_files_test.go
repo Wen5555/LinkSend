@@ -263,13 +263,13 @@ func TestClipboardFileCompletionCannotClearNewerCopyStatus(t *testing.T) {
 	if got := s.clipboardPeerRuntime["peer"]; got.FileID != "new" || got.Waiting != "copying_files" {
 		t.Fatal("old completion cleared new copy", got)
 	}
-	for _, statusError := range []string{"file_copy_failed", "write_failed"} {
+	for _, statusError := range []string{"file_copy_failed", "file_copy_disk_full", "write_failed"} {
 		ctx, cancel = context.WithCancel(t.Context())
 		job = &clipboardFileJob{peer: &PeerSession{PeerID: "peer"}, ctx: ctx, cancel: cancel, progress: ClipboardFileProgress{ID: "new", State: "transferring"}}
 		s.clipboardPeerRuntime["peer"] = clipboardPeerRuntimeStatus{FileID: "new", Waiting: "copying_files", Error: statusError}
 		s.finishClipboardFile(job, nil)
 		got := s.clipboardPeerRuntime["peer"]
-		if got.Waiting != "" || got.FileID != "" || (statusError == "file_copy_failed" && got.Error != "") || (statusError == "write_failed" && got.Error != statusError) {
+		if got.Waiting != "" || got.FileID != "" || (clipboardFileError(statusError) && got.Error != "") || (statusError == "write_failed" && got.Error != statusError) {
 			t.Fatal("completion changed an unrelated error or retained old file status", got)
 		}
 	}

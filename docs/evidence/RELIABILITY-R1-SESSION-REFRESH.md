@@ -26,3 +26,7 @@ Windows amd64，`. ./.tools/use-desktop-toolchain.ps1`，Go1.27.1；未操作系
 ## 仍需完成
 
 R1整体未完成：物理 Windows↔Mac 双向 LAN 文件集合/hash、中断恢复、原生睡眠/网络变化、真实不同网络双向传输待同候选现场核验。R2–R6按唯一 TODO 继续；本补丁不把旧包的任何 PASS 转记到新候选。
+
+## GitHub 准确提交核对
+
+代码提交 `f5f05ef878d919cd319f514574c35300e9d5b631` 已推送，`git ls-remote` 与本地SHA一致。[core](https://github.com/Wen5555/LinkSend/actions/runs/39163396677)、[desktop](https://github.com/Wen5555/LinkSend/actions/runs/39163396645)、[三平台包](https://github.com/Wen5555/LinkSend/actions/runs/39163396647) 均 success；逐项核对包job为 Windows amd64、macOS arm64、macOS amd64 全部 success。CI通过不代表已运行这些候选的原生关键旅程；未发布 Release、移动tag、合并main或替换生产服务。

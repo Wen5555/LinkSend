@@ -142,7 +142,7 @@ func (s *Service) setClipboardWaiting(peerID, waiting, fileID string) {
 	status := s.clipboardPeerRuntime[peerID]
 	status.Waiting = waiting
 	status.FileID = fileID
-	if fileID != "" && status.Error == "file_copy_failed" {
+	if fileID != "" && clipboardFileError(status.Error) {
 		status.Error = ""
 	}
 	if status.Waiting == "" && status.Error == "" {

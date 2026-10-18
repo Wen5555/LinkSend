@@ -1,3 +1,9 @@
+## 2026-10-19 可靠性 Goal R2 自动容量首批
+
+- 先形成ADR0016，再落实真实manifest自动空间预留、32路竞争容量保护、发布返回后幂等释放、低空间安全拒绝和下一次复制恢复。原代码低空间仍发布的负例及第一轮本地错误被取消覆盖的失败均保留，现已修复；健康会话不因单流磁盘拒绝关闭。无wire/schema变更，不新增缓存用户设置。
+- 定向普通3轮、组合race3轮/立即复制race10轮、前端126项/typecheck/lint/build及最终两模块workspace/off test/vet/build全部通过；一次组合race恢复失败和取消I/O确定性负例保留，取消意图修复后维持立即复制测试，见[容量证据](evidence/RELIABILITY-R2-CAPACITY.md)。已发布缓存仍保留，自动所有权/回收与真实键盘粘贴未完成，R2不打完成勾。
+- 上一增量 `f5f05ef` 远端SHA一致，core/desktop及三平台包CI全部success，详见R1证据；不代表对应包已完成物理关键旅程。
+
 ## 2026-10-19 可靠性 Goal R1 健康会话保护
 
 - 新定向真实ICE/QUIC回归先复现 `NetworkChanged` 关闭剪贴板活跃/文件空闲连接的缺陷；仅清理已由QUIC报告关闭的空闲会话后，通过通知后双向剪贴板、同SessionID文件完整传输/确认及失效连接清理。保持原transport失效与恢复机制，无wire/schema改变。

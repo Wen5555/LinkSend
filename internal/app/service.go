@@ -97,6 +97,7 @@ type Service struct {
 	clipboardFileJobs       map[string]*clipboardFileJob
 	clipboardFileSendSlots  chan struct{}
 	clipboardFileReadSlots  chan struct{}
+	clipboardCacheSpace     clipboardCacheSpace
 }
 
 type cachedNetworkSelection struct {

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/clipboardsync"
@@ -43,16 +44,17 @@ type clipboardFileOffer struct {
 }
 
 type clipboardFileJob struct {
-	peer        *PeerSession
-	event       clipboardsync.Event
-	lease       clipboardsync.Lease
-	reservation *clipboardsync.FileReservation
-	paths       []string
-	progress    ClipboardFileProgress
-	ctx         context.Context
-	cancel      context.CancelFunc
-	ready       chan struct{}
-	started     bool
+	peer         *PeerSession
+	event        clipboardsync.Event
+	lease        clipboardsync.Lease
+	reservation  *clipboardsync.FileReservation
+	paths        []string
+	progress     ClipboardFileProgress
+	ctx          context.Context
+	cancel       context.CancelFunc
+	ready        chan struct{}
+	started      bool
+	localFailure bool // Rejection precedes peer cancellation/connection teardown.
 }
 
 func validClipboardFileID(id string, size int) bool {
@@ -196,11 +198,12 @@ func (s *Service) updateClipboardFile(job *clipboardFileJob, state string, p tra
 func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	s.clipboardFilesMu.Lock()
 	wasCancelled := job.progress.State == "cancelled"
+	localFailure := job.localFailure
 	job.progress.State = "completed"
 	if err != nil {
 		job.progress.State = "failed"
-		job.progress.Error = "file_copy_failed"
-		if job.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, clipboardsync.ErrConflict) {
+		job.progress.Error = clipboardFileFailureCode(err)
+		if !localFailure && (job.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, clipboardsync.ErrConflict)) {
 			job.progress.State = "cancelled"
 			job.progress.Error = ""
 		}
@@ -210,14 +213,15 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	}
 	job.cancel()
 	failed := job.progress.State == "failed"
+	failure := job.progress.Error
 	s.clipboardFilesMu.Unlock()
 	s.clipboardStatusMu.Lock()
 	status := s.clipboardPeerRuntime[job.peer.PeerID]
 	if status.FileID == job.progress.ID {
 		status.Waiting, status.FileID = "", ""
 		if failed {
-			status.Error = "file_copy_failed"
-		} else if status.Error == "file_copy_failed" {
+			status.Error = failure
+		} else if clipboardFileError(status.Error) {
 			status.Error = ""
 		}
 	}
@@ -232,11 +236,22 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	}
 }
 
+func clipboardFileError(code string) bool {
+	return code == "file_copy_failed" || code == "file_copy_disk_full"
+}
+
+func clipboardFileFailureCode(err error) string {
+	if protocol.ErrorCode(err) == protocol.DiskFull || errors.Is(err, syscall.ENOSPC) {
+		return "file_copy_disk_full"
+	}
+	return "file_copy_failed"
+}
+
 func (s *Service) clipboardFileCancelled(peer *PeerSession, message clipboardsync.Message) {
 	s.clipboardFilesMu.Lock()
 	defer s.clipboardFilesMu.Unlock()
 	job := s.clipboardFileJobs[clipboardFileKey(peer, message.FileID)]
-	if job != nil && job.event.Digest == message.Digest && job.event.LeaseID == message.LeaseID && !clipboardFileFinished(job.progress.State) {
+	if job != nil && job.event.Digest == message.Digest && job.event.LeaseID == message.LeaseID && !job.localFailure && !clipboardFileFinished(job.progress.State) {
 		job.progress.State = "cancelled"
 		job.cancel()
 	}
@@ -409,7 +424,7 @@ func (s *Service) admitClipboardFiles(peer *PeerSession, candidate clipboardsync
 			defer s.clipboardWorkers.Done()
 			<-jobCtx.Done()
 			s.clipboardFilesMu.Lock()
-			if !clipboardFileFinished(job.progress.State) {
+			if !clipboardFileFinished(job.progress.State) && !job.localFailure {
 				job.progress.State = "cancelled"
 			}
 			s.clipboardFilesMu.Unlock()
@@ -493,7 +508,7 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 		}
 	}
 	var operationErr error
-	defer func() { _ = s.releasePeerSession(job.peer, operationErr) }()
+	defer func() { _ = s.releaseClipboardFileSession(job, operationErr) }()
 	stream, err := job.peer.Data.Conn.OpenStreamSync(job.ctx)
 	if err != nil {
 		operationErr = err
@@ -517,8 +532,19 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 	}
 	_ = stream.SetWriteDeadline(time.Time{})
 	_, err = transfer.SendWithOptions(job.ctx, wrapped, prepared, transfer.SendOptions{BodyBudget: processFileBudget, Hooks: transfer.SendHooks{Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "transferring", p) }}})
-	operationErr = err
-	return err
+	operationErr = classifyTaskError(err)
+	return operationErr
+}
+
+func (s *Service) releaseClipboardFileSession(job *clipboardFileJob, err error) error {
+	// Stream interruption can surface EOF/another I/O error after cancellation.
+	// Keep that diagnostic, but also preserve the canceled operation's control
+	// intent so a healthy connection is not mistaken for a failed QUIC path.
+	// releasePeerSession still rejects reuse when the connection itself closed.
+	if cause := job.ctx.Err(); cause != nil {
+		err = errors.Join(cause, err)
+	}
+	return s.releasePeerSession(job.peer, err)
 }
 
 func (s *Service) receiveClipboardFileStream(peer *PeerSession, stream *transport.QUICStream) (handled bool) {
@@ -608,6 +634,12 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		}
 	}()
 	var roots []string
+	var releaseSpace func()
+	defer func() {
+		if releaseSpace != nil {
+			releaseSpace()
+		}
+	}()
 	_, err = transfer.ReceiveWithOptions(job.ctx, stream, transfer.ReceiveOptions{Directory: directory, Peer: job.peer.PeerID, Plan: func(_ context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
 		if offer.Manifest.TransferID != job.progress.ID || offer.Content != nil || !s.clipboardFileCurrent(job) {
 			return transfer.ReceivePlan{}, clipboardsync.ErrStale
@@ -622,6 +654,21 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		}
 		if len(roots) == 0 || len(roots) > 128 {
 			return transfer.ReceivePlan{}, clipboardsync.ErrLimit
+		}
+		if releaseSpace != nil {
+			return transfer.ReceivePlan{}, clipboardsync.ErrStale
+		}
+		releaseSpace, err = s.clipboardCacheSpace.reserve(root, offer.Manifest)
+		if err != nil {
+			// Record local rejection before the engine sends its terminal error.
+			// Otherwise the peer's resulting file_cancel can arrive first and
+			// erase the actionable local reason. Earlier user cancellation wins.
+			s.clipboardFilesMu.Lock()
+			if !clipboardFileFinished(job.progress.State) && job.ctx.Err() == nil {
+				job.localFailure = true
+			}
+			s.clipboardFilesMu.Unlock()
+			return transfer.ReceivePlan{}, err
 		}
 		plan := transfer.FullReceivePlan(offer.Manifest)
 		plan.Directory = directory

@@ -44,7 +44,7 @@ function isPreferencesRevisionConflict(error: unknown) {
 	return message.includes('PREFERENCES_REVISION_CONFLICT');
 }
 function clipboardPeerState(peer: ClipboardPeerStatus) {
-  const errors: Record<string, string> = { read_failed: '读取本机剪贴板失败', clipboard_changed: '读取时内容已变化', send_timeout: '发送超时', connection_lost: '连接已中断', connection_failed: '连接失败', files_unsupported: '对端需要更新以同步文件', file_copy_failed: '文件复制失败，请重新复制', file_receive_failed: '接收复制文件失败', send_failed: '发送失败', receive_timeout: '接收超时', receive_failed: '接收失败', receive_invalid: '收到的内容无效', write_failed: '写入系统剪贴板失败' };
+  const errors: Record<string, string> = { read_failed: '读取本机剪贴板失败', clipboard_changed: '读取时内容已变化', send_timeout: '发送超时', connection_lost: '连接已中断', connection_failed: '连接失败', files_unsupported: '对端需要更新以同步文件', file_copy_failed: '文件复制失败，请重新复制', file_copy_disk_full: '空间不足，暂时无法复制文件', file_receive_failed: '接收复制文件失败', send_failed: '发送失败', receive_timeout: '接收超时', receive_failed: '接收失败', receive_invalid: '收到的内容无效', write_failed: '写入系统剪贴板失败' };
   const waiting: Record<string, string> = { queued: '等待发送', copying_files: '正在复制文件', waiting_slot: '等待发送资源', opening_stream: '正在建立数据流', sending: '正在发送', waiting_lease: '等待对端授权', connecting: '正在连接', waiting_receive_slot: '等待接收资源', receiving: '正在接收' };
   if (peer.error) return errors[peer.error] ?? '同步失败';
   if (peer.waiting) return waiting[peer.waiting] ?? '等待中';
