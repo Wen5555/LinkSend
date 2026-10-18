@@ -41,3 +41,13 @@ N4提交 `f23383d` 已推送，五项CI/三平台包success，准确四资产与
 为响应入口难以辨认，候选只在Mac添加`LinkSend`菜单栏文字，并允许主点击使用锁定Wails原生菜单默认行为；Windows点击唤主窗保持。核心off全test、桌面workspace与off-race/vet/build通过，标签追加后desktop off-race/vet/build再次通过（11.021s）。前端未改，沿用108测试边界；新准确包/主点击待验。
 
 本次Mac实例环境`LINKSEND_SERVER_URL=https://127.0.0.1:1`，主页信令不可达是故意隔离条件。正式`linksend.oooai.de`的HTTPS/WSS与Mac真实客户端必须另验；旧公网TLS超时没有因本节原生通过而消除。
+
+## 98469ce准确包主点击续验（2026-10-18）
+
+五项workflow全部success：core push/PR39087260830/39087262943、desktop push/PR39087260258/39087262949、packages39087260261。三平台四资产外层digest、内层SHA/BUILD-INFO/COMMITTED/clean/版本核验通过，完整表在忽略artifact `pkg-98469ce/PACKAGE-VERIFICATION.json`。Mac arm64 DMG SHA256 `6044b02725d209c50fd1ebb917d7a39def87f674e69d7ccd2bac12633ea7568a`；实际EXE SHA256 `b722bc257ef300462638097f8d069c651971e178f4c341c7e1a178834aced87a`，codesign deep/strict/arm64/bundle通过。
+
+新专用Mac-only loopback fixture经既有正常Bootstrap/邀请/Join完成配对并释放profile owner；通过生产Service.SaveDraft预置main revision1/held-main.txt，不写trust/SQL。新准确app PID39645、profile-a，clipboard=false，旧准确包与公共实例先按PID/path停掉。原生status AX名称现在为LinkSend；真实AXPress使PRIMARY_MENU_COUNT=1，再点击“快速发送文件”打开面板，job `.../job-linksend-ae-mac-primary-quick-98469ce-20261018-01` exit0。这验证本次标签/主点击修复，不继承旧包其他原生结果。
+
+随后点击已观察到的AXPopUpButton“快速发送目标”，旧AX引用失效，独立读取只返回窗口外壳；只读确认PID39645前台/可见、AXMain=true/AXFocused=false/未最小化。不能仅凭AX外壳断言产品空白或选择成功。截图技能只读权限检查requested=false/screenCapture=false，未请求或改变安全权限，没有截图/视觉QA。已异步请用户观察并选择M1原生对端；回答前不盲输或用RPC代替原生选择。
+
+checkpoint job `.../job-linksend-ae-mac-quick-checkpoint-98469ce-20261018-01` exit0：main整行/revision1精确保持、quick行仍空、SQLite quick_check=ok、clipboard=false。`quick-native-checkpoint-receipt.json`已下载；完整quick文件/后台重开/重启旅程仍NOT RUN。app和30分钟fixture为续验保留，精确所有权及收尾入口见唯一TODO。

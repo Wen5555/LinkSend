@@ -1,3 +1,9 @@
+## 2026-10-18 98469ce准确包与公共信令复验
+
+- 98469ce已推送、五项CI/三平台包全success，四资产完整校验；新准确Mac菜单栏LinkSend文字/主点击菜单/quick面板通过。main revision1整行保持；目标下拉框后AX仅外壳，录屏preflight false/未请求新权限，完整quick发送待现场观察，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。
+- 用户提醒信令错误后，明确原实例127.0.0.1:1隔离条件，另实测Win/Mac正式HTTPS/正常配对/邀请码重放拒绝/两路认证WSS/同身份verify通过；6edddad准确Mac公共实例主页可接收，独立peer确认online。旧TLS超时未复现/根因未确认，未改宿主网络。JP信令/STUN-only/备份timer active，见[信令证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)。
+- 旧Mac包38062及公共实例39366已停；当前准确98469ce39645与专用Mac loopback fixture保留供UI续验，clipboard=false。Windows策略拒绝、JP外部UDP授权、物理/OS/双NAT缺项保持，Goal active。
+
 ## 2026-10-18 Mac原生quick续验与菜单入口修复
 
 - 用户开启AX后，6edddad准确Mac包真实菜单→快速面板→文件Open/Cancel→面板取消通过；空send_drafts整行保持，无配对/发送。用户确认托盘存在。此前“图标或菜单未出现”保留为观察，未证实具体触发原因，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。

@@ -50,6 +50,18 @@ job `/tmp/codex-ssh/job-linksend-ae-jp-restart-backup-drill-20261018-01`：主�
 
 ## 当前限制与资源
 
+### 2026-10-18 09:40后公网与准确Mac客户端复验
+
+用户提醒主页“无法连接信令服务”。该当时实例是6edddad隔离profile，进程显式覆盖`https://127.0.0.1:1`，不能当作正式服务故障，也不能因此跳过公网检查。新只读job `job-linksend-ae-mac-public-health-current-20261018-01`实测系统解析198.18.1.30、无进程proxy环境；默认curl及单进程IPv4/no-proxy均HTTP200、TLS验证0、relay=false。Windows默认curl也HTTP200。旧LibreSSL/TLS超时保留为历史失败，本次没有复现，不宣称根因已定位或修改了宿主网络。
+
+本地98469ce核心交叉编译`controlprobe`（Mac二进制SHA256 `c8a5e7621880241702a98f297ccefdc4318886b90f340a5c53a3730cd89b5ad4`），新专用profile通过真实公共API Initialize→邀请→Join、已消费邀请码拒绝、两路认证WSS/心跳/online，并用同身份/组再次verify通过。job `/tmp/codex-ssh/job-linksend-ae-mac-public-wss-98469ce-20261018-01` exit0，未回传邀请码/密钥。
+
+Windows同源码controlprobe、新专用`public-wss-98469ce-windows`亦完成setup/verify两轮，strict_tls/两路认证WSS/同身份组与邀请码重放拒绝全部通过，进程exit0；无文件正文、系统剪贴板或LAN原生启动。它是公共控制面检查，与此前被策略拒绝的Windows原生独立LAN场景无关。
+
+随后让准确6edddad Mac包使用上述专用测试A身份及新偏好/接收目录，正式`https://linksend.oooai.de`、clipboard=false；原生主页读到“可以接收文件”。独立测试B通过正常生产客户端Devices接口确认准确桌面A在线，证明桌面认证WSS实际建立，不仅health成功。启动job `.../job-linksend-ae-mac-native-public-6edddad-20261018-01`及观察job `.../job-linksend-ae-mac-native-public-observe-6edddad-20261018-01`均exit0；包来源6edddad、CLI观察器来源98469ce分开。准确公共实例PID39366已在新quick场景启动前按路径停止。
+
+JP只读复核job `.../job-linksend-ae-jp-service-readonly-current-20261018-01`：linksend.service、linksend-stun.service与每日备份timer active，按时触发后的backup.service为inactive/dead（oneshot正常终态）；公共health200/relay=false。未变更防火墙/DNS/代理/路由。上述公网验证只覆盖HTTPS/WSS，不代表新STUN外部UDP、物理文件或双NAT通过。
+
 服务实际运行，公共HTTPS/WSS、主服务重启、完整隔离恢复、撤销跨重启/最新快照恢复已验。客户端旧profile灾后恢复、旧队列/撤销上下文隔离、STUN、真实双NAT、双机原生文件旅程仍未闭合。STUN仅查到Debian候选coturn4.6.1-2，当前未安装且3478无监听，不能称跨NAT已恢复。Mac系统curl公共HTTPS本轮报LibreSSL SSL_ERROR_SYSCALL（job `.../job-linksend-ae-mac-public-health-20261018-01`），该平台公网旅程不计PASS，继续做进程级IPv4/解析诊断。
 
 Windows准确包owned PID135152、Mac owned PID31256均已停止，剪贴板master=false、测试接收目录为空，保留profile和包供后续核对。Mac UI辅助访问拒绝、Windows UI点击未形成可验证导航，未当作原生旅程PASS。生产专属服务/备份timer是用户要求的持续资源，不随测试进程停止。
