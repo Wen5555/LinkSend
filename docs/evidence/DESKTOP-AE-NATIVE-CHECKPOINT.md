@@ -122,3 +122,9 @@ Mac准确arm64新独立空profile：DMG/严格deep codesign/arm64/bundle通过�
 首轮两task-owned app共享bundleID，foreground guard在按键前拒绝；第二轮仅运行新app后遇到AX旧引用失效，未当作产品故障。第三轮以新鲜对象并忽略已失效的只读节点完成。新准确app43357已按精确路径停止，独立profile/received空/clipboard=false，清理收据已下载。原98469ce恢复app重新启动为43588，同一started intent精确保持，恢复面板可见、新码字段空；不重新prepare或绕过恢复。根/profile及备份见唯一TODO。未改权限/宿主网络、未触碰系统剪贴板，签名仍ad-hoc/未公证。
 
 Mac N4的31B真实发送、后台/重启证据仍绑定98469ce；旧Win原生分项仍绑定6edddad，不升级为cf19349整个原生/物理矩阵通过。恢复输入、Windows真实托盘/新LAN策略拒绝、OS剪贴板、B2性能、独立物理文件及双NAT条件继续，Goal active。
+
+## 6f29814准确Mac恢复与包来源（2026-10-18）
+
+逐字符邀请码修复的五项CI、三平台包与四资产完整校验通过；本轮准确Mac原生同一started intent继续加入正式服务、真实重启与独立认证WSS在线验证通过，原身份/偏好/两草稿/源文件/唯一completed任务保持，旧上下文退休、剪贴板与免确认未自动开启。准确源码/DMG/EXE SHA、jobs、失败输入、收据和资源终态见[恢复完整证据](DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
+
+范围为同Mac旧loopback组profile经进程覆盖到不同正式HTTPS URL；同URL服务空库、物理LAN/双NAT、Windows新准确包原生仍未验。43字符legacy原生键盘输入不匹配，未提交且保留失败，不能标原生兼容通过。旧quick证据绑定98469ce、Win N1/N2/N3绑定6edddad，均不迁移到6f29814。准确Mac app已停止，测试文件/profile/私有备份保留，clipboard=false。

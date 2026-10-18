@@ -1,3 +1,8 @@
+## 2026-10-18 6f29814准确Mac恢复闭环
+
+- 逐字符输入修复6f29814五项CI/三平台包全部success，四资产完整来源/hash/COMMITTED/clean/版本通过。新准确Mac以原profile、同started intent真实点击继续恢复，正式服务独立查询从2成员到3、原identity登记；重启后独立认证WSS在线，原身份/偏好/两草稿/源hash/唯一completed任务保持，旧context退休。属旧loopback组→不同正式URL，不是同URL空库或物理文件。
+- 原生合成短码经实际点击+逐键/新鲜AX读取匹配，真实码提交前核对准确；43字符legacy额外原生键盘输入仍不匹配、未提交，不当作产品根因或PASS。收尾窗口无信令错误/继续恢复按钮，app已停止、clipboard=false，profile/文件/备份保留。详见[恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)；Goal active，其余必交付缺项保持。
+
 ## 2026-10-18 逐字符邀请码兼容性修复
 
 - React逐字符输入复现legacy邀请码被前端大写/截短；普通配对、明确切组和prepared/started恢复回归6 FAIL→GREEN。改为编辑保留原文、提交只规范化完整短码，非法输入不静默截成有效码；不改变Go/wire/schema。Mac原生18字符观察的根因仍未确认，原started请求保持。

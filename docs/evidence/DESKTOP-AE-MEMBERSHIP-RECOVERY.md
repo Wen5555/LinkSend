@@ -104,3 +104,19 @@ cf19349后续五项CI/三平台包与四资产完整核验已通过；新准确M
 固定Node24.21.0/pnpm12.4.1：针对三文件40tests GREEN；完整12files/115tests、typecheck含绑定、lint/build全部exit0。核心`GOWORK=off go test ./...`、desktop workspace/off `go test ./...`及off vet/build均exit0（Go测试缓存）。日志为`.artifacts/ae-20261018/pairing-input-{red,green,test,typecheck,lint,build,core-off,desktop}.log`。必要dist重建；无Go、wire、schema变更。
 
 Mac只读job `/tmp/codex-ssh/job-ls-ae-mac-field-value-shape-20261018-03` exit0：原准确98469ce实例的字段仍为空，未键入/提交真实码，未改变恢复请求。新源码的CI、准确包和原生输入复验另记；已有quick/文件/网络证据不迁移。
+
+### 6f29814准确Mac同intent恢复完成（2026-10-18）
+
+源码`6f298141280ae1fc0522fc3c21a6ce774a789ac9`已推送且远端一致。core push/PR `39091321411` / `39091324622`、desktop push/PR `39091321408` / `39091324633`、[packages 39091321416](https://github.com/Wen5555/LinkSend/actions/runs/39091321416)与Windows/Mac两架构jobs全部success。四资产外层digest、内层SHA、BUILD-INFO/COMMITTED/clean/版本核验通过：`.artifacts/ae-20261018/pkg-6f29814/PACKAGE-VERIFICATION.json`。
+
+准确arm64 DMG SHA256 `24621cd255be153b84286edd9933cd6180e0e7334e96f22a51b872e8f86c03de`；实际app EXE `a003120b4866463d029ad5aad1b39be93e653d56eb5858473f3fc6d7fa1eee71`。strict/deep签名、arm64和bundle核验后，停止原98469ce owner，在Mac任务私有目录完整备份原profile，再运行新app和同一profile/正式HTTPS进程覆盖；没有复制密钥到开发机、没有修改偏好中的旧URL。
+
+输入自动化首轮有AX列表引用错误（按键前失败）；下一轮合成短码实读`ACDB-EFGH`且快速清空无效，慢速Cmd+A清空也失败。这些失败不归因为新产品缺陷。改用实际点击准确文本框、逐键慢速输入并重新读取AX元素、逐键删除，合成9字符短码匹配且清空通过。没有重复提交真实码。上述结果尚不能单独解释旧98469ce实读18字符的原始原因。
+
+先用独立公共B正常Devices核对仍2成员且旧身份未加入，再由公共A正常生成新一次性码。仅在Mac内存经原生控件输入，**提交前实读值与码匹配**后，真实点击“核对并继续恢复”；沿原`dffc12143b3c5f882813c23297b9b102`，没有重新prepare。持久pending intent清除，同ID恢复回执落盘；独立公共B查询3成员、原identity登记，group=`a5b688ef624ebc888ffe74b2c2db83bf`。
+
+真实停止/重启同准确app后：同恢复回执保持、独立B确认该原生设备经正式服务认证WSS在线；原identity.key字节/偏好字节/两草稿整行/源hash保持，仍只有原completed任务与队列，SQLite quick_check=ok。旧membership snapshot对应上下文确实进入retired，当前新上下文不在退休集合；clipboard master=false、enabled clipboard grants=0、未自动开启免确认。以上是旧loopback组profile→不同正式URL的新码恢复，**不是同URL空库、物理文件或全部B验收**。
+
+原生43字符legacy合成输入额外检查未通过：首轮长度43但内容不匹配并已清空，逐字/区分大小写复核在第2字符即不匹配，未提交；不能用115项前端通过代替这项原生结果，也未据此推断产品根因。最后只读确认当前原生窗口未显示“无法连接信令服务”或待继续恢复按钮；准确owned app已停止，临时JS字段随退出丢弃、profile/文件/私有备份保留。
+
+远端job均在`/tmp/codex-ssh/`：`job-ls-ae-mac-start-input-6f29814-20261018-01`、`job-ls-ae-mac-input-slow-6f29814-20261018-02`、`job-ls-ae-mac-recovery-continue-6f29814-20261018-01`、`job-ls-ae-mac-recovery-restart-6f29814-20261018-01`、`job-ls-ae-mac-recovery-finish-6f29814-20261018-01`均exit0；输入失败原job保留。收据已下载为`.artifacts/ae-20261018/mac-native-recovery-6f29814-{receipt,final-receipt,cleanup-receipt}.json`。Mac测试资源为`/Users/wen/.codex/supervision/linksend-ae-20261018/recovery-input-6f29814`，原profile仍在`quick-native-98469ce/profile-a`；不再使用其旧43588 PID或把该目录名当作当前app版本。
