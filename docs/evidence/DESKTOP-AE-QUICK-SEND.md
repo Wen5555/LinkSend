@@ -8,9 +8,31 @@
 
 App传配置identity（缺失时shell身份），面板排除自身；identity未加载时禁用目标选择/发送并显示等待；历史self草稿保留目标与路径、明确不可发送。入队处理也核对当前界面条件，最终仍由Go授权。第四个回归验证目录先到、identity后到时正常peer恢复可选/发送且未改草稿；原有离线等待、撤权、取消、picker取消、异步选择与重复点击均保持。
 
-实际命令：固定Node24.21.0/pnpm12.4.1，`pnpm test src/components/QuickSendDialog.test.tsx`先3FAIL/7PASS，修复及第四例后完整`pnpm test`为12files/119PASS；`pnpm typecheck`、`pnpm lint`、`pnpm build`均exit0。核心`GOWORK=off go test ./...`和`go build ./...`通过；desktop workspace/off `go test ./...`、off vet和新dist后的off build通过。无Go/wire/schema/宿主网络修改，新提交CI/准确包原生仍待；旧准确包结果保持各自来源。
+实际命令：固定Node24.21.0/pnpm12.4.1，`pnpm test src/components/QuickSendDialog.test.tsx`先3FAIL/7PASS，修复及第四例后完整`pnpm test`为12files/119PASS；`pnpm typecheck`、`pnpm lint`、`pnpm build`均exit0。核心workspace `go test ./...`通过（app83.514s），`GOWORK=off go test ./...`和`go build ./...`通过；desktop workspace/off `go test ./...`、off vet和新dist后的off build通过。无Go/wire/schema/宿主网络修改。6ec3cc4新准确包结果见文末；旧准确包结果保持各自来源。
 
 ## 实际行为
+
+### 6ec3cc4准确Mac目标边界与文件复验（2026-10-18）
+
+源码`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`已推送且远端一致；core push/PR `39095472375`/`39095475109`、desktop push/PR `39095472386`/`39095475115`、[packages39095472398](https://github.com/Wen5555/LinkSend/actions/runs/39095472398)与三平台jobs全部success。四资产外层GitHub digest、内层SHA/BUILD-INFO/COMMITTED/clean/0.5.0及目标平台/架构核验通过：`.artifacts/ae-20261018/pkg-6ec3cc4/{artifact-verification,PACKAGE-VERIFICATION}.json`。准确arm64 DMG SHA256 `3942bc8b3cb787afe6c5d70bc99d8ad868bafe3d4748509512bf81c00f90b77e`，实际EXE `e13f0391f5074996c74fdd7e6ebedd241f0966612a827f9ce676cef39cee3e87`，strict/deep签名和arm64检查通过。
+
+新Mac-only夹具经正常Initialize/Invitation/Join建立A/B/C，生产SaveDraft预置main与self quick目标/首份测试文件，然后释放profile owner。fixture源码`.artifacts/ae-20261018/quick-target-fixture/main.go`；临时工具EXE SHA256 `9a99d1980dd9813851cd28f093a7c46ac5fd13288ea4e230afc34349ef6d6ee6`。私有原profile备份在Mac；精确app由DMG安装到`/Users/wen/.codex/supervision/linksend-ae-20261018/quick-target-native-6ec3cc4/LinkSend.app`。
+
+| 原生步骤 | 独立/持久核验 | 结果 |
+|---|---|---|
+| 菜单quick反复两次、保存self目标 | 真实AX显示N4 Native A/当前不可发送；不勾/勾离线等待都禁发；只有一个面板、两草稿整行保持、queue/tasks=0 | PASS |
+| 激活目标下拉 | AX仅返回准确窗口外壳；没有可核实的选项或选择收据，已Escape并从状态菜单显示主窗 | 原生目标选择NOT RUN，不推断产品空白 |
+| 停owned GUI后用正常SaveDraft设置已配对B并清quick路径，重启同app | quick revision2/paths空、main原行、零队列/任务；AX确认B在线/直连待检查 | 明确夹具设置，不冒充原生选目标 |
+| 真实“选择文件”→Open/Go to Folder/精确路径/Open | 生产quick revision3含唯一quick-source.txt；main原行保持；取消/菜单重开整行保持 | PASS |
+| 真实点击“加入发送队列” | 唯一queue `6d47f2e1138daf2d52d2ea688e5d743c`、request `quick-send-v1-3`、sender `20261018T040706.126103000Z-00000001`；仅quick路径清空为revision4，main revision1保持 | PASS |
+| 同机正常配对CLI接收 | Pion host↔host/固定身份QUIC，transfer `2280689c0a7e9691ebd644c75e35b7f9`、45B verified/committed、重传0、bilateral_confirmed=true、relay=false/direct_unknown；CLI exit0，实际用户文件仅一份且源/目标SHA256 `623e59d8e0d8a81606d07d8db376538c83d2e19ac4ad95353a7a8106950592c0` | PASS；loopback，不是物理LAN/双NAT/性能 |
+| 原生关闭主窗→菜单quick唤回→真实重启→原生菜单退出 | 关闭后窗口数0且同PID存活；重启同一completed队列未重发，main保持/quick空；最终身份/偏好字节/源hash、原self备份保持 | PASS |
+
+首轮self检查在勾选等待后遇AppleScript直接遍历表达式的specifier错误；只读确认仍禁发，再改成先取列表的正确脚本完成两轮，无重复入队或产品失败声明。CLI完成退出后有Pion关闭UDP socket日志，保留原始日志；不影响实际提交/双方确认。快速双击第二次送达、原生目标选择、Windows托盘及完整物理/同提交矩阵仍缺；0ae7cdf离线撤权、6f29814两种恢复与其他旧包结果不迁移。
+
+正式入口另外新鲜检查：Windows与Mac两次严格HTTPS `/healthz` 均HTTP200、TLS校验0，Mac收据`mac-public-health-6ec3cc4.json`；只证明对应进程HTTPS，不能代替新包WSS/完整跨网。这里GUI/receiver使用专属loopback信令及STUN覆盖，不操作日常profile或宿主网络。
+
+最终app经原生菜单正常退出，receiver与fixture均finished/exit0，监听关闭、SQLite quick_check=ok、clipboard=false/enabled grants=0；仅一completed队列/一任务、main revision1/quick revision4空路径。非敏感最终收据`.artifacts/ae-20261018/mac-quick-target-6ec3cc4-final-receipt.json`已下载；文件/profile/备份/原始失败日志保留。关键jobs统一在`/tmp/codex-ssh/job-ls-ae-mac-`：`quick-target-fixture-6ec3cc4-20261018-01`、`install-quick-target-6ec3cc4-20261018-01`、`quick-target-self-check-6ec3cc4-20261018-02`、`quick-target-prepare-normal-6ec3cc4-20261018-01`、`quick-target-picker-{goto,path,confirm}-6ec3cc4-20261018-01`、`quick-target-cancel-reopen-6ec3cc4-20261018-01`、`quick-target-enqueue-6ec3cc4-20261018-01`、`quick-target-send-receipt-6ec3cc4-20261018-01`、`quick-target-background-wake-6ec3cc4-20261018-01`、`quick-target-restart-check-6ec3cc4-20261018-01`、`quick-target-final-cleanup-6ec3cc4-20261018-01`均exit0；`quick-target-receiver-6ec3cc4-20261018-01`同样exit0。
 
 - quick草稿和main为不同持久行；打开/重复打开不改草稿，取消保留quick与main，选择器取消保留来源，提交成功后只清quick路径。SaveQuickSendDraft拒绝main、多目标和筛选元数据。
 - 最近/常用排序沿用Go设备pin/last-used目录，搜索名称/identity、最多10个候选；文件10条分页。目标撤权禁发送，离线需明确等待。新发现不获得授权。

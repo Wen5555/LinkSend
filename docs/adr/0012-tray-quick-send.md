@@ -16,4 +16,4 @@ macOS菜单栏显示`LinkSend`文字，并保留Wails beta.18的主点击菜单�
 
 入队命令只携带quick草稿revision和等待选择，Go读路径与peer，并以quick-send-v1加revision派生稳定请求ID。同revision改变等待策略与已提交请求冲突，未提交离线失败后可改为明确等待；清空路径或重启后仍返回原队列收据。并发重复只生成一项，底层全部预检/源hash/派发/取消仍归现有队列。JS不持有文件正文。
 
-界面、Go草稿/队列、重复打开/提交、取消、离线/撤权、主草稿并存、重启与实际同机QUIC文件通过；后台原生入口单独待验。任务库11、wire/预算/身份与relay=false保持；签名Share Target/Share Extension仍按原范围暂缓。
+界面、Go草稿/队列、重复打开/提交、取消、离线/撤权、主草稿并存、重启与实际同机QUIC文件通过；Mac准确包菜单/后台唤回与本机目标禁发通过，各结果绑定原提交。Windows原生托盘、Mac目标选择、快速双击送达与物理矩阵仍缺。任务库11、wire/预算/身份与relay=false保持；签名Share Target/Share Extension仍按原范围暂缓。

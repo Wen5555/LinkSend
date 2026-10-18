@@ -1,7 +1,8 @@
 ## 2026-10-18 N4本机目标边界修复
 
 - 三项新增回归在旧实现真实失败：候选包含本机、保存本机目标发送按钮可用、本机身份未加载仍可选/可发。App传入配置身份或shell身份，面板过滤本机，身份未知时等待，保留不可发送的旧目标/路径；新增身份晚到正常恢复回归。Go授权/wire/schema无变化。
-- 前端119项tests、typecheck/lint/build通过；核心off test/build、desktop workspace/off test/vet与最新dist后的off build通过。新源码CI/准确包原生仍待，旧0ae7cdf与98469ce证据不迁移，见[N4记录](evidence/DESKTOP-AE-QUICK-SEND.md)。
+- 前端119项tests、typecheck/lint/build通过；核心workspace/off test及off build、desktop workspace/off test及off vet/最新dist后的off build通过。6ec3cc4已推送，五项CI/三平台包与四资产完整核验success。
+- 准确Mac原生self目标在勾/不勾等待均禁发、重复菜单唯一面板/零队列通过；正常目标由夹具业务API预置后，真实picker/取消重开/入队、45B固定身份QUIC/唯一目标hash/双方确认、后台唤回/真实重启无重复与菜单退出通过。原生目标下拉仍受AX外壳限制，不报选择成功；loopback不替代物理。app/receiver/fixture均已终态，clipboard=false，见[N4记录](evidence/DESKTOP-AE-QUICK-SEND.md)。
 
 ## 2026-10-18 0ae7cdf准确包修复复验与N4原生负例
 
