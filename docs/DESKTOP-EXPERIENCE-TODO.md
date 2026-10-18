@@ -1,8 +1,16 @@
 # LinkSend 桌面体验全轮 TODO
 
-## 2026-10-19 可靠性 自动缓存与临时分享规划
+## 2026-10-19 可靠性 自动缓存与临时分享 Goal（active）
 
-用户要求的[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal启动提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)已形成，功能实施尚未启动。R0基线、R1连接/恢复/跨NAT、R2真实文件粘贴/全自动缓存、R3诊断、R4安装升级/退出、R5一次性临时分享、R6工程维护均为待实施。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因文档交付改变状态。
+用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。
+
+- [x] R0：核对 `f8358ce`、干净 tracked 工作区及三个既有未跟踪目录；复用本地 Go1.27.1/Node24.21.0/pnpm12.4.1；Mac arm64/macOS26.5 和日本自托管信令/STUN 主机 SSH 可用；修正 README 过期版本。见[基线证据](evidence/RELIABILITY-R0-BASELINE.md)。
+- [ ] R1：审查连接/恢复并添加实际缺陷回归；准确候选双向 LAN、中断恢复、睡眠/网络变化与真实不同网络传输仍待。
+- [ ] R2：缓存 ADR、自动管理、安全回归及 Finder/Explorer 真实键盘粘贴待实施/验证；现有文件条目读回不抵扣。
+- [ ] R3：可操作原因/下一步、安全诊断 DTO 与本地脱敏导出待实施。
+- [ ] R4：准确候选覆盖安装、活动任务退出/重启和受影响系统入口待验。
+- [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。
+- [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 
