@@ -1,3 +1,9 @@
+## 2026-10-18 准确包原生检查点与取消选择器修复
+
+- f23383d五项CI/三平台包success，四资产/BUILD-INFO/COMMITTED/clean/hash核验通过；准确Windows包完成原生N3设置、N1预览/CLI入口/真实QUIC接收集合与hash。Mac准确arm64包启动/签名核验通过，辅助功能关闭，UI/配对未验；托盘/菜单栏及物理文件不冒充通过。见[证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
+- 原生取消目录picker保留草稿却显示红色错误，已在三个Windows picker边界精确归一取消，其余错误保持。桌面workspace/off-race/vet/build、核心off完整test/vet/build通过；核心旧设备数断言受正常LAN公告影响，改为按identity核对信任与唯一性，同现场race三轮20.091s通过。新包UX复验继续。
+- 同测量器十轮后测双方发现/刷新10/10，Win控制10/10、Mac0/10/no route to host；发现中位数Win226→255.5ms、Mac141→81.5ms，不报告整体提速/文件吞吐。旧原生包/fixture已停止，profile/文件保留，剪贴板关闭，详见[LAN证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)。Goal active，外部授权缺口保持。
+
 ## 2026-10-18 N4 托盘快速发送候选
 
 - 托盘/菜单栏入口、typed事件/轮询补偿、独立quick持久草稿与轻量面板完成；Go按保存revision稳定入队，8并发/清空/重启不重复，main保持。取消保留选择，最近设备排序不增信任，离线等待与撤权门槛沿用原队列。

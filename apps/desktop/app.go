@@ -1019,31 +1019,31 @@ func (a *App) PickFiles() ([]string, error) {
 	if a.runtimeApp == nil {
 		return nil, errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedFiles(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择要发送的文件").
 		CanChooseFiles(true).
 		CanChooseDirectories(false).
-		PromptForMultipleSelection()
+		PromptForMultipleSelection)
 }
 func (a *App) PickDirectory() (string, error) {
 	if a.runtimeApp == nil {
 		return "", errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedDirectory(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择接收目录").
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
-		PromptForSingleSelection()
+		PromptForSingleSelection)
 }
 func (a *App) PickSourceDirectory() (string, error) {
 	if a.runtimeApp == nil {
 		return "", errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedDirectory(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择要发送的目录").
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
-		PromptForSingleSelection()
+		PromptForSingleSelection)
 }
 
 // Status reports this running shell only; it does not claim a P2P connection.

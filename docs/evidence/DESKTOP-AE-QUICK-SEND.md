@@ -29,3 +29,5 @@ Playwright独立session ae-quick、生产QuickSendDialog/CSS，临时Vite resolv
 浏览器曾发现目标选择后仍回到旧identity：React受控select恢复值早于异步mutation读取event.target.value。改为事件内立即捕获identity，再交给mutation；新增108th测试及实际浏览器select复验目标正确、发送按钮可用。旧失败截图保留，最终dark-1100-fixed.png。0 errors/1 warning，warning为Wails浏览器模式提示。
 
 截图在`output/playwright/ae-quick-20261018/`，原始日志/profile/DB在忽略artifact。owned浏览器、Vite及4个临时入口/配置/metadata文件已收尾，原`.playwright-cli`、ios/linux目录保持。原生Windows托盘/Mac菜单栏真实点击、后台唤起和准确包物理旅程仍待后续同提交验收；不能用浏览器按钮模拟代替。
+
+N4提交 `f23383d` 已推送，五项CI/三平台包success，准确四资产与Windows/Mac实际启动来源见[原生检查点](DESKTOP-AE-NATIVE-CHECKPOINT.md)。Windows原生N1目录/QUIC接收、N3设置通过，取消picker错误已定位并修复源码；这些不代表N4托盘真实点击已通过。

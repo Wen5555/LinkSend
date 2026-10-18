@@ -82,3 +82,19 @@ Mac 十轮均在 TCP dial 阶段以 `LAN_CONTROL_UNREACHABLE` / `no route to hos
 前端准确Node24.21.0/pnpm12.4.1：92tests/typecheck/lint/build通过；真实Wails beta.18绑定重新生成。核心off完整test（app67.027s）、vet/build通过；desktop workspace test、off-race/vet/build和最终dist稳定后的off build通过。发现完整race三轮通过（18.914s）；最终发现刷新/应用定向race三轮通过（5.333/10.530s）。最新日志为`refresh-verified-{core,race,desktop,frontend-*}.log`，不使用之前FAIL日志替代终态。未把源码候选替代准确包原生或真实双机。owned持久服务/监听未新增，普通夹具结束关闭自身socket；外部STUN授权与Mac公网/反控限制保持。
 
 阶段实现提交`2b9ee1c6336d44a2a05ddbd88479145dcdebf518`已推送，远端SHA一致，Draft PR #9保持。core push/PR `39074114051` / `39074117912`、desktop push/PR `39074113965` / `39074117897`、[三平台包39074113978](https://github.com/Wen5555/LinkSend/actions/runs/39074113978)全部success，Windows amd64和Mac arm64/amd64 job均success。后续N1不借这些包结果。
+
+## 同测量器十轮后测（f23383d）
+
+源码 `f23383dc12945df42bc095cd9a2adc8dc011e7c0`，同一测量器SHA256仍 `31417502a11d468b2f99cc31a662c82ef69b038bad22d37627e4691fe410da7e`，同两台物理机/链路/交替启动口径。不是原生桌面包、LAN配对/文件或双NAT；没有系统网络配置修改。
+
+| 指标 | Windows before→after | Mac before→after |
+|---|---|---|
+| 自动发现 | 10/10→10/10 | 10/10→10/10 |
+| ready-to-seen中位数 | 226→255.5ms | 141→81.5ms |
+| after范围 | 24–444ms | 21–983ms |
+| 刷新后新公告 | 10/10→10/10 | 10/10→10/10 |
+| 固定身份控制 | 10/10→10/10 | 0/10→0/10 |
+
+Mac后测仍 `LAN_CONTROL_UNREACHABLE / dial / no route to host`，multicast_send降级10次；成功发现不等于反向控制可达。ready-to-seen含启动编排，小样本未给p95，双方变化方向不同，不能宣称整体提速/文件吞吐收益。B2文件分段/大样本两方向各3次仍待真实链路。
+
+本机 `.artifacts/ae-20261018/after-f23383d/comparison-summary.json`；Mac `~/.codex/supervision/linksend-ae-20261018/after-f23383d`。管理job `/tmp/codex-ssh/job-linksend-ae-after-f23383d-01` exit0，各probe有界退出。批次exit0不改写Mac控制FAIL。

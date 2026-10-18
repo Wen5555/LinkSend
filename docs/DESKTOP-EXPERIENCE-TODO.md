@@ -6,22 +6,22 @@
 
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
-| A LAN 独立主流程 | 端口/reader/记忆修复；刷新合并/抖动、设备页触发/provider状态与早期host候选完成 | 新Pion计时RED→GREEN、定向race三轮、92前端与两模块通过 | 原发现模块10/10；Mac反控FAIL | 2b9ee1c五项CI及三平台包success | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：准确原生独立旅程继续 |
+| A LAN 独立主流程 | 端口/reader/记忆、刷新/provider/早期host完成 | Pion/并发回归通过 | f23383d后测发现/刷新双方10/10；Win控制10/10、Mac0/10 | f23383d五项CI及三平台包success | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：准确原生独立旅程继续 |
 | B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | e43043d五项CI及三平台包success | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：准确包/双NAT缺项保留 |
-| B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
-| C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过；JP路径/链接5项无SKIP | 浏览器夹具通过；原生/物理待验 | 0499cb5五项CI及三平台包success | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：同提交准确包/物理缺项转E |
+| B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 既有夹具边界保持 | 同口径十轮无整体提速结论；原生CLI入口通过；文件/OS剪贴板待验 | f23383d已同步 | 文件分段/两方向各3次与OS/恢复旅程继续，Mac反控限制单列 |
+| C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | f23383d准确Win原生目录/预设/loopback接收集合及hash PASS；物理待验 | f23383d包核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：新picker包复验及物理矩阵 |
 | C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过；首offer过期RED→GREEN | 浏览器元数据夹具通过；原生/物理待验 | 290c828五项CI/三平台包success；77b831b原Windows失败保留 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：同提交准确包/物理缺项转E |
-| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面候选完成 | 假时钟/两模块/完整race/101前端；真实QUIC粗略速率、剪贴板并存和控制通过 | 浏览器夹具通过；原生/物理待验 | 038e481五项CI/三平台包success | [证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：同提交准确包/物理缺项转E |
-| D / N4 托盘快速发送 | 托盘/菜单栏入口、quick草稿/稳定Go入队与轻量面板候选完成 | 两模块/完整app race/108前端与真实QUIC/重启幂等通过 | 浏览器键盘/布局通过；原生托盘与物理待验 | 本轮待阶段推送 | [证据](evidence/DESKTOP-AE-QUICK-SEND.md)：核对CI/准确包，然后原生入口与LAN矩阵 |
-| E 同提交候选/最终回归/文档 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 按阶段验证/提交/推送，同一 Draft PR 交付 |
+| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC速率/剪贴板夹具通过 | f23383d准确Win原生设置256KiB/s持久PASS；物理速率/OS待验 | f23383d包核验通过 | [证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：同提交物理缺项转E |
+| D / N4 托盘快速发送 | 托盘/菜单栏、quick草稿/Go入队与轻量面板完成 | 两模块/完整race/108前端与QUIC/重启幂等通过 | 浏览器通过；准确Win托盘/Mac菜单栏待验 | f23383d五项CI/三平台包success | [证据](evidence/DESKTOP-AE-QUICK-SEND.md)：真实系统入口及物理矩阵 |
+| E 同提交候选/最终回归/文档 | f23383d同提交四资产已核验；原生取消picker修复完成 | 修复core off/desktop/race/vet/build通过 | 准确Win分项PASS/取消UX FAIL待新包；Mac启动PASS/UI受限 | 修复待提交；同一Draft PR #9 | [证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：提交/CI/新包取消复验 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近源码同步：`038e48190427e898a6934c18804b1fd702ba7e9d`，远端一致，五项CI/三平台包success；N2修复290c828同样全部success，原77b831b失败保留。N4两模块/core off/vet/build、完整race192.535s、108前端与实际QUIC通过，当前收束阶段提交。下一动作：核对N4源码CI与三平台包，下载同提交候选验证来源/hash，继续准确Windows/Mac托盘、LAN独立配对/双向文件、恢复/剪贴板/B2与最终E。宿主规则/JP UDP3478补充授权仍待答，缺项不变。
+最近源码同步：`f23383dc12945df42bc095cd9a2adc8dc011e7c0`，远端一致、五项CI/三平台包success，准确四资产已核验。当前picker取消修复及核心测试identity断言通过必要验证，待聚焦提交/推送与新包复验；无前端/wire/schema更改。下一动作：新准确Windows包复验取消无红色错误，再继续托盘、物理独立LAN/双向文件、恢复/剪贴板/B2及E。Mac辅助功能关闭待用户答复，JP UDP3478补充授权仍待答，不能扩大授权。
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 
-运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
+运行现场：f23383d Windows PID156888/fixture155472/CLI146712均退出、10473无监听；Mac36699停止收据 `/tmp/codex-ssh/job-linksend-ae-stop-native-f23383d-20261018-01` exit0，clipboard=false。保留profile/源/接收文件；十轮后测probe已退出。用户允许自动处理本轮LinkSend Windows公用网络弹窗，本轮未出现；其余宿主网络/安全策略仍不授权。
 
 当前原生候选来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
 

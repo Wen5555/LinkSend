@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18原生picker修复：Windows锁定Wails beta.18取消精确错误在picker边界归一为空选择，不显示失败也不改变草稿；真实错误保持。无wire/schema改变，见[原生检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
+
 2026-10-18 N4候选：托盘/菜单栏快速发送请求打开同一窗口轻量面板，quick持久草稿与main隔离；Go以保存revision派生稳定入队收据，复用现有认证队列。取消保留选择、picker取消无修改、已提交后只清quick来源，重启不自动派发。无新快捷键权限/实例/文件正文IPC，准确包原生入口另验，见ADR0012。
 
 2026-10-18 N3候选：文件发送正文的进程共享预算、不限速或KiB/MiB上限、分类CAS偏好与运行中动态生效已实现；恢复/应用级重传同样计费，控制与自动剪贴板独立。可取消等待、突发有界，暂停派发不等于暂停当前任务。不声称精确UDP线速，见ADR0011与本轮证据。
