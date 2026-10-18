@@ -1,3 +1,8 @@
+## 2026-10-18 逐字符邀请码兼容性修复
+
+- React逐字符输入复现legacy邀请码被前端大写/截短；普通配对、明确切组和prepared/started恢复回归6 FAIL→GREEN。改为编辑保留原文、提交只规范化完整短码，非法输入不静默截成有效码；不改变Go/wire/schema。Mac原生18字符观察的根因仍未确认，原started请求保持。
+- 40定向与完整115前端tests、typecheck/lint/build、核心off完整test、desktop workspace/off test及off vet/build通过。新准确包/原生复验待继续，见[恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。Goal active，物理/OS/双NAT及授权缺口保持。
+
 ## 2026-10-18 cf19349准确包错误提示复验
 
 - cf19349五项CI/Windows与Mac两架构打包success，四资产完整来源/校验通过；新准确Mac arm64真实无效配对已显示中文提示，独立空profile包/签名/hash核验及收尾通过。见[准确包证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。没有升级旧包的文件/网络验收范围。

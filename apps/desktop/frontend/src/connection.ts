@@ -9,13 +9,12 @@ export function connectionMethodLabel(method: string): string {
   }
 }
 
-export function formatPairingCodeInput(value: string): string {
-  const trimmed = value.trimStart();
-  // Legacy protocol-v1 invitations are base64url and must retain case.
-  if (trimmed.length > 12) return trimmed.slice(0, 43);
+export function normalizePairingCode(value: string): string {
+  const trimmed = value.trim();
+  // Normalize only complete short codes at submission. Editing must preserve
+  // legacy base64url invitations, including their case and all 43 characters.
   const compact = trimmed.toUpperCase().replace(/[\s\-‐‑‒–—―]/g, '');
-  if (!/^[A-Z2-7]*$/.test(compact)) return trimmed.slice(0, 12);
-  return compact.length > 4 ? `${compact.slice(0, 4)}-${compact.slice(4, 8)}` : compact;
+  return /^[A-Z2-7]{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4)}` : trimmed;
 }
 
 export function shouldClearPairingCode(raw: unknown): boolean {

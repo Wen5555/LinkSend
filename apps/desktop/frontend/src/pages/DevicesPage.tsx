@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus, InboxStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
-import { formatPairingCodeInput, shouldClearPairingCode } from '../connection';
+import { normalizePairingCode, shouldClearPairingCode } from '../connection';
 import { deviceConnectionLabel, deviceName } from '../presentation';
 import { MembershipRecoveryPanel } from './MembershipRecoveryPanel';
 
@@ -120,8 +120,9 @@ export function DevicesPage({ devices, identityID, membership, inbox, name, run,
       <section className="surface pairing-form"><span className="section-kicker">连接另一台设备</span><h2>跨网络配对</h2><p className="muted">输入一次性配对码建立信任，接收时仍按本机策略确认。</p>
         <form onSubmit={event => {
           event.preventDefault();
-          void run('join', async () => { try { await Backend.PairDevice(code.trim(), name || 'LinkSend desktop'); setCode(''); } catch (cause) { if (String(cause).includes('PAIRING_IDENTITY_CONFLICT')) setSwitchCode(code.trim()); throw cause; } }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
-        }}><label className="field-label">配对码<input ref={pairingCode} className="pairing-input" value={code} onChange={event => setCode(formatPairingCodeInput(event.target.value))} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
+          const invitation = normalizePairingCode(code);
+          void run('join', async () => { try { await Backend.PairDevice(invitation, name || 'LinkSend desktop'); setCode(''); } catch (cause) { if (String(cause).includes('PAIRING_IDENTITY_CONFLICT')) setSwitchCode(invitation); throw cause; } }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
+        }}><label className="field-label">配对码<input ref={pairingCode} className="pairing-input" value={code} onChange={event => setCode(event.target.value)} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
         {switchCode && <div className="queue-notice"><strong>本机已属于另一设备组</strong><p>切换会离开当前设备组；历史记录和已接收文件保留。</p><button className="secondary" disabled={!!op} onClick={() => void run('switch-membership', async () => { await Backend.SwitchMembership(switchCode, name || 'LinkSend desktop'); setSwitchCode(''); setCode(''); }, '已切换并完成配对')}>确认切换设备组</button></div>}
         {membership?.message && <p className="field-help pairing-help">{membership.message}</p>}
         <div className="divider" /><h3>附近设备没有出现？</h3><p className="field-help">输入对方的局域网 IPv4 地址，只查找这一台设备。</p>

@@ -8,7 +8,7 @@ import { DevicesPage, LANDiscoveryNotice } from './DevicesPage';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const backend = vi.hoisted(() => ({ ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })), RefreshLANDiscovery: vi.fn(async () => {}) }));
+const backend = vi.hoisted(() => ({ PairDevice: vi.fn(), SwitchMembership: vi.fn(), ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })), RefreshLANDiscovery: vi.fn(async () => {}) }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const run: CommandRunner = async (_key, action, _message, onError) => {
@@ -45,6 +45,40 @@ afterEach(() => {
 });
 
 describe('设备目录和详情', () => {
+  it.each([
+    ['abcd–efgh', 'ABCD-EFGH'],
+    ['aBcDeFgH'.repeat(5) + '_-A', 'aBcDeFgH'.repeat(5) + '_-A'],
+  ])('preserves typed invitation characters until submitting %s', async (typed, submitted) => {
+    backend.PairDevice.mockResolvedValue(undefined);
+    const container = document.createElement('div'); document.body.append(container);
+    renderDevices(container, []); await settle();
+    const input = container.querySelector<HTMLInputElement>('input.pairing-input')!;
+    for (const character of typed) act(() => setInputValue(input, input.value + character));
+    expect(input.value).toBe(typed);
+    expect(backend.PairDevice).not.toHaveBeenCalled();
+    act(() => input.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await settle();
+    expect(backend.PairDevice).toHaveBeenCalledExactlyOnceWith(submitted, '本机');
+    expect(input.value).toBe('');
+  });
+
+  it('retains the exact typed legacy invitation for an explicitly confirmed group switch', async () => {
+    backend.PairDevice.mockRejectedValueOnce(new Error('PAIRING_IDENTITY_CONFLICT'));
+    backend.SwitchMembership.mockResolvedValue(undefined);
+    const legacy = 'aBcDeFgH'.repeat(5) + '_-A';
+    const container = document.createElement('div'); document.body.append(container);
+    renderDevices(container, []); await settle();
+    const input = container.querySelector<HTMLInputElement>('input.pairing-input')!;
+    for (const character of legacy) act(() => setInputValue(input, input.value + character));
+    act(() => input.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await settle();
+    expect(backend.SwitchMembership).not.toHaveBeenCalled();
+    click(Array.from(container.querySelectorAll('button')).find(item => item.textContent === '确认切换设备组')!);
+    await settle();
+    expect(backend.PairDevice).toHaveBeenCalledExactlyOnceWith(legacy, '本机');
+    expect(backend.SwitchMembership).toHaveBeenCalledExactlyOnceWith(legacy, '本机');
+  });
+
   it('requests discovery on entry and reconnect, without refreshing on every directory render', async () => {
     const container = document.createElement('div'); document.body.append(container);
     const root = renderDevices(container, []);

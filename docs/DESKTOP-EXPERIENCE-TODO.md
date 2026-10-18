@@ -7,7 +7,7 @@
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 端口/reader/记忆、刷新/provider/早期host完成 | Pion/并发回归通过 | 后测发现/刷新双方10/10；Mac反控0/10；新准确Win LAN启动被工具策略阻断 | 6edddad五项CI及三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：可用原生环境下继续独立旅程，不绕过策略 |
-| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/兼容/完整race通过 | 公共HTTPS/WSS/准确Mac在线PASS；98469ce原生prepare/cancel/重启保持PASS；join进入started后代码输入无效，仍未恢复 | cf19349五项CI/三平台包success；错误提示新Mac准确包通过 | [恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：核对输入并继续同intent；外部STUN/双NAT条件保持 |
+| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/兼容/完整race通过 | 公共HTTPS/WSS/准确Mac在线PASS；98469ce原生prepare/cancel/重启保持PASS；join进入started后代码输入无效，仍未恢复 | cf19349五项CI/三平台包success；错误提示新Mac准确包通过 | [恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：逐字符legacy输入缺陷6FAIL→115前端GREEN，待新准确包复验并继续同intent；外部STUN/双NAT条件保持 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 既有夹具边界保持 | 同口径十轮无整体提速结论；原生CLI入口通过；文件/OS剪贴板待验 | f23383d已同步 | 文件分段/两方向各3次与OS/恢复旅程继续，Mac反控限制单列 |
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |

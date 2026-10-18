@@ -94,3 +94,13 @@ Playwright独立session `ae-recovery` 对真实DevicesPage/RecoveryPanel、生�
 错误提示修复本地终态：固定Node24.21.0/pnpm12.4.1，12files/109tests、typecheck（含绑定）、lint/build均exit0，日志`native-error-frontend-*.log`。核心`GOWORK=off go test ./...`缓存通过；desktop workspace/off test7.246/6.928s、off vet/build全部exit0，日志`native-error-core-off.log`和`native-error-desktop.log`。必要dist重新生成，原协议码、配对输入/请求与Go源码不变；新准确包原生错误文案尚未复验。
 
 cf19349后续五项CI/三平台包与四资产完整核验已通过；新准确Mac独立空profile的真实无效配对操作已显示既有中文提示，见[准确包续验](DESKTOP-AE-NATIVE-CHECKPOINT.md)。该独立错误测试已收尾；恢复profile保持98469ce，同一started intent在进一步真实停止/重启后仍保持，owned43588/恢复面板显示，新码字段为空，等待手动合成输入观察。检查点收据确认偏好字节、两草稿、源hash、唯一completed task/queue仍保持；独立服务仍2成员/旧测试身份未加入，恢复尚未完成。
+
+### 逐字符邀请码兼容性修复（2026-10-18）
+
+在00798dc基线上新增真实React输入事件回归，逐字符追加到控件当前值，发现43字符区分大小写的legacy邀请码被每次onChange的大写/分隔/截短逻辑破坏，实际只剩`ABCD-EFGH_-A`。普通配对、明确确认的切组，以及prepared/started恢复均覆盖；新测试先取得6 FAIL/21 PASS（`pairing-input-red.log`）。这是独立确认的前端缺陷，尚不能解释98469ce原生合成短码实读18字符的原因。
+
+改为编辑时保留原文和43字符输入上限；只在明确提交时规范化完整8位短码（大小写、空白和既有分隔符）。legacy大小写/内容保持；非法超长短码不会被截成另一个有效码，继续交由Go校验。普通配对与冲突后明确切组复用同一提交值；恢复仍沿原intent，不自动prepare/提交，网络失败保留输入。
+
+固定Node24.21.0/pnpm12.4.1：针对三文件40tests GREEN；完整12files/115tests、typecheck含绑定、lint/build全部exit0。核心`GOWORK=off go test ./...`、desktop workspace/off `go test ./...`及off vet/build均exit0（Go测试缓存）。日志为`.artifacts/ae-20261018/pairing-input-{red,green,test,typecheck,lint,build,core-off,desktop}.log`。必要dist重建；无Go、wire、schema变更。
+
+Mac只读job `/tmp/codex-ssh/job-ls-ae-mac-field-value-shape-20261018-03` exit0：原准确98469ce实例的字段仍为空，未键入/提交真实码，未改变恢复请求。新源码的CI、准确包和原生输入复验另记；已有quick/文件/网络证据不迁移。

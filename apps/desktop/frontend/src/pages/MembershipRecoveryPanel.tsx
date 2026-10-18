@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { MembershipRecoveryStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
-import { formatPairingCodeInput, humanizeBackendError, shouldClearPairingCode } from '../connection';
+import { normalizePairingCode, humanizeBackendError, shouldClearPairingCode } from '../connection';
 
 type Props = { available: boolean; membershipState?: string; name: string; run: CommandRunner; op: string };
 
@@ -43,11 +43,11 @@ export function MembershipRecoveryPanel({ available, membershipState, name, run,
       {pending ? <>
         <p role="status">{status.message}</p>
         <strong>{status.mode === 'initialize' ? '在当前服务新建本机设备组' : '用新配对码加入设备组'}</strong>
-        {status.mode === 'join' && <label className="field-label">新的配对码<input className="pairing-input" value={code} onChange={event => setCode(formatPairingCodeInput(event.target.value))} maxLength={43} autoComplete="off" spellCheck={false} disabled={disabled} /></label>}
+        {status.mode === 'join' && <label className="field-label">新的配对码<input className="pairing-input" value={code} onChange={event => setCode(event.target.value)} maxLength={43} autoComplete="off" spellCheck={false} disabled={disabled} /></label>}
         {status.mode === 'join' && status.state !== 'prepared' && <p className="field-help">会先核对上次加入是否已完成；未完成时需要新的配对码。</p>}
         <div className="inline-actions">
           <button className="primary" disabled={disabled || !status.id || status.state === 'prepared' && status.mode === 'join' && !code.trim()} onClick={() => void run('continue-membership-recovery', async () => {
-            try { await Backend.ContinueMembershipRecovery(status.id!, code.trim(), name || 'LinkSend desktop'); setCode(''); }
+            try { await Backend.ContinueMembershipRecovery(status.id!, normalizePairingCode(code), name || 'LinkSend desktop'); setCode(''); }
             finally { await reload(); }
           }, '已重新连接设备组；旧任务不会自动发送', cause => { if (shouldClearPairingCode(cause)) setCode(''); })}>{status.state === 'prepared' ? '确认连接' : '核对并继续恢复'}</button>
           {status.state !== 'paused' && <button className="secondary" disabled={disabled || !status.id} onClick={() => void run('cancel-membership-recovery', async () => { setStatus(await Backend.CancelMembershipRecovery(status.id!)); setCode(''); }, status.state === 'prepared' ? '已取消准备；旧任务仍需重新确认' : '恢复已暂停；服务端结果保留待核对')}>{status.state === 'prepared' ? '取消准备' : '暂停恢复'}</button>}

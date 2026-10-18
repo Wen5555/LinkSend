@@ -29,6 +29,27 @@ beforeEach(() => { vi.resetAllMocks(); backend.MembershipRecoveryStatus.mockReso
 afterEach(() => { for (const root of roots.splice(0)) act(() => root.unmount()); document.body.replaceChildren(); });
 
 describe('显式设备组恢复', () => {
+  it.each([
+    ['prepared', 'abcd efgh', 'ABCD-EFGH'],
+    ['prepared', 'aBcDeFgH'.repeat(5) + '_-A', 'aBcDeFgH'.repeat(5) + '_-A'],
+    ['started', 'aBcDeFgH'.repeat(5) + '_-A', 'aBcDeFgH'.repeat(5) + '_-A'],
+  ])('preserves typed invitations and continues the same %s intent', async (state, typed, submitted) => {
+    backend.MembershipRecoveryStatus.mockResolvedValue({ state, id: 'same-intent', mode: 'join' });
+    backend.ContinueMembershipRecovery.mockRejectedValue(new Error('SIGNALING_UNREACHABLE'));
+    const container = mount(); await settle();
+    const input = container.querySelector<HTMLInputElement>('input.pairing-input')!;
+    for (const character of typed) act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, input.value + character);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(input.value).toBe(typed);
+    expect(backend.ContinueMembershipRecovery).not.toHaveBeenCalled();
+    click(button(container, state === 'prepared' ? '确认连接' : '核对并继续恢复')); await settle();
+    expect(backend.ContinueMembershipRecovery).toHaveBeenCalledExactlyOnceWith('same-intent', submitted, '本机测试');
+    expect(input.value).toBe(typed);
+    expect(backend.PrepareMembershipRecovery).not.toHaveBeenCalled();
+  });
+
   it('requires explicit confirmation, then joins using the durable intent and clears the one-time code', async () => {
     const container = mount(); await settle();
     expect(backend.PrepareMembershipRecovery).not.toHaveBeenCalled();

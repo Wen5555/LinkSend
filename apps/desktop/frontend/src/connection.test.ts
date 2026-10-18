@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionMethodLabel, formatPairingCodeInput, humanizeBackendError, mergeTaskSnapshots, shouldClearPairingCode, taskPhaseLabel } from './connection';
+import { connectionMethodLabel, normalizePairingCode, humanizeBackendError, mergeTaskSnapshots, shouldClearPairingCode, taskPhaseLabel } from './connection';
 
 describe('connection evidence labels', () => {
   it('does not infer LAN from an ICE host candidate or online presence', () => {
@@ -20,11 +20,15 @@ describe('connection evidence labels', () => {
     expect(humanizeBackendError('AUTHENTICATION_FAILED: administrator required')).toContain('权限模型不兼容');
     expect(humanizeBackendError('VERSION_INCOMPATIBLE: server capabilities incompatible')).toContain('升级服务端');
   });
-  it('formats current pairing codes without changing legacy invitations', () => {
-    expect(formatPairingCodeInput('abcd efgh')).toBe('ABCD-EFGH');
-    expect(formatPairingCodeInput('abcd–efgh')).toBe('ABCD-EFGH');
-    const legacy = 'AbCd_legacy-token-with-43-characters-123456';
-    expect(formatPairingCodeInput(legacy)).toBe(legacy.slice(0, 43));
+  it('normalizes complete short codes without altering legacy or invalid invitations', () => {
+    expect(normalizePairingCode('abcd efgh')).toBe('ABCD-EFGH');
+    expect(normalizePairingCode('abcd–efgh')).toBe('ABCD-EFGH');
+    expect(normalizePairingCode('  abcd-efgh  ')).toBe('ABCD-EFGH');
+    const legacy = 'aBcDeFgH'.repeat(5) + '_-A';
+    expect(normalizePairingCode(legacy)).toBe(legacy);
+    for (const invalid of ['abcd', 'ABCD-EFGHJ', 'abcd-efg1', legacy + 'EXCESS']) {
+      expect(normalizePairingCode(invalid)).toBe(invalid);
+    }
   });
   it('distinguishes pairing failures and clears only terminal codes', () => {
     expect(humanizeBackendError('PAIRING_CODE_EXPIRED')).toContain('已过期');
