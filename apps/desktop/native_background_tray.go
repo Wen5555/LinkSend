@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"image/png"
+	"runtime"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -42,6 +43,9 @@ func newNativeTray(host *application.App, iconPNG []byte, callbacks nativeTrayCa
 	handle := &nativeTray{tray: host.SystemTray.New(), menu: application.NewMenu(), callbacks: callbacks}
 	handle.tray.SetIcon(append([]byte(nil), iconPNG...))
 	handle.tray.SetTooltip("LinkSend")
+	if runtime.GOOS == "darwin" {
+		handle.tray.SetLabel("LinkSend")
+	}
 	handle.menu.Add("显示 LinkSend").OnClick(func(*application.Context) { handle.invoke(callbacks.Show) })
 	handle.menu.Add("快速发送文件").OnClick(func(*application.Context) { handle.invoke(callbacks.QuickSend) })
 	handle.menu.Add("打开收件箱").OnClick(func(*application.Context) { handle.invoke(callbacks.Inbox) })
@@ -61,7 +65,12 @@ func newNativeTray(host *application.App, iconPNG []byte, callbacks nativeTrayCa
 	handle.menu.AddSeparator()
 	handle.menu.Add("退出应用").OnClick(func(*application.Context) { handle.invoke(callbacks.Quit) })
 	handle.tray.SetMenu(handle.menu)
-	handle.tray.OnClick(func() { handle.invoke(callbacks.Show) })
+	// macOS status items expose primary activation to accessibility clients.
+	// Keep Wails' native menu activation there so quick send is reachable by a
+	// normal menu-bar press; the menu already contains an explicit Show action.
+	if runtime.GOOS != "darwin" {
+		handle.tray.OnClick(func() { handle.invoke(callbacks.Show) })
+	}
 	host.OnShutdown(handle.Close)
 	return handle, nil
 }

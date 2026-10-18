@@ -1,3 +1,9 @@
+## 2026-10-18 Mac原生quick续验与菜单入口修复
+
+- 用户开启AX后，6edddad准确Mac包真实菜单→快速面板→文件Open/Cancel→面板取消通过；空send_drafts整行保持，无配对/发送。用户确认托盘存在。此前“图标或菜单未出现”保留为观察，未证实具体触发原因，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。
+- Mac菜单栏候选加LinkSend文字、主点击保留Wails原生菜单；Windows行为保持。核心off全test与desktop workspace/off-race/vet/build通过，标签追加后off-race/vet/build再次通过。新包原生主点击/非空草稿/完整quick发送待验。
+- 当前Mac隔离实例故意连接127.0.0.1:1；正式公共HTTPS/WSS及客户端仍独立验收，旧TLS超时未升级通过。Goal active。
+
 ## 2026-10-18 6edddad 准确包复验
 
 - 取消修复6edddad五项CI/Windows与Mac两架构包全部success，四资产完整核验；准确Win三个原生picker取消无红色错误，草稿整行/接收偏好字节不变，f23383d旧失败保留。见[本轮原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。

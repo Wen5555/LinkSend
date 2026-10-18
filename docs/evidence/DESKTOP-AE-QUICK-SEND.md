@@ -31,3 +31,13 @@ Playwright独立session ae-quick、生产QuickSendDialog/CSS，临时Vite resolv
 截图在`output/playwright/ae-quick-20261018/`，原始日志/profile/DB在忽略artifact。owned浏览器、Vite及4个临时入口/配置/metadata文件已收尾，原`.playwright-cli`、ios/linux目录保持。原生Windows托盘/Mac菜单栏真实点击、后台唤起和准确包物理旅程仍待后续同提交验收；不能用浏览器按钮模拟代替。
 
 N4提交 `f23383d` 已推送，五项CI/三平台包success，准确四资产与Windows/Mac实际启动来源见[原生检查点](DESKTOP-AE-NATIVE-CHECKPOINT.md)。Windows原生N1目录/QUIC接收、N3设置通过，取消picker错误已定位并修复源码；这些不代表N4托盘真实点击已通过。
+
+## Mac原生续验与菜单可发现性（2026-10-18）
+
+用户已开启现有控制方式的辅助功能。6edddad准确arm64包、原隔离profile/PID38062：只读status-state第02轮观察到真实菜单及“快速发送文件”，随后通过System Events点击该精确菜单项，实际Wails面板含“托盘快速发送”/独立草稿说明/设备与文件选择控件。用户随后确认“托盘里面有啊”。菜单出现的具体触发时序未知，不能归因为右键注入成功。
+
+真实点击面板“选择文件”打开macOS `Open`窗口，读取其按钮后点击`Cancel`，再点击快速面板“取消”。任务库`send_drafts`操作前后整行一致（均为空）；无配对设备、未入队或发送文件。这只证明原生菜单→quick面板→文件picker→取消与空草稿保持，不证明非空主草稿或完整发送。job前缀`/tmp/codex-ssh/job-linksend-ae-mac-`：`status-state-6edddad-20261018-02`、`click-observed-quick-6edddad-20261018-02`、`quick-picker-open-6edddad-20261018-04`、`quick-picker-cancel-6edddad-20261018-01`均exit0。之前几次脚本因AppleScript语法/对象列表和只读DB定位失败，保留失败，不作产品失败。
+
+为响应入口难以辨认，候选只在Mac添加`LinkSend`菜单栏文字，并允许主点击使用锁定Wails原生菜单默认行为；Windows点击唤主窗保持。核心off全test、桌面workspace与off-race/vet/build通过，标签追加后desktop off-race/vet/build再次通过（11.021s）。前端未改，沿用108测试边界；新准确包/主点击待验。
+
+本次Mac实例环境`LINKSEND_SERVER_URL=https://127.0.0.1:1`，主页信令不可达是故意隔离条件。正式`linksend.oooai.de`的HTTPS/WSS与Mac真实客户端必须另验；旧公网TLS超时没有因本节原生通过而消除。

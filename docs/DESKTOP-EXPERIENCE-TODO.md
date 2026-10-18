@@ -12,7 +12,7 @@
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
-| D / N4 托盘快速发送 | 托盘/菜单栏、quick草稿/Go入队与轻量面板完成 | 两模块/race/108前端/QUIC/重启幂等通过 | Win普通后台/单实例/主草稿保持PASS；Mac权限现已启用、主窗可读，右键菜单待实际观察 | 6edddad五项CI/三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：用户协助展开Mac菜单后继续真实quick入口 |
+| D / N4 托盘快速发送 | quick/Go入队完成；Mac标签/主点击修复候选 | 两模块/race/108前端/QUIC/重启幂等通过；修复desktop off-race/vet/build通过 | 6edddad Mac真实菜单→quick→文件picker取消/空草稿保持PASS；完整发送待验 | 6edddad五项CI/三平台包success；新修复待同步 | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：新准确包主点击/非空草稿/实际quick发送 |
 | E 同提交候选/最终回归/文档 | 6edddad四资产/来源核验，三picker取消UX修复复验PASS | 修复core off/desktop/race/vet/build及五项CI通过 | Win原生分项PASS；同提交Mac arm64启动PASS、Intel物理/UI与网络待验 | 同一Draft PR #9，复验证据已整理 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
