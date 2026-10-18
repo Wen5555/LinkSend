@@ -5,7 +5,8 @@ export function connectionMethodLabel(method: string): string {
     case 'lan_direct': return '局域网直连';
     case 'internet_p2p': return '互联网 P2P';
     case 'relay': return '尚未实现';
-    default: return '直连 · 路径待确认';
+    case 'direct_unknown': return '直连 · 路径待确认';
+    default: return '未知';
   }
 }
 

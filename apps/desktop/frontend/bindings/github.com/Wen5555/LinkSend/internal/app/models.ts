@@ -156,12 +156,36 @@ export interface DeviceProfile {
 }
 
 /**
+ * Export is an allowlist projection, never a scrubbed serialization of private
+ * service/task/recovery/cache records. Unknown strings become fixed literals.
+ */
+export interface DiagnosticGuidance {
+    "code": string;
+    "stage": string;
+    "reason": string;
+    "next_step": string;
+    "action": string;
+}
+
+/**
  * DiagnosticIdentity intentionally omits local filesystem locations. Identity()
  * is an explicit local profile view; diagnostics are safe to export by default.
  */
 export interface DiagnosticIdentity {
     "id": string;
     "public_key_hex": string;
+}
+
+export interface DiagnosticTask {
+    "product_version": string;
+    "label": string;
+    "direction": string;
+    "state": string;
+    "method": string;
+    "last_attempt"?: string;
+    "can_retry": boolean;
+    "can_resume": boolean;
+    "guidance": DiagnosticGuidance;
 }
 
 export interface Diagnostics {
@@ -271,6 +295,7 @@ export interface InboxFilesPage {
  * of absolute filesystem locations and private connection diagnostics.
  */
 export interface InboxItem {
+    "diagnostic"?: DiagnosticTask | null;
     "task_id": string;
     "peer_id": string;
     "direction": string;
@@ -479,6 +504,7 @@ export interface TaskPhaseEvent {
 }
 
 export interface TaskSnapshot {
+    "diagnostic"?: DiagnosticTask | null;
     "batch_id"?: string;
 
     /**
@@ -487,6 +513,7 @@ export interface TaskSnapshot {
     "id": string;
     "task_id": string;
     "attempt_id": string;
+    "attempt_started_at"?: string;
     "direction": string;
     "peer_id"?: string;
     "source_summary"?: string;

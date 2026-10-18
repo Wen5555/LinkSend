@@ -12,6 +12,7 @@ import { ReceivePlanDialog } from './components/ReceivePlanDialog';
 import { InboxPage } from './pages/InboxPage';
 import { LANPairPrompt } from './components/LANPairPrompt';
 import { QuickSendDialog } from './components/QuickSendDialog';
+import { DiagnosticNavigation } from './components/TaskDiagnostics';
 import { Events } from '@wailsio/runtime';
 import './App.css';
 
@@ -77,7 +78,7 @@ export default function App() {
     setSettingsRequest(current => ({ category, revision: current.revision + 1 }));
     setTab('settings');
   };
-  return <div className="app-shell">
+  return <DiagnosticNavigation.Provider value={{ openSettings, openDevices: () => setTab('devices') }}><div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark" aria-hidden="true">↗</div><div><strong>LinkSend</strong><span>点对点文件传输</span></div></div>
       <nav aria-label="主导航">{tabs.map(item => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'settings') openSettings('general'); else setTab(item.id); setFocusTaskID(undefined); }}><span aria-hidden="true">{item.icon}</span> {item.label}{item.id === 'transfer' && incomingCount > 0 && <span className="nav-badge" aria-label={`${incomingCount} 个新增传输项目`}>{incomingCount > 99 ? '99+' : incomingCount}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="profile-chip"><span className="avatar">{(prefs.device_name || 'L')[0]}</span><div><strong>{prefs.device_name || '本机设备'}</strong><small>{config?.identity.id ? `${config.identity.id.slice(0, 10)}…` : '未连接'}</small></div></div><div className="relay-note">端到端加密直连</div></div>
@@ -104,5 +105,5 @@ export default function App() {
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
     {!incoming && quickOpen && <QuickSendDialog devices={devices} identityID={config?.identity.id || shell?.status.identity} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}
     {!incoming && <LANPairPrompt run={control.run} op={control.op} available={desktop.enabled} />}
-  </div>;
+  </div></DiagnosticNavigation.Provider>;
 }

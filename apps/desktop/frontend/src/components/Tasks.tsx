@@ -5,6 +5,7 @@ import type { CommandRunner } from '../hooks/useDesktop';
 import { connectionMethodLabel, taskPhaseLabel } from '../connection';
 import { deviceName, formatBytes, taskLabels } from '../presentation';
 import { ReceivedContentActions } from './ContentActions';
+import { TaskDiagnostics } from './TaskDiagnostics';
 
 export function TaskList({ tasks, devices, run, op }: { tasks: TaskSnapshot[]; devices: DeviceInfo[]; run: CommandRunner; op: string }) {
   const pageSize = 10;
@@ -33,7 +34,8 @@ export function TaskRow({ task: t, device, run, op, queueManaged = false }: { ta
       <div className="task-meta">{taskPhaseLabel(t.phase)} · {device ? deviceName(device) : t.peer_id?.slice(0, 10) || '等待对端'}{t.connection_method && ` · ${connectionMethodLabel(t.connection_method)}`}{t.state === 'transferring' ? ` · ${formatBytes(t.rate_bytes_per_second ?? 0)}/s · ${pct}%` : ''}</div>
       {!terminal && <div className="progress-line" role="progressbar" aria-label="已验证进度" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${pct}%` }} /></div>}
       <div className="task-accounting"><span>实际{t.direction === 'send' ? '发送' : '接收'} {formatBytes(t.direction === 'send' ? t.sent_bytes : t.received_bytes)}</span>{t.retransmitted_bytes > 0 && <span>其中重传 {formatBytes(t.retransmitted_bytes)}</span>}<span>已验证 {formatBytes(t.verified_bytes)}</span><span>已提交 {formatBytes(t.committed_bytes)}</span><span>{t.bilateral_confirmed ? '双方已确认' : '尚未完成双方确认'}</span></div>
-      <div className="task-foot"><span>逻辑完成 {formatBytes(t.processed_bytes)} / {formatBytes(t.total_bytes)}</span>{t.error_message && <span className="task-error">{t.error_code} · {t.error_message}</span>}</div>
+      <div className="task-foot"><span>逻辑完成 {formatBytes(t.processed_bytes)} / {formatBytes(t.total_bytes)}</span></div>
+      <TaskDiagnostics task={t} />
     </div>
     <div className="task-actions">{t.direction === 'receive' && t.state === 'completed' && t.bilateral_confirmed && <ReceivedContentActions taskID={t.id} revision={t.revision} run={run} op={op} available={true} />}
       {t.can_pause && <button className="secondary" aria-label={`暂停传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}

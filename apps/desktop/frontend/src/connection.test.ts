@@ -3,9 +3,10 @@ import { connectionMethodLabel, normalizePairingCode, humanizeBackendError, merg
 
 describe('connection evidence labels', () => {
   it('does not infer LAN from an ICE host candidate or online presence', () => {
-    for (const unproven of ['host', 'online', 'direct_unknown', '', 'unexpected']) {
-      expect(connectionMethodLabel(unproven)).toBe('直连 · 路径待确认');
+    for (const unproven of ['host', 'online', '', 'unexpected']) {
+      expect(connectionMethodLabel(unproven)).toBe('未知');
     }
+    expect(connectionMethodLabel('direct_unknown')).toBe('直连 · 路径待确认');
   });
   it('does not advertise a relay implementation', () => {
     expect(connectionMethodLabel('relay')).toBe('尚未实现');

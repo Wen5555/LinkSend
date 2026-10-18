@@ -39,10 +39,12 @@ type TaskFailureDiagnostic struct {
 }
 
 type TaskSnapshot struct {
+	Diagnostic               *DiagnosticTask              `json:"diagnostic,omitempty"`
 	BatchID                  string                       `json:"batch_id,omitempty"`
 	ID                       string                       `json:"id"` // compatibility alias for task_id
 	TaskID                   string                       `json:"task_id"`
 	AttemptID                string                       `json:"attempt_id"`
+	AttemptStartedAt         string                       `json:"attempt_started_at,omitempty"`
 	Direction                string                       `json:"direction"`
 	PeerID                   string                       `json:"peer_id,omitempty"`
 	SourceSummary            string                       `json:"source_summary,omitempty"`
@@ -198,6 +200,7 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.AttemptID = protocol.RandomID()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	s.StartedAt, s.UpdatedAt, s.State, s.CanCancel = now, now, "preparing", true
+	s.AttemptStartedAt = now
 	if s.Phase == "" {
 		s.Phase = "preparing"
 	}
@@ -1029,7 +1032,10 @@ func (s *Service) Tasks() []TaskSnapshot {
 	s.tasks.mu.RLock()
 	out := make([]TaskSnapshot, 0, len(s.tasks.tasks))
 	for _, t := range s.tasks.tasks {
-		out = append(out, t.snapshot())
+		snapshot := t.snapshot()
+		diagnostic := makeDiagnosticTask(snapshot, "task")
+		snapshot.Diagnostic = &diagnostic
+		out = append(out, snapshot)
 	}
 	s.tasks.mu.RUnlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt < out[j].StartedAt })
@@ -1042,7 +1048,10 @@ func (s *Service) Task(id string) (TaskSnapshot, bool) {
 	if t == nil {
 		return TaskSnapshot{}, false
 	}
-	return t.snapshot(), true
+	snapshot := t.snapshot()
+	diagnostic := makeDiagnosticTask(snapshot, "task")
+	snapshot.Diagnostic = &diagnostic
+	return snapshot, true
 }
 func (s *Service) CancelTask(id string) error {
 	done, workErr := s.beginProfileWork()
@@ -1216,6 +1225,7 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	t.snap.Revision++
 	t.snap.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	t.cancel = cancel
+	t.snap.AttemptStartedAt = t.snap.UpdatedAt
 	t.cfg = cfg
 	if t.recovery.Direction == "receive" {
 		t.decision = make(chan bool, 1)

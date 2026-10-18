@@ -2,6 +2,8 @@
 
 # Security
 
+R3诊断采用字段白名单重建安全DTO/报告，不对原始TaskSnapshot、恢复或缓存owner做正则脱敏后整体导出。未知字符串不原样输出；临时任务编号不携带稳定身份、路径、URL或原始异常。安全JSON构造完成后才写入用户选择的本地位置，O_EXCL临时文件/Sync/不覆盖Link保护已有文件，取消不写stale选择；不自动上传。诊断导航不授予重试或网络权限，旧原生错误owner保持独立。schema12/wire/身份校验不变，实际验证和未验原生边界见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
+
 2026-10-19 可靠性R2增量：文件剪贴板接收/checkpoint支持借用profile owner固定的`os.Root`，目录字符串不能替换其文件系统授权；发布前复核可见路径的身份。原生写入被尝试后，错误也不能证明未发布，因此保留已验证缓存并显示不确定状态。boot变化与TTL不能单独证明粘贴结束；完整自动回收仍待可靠原生交接与读取结束证据。见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量验证](evidence/RELIABILITY-R2-CACHE-PATHS.md)。无文件wire/schema改变。
 
 R2持久记录借用既有SQLite owner，使用设备Ed25519身份、固定用途及严格版本/大小/字段校验，CAS写入后回读；不保存私钥，不授予网络信任或剪贴板权限，不从行内字符串重建删除路径。stage/part必须匹配引擎实际打开的目录/文件句柄；publishing先于native，运行代次及RAM-only native-start证明不能跨重启推断。未知/损坏/结果不确定记录继续保护；这些记录包含私有相对清单和文件身份，诊断不得直接导出原行。验证见[持久owner证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。

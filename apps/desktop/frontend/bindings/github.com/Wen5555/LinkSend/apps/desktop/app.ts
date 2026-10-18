@@ -181,6 +181,14 @@ export function EnqueueQuickSend(revision: number, waitForPeer: boolean): $Cance
     return $Call.ByID(2822745730, revision, waitForPeer);
 }
 
+/**
+ * Only this explicit native-picker command exports a report. The frontend
+ * receives success/cancel state, never a private raw service snapshot.
+ */
+export function ExportDiagnostics(): $CancellablePromise<string> {
+    return $Call.ByID(4266831633);
+}
+
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
     return $Call.ByID(2230930606, records);
 }

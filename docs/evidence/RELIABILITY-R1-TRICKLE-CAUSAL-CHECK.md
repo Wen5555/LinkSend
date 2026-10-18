@@ -31,3 +31,5 @@
 测试源码/日志在`/tmp/linksend-reliability-1bc92e0-mac-ci-20261019`和独立negative目录。已下载四组普通/race、负例及四组完整test日志至`.artifacts/reliability-20261019/`；完整12命令日志仍在远端`matrix-r1-causal/`。没有操作日常应用、用户剪贴板、安装或宿主网络配置；本批是同机协议/生命周期检查，不替代R1物理LAN、恢复、睡眠或跨网，也不替代R2键盘粘贴。
 
 推送后另核对新提交三组CI，旧Mac arm64包仍记FAIL；只有新准确源码包通过才补新PASS。
+
+后续核对：新提交565840ec157f933f3d3dacb5100130e6a2c1ea2e已推送且远端一致，core39174347344、desktop39174347400、packages39174347352全部completed/success，Windows/Mac arm64/Mac amd64包job均成功。1bc92e0的旧Mac arm64包仍FAIL；本批不宣称物理跨网或墙钟性能通过。

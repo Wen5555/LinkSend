@@ -1,3 +1,9 @@
+## 2026-10-19 可靠性 Goal R3 可操作诊断候选
+
+- Go白名单投影提供任务/记录原因、阶段、下一步、版本/连接方法与真实尝试时间；仅用户主动SaveFile导出有界安全JSON，不复制私有路径/凭据/正文或原始异常，已有文件不覆盖，Windows取消不写旧路径。文件wire/schema12和原授权控制保持。
+- 前端130项/typecheck/lint/build、核心组合race3轮、两模块workspace/off完整检查通过；浏览器布局发现并修复说明行负margin，双尺寸已看图。准确候选原生导出与最终旅程继续，见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)，R3暂不打整体完成勾。
+- 上一565840e的core/desktop与三平台包CI全部success；旧1bc92e0 Mac arm64失败作为历史保留，不移记本批CI或原生通过。
+
 ## 2026-10-19 可靠性 Goal Mac候选交换因果检查
 
 - `1bc92e0`已推送且远端一致；core/desktop CI成功，包CI39172841244的Mac arm64旧墙钟断言FAIL，Windows/Intel Mac包success。准确记录失败，没有用本机重跑覆盖。

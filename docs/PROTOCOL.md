@@ -16,6 +16,10 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-19 本地诊断DTO
+
+R3只扩展本地TaskSnapshot/InboxItem可选安全diagnostic与snapshot可选attempt_started_at，不是网络授权/文件wire变化；旧任务JSON无实际尝试时间时显示未知，旧端忽略可选字段，schema仍12。导出报告v1单独白名单构造，最多32条/128KiB，使用报告内task-N编号，排除私有恢复/缓存/未来分享记录；只向JS返回导出保存/取消状态和安全错误码。详情见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)，不因此升级V1或新增连接能力。
+
 ## 2026-10-18 托盘快速发送
 
 任务库11与wire保持。quick为现有send_drafts的独立本地行；Go命令按精确revision与等待选择读取草稿，稳定请求收据在清空/重启后可核对，不能借主草稿或新授权重发。typed quick-send:open及BackgroundStatus revision只传面板唤起元数据，不传正文。边界见[ADR0012](adr/0012-tray-quick-send.md)。
