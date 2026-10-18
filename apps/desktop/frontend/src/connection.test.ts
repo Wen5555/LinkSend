@@ -33,6 +33,19 @@ describe('connection evidence labels', () => {
     expect(shouldClearPairingCode('PAIRING_CODE_EXPIRED')).toBe(true);
     expect(shouldClearPairingCode('PAIRING_CODE_INVALID')).toBe(false);
   });
+  it('localizes signaling codes wrapped by native Wails errors', () => {
+    for (const [code, message] of [
+      ['PAIRING_CODE_INVALID', '格式不正确'],
+      ['PAIRING_CODE_EXPIRED', '已过期'],
+      ['PAIRING_CODE_USED', '已被其他设备使用'],
+    ]) {
+      const error = new Error(`signaling HTTP 400: ${code}: private diagnostic detail`);
+      error.name = 'RuntimeError';
+      expect(humanizeBackendError(error)).toContain(message);
+      expect(humanizeBackendError(error)).not.toContain('private diagnostic detail');
+      expect(humanizeBackendError(error.message)).toContain(message);
+    }
+  });
   it('localizes stable task phases and preserves unknown diagnostics', () => {
     expect(taskPhaseLabel('awaiting_acceptance')).toBe('等待接收确认');
     expect(taskPhaseLabel('CHECKING')).toBe('检查直连路径');

@@ -1,3 +1,9 @@
+## 2026-10-18 Mac原生quick实收与错误提示修复
+
+- 98469ce准确Mac真实菜单/picker/取消重开/入队完成31B Pion/固定身份QUIC，实际接收hash一致、双方确认、仅quick清空、main整行保持；后台关闭/菜单quick唤起与真实重启无重复通过。目标由夹具业务API预置且用户协助选择，该边界与Win托盘/物理缺项保持，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。
+- 同post-quick profile私有备份后连接已部署正式信令，原生恢复prepare/cancel/实际重启保持通过；join自动输入后PAIRING_CODE_INVALID，独立server仍2成员/身份未加入、intent=started。合成文本自动输入长度异常正在核实，不能标恢复完成，见[恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
+- 原生HTTP包装令首个HTTP token遮蔽协议码，新增回归RED→GREEN，局部解析后使用既有中文提示。前端109tests/typecheck/lint/build、核心GOWORK=off完整test（缓存）、desktop workspace/off test及off vet/build通过；Go/wire/schema保持。新源码CI/包另验，以上原生结果仍绑定98469ce。
+
 ## 2026-10-18 98469ce准确包与公共信令复验
 
 - 98469ce已推送、五项CI/三平台包全success，四资产完整校验；新准确Mac菜单栏LinkSend文字/主点击菜单/quick面板通过。main revision1整行保持；目标下拉框后AX仅外壳，录屏preflight false/未请求新权限，完整quick发送待现场观察，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。

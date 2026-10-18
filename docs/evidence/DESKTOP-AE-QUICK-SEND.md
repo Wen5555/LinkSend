@@ -51,3 +51,15 @@ N4提交 `f23383d` 已推送，五项CI/三平台包success，准确四资产与
 随后点击已观察到的AXPopUpButton“快速发送目标”，旧AX引用失效，独立读取只返回窗口外壳；只读确认PID39645前台/可见、AXMain=true/AXFocused=false/未最小化。不能仅凭AX外壳断言产品空白或选择成功。截图技能只读权限检查requested=false/screenCapture=false，未请求或改变安全权限，没有截图/视觉QA。已异步请用户观察并选择M1原生对端；回答前不盲输或用RPC代替原生选择。
 
 checkpoint job `.../job-linksend-ae-mac-quick-checkpoint-98469ce-20261018-01` exit0：main整行/revision1精确保持、quick行仍空、SQLite quick_check=ok、clipboard=false。`quick-native-checkpoint-receipt.json`已下载；完整quick文件/后台重开/重启旅程仍NOT RUN。app和30分钟fixture为续验保留，精确所有权及收尾入口见唯一TODO。
+
+## 98469ce准确Mac原生文件闭环（2026-10-18 10:05）
+
+从原生菜单“显示 LinkSend”恢复了可读的quick控件。自动下拉框/键盘尝试未形成选择收据，不能计入原生选择通过；随后以生产Service.SaveDraft准备仅含测试B的quick目标，目标预置明确是夹具设置。用户回复已选择M1原生对端，后续AX实读“快速发送目标=M1 原生对端 · 在线 · 直连待检查”。此前CLI及桌面后台发布文件实际均有两设备、UI一度为0；交互后设备与选项恢复，具体原因未证实，没有据此修改设备逻辑。偏好版本缺失假设被实际format_version=1排除，原偏好未改；该脚本在发现版本合法前已停owned app，随后正常按既有profile恢复。
+
+真实点击quick“选择文件”，macOS Open→Go to Folder→精确专用路径→Open，持久quick revision2只含`quick-source.txt`与精确B，main revision1/整行不变。再点击面板取消、原生菜单重开，quick整行/revision2与main完整保持。没有通过RPC添加文件或入队。
+
+真实点击“加入发送队列”前再次只读核对精确来源/目标/revision和空队列。产生唯一queue `1eb9be4e9e36f24ee67b59255caa3991`、request `quick-send-v1-2`、sender task `20261018T020514.364662000Z-00000001`、transfer `a5dd9f522307377f2d5028b16fad0903`。准确桌面与同机正常配对CLI经Pion/固定身份QUIC/TLS1.3/ALPN linksend/1完成31B，sender verified/committed31、retransmitted0、bilateral_confirmed=true、relay=false、direct_unknown。CLI exit0、实际接收31B且只有一个提交目标，源/目标SHA256均为`d37347cbc04900dab1462c0759a836c73b39401ac4fa77397db82bfce1c15a83`。CLI终态后有关闭UDP socket的Pion stderr，保留日志，不把它当成未完成或隐藏。
+
+入队成功后仅quick路径清空，revision3，main仍原整行。原生主窗关闭后AX窗口数0、同owner仍在；原生菜单quick唤醒成功、仍仅一个completed队列。再真实停止/重启准确包，main完整保持、quick空、无重复入队/派发。收据`quick-native-send-receipt.json`已下载到忽略artifact，含实际sender快照/文件hash/背景和重启断言。相关job（前缀`/tmp/codex-ssh/job-linksend-ae-mac-`）`quick-picker-goto/path/confirm-98469ce-20261018-01`、`quick-cancel-reopen-98469ce-20261018-01`、`quick-native-enqueue-98469ce-20261018-01`、`quick-final-receipt-98469ce-20261018-01`、`quick-background-wake-98469ce-20261018-01`、`quick-restart-check-98469ce-20261018-01`均exit0；receiver job同样exit0。
+
+边界：Mac-only loopback、31B单文件、夹具预置目标且用户协助选择，不是物理双机/吞吐/三设备或自动目标选择全通过。Windows真实托盘、离线/撤权/反复提交等完整原生矩阵仍缺，源码既有测试保持原范围。截图权限未改变，没有视觉QA。N4现场转入独立的公共信令恢复旅程前已保留整个post-quick profile备份，loopback fixture已正常终态exit0，CLI receiver退出，clipboard=false。

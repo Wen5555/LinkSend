@@ -4,6 +4,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-18原生错误提示增量：识别Wails `RuntimeError`与信令HTTP包装后的稳定协议码，继续使用既有中文配对提示；不显示已识别码后的原始诊断详情。只修改桌面展示，不改变配对请求、授权、wire或schema；准确包原生恢复结果单列。
+
 2026-10-18原生picker修复：Windows锁定Wails beta.18取消精确错误在picker边界归一为空选择，不显示失败也不改变草稿；真实错误保持。无wire/schema改变，见[原生检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
 
 2026-10-18 N4候选：托盘/菜单栏快速发送请求打开同一窗口轻量面板，quick持久草稿与main隔离；Go以保存revision派生稳定入队收据，复用现有认证队列。取消保留选择、picker取消无修改、已提交后只清quick来源，重启不自动派发。无新快捷键权限/实例/文件正文IPC，准确包原生入口另验，见ADR0012。

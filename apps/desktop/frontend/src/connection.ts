@@ -103,7 +103,8 @@ export function humanizeBackendError(raw: unknown): string {
   if (text.includes('invitation invalid, expired or used')) {
     return '配对码无效、已过期或已使用，请在另一台设备上重新生成。';
   }
-  const code = text.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0];
+  const code = text.match(/^(?:RuntimeError:\s*)?signaling HTTP \d{3}:\s*([A-Z][A-Z0-9_]{2,})(?=:|\s|$)/)?.[1]
+    ?? text.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0];
   const byCode: Record<string, string> = {
     CLIPBOARD_IMAGE_NOT_AVAILABLE: '剪贴板中没有可用图片，请先复制图片再读取。',
     CLIPBOARD_IMAGE_FORMAT_UNSUPPORTED: '暂不支持剪贴板中的图片格式，请重新复制为 PNG 图片。',

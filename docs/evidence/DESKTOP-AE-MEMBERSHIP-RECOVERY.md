@@ -80,3 +80,15 @@ Playwright独立session `ae-recovery` 对真实DevicesPage/RecoveryPanel、生�
 ### 阶段同步与CI
 
 实现提交 `e43043d25c0cbb03ece846b093297dc47069a711` 已推送 `codex/lan-rebuild-ae`，远端SHA一致，沿用Draft PR #9。core push/PR `39073187230` / `39073189614`、desktop push/PR `39073187229` / `39073189666`、[三平台包39073187228](https://github.com/Wen5555/LinkSend/actions/runs/39073187228)均success；Windows amd64、Mac arm64/amd64均success。后续A源码改动需自己的准确包，不能把这些包结果迁移过去。
+
+### 98469ce准确Mac到已部署新服务的原生恢复（进行中）
+
+完成N4后停止准确Mac package，远端同任务私有目录完整备份post-quick测试profile，密钥仍只在原Mac受限目录，未回传。旧loopback fixture/CLI均正常退出。使用同一准确98469ce app与原profile/原身份，进程级将服务地址切至已部署的严格`https://linksend.oooai.de`；偏好、源/收到文件、主草稿与completed quick队列保持。这是从旧组profile到不同服务URL的新码加入案例，不是同URL空库或物理文件测试。
+
+真实原生设备页→服务重建后重新连接→默认加入新组→勾选明确确认→准备恢复，持久intent为prepared/join且endpoint fingerprint严格绑定正式URL；native prepare job01 exit0。原生“取消准备”后intent消失、旧context/两草稿/completed队列保持，job cancel-prepare exit0。再次原生prepare（job02）后真实停止/重启应用，同一完整intent精确保持；设备页自动显示继续恢复、新码字段和禁用确认按钮，restart-prepared job exit0。
+
+专用公共组通过正常客户端创建新一次性码，仅在Mac进程内存中交给原生输入控件，无码/密钥写入本仓库或日志。第一次原生键入/确认进入持久started，实际请求返回PAIRING_CODE_INVALID。独立公共B的Devices确认当前仍2成员、旧测试A身份没有加入；不是成功。后续新码元数据为9字符，自动键入合成ABCD-EFGH实读18字符，AXValue写入也未匹配；未据此伪称产品根因或反复提交，正在请用户手动输入合成文本（不确认）区分自动化/输入问题。原intent保持started，后续必须使用“核对并继续恢复”并先查实际远端结果，不重做prepare。
+
+实际面板还暴露错误显示缺陷：`RuntimeError: signaling HTTP 400: PAIRING_CODE_INVALID: ...`被首个大写token HTTP遮蔽，原有中文映射未命中。新增真实包装格式回归RED，局部提取传输包装后的协议码，输入异常与错误显示分别记录；该后续源码不改变98469ce包的以上证据。当前恢复尚未完成，旧context退休/远端加入/重启后新组在线与文件保留最终核验仍待执行。
+
+错误提示修复本地终态：固定Node24.21.0/pnpm12.4.1，12files/109tests、typecheck（含绑定）、lint/build均exit0，日志`native-error-frontend-*.log`。核心`GOWORK=off go test ./...`缓存通过；desktop workspace/off test7.246/6.928s、off vet/build全部exit0，日志`native-error-core-off.log`和`native-error-desktop.log`。必要dist重新生成，原协议码、配对输入/请求与Go源码不变；新准确包原生错误文案尚未复验。

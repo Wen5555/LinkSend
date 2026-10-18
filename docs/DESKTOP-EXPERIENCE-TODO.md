@@ -7,21 +7,21 @@
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 端口/reader/记忆、刷新/provider/早期host完成 | Pion/并发回归通过 | 后测发现/刷新双方10/10；Mac反控0/10；新准确Win LAN启动被工具策略阻断 | 6edddad五项CI及三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：可用原生环境下继续独立旅程，不绕过策略 |
-| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；Win/Mac公共HTTPS/两路认证WSS PASS；准确Mac公共online PASS；新STUN外部待授权；灾后恢复UI待验 | 98469ce五项CI及三平台包success | [信令复验](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)：准确包恢复/双NAT缺项保留 |
+| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/兼容/完整race通过 | 公共HTTPS/WSS/准确Mac在线PASS；98469ce原生prepare/cancel/重启保持PASS；join进入started后代码输入无效，仍未恢复 | 98469ce五项CI/三平台包success；错误提示后续修复待同步 | [恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：核对输入并继续同intent；外部STUN/双NAT条件保持 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 既有夹具边界保持 | 同口径十轮无整体提速结论；原生CLI入口通过；文件/OS剪贴板待验 | f23383d已同步 | 文件分段/两方向各3次与OS/恢复旅程继续，Mac反控限制单列 |
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
-| D / N4 托盘快速发送 | quick/Go入队完成；Mac标签/主点击修复 | 两模块/race/108前端/QUIC/重启幂等通过；修复desktop off-race/vet/build通过 | 6edddad菜单→quick→picker取消/空草稿PASS；98469ce准确Mac标签/主点击/quick PASS；目标选择后AX仅外壳、待用户观察 | 98469ce五项CI/三平台包success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：非空主草稿与实际quick发送待验 |
+| D / N4 托盘快速发送 | quick/Go入队、Mac标签/主点击完成 | 两模块/race/108前端/QUIC/重启幂等通过 | 98469ce准确Mac原生picker/取消重开/入队31B QUIC实收hash/主草稿保持/后台菜单唤起/重启无重复PASS；目标夹具预置且用户协助 | 98469ce五项CI/三平台包success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Win真实托盘、离线/撤权等原生缺项继续 |
 | E 同提交候选/最终回归/文档 | 98469ce四资产/来源核验；此前6edddad取消UX复验PASS | 核心off/desktop/race/vet/build及五项CI通过 | 新Mac arm64主点击/quick PASS；旧包物理证据不迁移；Intel实机与网络待验 | 同一Draft PR #9、98469ce五项CI/三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近源码同步：`98469ce3edfee2663dc52b2c19735ae905ab78bb`，远端一致、五项CI/三平台包success，四资产完整核验。新准确Mac包菜单栏LinkSend标签、主点击菜单→quick面板通过；主草稿revision1/整行保持。目标下拉框点击后AX仅返回外壳，进程仍前台/可见；录屏只读preflight false，未请求新权限，已询问用户观察，完整quick发送NOT RUN。6edddad准确Win的picker/批次/限速/后台分项和准确Mac菜单/picker取消/空草稿保持原来源。新Win原生LAN启动此前被CreateProcess前自动审批拒绝，无细分原因，不绕过；物理/OS/双NAT与JP UDP3478条件保持。
+最近准确包源码：`98469ce3edfee2663dc52b2c19735ae905ab78bb`，五项CI/三平台包success，四资产完整核验；文档检查点110385b已推送。新准确Mac实际quick 31B/hash/双方确认、取消重开/main保持/后台唤起/真实重启无重复通过。目标夹具预置且用户协助选择，不能升级为全部原生/物理通过。本批后续源码只修复信令HTTP包装后的中文错误提示，109前端tests及typecheck/lint/build、核心off和两模式desktop/off vet/build通过；源码CI/新包另验。Windows原生LAN的CreateProcess前审批拒绝、物理/OS/双NAT和JP UDP3478授权条件保持。
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 
-运行现场：此前Windows owned包/fixture/CLI全退出、10729无监听；Mac37667/38062均已停止，公共信令准确6edddad实例39366也已停止。当前Mac准确98469ce app PID39645，根`/Users/wen/.codex/supervision/linksend-ae-20261018/quick-native-98469ce`、profile-a；正常配对的Mac-only loopback fixture job `/tmp/codex-ssh/job-linksend-ae-mac-native-fixture-98469ce-20261018-01`运行（30分钟上限，可用根下stop-fixture正常结束），等待原生目标选择续验，CLI receiver尚未启动。clipboard=false、SQLite quick_check=ok、main整行保持，收据已下载；结束时核对准确PID/path收尾。无Windows公用网络弹窗，宿主网络保持，Mac辅助功能由用户开启。
+运行现场：原Windows/Mac旧包及N4 loopback fixture/CLI均正常终态。Mac准确98469ce同一app/profile转入公共恢复：根`/Users/wen/.codex/supervision/linksend-ae-20261018/quick-native-98469ce`，当前owned PID从根下owned-pid.txt读取并核对app路径；post-quick完整profile备份为before-public-recovery-profile-a。原生prepare/cancel/重启保持已验，当前intent=started，公共独立对端确认仍2成员/测试身份未加入；无最后完成收据。自动键入合成9字符实读18字符、AXValue不匹配，已请用户手动输入ABCD-EFGH且不确认，等待观察；不重做prepare或绕过原生调用。clipboard=false、源/接收/草稿/completed队列保留，结束时按精确PID/path收尾。无Windows公用网络弹窗、宿主网络不改，Mac录屏未授权且未请求。
 
 早期原生候选（历史检查点）来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
 
