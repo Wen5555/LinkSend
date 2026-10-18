@@ -35,7 +35,8 @@ describe('workspace operation surfaces', () => {
   it('keeps pause and cancel enabled while a different enqueue command is preparing', () => {
     const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client: createQueryClient() }, createElement(TransferPage, { workspace, devices: [device], run, op: 'enqueue', controlRun: run, controlOp: '', available: true, enqueueIdentity: new EnqueueIdentity(() => 'request') })));
     expect(markup).toContain('正在核对内容并加入');
-    expect(markup).toContain('进行中');
+    expect(markup).toContain('传输队列');
+    expect(markup).not.toContain('aria-label="传输视图"');
     expect(markup).not.toContain('保存内容草稿');
     expect(markup).not.toContain('内容类型');
     const controls = renderToStaticMarkup(createElement(TaskList, { tasks: [task], devices: [device], run, op: '' }));
@@ -84,7 +85,7 @@ describe('workspace operation surfaces', () => {
     expect(movedQueueIDs([queueItem('a', 'queued'), queueItem('running', 'running'), queueItem('b', 'waiting_peer')], 'b', -1)).toEqual(['b', 'a']);
   });
   it('preserves dirty category input while rebasing clean settings fields', () => {
-    const current: DesktopPreferences = { format_version: 1, revision: 2, device_name: '正在输入', receive_directory: 'C:\\old', conflict_policy: 'keep_both', server_url: 'https://old.example', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], background: { close_mode: '', notifications: false, prevent_sleep: false }, clipboard_enabled: false };
+    const current: DesktopPreferences = { format_version: 1, revision: 2, device_name: '正在输入', receive_directory: 'C:\\old', conflict_policy: 'keep_both', server_url: 'https://old.example', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], background: { close_mode: '', notifications: false, prevent_sleep: false }, retain_transfer_queue: false, clipboard_enabled: false };
     const latest: DesktopPreferences = { ...current, revision: 3, device_name: '后台名称', receive_directory: 'C:\\new', server_url: 'https://new.example' };
     const merged = mergePreferences(current, latest, new Set(['device_name' as const]));
     expect(merged.device_name).toBe('正在输入');

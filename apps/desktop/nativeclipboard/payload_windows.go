@@ -48,8 +48,25 @@ func readClipboardText(ctx context.Context, kind clipboardsync.Kind, expected ui
 	if err := ctx.Err(); err != nil {
 		return nil, clipboardGeneration(), err
 	}
-	if ok, _, err := openClipboard.Call(clipboardOwner.Load()); ok == 0 {
-		return nil, clipboardGeneration(), errors.Join(ErrUnavailable, err)
+	// Copying applications may briefly retain the clipboard while publishing
+	// formats. Wait for that same generation instead of dropping its only event.
+	deadline := time.Now().Add(750 * time.Millisecond)
+	for {
+		if current := clipboardGeneration(); current != expected {
+			return nil, current, ErrChanged
+		}
+		if ok, _, err := openClipboard.Call(clipboardOwner.Load()); ok != 0 {
+			break
+		} else if !time.Now().Before(deadline) {
+			return nil, clipboardGeneration(), errors.Join(ErrUnavailable, err)
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, clipboardGeneration(), ctx.Err()
+		case <-timer.C:
+		}
 	}
 	defer closeClipboard.Call()
 	if current := clipboardGeneration(); current != expected {

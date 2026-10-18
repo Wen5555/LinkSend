@@ -1,5 +1,9 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-18 0.6.0后用户反馈修复
+
+0.6.1发布准备沿用修复分支`codex/fix-desktop-workflows`，基线main `9d8334c`。四项源码已实现：文件打开/定位、自动剪贴板启动与恢复、删除与黑名单、统一收发队列/退出清空设置/红点。旧发布源与外部未验项保持；详见[本轮证据](evidence/DESKTOP-060-WORKFLOW-FIXES.md)。用户随后明确授权发布0.6.1，版本、合并与新包核验正在执行；不恢复被拒绝的原生旅程。
+
 ## 2026-10-18 A–E Goal（已启动，当前 blocked）
 
 本聊天 Goal 已通过平台创建，2026-10-18 经 `update_goal` 返回状态 blocked；用户明确执行[目标文档](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)，整体未完成。起点 `638b2aa`，原工作分支 `codex/lan-rebuild-ae`，PR #9已合并main，当前交付分支main。不恢复旧代理/heartbeat；保留 `.playwright-cli/`、`apps/desktop/build/ios/`、`apps/desktop/build/linux/` 未跟踪内容。

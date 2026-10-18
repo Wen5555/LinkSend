@@ -64,6 +64,33 @@ func (s *Service) cancelPeerTasks(peerID string) {
 	}
 }
 
+func (s *Service) ForgetPeer(peerID string) error {
+	done, err := s.beginWorkspaceWork()
+	if err != nil {
+		return err
+	}
+	defer done()
+	if peerID == s.identity.ID() {
+		return errors.New("INVALID_ARGUMENT: cannot delete this device")
+	}
+	s.clipboardGrantMu.Lock()
+	s.trustMu.Lock()
+	err = identity.ForgetPeer(s.cfg.DataDir, peerID)
+	s.trustMu.Unlock()
+	if err == nil {
+		err = s.clearClipboardGrantsLocked(peerID)
+	}
+	s.clipboardGrantMu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.closePooledSessions(peerID)
+	s.cancelPeerTasks(peerID)
+	_, err = s.store.db.Exec(`DELETE FROM device_profiles WHERE peer_id=?`, peerID)
+	s.notifyChange()
+	return err
+}
+
 // BlockPeer is local and works even when the membership server is unavailable.
 // Persist the denial before stopping tasks so discovery cannot restore the pin.
 func (s *Service) BlockPeer(peerID string) error {

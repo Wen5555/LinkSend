@@ -11,6 +11,18 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// ServiceStartup may precede native window creation. Install the Windows owner
+// and watcher only once the runtime reports a live native window.
+func (a *App) clipboardReady() {
+	a.clipboardMu.Lock()
+	a.clipboardRuntimeReady = true
+	a.clipboardMu.Unlock()
+	if runtime.GOOS == "windows" && a.window != nil {
+		nativeclipboard.SetOwnerWindow(uintptr(a.window.NativeWindow()))
+	}
+	go a.refreshClipboardWatch()
+}
+
 type ClipboardWatchStatus struct {
 	Enabled       bool                          `json:"enabled"`
 	MasterEnabled bool                          `json:"master_enabled"`
@@ -100,6 +112,7 @@ func (a *App) refreshClipboardWatchOwned() {
 	paused := a.clipboardSleeping || a.clipboardLocked || a.clipboardUserPaused || a.clipboardMasterDisabled
 	enabled := a.core.ClipboardSyncEnabled() && !paused
 	active := a.clipboardStop != nil
+	runtimeReady := a.clipboardRuntimeReady
 	a.clipboardMu.Unlock()
 	if !enabled {
 		a.stopClipboardWatchOwned()
@@ -112,7 +125,7 @@ func (a *App) refreshClipboardWatchOwned() {
 	var err error
 	if a.clipboardWatchStart != nil {
 		stop, err = a.clipboardWatchStart()
-	} else if a.runtimeApp == nil || a.window == nil {
+	} else if a.runtimeApp == nil || a.window == nil || !runtimeReady {
 		return
 	} else {
 		stop, err = application.InvokeSyncWithResultAndError(func() (func(), error) {
@@ -179,6 +192,7 @@ func (a *App) startClipboardDelivery() {
 			case <-a.ctx.Done():
 				return
 			case <-ticker.C:
+				a.refreshClipboardWatch()
 				go a.ensureClipboardSessions()
 
 			case change := <-a.clipboardChanges:

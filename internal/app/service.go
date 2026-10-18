@@ -289,6 +289,13 @@ func (s *Service) Join(ctx context.Context, token, name string) (DeviceInfo, err
 	if err != nil {
 		return DeviceInfo{}, err
 	}
+	ids := make([]string, 0, len(devices))
+	for _, device := range devices {
+		ids = append(ids, device.ID)
+	}
+	if err = identity.RestoreForgottenPeers(s.cfg.DataDir, ids); err != nil {
+		return DeviceInfo{}, err
+	}
 	if err = s.syncPairedDevices(devices); err != nil {
 		return DeviceInfo{}, err
 	}
@@ -330,6 +337,13 @@ func (s *Service) SwitchMembership(ctx context.Context, token, name string) (Dev
 	}
 	devices, err = c.Devices(ctx)
 	if err != nil {
+		return DeviceInfo{}, err
+	}
+	ids := make([]string, 0, len(devices))
+	for _, device := range devices {
+		ids = append(ids, device.ID)
+	}
+	if err = identity.RestoreForgottenPeers(s.cfg.DataDir, ids); err != nil {
 		return DeviceInfo{}, err
 	}
 	if err = s.syncPairedDevices(devices); err != nil {
@@ -441,6 +455,21 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		return nil, err
 	}
 	for _, blocked := range denied {
+		if blocked.Forgotten && !blocked.LocalBlock {
+			filtered := out[:0]
+			for _, item := range out {
+				if item.ID == blocked.ID {
+					if !item.Nearby {
+						continue
+					}
+					item.Trusted, item.AlwaysAccept, item.Online = false, false, false
+					item.Relationship, item.ServiceState = "unpaired", "unknown"
+				}
+				filtered = append(filtered, item)
+			}
+			out = filtered
+			continue
+		}
 		found := false
 		for i := range out {
 			if out[i].ID == blocked.ID {
@@ -456,6 +485,13 @@ func (s *Service) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		}
 		if !found {
 			out = append(out, DeviceInfo{ID: blocked.ID, Name: blocked.Name, Blocked: true, Relationship: "removed", ServiceState: map[bool]string{true: "pending_revoke_sync", false: "revoked"}[blocked.PendingSync], LANControlState: "blocked", ConnectionState: "blocked"})
+		}
+		if blocked.LocalBlock {
+			for i := range out {
+				if out[i].ID == blocked.ID {
+					out[i].Relationship = "blocked"
+				}
+			}
 		}
 	}
 	if len(out) == 0 && serverErr != nil {

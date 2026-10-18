@@ -746,7 +746,7 @@ func (s *Service) renewClipboardLeases(peerID string) {
 	peers := make([]*PeerSession, 0, 1)
 	for _, pooled := range s.directPool {
 		peer := pooled.peer
-		if peer == nil || peer.PeerID != peerID || peer.Data == nil || peer.Data.Conn.Context().Err() != nil {
+		if peer == nil || (peerID != "" && peer.PeerID != peerID) || peer.Data == nil || peer.Data.Conn.Context().Err() != nil {
 			continue
 		}
 		peers = append(peers, peer)
@@ -795,6 +795,11 @@ func (s *Service) ResetClipboard(paused bool, generation uint64) {
 		s.schedulePoolIdleLocked(key, pooled)
 	}
 	s.directPoolMu.Unlock()
+	if !paused {
+		// Reset discarded the old leases. Wake each connection's existing owner
+		// before its idle timeout instead of waiting for the periodic renewal.
+		s.renewClipboardLeases("")
+	}
 }
 
 func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig) error {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Backend from '../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { DesktopPreferences } from '../bindings/github.com/Wen5555/LinkSend/apps/desktop/models';
+import { useIncomingBadge } from './hooks/useIncomingBadge';
 import { useCommand, useDesktop } from './hooks/useDesktop';
 import { CommandLanes, EnqueueIdentity } from './workspace-cache';
 import { humanizeBackendError } from './connection';
@@ -18,13 +19,12 @@ type Tab = 'transfer' | 'inbox' | 'devices' | 'settings';
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'transfer', label: '传输', icon: '⇄' }, { id: 'inbox', label: '记录', icon: '▤' }, { id: 'devices', label: '设备', icon: '◉' }, { id: 'settings', label: '设置', icon: '⚙' },
 ];
-const emptyPreferences: DesktopPreferences = { format_version: 1, revision: 0, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', conflict_policy: 'keep_both', device_name: '', background: { close_mode: '', notifications: false, prevent_sleep: false }, clipboard_enabled: false };
+const emptyPreferences: DesktopPreferences = { format_version: 1, revision: 0, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', conflict_policy: 'keep_both', device_name: '', background: { close_mode: '', notifications: false, prevent_sleep: false }, retain_transfer_queue: false, clipboard_enabled: false };
 
 export default function App() {
   const [quickOpen, setQuickOpen] = useState(false);
   const quickRevision = useRef(0);
   const [tab, setTab] = useState<Tab>('transfer');
-  const [transferInitialView, setTransferInitialView] = useState<'send' | 'queue' | 'active'>('send');
   const [settingsRequest, setSettingsRequest] = useState<SettingsCategoryRequest>({ category: 'general', revision: 0 });
   const [focusTaskID, setFocusTaskID] = useState<string>();
   const desktop = useDesktop();
@@ -37,6 +37,7 @@ export default function App() {
     for (const item of workspace?.queue ?? []) enqueueIdentity.current.confirmed(item.request_id);
   }, [workspace?.queue]);
   const devices = desktop.devices.data ?? [];
+  const incomingCount = useIncomingBadge(workspace, devices, tab === 'transfer');
   const shell = desktop.shell.data;
   useEffect(() => {
     const revision = shell?.background.quick_send_revision ?? 0;
@@ -78,7 +79,7 @@ export default function App() {
   };
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark" aria-hidden="true">↗</div><div><strong>LinkSend</strong><span>点对点文件传输</span></div></div>
-      <nav aria-label="主导航">{tabs.map(item => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'transfer') setTransferInitialView('send'); if (item.id === 'settings') openSettings('general'); else setTab(item.id); setFocusTaskID(undefined); }}><span aria-hidden="true">{item.icon}</span> {item.label}</button>)}</nav>
+      <nav aria-label="主导航">{tabs.map(item => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'settings') openSettings('general'); else setTab(item.id); setFocusTaskID(undefined); }}><span aria-hidden="true">{item.icon}</span> {item.label}{item.id === 'transfer' && incomingCount > 0 && <span className="nav-badge" aria-label={`${incomingCount} 个新增传输项目`}>{incomingCount > 99 ? '99+' : incomingCount}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="profile-chip"><span className="avatar">{(prefs.device_name || 'L')[0]}</span><div><strong>{prefs.device_name || '本机设备'}</strong><small>{config?.identity.id ? `${config.identity.id.slice(0, 10)}…` : '未连接'}</small></div></div><div className="relay-note">端到端加密直连</div></div>
     </aside>
     <section className="workspace"><header className="topbar"><div><p className="eyebrow">{tab === 'transfer' ? '工作台' : tab === 'devices' ? '本机设备偏好' : tab === 'inbox' ? '本机传输记录' : '本地配置'}</p><h1>{tabs.find(item => item.id === tab)?.label}</h1></div><div className="top-status"><span className={inbox?.signaling_connected || inbox?.lan_available ? 'status-dot ready' : 'status-dot'} />{!desktop.enabled ? '后端未连接' : inbox?.listening ? '可以接收文件' : inbox?.lan_available ? '局域网接收在线' : inbox?.signaling_connected ? '接收连接在线' : '接收尚未就绪'}<button className="ghost top-receive-settings" onClick={() => openSettings('receive')}>接收设置</button><button className="icon-button" disabled={!desktop.enabled || !!command.op} aria-label="刷新设备和工作台" onClick={() => void command.run('refresh', async () => { if (inbox?.lan_available) await Backend.RefreshLANDiscovery(); await desktop.refresh(); })}>↻</button></div></header>
@@ -95,10 +96,10 @@ export default function App() {
       {command.notice && <div className="banner notice-banner" role="status"><p>{command.notice}</p><button onClick={command.clearNotice} aria-label="关闭操作提示">×</button></div>}
       {control.error && <div className="banner error-banner" role="alert"><p>{control.error}</p><button onClick={control.clearError} aria-label="关闭传输控制错误">×</button></div>}
       {control.notice && <div className="banner notice-banner" role="status"><p>{control.notice}</p><button onClick={control.clearNotice} aria-label="关闭传输控制提示">×</button></div>}
-      {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} initialView={transferInitialView} /> :
+      {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} /> :
         tab === 'inbox' ? <InboxPage devices={devices} run={control.run} op={control.op} available={available} focusTaskID={focusTaskID} navigationRevision={shell?.background.navigation_revision} /> :
         tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} inbox={inbox} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
-          <SettingsPage initialCategory={settingsRequest.category} categoryRequest={settingsRequest} sendToSupported={shell?.entries.send_to_supported} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} background={shell?.background} clipboard={shell?.clipboard} run={command.run} controlRun={control.run} op={command.op || control.op} available={desktop.enabled} onOpenLegacyQueue={() => { setTransferInitialView('queue'); setTab('transfer'); }} />}
+          <SettingsPage devices={devices} identityID={config?.identity.id || shell?.status.identity} initialCategory={settingsRequest.category} categoryRequest={settingsRequest} sendToSupported={shell?.entries.send_to_supported} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} background={shell?.background} clipboard={shell?.clipboard} run={command.run} controlRun={control.run} op={command.op || control.op} available={desktop.enabled} onOpenLegacyQueue={() => setTab('transfer')} />}
     </section>
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
     {!incoming && quickOpen && <QuickSendDialog devices={devices} identityID={config?.identity.id || shell?.status.identity} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}

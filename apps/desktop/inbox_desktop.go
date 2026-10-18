@@ -57,6 +57,15 @@ func (a *App) CleanupInboxStaging(limit int) (coreapp.InboxCleanupResult, error)
 // RevealInboxFile accepts opaque IDs, never a path or shell command from JS.
 // Core resolves the persisted receive plan and checks the actual filesystem.
 func (a *App) RevealInboxFile(taskID string, fileID uint32) error {
+	return a.launchInboxFile(taskID, fileID, false)
+}
+
+// OpenInboxFile is an explicit user action; receiving a file never opens it.
+func (a *App) OpenInboxFile(taskID string, fileID uint32) error {
+	return a.launchInboxFile(taskID, fileID, true)
+}
+
+func (a *App) launchInboxFile(taskID string, fileID uint32, openFile bool) error {
 	if err := a.workspaceAvailable(); err != nil {
 		return err
 	}
@@ -65,6 +74,9 @@ func (a *App) RevealInboxFile(taskID string, fileID uint32) error {
 	location, err := a.core.ResolveInboxFile(ctx, taskID, fileID)
 	if err != nil {
 		return err
+	}
+	if openFile {
+		return openNativeInboxFile(location.Path)
 	}
 	program, arguments, err := inboxRevealCommand(runtime.GOOS, os.Getenv("SystemRoot"), location.Path)
 	if err != nil {

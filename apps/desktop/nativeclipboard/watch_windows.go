@@ -36,6 +36,7 @@ type windowsClipboardWatch struct {
 	done    chan struct{}
 	urlW    uintptr
 	urlA    uintptr
+	png     uintptr
 	once    sync.Once
 	last    atomic.Uint32
 }
@@ -92,7 +93,7 @@ func (w *windowsClipboardWatch) snapshot() Change {
 		Sequence: uint64(uint32(sequence)),
 		Text:     available(13) || available(1), // CF_UNICODETEXT / CF_TEXT
 		Link:     (w.urlW != 0 && available(w.urlW)) || (w.urlA != 0 && available(w.urlA)),
-		Image:    available(2) || available(8) || available(17), // CF_BITMAP / CF_DIB / CF_DIBV5
+		Image:    available(2) || available(8) || available(17) || (w.png != 0 && available(w.png)), // CF_BITMAP / CF_DIB / CF_DIBV5 / registered PNG
 	}
 }
 
@@ -114,6 +115,7 @@ func watchChanges(ctx context.Context, nativeWindow uintptr, notify func(Change)
 		return format
 	}
 	watch.urlW, watch.urlA = register("UniformResourceLocatorW"), register("UniformResourceLocator")
+	watch.png = register("PNG")
 	clipboardWatches.Store(id, watch)
 	if ok, _, callErr := setSubclass.Call(nativeWindow, watchCallback, id, 0); ok == 0 {
 		clipboardWatches.Delete(id)

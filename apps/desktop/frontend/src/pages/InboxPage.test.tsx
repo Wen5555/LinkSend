@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { InboxItem, InboxPage as PageData } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import { InboxPage, InboxResendLedger, cleanupNotice, inboxError, inboxQuery } from './InboxPage';
 
-const backend = vi.hoisted(() => ({ Inbox: vi.fn(), InboxFiles: vi.fn(), ResendInbox: vi.fn(), ForgetInboxRecords: vi.fn(), CleanupInboxStaging: vi.fn(), RevealInboxFile: vi.fn() }));
+const backend = vi.hoisted(() => ({ Inbox: vi.fn(), InboxFiles: vi.fn(), ResendInbox: vi.fn(), ForgetInboxRecords: vi.fn(), CleanupInboxStaging: vi.fn(), RevealInboxFile: vi.fn(), OpenInboxFile: vi.fn() }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const filters = { search: '', peer: '', direction: '', state: '', after: '', before: '' };
@@ -42,7 +42,7 @@ describe('InboxPage bounded and safe surfaces', () => {
     expect(html).toContain('&lt;script&gt;unsafe&lt;/script&gt;.txt');
     expect(html).not.toContain('<script>');
     expect(html).toContain('未选择接收');
-    expect(html).toMatch(/<button class="secondary" disabled="">定位文件<\/button>/);
+    expect(html).toMatch(/<button class="secondary" disabled="">打开所在文件夹<\/button>/);
     expect(backend.RevealInboxFile).not.toHaveBeenCalled();
   });
   it('does not imply that a historical task with no file index can be located', () => {

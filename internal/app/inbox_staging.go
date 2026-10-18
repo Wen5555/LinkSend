@@ -259,7 +259,7 @@ func (s *Service) ResolveInboxFile(ctx context.Context, taskID string, fileID ui
 	if err != nil {
 		return InboxLocation{}, err
 	}
-	if snap.State != "completed" || !snap.BilateralConfirmed || snap.Direction != "receive" {
+	if snap.Direction != "send" && (snap.State != "completed" || !snap.BilateralConfirmed || snap.Direction != "receive") {
 		return InboxLocation{}, ErrInboxFileUnavailable
 	}
 	var relative, kind string
@@ -268,10 +268,26 @@ func (s *Service) ResolveInboxFile(ctx context.Context, taskID string, fileID ui
 	if err != nil || relative == "" {
 		return InboxLocation{}, ErrInboxFileUnavailable
 	}
-	if transfer.ValidatePath(relative) != nil || recovery.TargetDirectory == "" {
+	if transfer.ValidatePath(relative) != nil {
 		return InboxLocation{}, ErrInboxOwnership
 	}
-	root, err := os.OpenRoot(recovery.TargetDirectory)
+	directory := recovery.TargetDirectory
+	if snap.Direction == "send" {
+		directory = ""
+		for _, source := range recovery.SourcePaths {
+			base := filepath.ToSlash(filepath.Base(source))
+			if filepath.IsAbs(source) && (relative == base || strings.HasPrefix(relative, base+"/")) {
+				if directory != "" {
+					return InboxLocation{}, ErrInboxOwnership
+				}
+				directory = filepath.Dir(source)
+			}
+		}
+	}
+	if directory == "" {
+		return InboxLocation{}, ErrInboxFileUnavailable
+	}
+	root, err := os.OpenRoot(directory)
 	if errors.Is(err, fs.ErrNotExist) {
 		return InboxLocation{}, ErrInboxFileMissing
 	}
@@ -307,7 +323,7 @@ func (s *Service) ResolveInboxFile(ctx context.Context, taskID string, fileID ui
 	if err = ctx.Err(); err != nil {
 		return InboxLocation{}, err
 	}
-	return InboxLocation{TaskID: taskID, FileID: fileID, Name: relative, Path: filepath.Join(recovery.TargetDirectory, filepath.FromSlash(relative))}, nil
+	return InboxLocation{TaskID: taskID, FileID: fileID, Name: relative, Path: filepath.Join(directory, filepath.FromSlash(relative))}, nil
 }
 
 func (s *Service) loadInboxTask(ctx context.Context, id string) (TaskSnapshot, taskRecovery, error) {

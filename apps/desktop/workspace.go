@@ -29,6 +29,13 @@ func (a *App) Workspace() (coreapp.WorkspaceSnapshot, error) {
 	}
 	return a.core.Workspace()
 }
+
+func (a *App) ClearTransferQueue(all bool) error {
+	if err := a.workspaceAvailable(); err != nil {
+		return err
+	}
+	return a.core.ClearTransferQueue(all)
+}
 func (a *App) PreviewDraft() (coreapp.DraftPreview, error) {
 	if err := a.workspaceAvailable(); err != nil {
 		return coreapp.DraftPreview{}, err

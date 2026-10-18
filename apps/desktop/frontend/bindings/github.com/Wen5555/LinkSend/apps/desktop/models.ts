@@ -64,6 +64,7 @@ export interface DesktopPreferences {
     "device_name": string;
     "background": BackgroundOptions;
     "clipboard_enabled": boolean;
+    "retain_transfer_queue": boolean;
 }
 
 export interface DesktopStatus {

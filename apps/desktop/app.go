@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"net/url"
@@ -57,6 +58,7 @@ type App struct {
 	clipboardUserPaused     bool
 	clipboardMasterDisabled bool
 	clipboardClosed         bool
+	clipboardRuntimeReady   bool
 	clipboardWatchStart     func() (func(), error)
 	clipboardChanges        chan nativeclipboard.Change
 	clipboardDone           chan struct{}
@@ -76,6 +78,7 @@ type DesktopPreferences struct {
 	DeviceName             string            `json:"device_name"`
 	Background             BackgroundOptions `json:"background"`
 	ClipboardEnabled       bool              `json:"clipboard_enabled"`
+	RetainTransferQueue    bool              `json:"retain_transfer_queue"`
 }
 
 type PreferencesStatus struct {
@@ -146,6 +149,12 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
+		if !a.prefs.RetainTransferQueue {
+			if err := a.core.ClearTransferQueue(true); err != nil {
+				a.initErr = err
+				return
+			}
+		}
 		a.startNativeSystemEvents()
 		if a.runtimeApp != nil {
 			if err := a.initializeContentActions(); err != nil {
@@ -184,6 +193,11 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	if a.core != nil && !a.Preferences().RetainTransferQueue {
+		if err := a.core.ClearTransferQueue(true); err != nil {
+			slog.Warn("transfer queue cleanup failed", "error", err)
+		}
+	}
 	a.closeClipboardOwner()
 	a.stopNativeSystemEvents()
 	if a.cancel != nil {
@@ -264,7 +278,14 @@ func (a *App) shouldQuit() bool {
 	}
 	a.closeDialog = true
 	a.closeMu.Unlock()
-	showNativeChoice(a.window, "LinkSend 仍有任务运行", fmt.Sprintf("当前有 %d 个未结束任务。保存并退出会保留已验证数据，下次启动需确认恢复。尚未准备完成的内容需重新发送。", len(active)), []string{"继续任务", "保存并退出", "取消任务并退出"}, 0, 0, func(choice int, err error) {
+	retain := a.Preferences().RetainTransferQueue
+	message := fmt.Sprintf("当前有 %d 个未结束任务。退出将取消未完成任务并清空传输页，历史记录与文件保留。需要下次恢复时，请先在通用设置关闭自动清空。", len(active))
+	choices := []string{"继续任务", "取消任务并退出"}
+	if retain {
+		message = fmt.Sprintf("当前有 %d 个未结束任务。保存并退出会保留已验证数据，下次启动需确认恢复。尚未准备完成的内容需重新发送。", len(active))
+		choices = []string{"继续任务", "保存并退出", "取消任务并退出"}
+	}
+	showNativeChoice(a.window, "LinkSend 仍有任务运行", message, choices, 0, 0, func(choice int, err error) {
 		if err != nil {
 			a.setCloseDialog(false)
 			a.showQuitWarning("退出确认窗口暂不可用，任务继续运行。")
@@ -272,7 +293,11 @@ func (a *App) shouldQuit() bool {
 		}
 		switch choice {
 		case 1:
-			a.saveTasksAndQuit()
+			if retain {
+				a.saveTasksAndQuit()
+			} else {
+				a.cancelTasksAndQuit(active)
+			}
 		case 2:
 			a.cancelTasksAndQuit(active)
 		default:
@@ -560,6 +585,7 @@ func (a *App) SavePreferencesSection(section string, expectedRevision uint64, pa
 	switch section {
 	case "general":
 		next.DeviceName = patch.DeviceName
+		next.RetainTransferQueue = patch.RetainTransferQueue
 	case "receive":
 		next.ReceiveDirectory = patch.ReceiveDirectory
 		next.ConflictPolicy = patch.ConflictPolicy
@@ -963,11 +989,7 @@ func (a *App) RemoveDevice(deviceID string) error {
 	if a.core == nil {
 		return errBackendUnavailable
 	}
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	err := a.core.Revoke(ctx, deviceID)
+	err := a.core.ForgetPeer(deviceID)
 	a.refreshClipboardWatch()
 	return err
 }

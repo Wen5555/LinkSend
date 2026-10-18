@@ -21,7 +21,7 @@ export function TaskList({ tasks, devices, run, op }: { tasks: TaskSnapshot[]; d
   </section>;
 }
 
-function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: DeviceInfo; run: CommandRunner; op: string }) {
+export function TaskRow({ task: t, device, run, op, queueManaged = false }: { task: TaskSnapshot; device?: DeviceInfo; run: CommandRunner; op: string; queueManaged?: boolean }) {
   const pct = t.total_bytes && t.total_bytes > 0 ? Math.min(100, Math.round(t.processed_bytes / t.total_bytes * 100)) : 0;
   const terminal = ['completed', 'failed', 'cancelled', 'rejected', 'no_content'].includes(t.state);
   return <article className="task-row" data-task-id={t.id} id={`task-${t.id}`} tabIndex={-1}>
@@ -30,17 +30,17 @@ function TaskRow({ task: t, device, run, op }: { task: TaskSnapshot; device?: De
       <div className="task-title"><strong>{t.direction === 'send' ? '发送' : '接收'} · {t.source_summary || t.manifest_summary || '文件传输'}</strong><span className={`state-badge ${t.state}`}>{taskLabels[t.state] || t.state}</span></div>
       {t.manifest_summary && <div className="task-meta">{t.manifest_summary} · {t.file_count || 0} 项</div>}
       {t.receive_plan_digest && <div className="task-meta">所选 {t.selected_files} 个文件、{t.selected_entries - t.selected_files} 个目录 · 跳过 {t.skipped_entries} 项（{formatBytes(t.skipped_bytes)}）</div>}
-      <div className="task-meta">{taskPhaseLabel(t.phase)} · {device ? deviceName(device) : t.peer_id?.slice(0, 10) || '等待对端'}{t.connection_method && ` · ${connectionMethodLabel(t.connection_method)}`}{t.rate_bytes_per_second ? ` · ${formatBytes(t.rate_bytes_per_second)}/s` : ''}</div>
+      <div className="task-meta">{taskPhaseLabel(t.phase)} · {device ? deviceName(device) : t.peer_id?.slice(0, 10) || '等待对端'}{t.connection_method && ` · ${connectionMethodLabel(t.connection_method)}`}{t.state === 'transferring' ? ` · ${formatBytes(t.rate_bytes_per_second ?? 0)}/s · ${pct}%` : ''}</div>
       {!terminal && <div className="progress-line" role="progressbar" aria-label="已验证进度" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${pct}%` }} /></div>}
       <div className="task-accounting"><span>实际{t.direction === 'send' ? '发送' : '接收'} {formatBytes(t.direction === 'send' ? t.sent_bytes : t.received_bytes)}</span>{t.retransmitted_bytes > 0 && <span>其中重传 {formatBytes(t.retransmitted_bytes)}</span>}<span>已验证 {formatBytes(t.verified_bytes)}</span><span>已提交 {formatBytes(t.committed_bytes)}</span><span>{t.bilateral_confirmed ? '双方已确认' : '尚未完成双方确认'}</span></div>
       <div className="task-foot"><span>逻辑完成 {formatBytes(t.processed_bytes)} / {formatBytes(t.total_bytes)}</span>{t.error_message && <span className="task-error">{t.error_code} · {t.error_message}</span>}</div>
     </div>
     <div className="task-actions">{t.direction === 'receive' && t.state === 'completed' && t.bilateral_confirmed && <ReceivedContentActions taskID={t.id} revision={t.revision} run={run} op={op} available={true} />}
       {t.can_pause && <button className="secondary" aria-label={`暂停传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.PauseTask(t.id))}>暂停传输</button>}
-      {t.can_resume && !t.batch_id && <button className="primary" aria-label={`恢复传输 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
-      {t.can_cancel && t.state !== 'awaiting_acceptance' && <button className="ghost" aria-label={`取消传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}
-      {t.can_retry && !t.batch_id && <button className="secondary" aria-label={`重新发送 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
-      {t.batch_id && (t.can_resume || t.can_retry) && <small className="field-help">请在待发送队列中确认此批次目标。</small>}
+      {t.can_resume && !t.batch_id && !queueManaged && <button className="primary" aria-label={`恢复传输 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.ResumeTask(t.id), '正在重新连接并恢复原任务')}>恢复传输</button>}
+      {t.can_cancel && !queueManaged && <button className="ghost" aria-label={`取消传输 ${t.id}`} disabled={!!op} onClick={() => void run(t.id, () => Backend.CancelTask(t.id))}>取消</button>}
+      {t.can_retry && !t.batch_id && !queueManaged && <button className="secondary" aria-label={`重新发送 ${t.id}`} disabled={!!op || device?.blocked} onClick={() => void run(t.id, () => Backend.RetryTask(t.id))}>重新发送</button>}
+      {t.batch_id && (t.can_resume || t.can_retry) && <small className="field-help">请在本条队列中确认此批次目标。</small>}
       {t.state === 'completed' && t.direction === 'receive' && <button className="secondary" aria-label={`打开 ${t.id} 的文件夹`} disabled={!!op} onClick={() => void run(t.id, () => Backend.OpenTaskDirectory(t.id))}>打开文件夹</button>}
     </div>
   </article>;

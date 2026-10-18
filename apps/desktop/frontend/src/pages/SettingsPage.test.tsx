@@ -26,7 +26,7 @@ const basePreferences: DesktopPreferences = {
   excluded_interfaces: [],
   stun_urls: [],
   background: { close_mode: '', notifications: false, prevent_sleep: false },
-  clipboard_enabled: false,
+  retain_transfer_queue: false, clipboard_enabled: false,
 };
 
 function deferred<T>() {
