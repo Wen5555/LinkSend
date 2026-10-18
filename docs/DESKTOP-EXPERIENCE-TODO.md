@@ -12,12 +12,12 @@
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
-| D / N4 托盘快速发送 | quick/Go入队、Mac标签/主点击完成 | 两模块/race/108前端/QUIC/重启幂等通过 | 98469ce准确Mac原生picker/取消重开/入队31B QUIC实收hash/主草稿保持/后台菜单唤起/重启无重复PASS；目标夹具预置且用户协助 | 98469ce五项CI/三平台包success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：6f29814原生目录被同步共享I/O阻塞已定位并修源码，待新准确包复验后继续离线/撤权；Win托盘仍缺 |
-| E 同提交候选/最终回归/文档 | 6f29814四资产/来源核验；原包分项保留来源 | 核心off/desktop/vet/build/115前端及五项CI通过 | 新Mac arm64原生错误提示PASS；98469ce原生quick文件PASS；Intel实机与物理/网络待验 | 同一Draft PR #9、6f29814五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
+| D / N4 托盘快速发送 | quick/Go入队、菜单主点击及共享存储隔离完成 | 两模块/off-race/115前端边界；目录副作用/隔离回归RED→GREEN | 0ae7cdf准确Mac同现场修复PASS；离线明确等待唯一入队/原生picker/取消重开/后台唤回/重启/撤权禁发/原生退出PASS；98469ce旧31B文件保持来源 | 0ae7cdf五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Win托盘、快速双击送达与物理/完整同提交矩阵继续 |
+| E 同提交候选/最终回归/文档 | 0ae7cdf四资产/来源核验；原包分项保留来源 | 核心off/desktop/off-race/vet/build/115前端CI边界通过 | 新Mac目录恢复/N4离线撤权/后台重启退出PASS；旧文件/恢复保持原准确来源，物理仍待验 | 同一Draft PR #9、0ae7cdf五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近准确包源码：`6f298141280ae1fc0522fc3c21a6ce774a789ac9`，远端一致、五项CI/三平台包success，四资产完整来源/校验通过；115前端tests及typecheck/lint/build、核心off、两模式desktop/off vet/build通过。准确Mac同一started intent经原生新码继续，正式组3成员/原identity登记，真实重启后独立WSS在线、原身份/偏好/两草稿/源hash/唯一completed任务保持，旧context退休；app已停止、clipboard=false。另已完成同URL新空库的准确Mac原生prepare/cancel/真实重启/新码加入；旧B同身份恢复新组后旧queue原生确认被授权代次拒绝，tasks=0；两草稿/旧queue绑定保持、app和loopback夹具均已停止。此为Mac loopback，Win同URL/物理仍未验；用户手动合成短码已实读9字符匹配，未提交该合成码，43字符legacy自动输入仍未通过。N4原生31B和后台/重启仍绑定98469ce，旧Win原生仍绑定6edddad。Windows原生LAN启动策略拒绝、物理/OS/双NAT及JP UDP3478授权条件保持。
+最近准确包源码：`0ae7cdfecb9dc929a219dae352ae09c3ad24ec47`，远端一致、五项CI/三平台包/四资产来源与hash核验success。普通设备RPC不再同步写系统共享；显式/非默认profile隔离，默认App Group需Team+准确entitlement。准确Mac同现场目录由卡住到恢复，N4离线等待唯一入队、原生picker/取消重开、后台唤回、重启需确认、远端撤权禁发与原生退出均PASS；fixture已正常停止，端口关闭、clipboard=false。没有本轮文件/物理通过声明。旧31B文件仍绑定98469ce，B不同URL/同URL原生仍绑定6f29814，Win旧分项仍绑定6edddad；Win启动策略、物理/OS/双NAT、legacy输入和JP UDP3478授权条件保持。
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 

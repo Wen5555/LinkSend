@@ -76,3 +76,28 @@ fixture源码`.artifacts/ae-20261018/quick-offline-fixture/main.go` SHA71582b1b3
 本地`GOWORK=off go test ./...`核心缓存PASS；desktop workspace test7.231s、off `go test -race -count=1 ./...`9.211s与nativeclipboard1.636s、off vet/build全部PASS。Mac实际SDK核对Security函数/签名；修改后的Objective-C `clang -fsyntax-only -Werror`及真实ad-hoc小探针编译/执行exit0，确认不返回共享容器。新准确包/原生设备恢复与剩余离线、撤权矩阵待继续；不把源码GREEN升级为包级修复成功。
 
 远端fixture job `/tmp/codex-ssh/job-ls-ae-mac-quick-offline-fixture-20261018-01`为45分钟owned loopback服务；当前旧app已诊断退出，profile/文件/私有备份保留，clipboard=false。关键失败jobs为quick-offline-open-check第01/02轮；栈job `job-ls-ae-mac-quick-offline-capture-stacks-20261018-01` exit0，C验证 `job-ls-ae-mac-share-signature-check-20261018-01` exit0。所有原始日志保留在任务根`quick-offline-native-6f29814`与对应jobPath，后续按准确新包继续同现场。
+
+## 0ae7cdf准确Mac修复复验与N4离线/撤权矩阵（2026-10-18）
+
+修复源码`0ae7cdfecb9dc929a219dae352ae09c3ad24ec47`已推送、远端一致。core push/PR `39094061712` / `39094064097`、desktop push/PR `39094062029` / `39094064059`、[packages39094061744](https://github.com/Wen5555/LinkSend/actions/runs/39094061744)及三平台jobs全部success；四资产外层digest、载荷SHA、BUILD-INFO/COMMITTED/clean/版本完整核验通过，报告`.artifacts/ae-20261018/pkg-0ae7cdf/PACKAGE-VERIFICATION.json`。前端源码/dist未变，115项前端边界与CI结果保持。
+
+准确arm64 DMG SHA256 `9e0cb6e1317ccbf307599b35ec7021fc3bb1f0f049244b1599bb13634025528b`；实际EXE `a258ea9f52e89de111664a371c1cb1d47fe93c5df2c07eb627a2aa3d7d65f7a1`。同一旧现场的profile/URL/初始两草稿/三设备保持，私有备份后安装为`quick-offline-native-6f29814/LinkSend-fixed-0ae7cdf.app`，旧6f29814 app和诊断日志保留。目录名称不是版本证明，所有结果绑定上述新EXE。新包真实菜单打开quick立即读到离线B，两次打开都只有一面板；该现场明确完成FAIL→PASS，未改系统权限或网络。
+
+| 原生操作 | 持久/独立核验 | 结果 |
+|---|---|---|
+| 连续两次菜单quick、未勾离线等待 | 独立C确认A在线/B离线；唯一面板、入队禁用、初始两草稿整行保持、queue/tasks=0 | PASS |
+| 勾选离线等待→真实点击入队 | 唯一queue `6160c8cfa0c393a89cd48c4a5f1134cb`、request `quick-send-v1-1`、draft=quick/revision1、wait=true、state=waiting_peer、task_id空；仅quick路径清空为revision2、main整行保持 | PASS |
+| 再次反复菜单重开 | quick空/入队禁用，同一queue未复制、tasks=0 | PASS；不冒充第二个快速双击已送达 |
+| 原生picker重新选择测试文件 | Open→Go to Folder→精确quick-source.txt→Open，quick revision3、main整行保持；取消/重开保留两行 | PASS |
+| 原生关闭主窗→菜单quick唤回 | 关闭后窗口数0，同一PID仍存活，菜单唤回quick；同一queue未派发 | PASS |
+| 真实停止/重启准确新app | 两草稿整行保持；同一queue变needs_attention/RESTART_CONFIRMATION_REQUIRED、task_id空、tasks=0，菜单恢复B目标 | PASS |
+| C正常签名撤销B，保持quick打开 | C独立目录两条有效组关系+B removed历史；A trust移除B，quick显示当前不可发送；实际勾等待仍不能入队、取消/菜单重开两次仍禁用，两草稿保持且仍只有原queue/tasks=0 | PASS |
+| 原生菜单退出应用 | owned进程正常退出，原profile本地设备发布worker此前仍更新且只含A/C；fixture正常exit0、端口关闭、SQLite quick_check=ok | PASS |
+
+初始quick目标/首份文件是夹具通过生产SaveDraft预置，不冒充自动原生选择设备；后续picker补回文件是真实系统选择。这里没有接收方receiver或文件传输，received为空，不能升级成0ae7cdf文件/物理LAN/性能通过；98469ce的31B真实QUIC证据继续保留原版本。Windows托盘原生、快速双击送达、物理与完整N1–N4同提交矩阵仍缺。
+
+picker首次点击后的0.3秒窗口检查过早停止，后续前置检查也停止；观察到真实Open窗口后只操作现有picker，经有界就绪等待完成Goto/精确路径/Open。原失败保留，没有归因产品失败。撤销首次脚本把包含removed历史的目录总数误当活跃组人数；Revoke已exit0后停止，先只读核对两条active+B blocked/removed/revoked，再继续原生禁发检查，没有重复撤销。共享签名探针还加上与旧包相同group entitlement再ad-hoc签名，仍返回无系统容器、exit0；正式Team签名/App Group激活继续NOT RUN。
+
+最终身份字节、偏好字节、main revision1、picker后的quick revision3和两份源hash保持；quick最终保留未发送选择。仅原queue needs_attention、task_id空、tasks=0，clipboard master=false、enabled grants=0，旧/新准确app、源码/日志和两份私有备份保留。原生“退出应用”后应用终态、fixture正常exit0，独立socket确认loopback监听关闭；未清理用户文件或共享容器。
+
+非敏感收据已下载：`.artifacts/ae-20261018/mac-quick-fixed-0ae7cdf-{install-receipt,native-receipt,final-receipt}.json`；受控旧栈为`mac-quick-offline-6f29814-controlled-stack.log`。关键job均在`/tmp/codex-ssh/`且exit0：`job-ls-ae-mac-install-quick-fixed-0ae7cdf-20261018-01`、`job-ls-ae-mac-quick-fixed-open-check-20261018-01`、`job-ls-ae-mac-quick-fixed-offline-enqueue-20261018-01`、`job-ls-ae-mac-quick-fixed-reopen-after-enqueue-20261018-01`、`job-ls-ae-mac-quick-fixed-picker-confirm-20261018-02`、`job-ls-ae-mac-quick-fixed-cancel-reopen-20261018-01`、`job-ls-ae-mac-quick-fixed-background-wake-20261018-01`、`job-ls-ae-mac-quick-fixed-restart-20261018-01`、`job-ls-ae-mac-quick-fixed-revoked-native-check-20261018-01`、`job-ls-ae-mac-quick-fixed-native-quit-cleanup-20261018-01`、`job-ls-ae-mac-quick-fixed-final-closed-20261018-01`。

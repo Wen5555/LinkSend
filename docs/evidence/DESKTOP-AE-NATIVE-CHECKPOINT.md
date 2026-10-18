@@ -128,3 +128,11 @@ Mac N4的31B真实发送、后台/重启证据仍绑定98469ce；旧Win原生分
 逐字符邀请码修复的五项CI、三平台包与四资产完整校验通过；本轮准确Mac原生同一started intent继续加入正式服务、真实重启与独立认证WSS在线验证通过，原身份/偏好/两草稿/源文件/唯一completed任务保持，旧上下文退休、剪贴板与免确认未自动开启。准确源码/DMG/EXE SHA、jobs、失败输入、收据和资源终态见[恢复完整证据](DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
 
 范围为同Mac旧loopback组profile经进程覆盖到不同正式HTTPS URL；同URL服务空库、物理LAN/双NAT、Windows新准确包原生仍未验。43字符legacy原生键盘输入不匹配，未提交且保留失败，不能标原生兼容通过。旧quick证据绑定98469ce、Win N1/N2/N3绑定6edddad，均不迁移到6f29814。准确Mac app已停止，测试文件/profile/私有备份保留，clipboard=false。
+
+## 0ae7cdf设备目录阻塞修复与Mac N4矩阵（2026-10-18）
+
+准确0ae7cdf五项CI、三平台包和四资产完整核验通过。6f29814离线quick现场发现Devices RPC被系统共享快照的os.OpenRoot阻塞；新包在同profile/同URL真实恢复目录，未更改系统权限。共享存储隔离、SDK/C/同entitlement ad-hoc探针、本地两模块/race检查与真实新包均分别验证，见[N4完整证据](DESKTOP-AE-QUICK-SEND.md)。
+
+新准确Mac菜单重复打开、离线未等待禁入队/明确等待唯一入队、原生picker补文件/取消重开、后台菜单唤回、真实重启需确认、正常远端撤权后等待仍禁发、原生菜单退出通过；主草稿/quick选择、身份/偏好/源hash保持，queue仅一项needs_attention、tasks=0。初始目标/来源为夹具API预置，未冒充原生选择目标；本轮没有文件传输或物理通过声明。app和loopback fixture正常终态、端口关闭、clipboard=false，最终收据已下载。
+
+包来源仍为0ae7cdf，旧B恢复仍绑定6f29814、31B文件仍绑定98469ce、旧Win分项绑定6edddad。Win托盘/启动策略限制、快速双击送达、legacy原生输入、物理/OS剪贴板/双NAT与完整A–E仍保留缺项；Goal active。

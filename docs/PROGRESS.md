@@ -1,3 +1,8 @@
+## 2026-10-18 0ae7cdf准确包修复复验与N4原生负例
+
+- 0ae7cdf五项CI/三平台包与四资产完整核验通过；新准确Mac在同profile/URL使原先卡住的设备RPC恢复，菜单quick识别离线B，两次打开唯一面板、未等待禁发送，实际勾等待/入队形成唯一waiting_peer。原生picker补回文件/取消重开/main保持、后台关闭菜单唤起/真实重启需确认、远端撤权后即使勾等待仍禁发送均通过；tasks=0，无本轮文件或物理通过声明。
+- 原生菜单退出后app和fixture均停止，端口关闭、SQLite校验/身份/偏好/源hash/两草稿保持，clipboard=false。初始目标/文件为夹具预置、双击送达与Win托盘仍未验；旧98469ce 31B结果不迁移。源码/失败/准确hash/job/收据见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。Goal active，其余物理/OS/双NAT及授权条件保持。
+
 ## 2026-10-18 原生设备RPC被共享目录I/O阻塞的修复候选
 
 - 6f29814准确Mac离线quick现场两次复现后端3设备/原生列表未返回；受控SIGQUIT栈定位App.Devices及native-entry worker卡在系统共享快照os.OpenRoot。未入队或传输，两草稿保持；主动诊断终止不当作自发崩溃。
