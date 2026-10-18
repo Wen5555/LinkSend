@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Wen5555/LinkSend/apps/desktop/nativeclipboard"
+	"github.com/Wen5555/LinkSend/apps/desktop/updater"
 	linksendapp "github.com/Wen5555/LinkSend/internal/app"
 	"github.com/Wen5555/LinkSend/internal/connectivity"
 	"github.com/Wen5555/LinkSend/internal/protocol"
@@ -29,6 +30,8 @@ import (
 
 // App is the thin desktop boundary. Network and file services belong to internal/app.
 type App struct {
+	updateMu                sync.Mutex
+	updates                 *updater.Manager
 	ctx                     context.Context
 	cancel                  context.CancelFunc
 	core                    *linksendapp.Service
@@ -62,6 +65,10 @@ type App struct {
 	clipboardWatchStart     func() (func(), error)
 	clipboardChanges        chan nativeclipboard.Change
 	clipboardDone           chan struct{}
+	clipboardProgressMu     sync.Mutex
+	clipboardProgressWindow *application.WebviewWindow
+	clipboardProgressShown  bool
+	clipboardProgressQueued bool
 }
 
 type DesktopPreferences struct {
@@ -165,7 +172,7 @@ func (a *App) startup(ctx context.Context) {
 		if runtime.GOOS == "windows" && a.window != nil {
 			nativeclipboard.SetOwnerWindow(uintptr(a.window.NativeWindow()))
 		}
-		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Validate: nativeclipboard.ValidatePayload, Write: nativeclipboard.WritePreparedPayloadBefore})
+		a.core.ConfigureClipboard(linksendapp.ClipboardAdapter{Generation: nativeclipboard.Generation, Read: nativeclipboard.ReadPayload, Validate: nativeclipboard.ValidatePayload, Write: nativeclipboard.WritePreparedPayloadBefore, ReadFiles: nativeclipboard.ReadFiles, WriteFiles: nativeclipboard.WriteFiles})
 		a.setClipboardSuspended("master", !a.prefs.ClipboardEnabled)
 		a.startClipboardDelivery()
 		a.refreshClipboardWatch()
@@ -193,6 +200,7 @@ func defaultReceiveDirectory() string {
 	return filepath.Join(home, "Downloads", "LinkSend")
 }
 func (a *App) shutdown() {
+	a.closeUpdater()
 	if a.core != nil && !a.Preferences().RetainTransferQueue {
 		if err := a.core.ClearTransferQueue(true); err != nil {
 			slog.Warn("transfer queue cleanup failed", "error", err)

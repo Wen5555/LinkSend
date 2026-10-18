@@ -33,6 +33,7 @@ const (
 	Text  Kind = "text"
 	Link  Kind = "link"
 	Image Kind = "image"
+	Files Kind = "files"
 )
 
 type Lease struct {
@@ -595,7 +596,7 @@ func (s *State) pruneLocked() {
 		}
 	}
 }
-func validKind(kind Kind) bool { return kind == Text || kind == Link || kind == Image }
+func validKind(kind Kind) bool { return kind == Text || kind == Link || kind == Image || kind == Files }
 func validatePayload(kind Kind, payload []byte) error {
 	if !validKind(kind) || len(payload) == 0 {
 		return ErrStale

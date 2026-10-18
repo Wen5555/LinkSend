@@ -30,12 +30,14 @@ type ClipboardPeerStatus struct {
 type clipboardPeerRuntimeStatus struct {
 	Waiting string
 	Error   string
+	FileID  string
 }
 
 type clipboardSendJob struct {
-	peer  *PeerSession
-	lease clipboardsync.Lease
-	event clipboardsync.Event
+	peer   *PeerSession
+	lease  clipboardsync.Lease
+	event  clipboardsync.Event
+	fileID string
 }
 
 type clipboardPeerSender struct {
@@ -66,6 +68,10 @@ func clipboardMessageGenerationValid(peer *PeerSession, message clipboardsync.Me
 	switch message.Type {
 	case "lease":
 		return peer.RemoteAuthorizationGeneration > 0 && message.Generation == peer.RemoteAuthorizationGeneration
+	case "file_ready":
+		return peer.ClipboardFiles && peer.RemoteAuthorizationGeneration > 0 && message.Generation == peer.RemoteAuthorizationGeneration
+	case "file_cancel":
+		return peer.ClipboardFiles && message.Generation == peer.AuthorizationGeneration
 	case "event":
 		return peer.AuthorizationGeneration > 0 && message.Generation == peer.AuthorizationGeneration
 	default:
@@ -125,12 +131,20 @@ func (s *Service) clearClipboardPeerRuntime(peerID string) {
 }
 
 func (s *Service) setClipboardPeerWaiting(peerID, waiting string) {
+	s.setClipboardWaiting(peerID, waiting, "")
+}
+
+func (s *Service) setClipboardWaiting(peerID, waiting, fileID string) {
 	if peerID == "" {
 		return
 	}
 	s.clipboardStatusMu.Lock()
 	status := s.clipboardPeerRuntime[peerID]
 	status.Waiting = waiting
+	status.FileID = fileID
+	if fileID != "" && status.Error == "file_copy_failed" {
+		status.Error = ""
+	}
 	if status.Waiting == "" && status.Error == "" {
 		delete(s.clipboardPeerRuntime, peerID)
 	} else {
@@ -143,11 +157,32 @@ func (s *Service) setClipboardPeerError(peerID, statusError string) {
 	s.setClipboardPeerRuntime(peerID, "", statusError)
 }
 
+// A new connection attempt or a usable lease supersedes connection errors,
+// while a successful reconnect must not hide an unrelated clipboard I/O error.
+func (s *Service) setClipboardConnectionState(peerID, waiting string) {
+	s.clipboardStatusMu.Lock()
+	defer s.clipboardStatusMu.Unlock()
+	status := s.clipboardPeerRuntime[peerID]
+	if status.Error == "connection_failed" || status.Error == "connection_lost" {
+		status.Error = ""
+	}
+	if waiting != "" || status.Waiting == "connecting" || status.Waiting == "waiting_lease" {
+		status.Waiting = waiting
+	}
+	if status.Waiting == "" && status.Error == "" {
+		delete(s.clipboardPeerRuntime, peerID)
+	} else {
+		s.clipboardPeerRuntime[peerID] = status
+	}
+}
+
 type ClipboardAdapter struct {
 	Generation func() uint64
 	Read       func(context.Context, clipboardsync.Kind, uint64) ([]byte, uint64, error)
 	Validate   func(clipboardsync.Kind, []byte) error
 	Write      func(clipboardsync.Kind, []byte, uint64, time.Time) (uint64, error)
+	ReadFiles  func(context.Context, uint64) ([]string, uint64, error)
+	WriteFiles func([]string, uint64, time.Time) (uint64, error)
 }
 
 func (s *Service) ConfigureClipboard(adapter ClipboardAdapter) {
@@ -249,6 +284,9 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 	s.cancelClipboardSends("", "")
 	if len(change.Kinds) == 0 {
 		return nil
+	}
+	if containsClipboardKind(change.Kinds, clipboardsync.Files) {
+		return s.clipboardFilesChanged(ctx, observation)
 	}
 	s.clipboardAdapterMu.RLock()
 	adapter := s.clipboardAdapter
@@ -443,14 +481,14 @@ func (s *Service) runClipboardSender(key string, sender *clipboardPeerSender) {
 }
 
 func (s *Service) sendClipboardJob(ctx context.Context, job *clipboardSendJob) error {
-	s.setClipboardPeerWaiting(job.peer.PeerID, "waiting_slot")
+	s.setClipboardWaiting(job.peer.PeerID, "waiting_slot", job.fileID)
 	select {
 	case s.clipboardSendSlots <- struct{}{}:
 	case <-ctx.Done():
 		return context.Cause(ctx)
 	}
 	defer func() { <-s.clipboardSendSlots }()
-	s.setClipboardPeerWaiting(job.peer.PeerID, "opening_stream")
+	s.setClipboardWaiting(job.peer.PeerID, "opening_stream", job.fileID)
 	stream, err := job.peer.Data.Conn.OpenUniStreamSync(ctx)
 	if err != nil {
 		return err
@@ -467,7 +505,7 @@ func (s *Service) sendClipboardJob(ctx context.Context, job *clipboardSendJob) e
 		case <-done:
 		}
 	}()
-	s.setClipboardPeerWaiting(job.peer.PeerID, "sending")
+	s.setClipboardWaiting(job.peer.PeerID, "sending", job.fileID)
 	message := clipboardsync.Message{Type: "event", LeaseID: job.event.LeaseID, SessionID: job.peer.SessionID, Generation: job.peer.RemoteAuthorizationGeneration, OriginID: job.event.OriginID, Boot: job.event.Boot, OriginSeq: job.event.OriginSeq, Lamport: job.event.Lamport, Kind: job.event.Kind, Digest: job.event.Digest, OSGeneration: job.event.OSGeneration, SenderGrantRevision: job.event.SenderGrantRevision, ReceiverGrantRevision: job.event.ReceiverGrantRevision, PayloadBytes: uint32(len(job.event.Payload))}
 	writer := clipboardGuardedWriter{ctx: ctx, dst: stream, state: s.clipboardSync, event: job.event, deadline: deadline}
 	err = clipboardsync.Write(writer, message, job.event.Payload)
@@ -481,6 +519,9 @@ func (s *Service) sendClipboardJob(ctx context.Context, job *clipboardSendJob) e
 }
 
 func (s *Service) cancelClipboardSends(peerID string, kind clipboardsync.Kind) {
+	if kind == "" || kind == clipboardsync.Files {
+		s.cancelClipboardFileJobs(peerID, false)
+	}
 	s.clipboardDispatchMu.Lock()
 	senders := make([]*clipboardPeerSender, 0, len(s.clipboardSenders))
 	for _, sender := range s.clipboardSenders {
@@ -543,7 +584,11 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			}
 		}
 	}()
-	defer func() { <-renewDone; s.clipboardSync.DropSession(peer.PeerID, peer.SessionID) }()
+	defer func() {
+		<-renewDone
+		s.clipboardSync.DropSession(peer.PeerID, peer.SessionID)
+		s.cancelStaleClipboardFiles()
+	}()
 	for {
 		stream, err := peer.Data.Conn.AcceptUniStream(ctx)
 		if err != nil {
@@ -564,6 +609,12 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			continue
 		}
 		switch message.Type {
+		case "file_ready":
+			stream.CancelRead(0)
+			s.clipboardFileReady(peer, message)
+		case "file_cancel":
+			stream.CancelRead(0)
+			s.clipboardFileCancelled(peer, message)
 		case "lease":
 			payload, payloadErr := clipboardsync.ReadPayload(stream, message)
 			stream.CancelRead(0)
@@ -572,6 +623,9 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 			}
 			var grants []clipboardsync.Grant
 			for _, remoteGrant := range message.Grants {
+				if remoteGrant.Kind == clipboardsync.Files && !peer.ClipboardFiles {
+					continue
+				}
 				if _, ok := s.clipboardGrant(peer.PeerID, "send", remoteGrant.Kind, peer.AuthorizationGeneration); ok {
 					grants = append(grants, clipboardsync.Grant{Kind: remoteGrant.Kind, Revision: remoteGrant.Revision})
 				}
@@ -629,6 +683,12 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 					s.setClipboardPeerError(peer.PeerID, "receive_invalid")
 					return
 				}
+				if candidate.Kind == clipboardsync.Files {
+					if err := s.admitClipboardFiles(peer, candidate); err != nil {
+						s.setClipboardPeerError(peer.PeerID, "file_receive_failed")
+					}
+					return
+				}
 				s.clipboardAdapterMu.RLock()
 				adapter := s.clipboardAdapter
 				s.clipboardAdapterMu.RUnlock()
@@ -643,6 +703,7 @@ func (s *Service) serveClipboardPeer(peer *PeerSession) {
 					return
 				}
 				s.clearClipboardPeerRuntime(peer.PeerID)
+				s.cancelStaleClipboardFiles()
 			}()
 		}
 	}
@@ -683,6 +744,15 @@ func (s *Service) sendClipboardLease(parent context.Context, peer *PeerSession) 
 		return
 	}
 	grants := s.clipboardGrantsLocked(peer.PeerID, "receive", peer.AuthorizationGeneration)
+	if !peer.ClipboardFiles {
+		filtered := grants[:0]
+		for _, grant := range grants {
+			if grant.Kind != clipboardsync.Files {
+				filtered = append(filtered, grant)
+			}
+		}
+		grants = filtered
+	}
 	if len(grants) == 0 {
 		s.setClipboardReady(peer, "receive", false)
 		return
@@ -772,7 +842,11 @@ func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready b
 		} else {
 			pooled.clipboardReceiveReady = ready
 		}
+		if pooled.clipboardSendReady && pooled.clipboardReceiveReady {
+			pooled.clipboardBootstrap = false
+		}
 		if ready {
+			s.setClipboardConnectionState(peer.PeerID, "")
 			if pooled.timer != nil {
 				pooled.timer.Stop()
 				pooled.timer = nil
@@ -872,7 +946,7 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 	}
 	if !requiresSignalHandoff {
 		for _, item := range targets {
-			s.setClipboardPeerWaiting(item.id, "")
+			s.setClipboardConnectionState(item.id, "")
 		}
 		s.signalHandoffMu.Unlock()
 		return nil
@@ -900,24 +974,39 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 		healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
 		s.directPoolMu.Unlock()
 		if healthy {
-			s.setClipboardPeerWaiting(item.id, "")
+			s.setClipboardConnectionState(item.id, "")
 		} else {
-			s.setClipboardPeerWaiting(item.id, "connecting")
-			connectCtx, cancel := context.WithTimeout(connectRoot, 10*time.Second)
+			s.setClipboardConnectionState(item.id, "connecting")
 			peerCfg := cfg
 			peerCfg.expectedAuthorizationGeneration = item.generation
-			peer, connectErr := s.acquirePeerSession(connectCtx, item.id, peerCfg)
-			cancel()
+			peerCfg.clipboardBootstrap = true
+			// ConnectDirect already bounds lookup, signaling, ICE and QUIC with
+			// cfg.CheckTimeout. Do not truncate that budget for clipboard peers.
+			peer, connectErr := s.acquirePeerSession(connectRoot, item.id, peerCfg)
 			if connectErr != nil {
 				s.setClipboardPeerError(item.id, "connection_failed")
 				result = errors.Join(result, connectErr)
 			} else {
 				releaseErr := s.releasePeerSession(peer, nil)
-				if releaseErr != nil {
+				s.directPoolMu.Lock()
+				pooled := s.directPool[key]
+				healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
+				if releaseErr != nil && !healthy {
 					s.setClipboardPeerError(item.id, "connection_failed")
 				} else {
-					s.setClipboardPeerWaiting(item.id, "waiting_lease")
+					// A simultaneous LAN dial may have replaced this bootstrap
+					// with the shared winner. Observe that current session, not
+					// the superseded peer or its close result.
+					if healthy && pooled.peer != peer {
+						releaseErr = nil
+					}
+					if healthy && (pooled.clipboardSendReady || pooled.clipboardReceiveReady) {
+						s.setClipboardConnectionState(item.id, "")
+					} else {
+						s.setClipboardConnectionState(item.id, "waiting_lease")
+					}
 				}
+				s.directPoolMu.Unlock()
 				result = errors.Join(result, releaseErr)
 			}
 		}

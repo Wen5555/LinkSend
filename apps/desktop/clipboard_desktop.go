@@ -24,14 +24,15 @@ func (a *App) clipboardReady() {
 }
 
 type ClipboardWatchStatus struct {
-	Enabled       bool                          `json:"enabled"`
-	MasterEnabled bool                          `json:"master_enabled"`
-	Active        bool                          `json:"active"`
-	Paused        bool                          `json:"paused"`
-	PauseReason   string                        `json:"pause_reason,omitempty"`
-	Last          nativeclipboard.Change        `json:"last"`
-	Error         string                        `json:"error,omitempty"`
-	Peers         []coreapp.ClipboardPeerStatus `json:"peers"`
+	Enabled       bool                            `json:"enabled"`
+	MasterEnabled bool                            `json:"master_enabled"`
+	Active        bool                            `json:"active"`
+	Paused        bool                            `json:"paused"`
+	PauseReason   string                          `json:"pause_reason,omitempty"`
+	Last          nativeclipboard.Change          `json:"last"`
+	Error         string                          `json:"error,omitempty"`
+	Peers         []coreapp.ClipboardPeerStatus   `json:"peers"`
+	Files         []coreapp.ClipboardFileProgress `json:"files,omitempty"`
 }
 
 func (a *App) ClipboardGrants(peerID string) ([]coreapp.ClipboardGrant, error) {
@@ -66,9 +67,10 @@ func (a *App) ensureClipboardSessions() {
 	if a.ctx == nil || a.core == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
-	defer cancel()
-	_ = a.core.EnsureClipboardSessions(ctx, a.directConfig())
+	// The core bounds each direct connection phase and owns singleflight.
+	// A shorter desktop-wide deadline would abort normal ICE setup and starve
+	// later peers. App shutdown still cancels the whole pass through a.ctx.
+	_ = a.core.EnsureClipboardSessions(a.ctx, a.directConfig())
 }
 
 func (a *App) ClipboardWatcher() ClipboardWatchStatus {
@@ -90,6 +92,7 @@ func (a *App) ClipboardWatcher() ClipboardWatchStatus {
 	if a.core != nil {
 		status.Enabled = a.core.ClipboardSyncEnabled() && status.MasterEnabled
 		status.Peers = a.core.ClipboardPeerStatuses()
+		status.Files = a.core.ClipboardFileProgresses()
 	}
 	return status
 }
@@ -186,6 +189,8 @@ func (a *App) startClipboardDelivery() {
 		defer close(a.clipboardDone)
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
+		progressTicker := time.NewTicker(250 * time.Millisecond)
+		defer progressTicker.Stop()
 		go a.ensureClipboardSessions()
 		for {
 			select {
@@ -194,9 +199,15 @@ func (a *App) startClipboardDelivery() {
 			case <-ticker.C:
 				a.refreshClipboardWatch()
 				go a.ensureClipboardSessions()
+			case <-progressTicker.C:
+				a.refreshClipboardFileWindow()
 
 			case change := <-a.clipboardChanges:
 				kinds := make([]clipboardsync.Kind, 0, 3)
+				if change.Files {
+					_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: []clipboardsync.Kind{clipboardsync.Files}})
+					continue
+				}
 				if change.Link || change.Text {
 					kinds = append(kinds, clipboardsync.Link)
 				}

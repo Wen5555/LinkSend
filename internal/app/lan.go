@@ -175,9 +175,17 @@ func (s *Service) receiveLANSession(ctx context.Context, incoming discovery.Inco
 		return
 	}
 	session.localPeer = true
+	session.ownsSignal = true // This inbound LAN TLS channel is not a shared WSS inbox.
 	session.peerName = peer.Name
 	session.peerPublicKey = append(ed25519.PublicKey(nil), peer.PublicKey...)
 	session.lanAddress = incoming.Route.RemoteAddress
+	if session.SessionReuse {
+		// As on the WSS inbox path, start both stream owners immediately.
+		// Waiting for a file stream first prevents clipboard-only sessions from
+		// exchanging leases and from ever processing their unidirectional data.
+		s.adoptInboundPeerSession(session)
+		return
+	}
 	if s.receiveIncoming(ctx, session, directory) {
 		_ = s.closePeerAfterTransfer(session)
 	} else {

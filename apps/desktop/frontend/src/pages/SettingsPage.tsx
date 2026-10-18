@@ -7,8 +7,9 @@ import { BackgroundSettings } from '../components/BackgroundSettings';
 import { ContentSettings } from '../components/ContentSettings';
 import { ClipboardDevices } from '../components/ClipboardDevices';
 import { FileSendLimit, validFileSendLimit } from '../components/FileSendLimit';
+import { SoftwareUpdates } from '../components/SoftwareUpdates';
 
-export type SettingsCategory = 'general' | 'receive' | 'sending' | 'clipboard' | 'system' | 'network' | 'storage' | 'diagnostics';
+export type SettingsCategory = 'general' | 'receive' | 'sending' | 'clipboard' | 'system' | 'network' | 'storage' | 'updates' | 'diagnostics';
 export type SettingsCategoryRequest = { category: SettingsCategory; revision: number };
 type EditableSection = 'general' | 'receive' | 'sending' | 'clipboard' | 'network';
 type DirtyField = 'file_send_bytes_per_second' | 'device_name' | 'retain_transfer_queue' | 'receive_directory' | 'conflict_policy' | 'clipboard_enabled' | 'server_url' | 'bind_address' | 'interface_priority' | 'excluded_interfaces' | 'stun_urls';
@@ -18,7 +19,7 @@ const categories: { id: SettingsCategory; label: string; hint: string }[] = [
   { id: 'sending', label: '文件发送', hint: '正文速率上限' },
   { id: 'clipboard', label: '自动剪贴板', hint: '同步与运行状态' },
   { id: 'system', label: '系统集成', hint: '后台、通知与分享' }, { id: 'network', label: '网络与发现', hint: '服务与接口' },
-  { id: 'storage', label: '存储与记录', hint: '旧内容与清理' }, { id: 'diagnostics', label: '诊断与关于', hint: '连接与版本' },
+  { id: 'storage', label: '存储与记录', hint: '旧内容与清理' }, { id: 'updates', label: '软件更新', hint: 'GitHub 正式版' }, { id: 'diagnostics', label: '诊断与关于', hint: '连接与版本' },
 ];
 const splitNames = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
 const sectionFields: Record<EditableSection, DirtyField[]> = {
@@ -43,8 +44,8 @@ function isPreferencesRevisionConflict(error: unknown) {
 	return message.includes('PREFERENCES_REVISION_CONFLICT');
 }
 function clipboardPeerState(peer: ClipboardPeerStatus) {
-  const errors: Record<string, string> = { read_failed: '读取本机剪贴板失败', clipboard_changed: '读取时内容已变化', send_timeout: '发送超时', connection_lost: '连接已中断', connection_failed: '连接失败', send_failed: '发送失败', receive_timeout: '接收超时', receive_failed: '接收失败', receive_invalid: '收到的内容无效', write_failed: '写入系统剪贴板失败' };
-  const waiting: Record<string, string> = { queued: '等待发送', waiting_slot: '等待发送资源', opening_stream: '正在建立数据流', sending: '正在发送', waiting_lease: '等待对端授权', connecting: '正在连接', waiting_receive_slot: '等待接收资源', receiving: '正在接收' };
+  const errors: Record<string, string> = { read_failed: '读取本机剪贴板失败', clipboard_changed: '读取时内容已变化', send_timeout: '发送超时', connection_lost: '连接已中断', connection_failed: '连接失败', files_unsupported: '对端需要更新以同步文件', file_copy_failed: '文件复制失败，请重新复制', file_receive_failed: '接收复制文件失败', send_failed: '发送失败', receive_timeout: '接收超时', receive_failed: '接收失败', receive_invalid: '收到的内容无效', write_failed: '写入系统剪贴板失败' };
+  const waiting: Record<string, string> = { queued: '等待发送', copying_files: '正在复制文件', waiting_slot: '等待发送资源', opening_stream: '正在建立数据流', sending: '正在发送', waiting_lease: '等待对端授权', connecting: '正在连接', waiting_receive_slot: '等待接收资源', receiving: '正在接收' };
   if (peer.error) return errors[peer.error] ?? '同步失败';
   if (peer.waiting) return waiting[peer.waiting] ?? '等待中';
   return peer.state === 'ready' ? '就绪' : peer.state === 'unsupported' ? '对端不支持' : '连接中';
@@ -111,7 +112,8 @@ export function SettingsPage({ devices = [], identityID, preferences, effective,
       {category === 'system' && <div className="settings-stack"><BackgroundSettings status={background} run={controlRun} op={op} available={available} /><section className="surface settings-page"><span className="section-kicker">系统分享</span><h2>文件管理器入口</h2><p className="field-help">Windows“发送到”和 macOS Finder 服务作为兼容入口；正式系统分享能力以准确安装包为准。</p>{sendToSupported && <div className="inline-actions"><button className="secondary" disabled={!!op} onClick={() => void run('install-sendto', () => Backend.ConfigureSendTo(true), '已安装发送到入口')}>安装入口</button><button className="ghost" disabled={!!op} onClick={() => void run('uninstall-sendto', () => Backend.ConfigureSendTo(false), '已移除发送到入口')}>移除入口</button></div>}</section></div>}
       {category === 'network' && <section className="surface settings-page"><span className="section-kicker">网络与发现</span><h2>连接设置</h2><label className="field-label">信令服务地址<input disabled={savingSection === 'network'} value={prefs.server_url} onChange={event => update('network', { server_url: event.target.value })} /></label><details><summary>高级接口设置</summary><label className="field-label">本机绑定地址<input disabled={savingSection === 'network'} value={prefs.bind_address} onChange={event => update('network', { bind_address: event.target.value })} placeholder="留空自动选择" /></label><label className="field-label">接口优先级<input disabled={savingSection === 'network'} value={(prefs.interface_priority ?? []).join(', ')} onChange={event => update('network', { interface_priority: splitNames(event.target.value) })} /></label><label className="field-label">排除接口<input disabled={savingSection === 'network'} value={(prefs.excluded_interfaces ?? []).join(', ')} onChange={event => update('network', { excluded_interfaces: splitNames(event.target.value) })} /></label><label className="field-label">STUN 地址<input disabled={savingSection === 'network'} value={(prefs.stun_urls ?? []).join(', ')} onChange={event => update('network', { stun_urls: splitNames(event.target.value) })} /></label></details><div className="interface-list">{interfaces.filter(item => !item.is_loopback).map(item => <div className="interface-row" key={item.name}><span>{item.name}</span><small>{(item.addresses ?? []).join(' / ')}</small></div>)}</div>{effective && <p className="field-help">当前绑定：{effective.bind_address || '自动'} · 保存后用于新连接</p>}<button className="primary" disabled={!!op || !available || mergeRequired || savingSection === 'network'} onClick={() => void save('network', 'preferences-network', '网络设置已保存；健康传输继续运行')}>保存网络设置</button></section>}
       {category === 'storage' && <section className="surface settings-page"><span className="section-kicker">存储与记录</span><h2>旧版内容与应用暂存</h2><p className="field-help">旧版文字、链接和图片入口已移除。已有草稿、队列和历史不会自动续发，可在记录与清理区处理。</p><ContentSettings run={controlRun} op={op} available={available} onOpenQueue={onOpenLegacyQueue} /></section>}
-      {category === 'diagnostics' && <section className="surface settings-page"><span className="section-kicker">诊断与关于</span><h2>LinkSend 0.5.0</h2><dl className="settings-diagnostics"><div><dt>后台接收</dt><dd>{inbox?.listening ? '正在等待请求' : '尚未就绪'}</dd></div><div><dt>附近发现</dt><dd>{inbox?.lan_available ? '可用' : '不可用'}</dd></div><div><dt>信令健康</dt><dd>{diagnostics?.server_health || '未检查'}</dd></div><div><dt>任务恢复</dt><dd>{diagnostics?.restart_recovery_supported ? '可用' : '不可用'}</dd></div><div><dt>中继</dt><dd>未实现</dd></div></dl></section>}
+      {category === 'updates' && <SoftwareUpdates available={available} />}
+      {category === 'diagnostics' && <section className="surface settings-page"><span className="section-kicker">诊断与关于</span><h2>LinkSend {diagnostics?.version || '版本读取中'}</h2><dl className="settings-diagnostics"><div><dt>后台接收</dt><dd>{inbox?.listening ? '正在等待请求' : '尚未就绪'}</dd></div><div><dt>附近发现</dt><dd>{inbox?.lan_available ? '可用' : '不可用'}</dd></div><div><dt>信令健康</dt><dd>{diagnostics?.server_health || '未检查'}</dd></div><div><dt>任务恢复</dt><dd>{diagnostics?.restart_recovery_supported ? '可用' : '不可用'}</dd></div><div><dt>中继</dt><dd>未实现</dd></div></dl></section>}
     </div>
   </div>;
 }

@@ -49,6 +49,8 @@ type DirectConfig struct {
 	contentForceFile                bool
 	disableSessionReuse             bool
 	disableClipboardSync            bool
+	disableClipboardFiles           bool
+	clipboardBootstrap              bool
 	contentTaskID                   string
 	contentAttemptID                string
 	expectedAuthorizationGeneration uint64
@@ -89,6 +91,7 @@ type PeerSession struct {
 	lanAddress                    string
 	SessionReuse                  bool
 	ClipboardSync                 bool
+	ClipboardFiles                bool
 	clipboardLeaseWake            chan struct{}
 }
 
@@ -347,7 +350,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	cfg.phase("session_prepare")
 	sessionID := protocol.RandomID()
 	cfg.session(sessionID, peer.ID)
-	request, err := protocol.NewEnvelope("connect_request", s.identity.ID(), peer.ID, sessionID, firstGeneration, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: !cfg.disableSessionReuse, ClipboardSync: !cfg.disableClipboardSync, AuthorizationGeneration: authorizationGeneration})
+	request, err := protocol.NewEnvelope("connect_request", s.identity.ID(), peer.ID, sessionID, firstGeneration, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: !cfg.disableSessionReuse, ClipboardSync: !cfg.disableClipboardSync, ClipboardFiles: !cfg.disableClipboardSync && !cfg.disableClipboardFiles, AuthorizationGeneration: authorizationGeneration})
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +400,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 		closeSignal = false
 		closeEndpoint = false
 		description, _ := envelopeICEDescription(*incoming)
-		result := &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
+		result := &PeerSession{PeerID: peer.ID, SessionID: incoming.SessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync, ClipboardFiles: description.ClipboardSync && description.ClipboardFiles && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync && !cfg.disableClipboardFiles}
 		s.deviceConnections.remember(result)
 		return result, nil
 	}
@@ -446,7 +449,7 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	cfg.evidence((&PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings}).Evidence())
 	closeSignal = false
 	closeEndpoint = false
-	result := &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: remote.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: remote.SessionReuse, ClipboardSync: remote.ClipboardSync && remote.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
+	result := &PeerSession{PeerID: peer.ID, SessionID: sessionID, Path: path, Data: data, Timings: timings, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: remote.AuthorizationGeneration, signal: signalSession, ownsSignal: true, stopHeartbeat: stopHeartbeat, localPeer: localPeer, peerName: peer.Name, peerPublicKey: append(ed25519.PublicKey(nil), peer.PublicKey...), lanAddress: lanRemoteAddress(signalSession), SessionReuse: remote.SessionReuse, ClipboardSync: remote.ClipboardSync && remote.AuthorizationGeneration > 0 && !cfg.disableClipboardSync, ClipboardFiles: remote.ClipboardSync && remote.ClipboardFiles && remote.AuthorizationGeneration > 0 && !cfg.disableClipboardSync && !cfg.disableClipboardFiles}
 	s.deviceConnections.remember(result)
 	return result, nil
 }
@@ -578,7 +581,7 @@ func (s *Service) acceptDirectOnSessionPeer(ctx context.Context, expectedPeerID 
 		return nil, reportFailure(err)
 	}
 	description, _ := envelopeICEDescription(*requestWire.Message)
-	result := &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, signalBase: signalBase, SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync}
+	result := &PeerSession{PeerID: peer.ID, SessionID: requestWire.Message.SessionID, Path: path, Data: data, AuthorizationGeneration: authorizationGeneration, RemoteAuthorizationGeneration: description.AuthorizationGeneration, signal: signalSession, signalBase: signalBase, SessionReuse: description.SessionReuse, ClipboardSync: description.ClipboardSync && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync, ClipboardFiles: description.ClipboardSync && description.ClipboardFiles && description.AuthorizationGeneration > 0 && !cfg.disableClipboardSync && !cfg.disableClipboardFiles}
 	cfg.evidence(result.Evidence())
 	closeEndpoint = false
 	s.deviceConnections.remember(result)
@@ -605,7 +608,7 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 			_ = listener.Close()
 		}
 	}()
-	response, err := protocol.NewEnvelope("connect_response", s.identity.ID(), peer.ID, request.SessionID, request.Generation, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: remote.SessionReuse && !cfg.disableSessionReuse, ClipboardSync: remote.ClipboardSync && !cfg.disableClipboardSync, AuthorizationGeneration: cfg.expectedAuthorizationGeneration})
+	response, err := protocol.NewEnvelope("connect_response", s.identity.ID(), peer.ID, request.SessionID, request.Generation, iceDescription{Ufrag: endpoint.Credentials().Ufrag, Password: endpoint.Credentials().Password, SessionReuse: remote.SessionReuse && !cfg.disableSessionReuse, ClipboardSync: remote.ClipboardSync && !cfg.disableClipboardSync, ClipboardFiles: remote.ClipboardFiles && !cfg.disableClipboardSync && !cfg.disableClipboardFiles, AuthorizationGeneration: cfg.expectedAuthorizationGeneration})
 	if err != nil {
 		return connectivity.Path{}, nil, err
 	}

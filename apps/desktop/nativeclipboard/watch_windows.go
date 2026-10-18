@@ -94,6 +94,7 @@ func (w *windowsClipboardWatch) snapshot() Change {
 		Text:     available(13) || available(1), // CF_UNICODETEXT / CF_TEXT
 		Link:     (w.urlW != 0 && available(w.urlW)) || (w.urlA != 0 && available(w.urlA)),
 		Image:    available(2) || available(8) || available(17) || (w.png != 0 && available(w.png)), // CF_BITMAP / CF_DIB / CF_DIBV5 / registered PNG
+		Files:    available(15),                                                                     // CF_HDROP
 	}
 }
 

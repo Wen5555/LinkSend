@@ -6,4 +6,5 @@ export interface Change {
     "text": boolean;
     "link": boolean;
     "image": boolean;
+    "files"?: boolean;
 }

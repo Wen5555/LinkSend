@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 11
+const taskStoreSchema = 12
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -204,6 +204,19 @@ func historyDB(path string) (*sql.DB, error) {
 	}
 	if schema < 11 {
 		if err = migrateBatchMetadata(tx); err != nil {
+			return rollback(err)
+		}
+	}
+	if schema < 12 {
+		if _, err = tx.Exec(`ALTER TABLE clipboard_grants RENAME TO clipboard_grants_v11;
+			CREATE TABLE clipboard_grants (
+			peer_id TEXT NOT NULL, direction TEXT NOT NULL CHECK(direction IN ('send','receive')),
+			kind TEXT NOT NULL CHECK(kind IN ('text','link','image','files')),
+			enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), revision INTEGER NOT NULL CHECK(revision > 0),
+			updated_at TEXT NOT NULL, authorization_generation INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY(peer_id,direction,kind));
+			INSERT INTO clipboard_grants SELECT * FROM clipboard_grants_v11;
+			DROP TABLE clipboard_grants_v11;`); err != nil {
 			return rollback(err)
 		}
 	}

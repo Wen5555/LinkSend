@@ -12,6 +12,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as updater$0 from "./updater/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as app$0 from "../../internal/app/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -46,6 +49,10 @@ export function CancelBatch(id: string, revision: number): $CancellablePromise<a
     return $Call.ByID(3900665653, id, revision);
 }
 
+export function CancelClipboardFile(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1357565413, id);
+}
+
 export function CancelMembershipRecovery(requestID: string): $CancellablePromise<app$0.MembershipRecoveryStatus> {
     return $Call.ByID(887065632, requestID);
 }
@@ -58,8 +65,16 @@ export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
 }
 
+export function CancelUpdate(): $CancellablePromise<updater$0.Status> {
+    return $Call.ByID(1981887714);
+}
+
 export function CaptureClipboardImage(requestID: string): $CancellablePromise<app$0.ContentDraft> {
     return $Call.ByID(1938429354, requestID);
+}
+
+export function CheckForUpdates(): $CancellablePromise<updater$0.Status> {
+    return $Call.ByID(2675659504);
 }
 
 export function CleanupContentSnapshots(): $CancellablePromise<app$0.ContentCleanupResult> {
@@ -140,6 +155,10 @@ export function DiscardContentDraft(id: string, revision: number): $CancellableP
 
 export function DiscardNativeShare(requestID: string): $CancellablePromise<void> {
     return $Call.ByID(3405804501, requestID);
+}
+
+export function DownloadUpdate(): $CancellablePromise<updater$0.Status> {
+    return $Call.ByID(115027584);
 }
 
 export function EffectiveConfig(): $CancellablePromise<$models.EffectiveConfig> {
@@ -243,6 +262,14 @@ export function OpenReceivedURL(taskID: string): $CancellablePromise<app$0.Conte
 
 export function OpenTaskDirectory(taskID: string): $CancellablePromise<void> {
     return $Call.ByID(3141333411, taskID);
+}
+
+export function OpenUpdatePackage(): $CancellablePromise<updater$0.Status> {
+    return $Call.ByID(1496629312);
+}
+
+export function OpenUpdateReleasePage(): $CancellablePromise<void> {
+    return $Call.ByID(2516926270);
 }
 
 /**
@@ -439,6 +466,10 @@ export function UnblockDevice(deviceID: string): $CancellablePromise<void> {
 
 export function UnblockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(493225303, id);
+}
+
+export function UpdateStatus(): $CancellablePromise<updater$0.Status> {
+    return $Call.ByID(1098431686);
 }
 
 export function Workspace(): $CancellablePromise<app$0.WorkspaceSnapshot> {

@@ -375,6 +375,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .manual-lan-discovery summary { cursor: pointer; color: var(--accent, #236b5e); padding: 10px 0; }
 .clipboard-device-list { margin: 20px 0; border-top: 1px solid var(--border, #e4e9ed); padding-top: 16px; }
 .clipboard-device-list .toggle-row small { display: block; margin-top: 4px; }
+.software-updates .inline-actions { flex-wrap: wrap; }
+.update-message { margin: 20px 0 12px; }
+.update-progress { display: grid; gap: 8px; margin: 16px 0; color: var(--muted); font-size: 13px; }
+.update-progress progress { width: 100%; height: 10px; accent-color: var(--accent); }
+.update-notes { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.update-notes summary { cursor: pointer; font-weight: 600; }
+.update-notes > div { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; margin-top: 14px; font-size: 13px; line-height: 1.7; }
 @media (max-width: 850px) {
   .transfer-workspace .send-surface { padding: 16px; }
   .transfer-queue .inline-actions { flex-wrap: wrap; }

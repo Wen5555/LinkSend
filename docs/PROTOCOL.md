@@ -1,3 +1,13 @@
+## 2026-10-19 文件剪贴板能力增量（本地候选）
+
+认证连接新增独立 `clipboard_files_v1`，双方声明后才发出 files grant/lease/event。旧端只收 text/link/image，普通文件 V1 帧保持。任务库 11→12 扩大 clipboard_grants.kind 约束，保留原行，不默认授予文件权限；迁移前 VACUUM 备份并验证。
+
+files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为 16 字节随机 ID 的小写十六进制，count=1..128、bytes>=0；不含绝对路径或文件正文。原10秒 lease 内验证全部身份、双方 revision、摘要、顺序和 OS generation 后，预约最长24小时。仅预约可跨越原 lease 到期，普通事件不延期。`file_ready` / `file_cancel` 无正文，携带 lease_id/session_id/generation/file_id/digest；ready 的 generation 为原事件接收方的本地授权代次，cancel 绑定该控制消息接收方代次。取消前发布当前 lease 时钟，避免新本地复制使下一次复制仍使用过时因果锚点。
+
+获准后另开 QUIC 双向流：8字节 `LSCF01\0\0`、4字节大端 JSON 长度（1..2048）、`{id,digest}` 预约绑定，随后完整复用原 V1 文件协议/BLAKE3/安全路径/确认及文件共享速率预算。两端每方向文件正文最多2路，预约最多16条。无预约、未知能力、无权限或畸形绑定均中止流。完成后在当前权限 revision、预约 owner 和 OS generation 不变时，原生写入本机接收路径。失败/取消删除任务专属未发布缓存；成功缓存留在 profile/clipboard-files/<id> 供粘贴，暂不自动清理，不支持重启补发旧复制。小正文不会触发大文件窗。
+
+具体兼容、原生边界及本轮未验部分见 [ADR0015](adr/0015-file-clipboard-progress.md) 和 [验证记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
+
 # Protocol
 
 ## 2026-10-18 托盘快速发送

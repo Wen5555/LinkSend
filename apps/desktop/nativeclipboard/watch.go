@@ -9,6 +9,7 @@ type Change struct {
 	Text     bool   `json:"text"`
 	Link     bool   `json:"link"`
 	Image    bool   `json:"image"`
+	Files    bool   `json:"files,omitempty"`
 }
 
 func Watch(ctx context.Context, nativeWindow uintptr, notify func(Change)) (func(), error) {

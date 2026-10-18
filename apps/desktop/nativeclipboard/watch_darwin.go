@@ -53,7 +53,7 @@ func watchPasteboardChanges(ctx context.Context, name string, notify func(Change
 				}
 				last = sequence
 				kinds := uint32(C.linksendClipboardTypes(nativeName))
-				notify(Change{Sequence: sequence, Text: kinds&1 != 0, Link: kinds&2 != 0, Image: kinds&4 != 0})
+				notify(Change{Sequence: sequence, Text: kinds&1 != 0, Link: kinds&2 != 0, Image: kinds&4 != 0, Files: kinds&8 != 0})
 			}
 		}
 	}()

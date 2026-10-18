@@ -93,6 +93,10 @@ type Service struct {
 	clipboardWorkers        sync.WaitGroup
 	clipboardReceiveSlots   chan struct{}
 	clipboardPaused         atomic.Bool
+	clipboardFilesMu        sync.Mutex
+	clipboardFileJobs       map[string]*clipboardFileJob
+	clipboardFileSendSlots  chan struct{}
+	clipboardFileReadSlots  chan struct{}
 }
 
 type cachedNetworkSelection struct {

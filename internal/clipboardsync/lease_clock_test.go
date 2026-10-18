@@ -145,7 +145,7 @@ func TestFailedLeaseClockInstallPreservesClockAndLeaseWindow(t *testing.T) {
 			case "revision":
 				grants = []Grant{{Kind: Text}}
 			case "kind":
-				grants = []Grant{{Kind: Kind("files"), Revision: 1}}
+				grants = []Grant{{Kind: Kind("unsupported"), Revision: 1}}
 			case "ttl":
 				ttl = 0
 			case "remote_overflow":
