@@ -27,6 +27,9 @@ func TestProductVersionMetadataSynchronized(t *testing.T) {
 	checks := [][2]string{
 		{"apps/desktop/build/config.yml", `version: "` + ProductVersion + `"`},
 		{"apps/desktop/build/darwin/Info.plist", `<string>` + ProductVersion + `</string>`},
+		{"apps/desktop/build/darwin/Info.dev.plist", `<string>` + ProductVersion + `</string>`},
+		{"apps/desktop/native-share/macos/Info.plist", `<string>` + ProductVersion + `</string>`},
+		{"apps/desktop/native-share/windows/AppxManifest.xml", `Version="` + ProductVersion + `.0"`},
 		{"apps/desktop/build/windows/info.json", `"file_version": "` + ProductVersion + `.0"`},
 		{"apps/desktop/build/windows/info.json", `"product_version": "` + ProductVersion + `.0"`},
 		{"apps/desktop/build/windows/info.json", `"0409"`},
@@ -34,6 +37,7 @@ func TestProductVersionMetadataSynchronized(t *testing.T) {
 		{"apps/desktop/build/windows/info.json", `"ProductVersion": "` + ProductVersion + `"`},
 		{"apps/desktop/build/windows/wails.exe.manifest", `version="` + ProductVersion + `"`},
 		{"apps/desktop/build/windows/nsis/project.nsi", `INFO_PRODUCTVERSION "` + ProductVersion + `"`},
+		{"apps/desktop/build/windows/nsis/wails_tools.nsh", `INFO_PRODUCTVERSION "` + ProductVersion + `"`},
 		{"apps/desktop/frontend/package.json", `"version": "` + ProductVersion + `"`},
 		{".github/workflows/wails3-packages.yml", `PRODUCT_VERSION: ` + ProductVersion},
 	}
