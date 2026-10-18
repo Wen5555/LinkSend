@@ -2,6 +2,12 @@
 
 分项证据，状态仅在[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。物理双机、系统托盘、双NAT与原生loopback分别记录。
 
+## 四项功能可用收尾与信令复验（2026-10-18）
+
+用户明确缩减重复测试，选择收尾现有N1–N4。6ec3cc4准确Mac补一次原生目录picker/源码预设/自定义`*.tmp`保存与实际80B/三文件发送：集合和hash、中文空目录正确，预设及自定义排除内容未收到；main成功后清空且规则保持。再从真实快速菜单原生清空/选回B，quick持久revision4→5→6，main/queue/tasks不变且未入队；旧AX菜单外壳限制不再作为原生键盘目标选择的未验项。详情与IDs见[N1](DESKTOP-AE-SOURCE-SELECTION.md)和[N4](DESKTOP-AE-QUICK-SEND.md)。没有新源码/构建，N2/N3和旧平台证据继续绑定各自版本。
+
+本轮结束Windows与Mac各一次严格`https://linksend.oooai.de/healthz`返回200、TLS verify=0。首次Windows误查`/health`返回426（该路径不属于健康入口），更正后200；不把health当作新WSS、跨网文件或双NAT验收。最终preset-native-6ec3cc4 app/receiver/server全部终态exit0、监听关闭、2queues/2tasks均completed（含原各1）、main5/quick6、rate0、clipboard=false/grants0，原源/备份/身份/偏好保持；收据`mac-preset-6ec3cc4-final-receipt.json`与两平台`formal-health-final-*-receipt.json`已保留。Windows新启动策略、物理LAN/OS剪贴板/双NAT与JP UDP授权条件仍保持。
+
 ## 6ec3cc4准确Mac N2原生故障矩阵（2026-10-18）
 
 同一准确arm64包原生扩展为B/C两个软件目标并明确等待，真实picker/一批原子入队后B完成74B、C离线等待。源变化触发C SOURCE_CHANGED失败且B保持；真实重启后只原生确认C，重新等待的接收器完成新98B/hash/双方确认，B未重复发送。另16MiB活动批次中原生独立取消等待C不停止B，再取消剩余批次使B取消且无提交文件；前一批完成文件保持。

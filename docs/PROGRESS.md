@@ -1,3 +1,9 @@
+## 2026-10-18 四项功能可用收尾
+
+- 按用户最新要求复用已有验证，缩减重复矩阵。6ec3cc4准确Mac只新增一个原生目录picker/源码预设/自定义排除保存与80B实际QUIC发送，三文件集合/hash/中文空目录及排除内容缺席均通过；原生快速目标下拉清空/选回B也已保存，不再仅依赖fixture预置目标。
+- 两平台正式`/healthz`均HTTPS200/TLS verify0；首次误用`/health`的426保留为错误路径观察，不外推为WSS或跨NAT通过。所有新owned资源停止、监听关闭、clipboard=false，未更改产品源码、宿主网络/权限或日常profile。
+- N1–N4实现与可用收尾证据已汇总，准确候选仍6ec3cc4，完整物理/网络缺项如实保留。见[当前检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)与[唯一TODO](DESKTOP-EXPERIENCE-TODO.md)。
+
 ## 2026-10-18 6ec3cc4准确Mac N2故障、重试与取消
 
 - 原生checkbox勾选第二目标、明确等待、picker与一次批次提交通过；B在线实际74B完成，C离线等待。专用源变化令C真实SOURCE_CHANGED failed/需确认，B保持；真实重启后明确只确认C并重开已终态的一次性接收器，同一子项完成新98B/hash/双方确认，B没有重试。

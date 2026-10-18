@@ -2,6 +2,12 @@
 
 契约见[ADR0012](../adr/0012-tray-quick-send.md)，当前状态由[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。源码增加托盘/菜单栏“快速发送文件”，唤起既有窗口中的轻量对话面板；没有新实例/快捷键权限/传输队列。
 
+## 6ec3cc4准确Mac原生目标选择补齐（2026-10-18）
+
+同一准确包在隔离preset-native-6ec3cc4中从真实菜单打开快速面板，原生下拉显示正常已配对B。菜单打开后AX仍只暴露窗口外壳，但本次使用原生上箭头/Return清空，再重新打开并用下箭头/Return选回B，Go持久quick revision4→5→6；目标与原路径/规则恢复相同，main/queue/tasks保持、未入队，随后原生关闭面板。此为实际目标选择成功，补上下面旧检查点的NOT RUN；不把旧检查点改成当时已通过，也不增加新文件/物理测试声明。
+
+job `/tmp/codex-ssh/job-ls-ae-mac-preset-quick-target-6ec3cc4-20261018-01`实际exit0；完整选择收据包含在`mac-preset-6ec3cc4-final-receipt.json`。app/receiver/专属服务已正常停止，监听关闭、clipboard=false；准确包原生45B实际发送、取消/后台/重启和离线撤权分别保留原来源，物理与Windows托盘仍未验。
+
 ## 本机目标与身份加载边界修复（2026-10-18）
 
 旧QuickSendDialog仅按trusted/blocked筛选，核心目录中的本机同样trusted。新增三个真实回归先RED：本机出现在候选中、保存本机目标的发送按钮启用、identity尚未读取时仍启用目标。后端授权并未被绕过，这里修复的是用户可见候选与发送入口。
