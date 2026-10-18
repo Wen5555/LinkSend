@@ -29,3 +29,7 @@
 复核[ADR0016](../adr/0016-automatic-clipboard-file-cache.md)发现boot变化也不足以证明安全：应用重启前，系统恢复的旧路径可能已开始新的粘贴。已纠正此假设；不得靠boot+TTL删除发布对象。Microsoft文档的异步数据对象协商是可选的，Apple文件协调只覆盖协调读写，文件承诺文档的拖放示例也不证明Cmd+V。原生交接与读取结束证明、持久所有权/崩溃对账、有界自动回收和实际双平台粘贴仍须继续。
 
 普通原生错误不能随意消耗更高generation，否则会吞掉用户的新复制；后续原生结果契约需区分“确定未写入”“可证明的本机变更”“结果未知”，保持新复制与防回环边界。本批只解决缓存保留与准确状态，不声称该扩展契约已完成。
+
+## 准确提交与CI
+
+源码 `bed8d2c651c9f8c7512b3884a7c096b2efaa387c` 已推送，远端SHA一致。[core](https://github.com/Wen5555/LinkSend/actions/runs/39167827133)、[desktop](https://github.com/Wen5555/LinkSend/actions/runs/39167827116)、[三平台包](https://github.com/Wen5555/LinkSend/actions/runs/39167827151)均success，Windows/Mac arm64/Mac amd64三job逐项核对。Linux core完整test/race包含实际目录替换分支；这不替代Finder/Explorer键盘粘贴、安装或跨网旅程。未合并main、发布或替换生产。

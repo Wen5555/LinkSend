@@ -1,3 +1,7 @@
+## 2026-10-19 可靠性R2私有存储边界
+
+缓存签名记录`clipboard-cache/v1/<id>`只在当前profile既有SQLite metadata中保存，不进入信令、QUIC文件帧或JS DTO。Go-only Root/StorageReady提供实际存储句柄来源，错误复用已有RECEIVE_PLAN_PERSIST_FAILED；没有新增协商能力或升级文件V1。记录版本与任务库schema分开，当前仍schema12；严格未知版本/签名/运行代次检查及兼容/回退说明见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)。不确定原生写入保留可能已发布文件，不把错误当作未发布证明。自动回收仍待原生读取结束许可。
+
 ## 2026-10-19 文件剪贴板能力增量（本地候选）
 
 认证连接新增独立 `clipboard_files_v1`，双方声明后才发出 files grant/lease/event。旧端只收 text/link/image，普通文件 V1 帧保持。任务库 11→12 扩大 clipboard_grants.kind 约束，保留原行，不默认授予文件权限；迁移前 VACUUM 备份并验证。

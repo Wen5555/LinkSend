@@ -1,3 +1,5 @@
+2026-10-19 可靠性R2持久owner：在既有SQLite metadata命名空间保存版本1的私有签名缓存记录，固定目录与实际stage/file句柄来源在body前登记，发布意图先落盘，实际mutation仍重验控制/CAS；不确定发布缓存保护，旧运行记录不重放。文件wire、clipboard_files_v1及任务库schema12保持。完整活动引用/自动回收和双平台键盘粘贴仍待，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)与[持久记录验证](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。
+
 2026-10-19 文件剪贴板：双方协商 clipboard_files_v1 并分别开启 files 收发权限后，原生文件列表经10秒内预约进入现有认证文件引擎，正文不经JS/信令。预约最长24h但新复制/暂停/撤权/取消优先；完成校验后写本机路径，失败不发布部分文件。大于等于32MiB显示居中“正在复制”，准备不确定进度、传输按 verified 字节；小文字/图片不弹窗。任务库11→12备份迁移，成功缓存暂保留，重启不补发。本地候选的物理双向文字、图片和文件条目、原生进度及取消已验证；准确发行包与其余验收边界单列，见ADR0015和实施记录。
 
 2026-10-18 0.6.0后工作流修复：记录支持明确打开文件/所在文件夹（含发送源）；自动剪贴板修复原生ready、PNG/忙读取与恢复即续期；本地忘记与黑名单拆分；统一收发队列、清理/默认退出清空与新增接收红点。信任schema3仅加可选forgotten，任务库/文件wire不变；准确边界见[ADR0013](adr/0013-desktop-transfer-workflows.md)和[实施记录](evidence/DESKTOP-060-WORKFLOW-FIXES.md)。

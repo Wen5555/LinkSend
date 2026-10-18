@@ -735,7 +735,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrPlanUnsupported)})
 		return Result{}, ErrPlanUnsupported
 	}
-	r, err := openReceiverContentRoot(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged, descriptor, options.Root)
+	r, err := openReceiverContentRoot(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged, descriptor, options.Root, options.StorageReady)
 	if err != nil {
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return Result{}, err

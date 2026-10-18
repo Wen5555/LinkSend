@@ -609,7 +609,7 @@ func (s *Service) receiveClipboardFileStream(peer *PeerSession, stream *transpor
 	return true
 }
 
-func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport.QUICStream) error {
+func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport.QUICStream) (err error) {
 	select {
 	case s.clipboardFileReadSlots <- struct{}{}:
 	case <-job.ctx.Done():
@@ -623,11 +623,38 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 	defer destination.Close()
 	directory := destination.directory
 	published, nativeAttempted := false, false
+	var receipt *clipboardCacheReceipt
 	defer func() {
+		var metadataErr error
 		if !published && !nativeAttempted {
-			_ = destination.discardUnpublished()
+			cleanupErr := destination.discardUnpublished()
+			if receipt != nil {
+				if cleanupErr == nil {
+					metadataErr = receipt.forgetRemoved()
+				} else {
+					metadataErr = receipt.advance("abandoned")
+				}
+			}
+		} else if receipt != nil {
+			if published {
+				metadataErr = receipt.advance("published")
+			} else {
+				metadataErr = receipt.advance("protected")
+			}
+		}
+		if metadataErr != nil && err == nil {
+			err = cacheMetadataError(metadataErr)
+			if nativeAttempted {
+				s.clipboardFilesMu.Lock()
+				job.publicationUncertain = true
+				s.clipboardFilesMu.Unlock()
+			}
 		}
 	}()
+	receipt, err = s.registerClipboardCache(destination, job.peer.PeerID)
+	if err != nil {
+		return cacheMetadataError(err)
+	}
 	var roots []string
 	var releaseSpace func()
 	defer func() {
@@ -667,10 +694,21 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		}
 		plan := transfer.FullReceivePlan(offer.Manifest)
 		plan.Directory = directory
+		if err := receipt.bindManifest(offer.Manifest); err != nil {
+			return transfer.ReceivePlan{}, cacheMetadataError(err)
+		}
 		return plan, nil
+	}, StorageReady: func(storage transfer.ReceiveStorage) error {
+		if err := receipt.bindStage(storage); err != nil {
+			return cacheMetadataError(err)
+		}
+		return nil
 	}, Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "receiving", p) }})
 	if err != nil {
 		return err
+	}
+	if err := receipt.advance("verified"); err != nil {
+		return cacheMetadataError(err)
 	}
 	s.clipboardAdapterMu.RLock()
 	adapter := s.clipboardAdapter
@@ -680,6 +718,11 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 	}
 	if err := job.ctx.Err(); err != nil {
 		return err
+	}
+	// Durable intent can involve disk I/O. Persist it outside the permission
+	// and clipboard-state locks; revalidate every control/CAS condition below.
+	if err := receipt.advance("publishing"); err != nil {
+		return cacheMetadataError(err)
 	}
 	s.clipboardGrantMu.Lock()
 	defer s.clipboardGrantMu.Unlock()
@@ -696,6 +739,9 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		}
 		if err := destination.visible(); err != nil {
 			return 0, err
+		}
+		if err := receipt.beginNative(); err != nil {
+			return 0, cacheMetadataError(err)
 		}
 		// Even an error can follow a native mutation. Once the OS adapter has
 		// seen the paths, preserve verified files until ownership reconciliation

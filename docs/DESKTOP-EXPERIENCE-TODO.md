@@ -9,6 +9,8 @@
 - [ ] R2（实施中）：[缓存ADR0016](adr/0016-automatic-clipboard-file-cache.md)已先冻结；落实真实manifest自动空间预留、并发容量保护、拒绝后残留清理及稳定空间原因/新复制恢复。自动所有权/回收、跨启动保护及 Finder/Explorer 真实键盘粘贴仍待；现有文件条目读回不抵扣。见[容量增量证据](evidence/RELIABILITY-R2-CAPACITY.md)。
 
   R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
+
+  R2持久owner首批：同一SQLite连接保存带用途/身份/运行代次的签名记录，实际stage/file句柄来源在body前登记，publishing在原生写入前登记；损坏/冲突/旧运行不能重获发送或未发布删除权限。见[持久记录证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。活动引用、启动对账/自动回收与原生完成证明继续。
 - [ ] R3：可操作原因/下一步、安全诊断 DTO 与本地脱敏导出待实施。
 - [ ] R4：准确候选覆盖安装、活动任务退出/重启和受影响系统入口待验。
 - [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。

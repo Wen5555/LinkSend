@@ -117,6 +117,10 @@ func TestClipboardFilesInsufficientSpacePreservesExistingFiles(t *testing.T) {
 	if remaining != 0 {
 		t.Fatal("failed receive leaked capacity")
 	}
+	var cacheRows int
+	if err := f.b.store.db.QueryRow(`SELECT count(*) FROM metadata WHERE key LIKE ?`, clipboardCacheKeyPrefix+"%").Scan(&cacheRows); err != nil || cacheRows != 0 {
+		t.Fatal("removed unpublished copy retained or lost unrelated cache metadata", cacheRows, err)
+	}
 	if data, err := os.ReadFile(f.source); err != nil || string(data) != "clipboard file bytes" {
 		t.Fatal("space rejection changed sender source", err)
 	}

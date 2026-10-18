@@ -94,7 +94,20 @@ type ReceiveOptions struct {
 	AcceptNativeContent bool
 	Plan                func(context.Context, Offer) (ReceivePlan, error)
 	PlanChanged         func(ReceivePlan) error
-	Progress            func(Progress)
+	// StorageReady observes engine-owned handles after the plan checkpoint and
+	// before accepting body bytes. Borrowers must not write or close them.
+	StorageReady func(ReceiveStorage) error
+	Progress     func(Progress)
+}
+
+// ReceiveStorage is Go-only provenance for a local storage owner, never wire
+// metadata or a frontend DTO. Files refer to the receiver's actual open inodes.
+type ReceiveStorage struct {
+	Root, Stage *os.Root            `json:"-"`
+	Files       map[uint32]*os.File `json:"-"`
+	Manifest    Manifest            `json:"-"`
+	Plan        ReceivePlan         `json:"-"`
+	Peer        string              `json:"-"`
 }
 
 type PlanSummary struct {

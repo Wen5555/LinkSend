@@ -159,6 +159,9 @@ func TestClipboardFilesUncertainNativePublicationKeepsVerifiedPaths(t *testing.T
 		if p.Error != "file_copy_publication_uncertain" {
 			t.Fatal("uncertain native outcome was reported as definitely unpublished", p)
 		}
+		if record := loadTestCacheRecord(t, f.b, p.ID); record.State != "protected" {
+			t.Fatal("uncertain native publication lost its durable protection", record.State)
+		}
 	}
 }
 

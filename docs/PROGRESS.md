@@ -1,3 +1,10 @@
+## 2026-10-19 可靠性 Goal R2 持久owner首批
+
+- 在现有SQLite metadata命名空间保存严格版本/用途/身份/运行代次及Ed25519签名的缓存归属，CAS+回读；实际引擎Root/Stage/File句柄来源在accept/body前登记，publishing先于原生写入，DB I/O在授权/状态锁外，实际mutation仍复核控制与CAS。无新数据库/schema/wire，损坏或未知记录保护。
+- 首轮首次checkpoint漏接回调的安全失败保留，统一notifyPlanReady后修复；真实QUIC、before-body门、签名/外来inode/SQLite故障及真实profile key重载测试核对所有权与不重放，详见[证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。完整活动引用/对账/自动回收、原生完成证明和键盘粘贴仍未完成。
+- 本地最终普通3轮、app/transfer定向race各3轮及两模块workspace/off test/vet/build全部退出0；前端未改，复用同产品前端来源。推送后继续核对CI，源码记录通过不抵扣真实系统粘贴或自动回收验收。
+- `bed8d2c` 的core/desktop及三平台包CI全部success，Linux实际目录替换分支已被完整core测试/race覆盖；不冒充系统粘贴或安装验收。
+
 ## 2026-10-19 可靠性 Goal R2 路径与不确定发布
 
 - 原生adapter已接收路径但确认报错的注入回归先复现文件被删；修复后保留已验证缓存并显示准确不确定状态。接收/checkpoint使用同profile owner固定的Root，目录字符串不再可替换写入授权；无wire/schema变化。Root闭合、错误目录/伪checkpoint、Windows junction及已有用户文件保护均有回归，真实QUIC夹具与文件系统/内存原生adapter范围见[证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。
