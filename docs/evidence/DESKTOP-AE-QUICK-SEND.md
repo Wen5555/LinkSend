@@ -63,3 +63,16 @@ checkpoint job `.../job-linksend-ae-mac-quick-checkpoint-98469ce-20261018-01` ex
 入队成功后仅quick路径清空，revision3，main仍原整行。原生主窗关闭后AX窗口数0、同owner仍在；原生菜单quick唤醒成功、仍仅一个completed队列。再真实停止/重启准确包，main完整保持、quick空、无重复入队/派发。收据`quick-native-send-receipt.json`已下载到忽略artifact，含实际sender快照/文件hash/背景和重启断言。相关job（前缀`/tmp/codex-ssh/job-linksend-ae-mac-`）`quick-picker-goto/path/confirm-98469ce-20261018-01`、`quick-cancel-reopen-98469ce-20261018-01`、`quick-native-enqueue-98469ce-20261018-01`、`quick-final-receipt-98469ce-20261018-01`、`quick-background-wake-98469ce-20261018-01`、`quick-restart-check-98469ce-20261018-01`均exit0；receiver job同样exit0。
 
 边界：Mac-only loopback、31B单文件、夹具预置目标且用户协助选择，不是物理双机/吞吐/三设备或自动目标选择全通过。Windows真实托盘、离线/撤权/反复提交等完整原生矩阵仍缺，源码既有测试保持原范围。截图权限未改变，没有视觉QA。N4现场转入独立的公共信令恢复旅程前已保留整个post-quick profile备份，loopback fixture已正常终态exit0，CLI receiver退出，clipboard=false。
+## 6f29814离线原生续验暴露设备读取阻塞（2026-10-18）
+
+准确6f29814 app（EXE SHA a003120b4866463d029ad5aad1b39be93e653d56eb5858473f3fc6d7fa1eee71）在新的Mac-only loopback三设备夹具中复现：独立C正常Devices确认A在线、B离线/未撤权，本地trust含B/C，profile设备快照已写3条，但原生主设备页/quick未收到设备列表，保存的B显示当前不可发送。未勾选等待、未入队、tasks=0，两草稿原行保持；这不构成离线门槛PASS。
+
+fixture源码`.artifacts/ae-20261018/quick-offline-fixture/main.go` SHA71582b1b3c01189c121ff547d709d4fb6bbef15e2e826f07caf8e989bdfd9e55；基于不变6f29814核心构建临时Mac工具，EXE SHAe5a573b3b0894193d0614f2f34b0b6b5f71048d66f084983263aa8a4187c9a4b。A/B/C正常Initialize/Invitation/Join，生产SaveDraft预置目标与初始文件，不冒充原生选择通过；profile owner释放后准确GUI独占A。原生菜单可打开quick；手动取消→设备→刷新仍没有B/C，端点健康/成员在线与UI分别记录。
+
+保留现场并以同包、同profile、同URL做一次带stdout/stderr的受控重启，问题再次出现。2秒sample未提供足够Go调用关系；在确认queue/tasks=0且两草稿整行保持后，对**仅任务owned app**主动SIGQUIT取Go栈并退出。这是诊断终止，不是应用自发崩溃。栈明确有App.Devices和native-entry worker两个goroutine卡在publishNativeShareDevices→writeNativeShareDevices→os.OpenRoot；App.Devices调用前已拿到3条设备，RPC被后续系统共享快照I/O拖住。实际包包含App Group entitlement，属于ad-hoc签名；没有打开/修改系统权限，也未进一步读取或清理共享容器。
+
+候选修复移除普通Devices RPC的同步共享发布，沿用owned native-entry worker原有15秒发布；显式/非默认profile不调用系统App Group resolver；默认profile还须通过Security.framework的非空TeamIdentifier与准确group entitlement条件。隔离profile仍保存/读取自己的系统入口目录。三个隔离条件及两个真实配对目录/入口副作用回归先RED，再GREEN；默认合法profile的resolver/空容器/去重路径也通过。无前端、wire、schema或权限修改。
+
+本地`GOWORK=off go test ./...`核心缓存PASS；desktop workspace test7.231s、off `go test -race -count=1 ./...`9.211s与nativeclipboard1.636s、off vet/build全部PASS。Mac实际SDK核对Security函数/签名；修改后的Objective-C `clang -fsyntax-only -Werror`及真实ad-hoc小探针编译/执行exit0，确认不返回共享容器。新准确包/原生设备恢复与剩余离线、撤权矩阵待继续；不把源码GREEN升级为包级修复成功。
+
+远端fixture job `/tmp/codex-ssh/job-ls-ae-mac-quick-offline-fixture-20261018-01`为45分钟owned loopback服务；当前旧app已诊断退出，profile/文件/私有备份保留，clipboard=false。关键失败jobs为quick-offline-open-check第01/02轮；栈job `job-ls-ae-mac-quick-offline-capture-stacks-20261018-01` exit0，C验证 `job-ls-ae-mac-share-signature-check-20261018-01` exit0。所有原始日志保留在任务根`quick-offline-native-6f29814`与对应jobPath，后续按准确新包继续同现场。

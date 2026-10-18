@@ -1,3 +1,8 @@
+## 2026-10-18 原生设备RPC被共享目录I/O阻塞的修复候选
+
+- 6f29814准确Mac离线quick现场两次复现后端3设备/原生列表未返回；受控SIGQUIT栈定位App.Devices及native-entry worker卡在系统共享快照os.OpenRoot。未入队或传输，两草稿保持；主动诊断终止不当作自发崩溃。
+- Devices RPC不再同步写共享快照；显式/非默认profile只访问自己入口目录，默认profile还须TeamIdentifier与准确App Group entitlement。三个隔离及两个真实目录副作用回归RED→GREEN，核心off/desktop两模式/off-race/vet/build通过；Mac SDK/C语法和ad-hoc探针通过。新包/原生复验继续，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)与[ADR0003](adr/0003-desktop-ownership-and-local-denial.md)。无前端/wire/schema/宿主权限变化，Goal active。
+
 ## 2026-10-18 准确Mac同URL空库恢复与旧队列隔离
 
 - 6f29814准确包在Mac loopback同URL切换独立新空控制库，原生prepare/cancel/再次prepare与真实重启保持、新码加入、再次重启/认证WebSocket通过；独立C核对旧身份加入新组。两草稿/身份/偏好/源hash/旧queue绑定保持，旧context退休。用户手动合成短码已新鲜AX实读9字符匹配，未提交该合成码；不升级旧18字符/legacy异常根因。

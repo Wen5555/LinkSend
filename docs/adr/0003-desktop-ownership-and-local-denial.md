@@ -46,3 +46,11 @@ M0 不改变任务历史 schema 2 或文件帧；M1 元数据与 M4 接收计划
 自动测试覆盖 OS 锁竞争、子进程退出/强杀锁释放、拒绝与迁移、源/身份恢复负例及真实 QUIC
 在已验证块后保存退出。窗口/托盘/通知、Finder Services、安装卸载属于各阶段原生验收，
 不得由编译或 loopback 结果代替。网络矩阵的既有 MASQUERADE-only FAIL 保留。
+
+## 2026-10-18 系统共享存储与 profile 隔离补充
+
+普通设备目录RPC只返回核心设备查询，不同步写入系统共享快照。已有单个native-entry worker继续按原15秒节奏发布安全设备元数据；共享目录的系统提示或文件I/O等待不能阻塞设备页和快速发送的目录响应，也不能由一次目录读取清除其他系统入口错误。
+
+macOS显式`LINKSEND_DATA_DIR`及任何非默认profile只使用各自profile中的native-share-v1，不解析、读写或消费全局App Group入口。只有规范化后的默认profile且未显式覆盖时才允许解析系统容器；进程还须同时具有非空TeamIdentifier签名和准确的group.com.linksend.desktop entitlement。仅带group entitlement的ad-hoc预览不访问系统容器。局部SendTo/Finder入口、草稿和现有profile owner不因此改变；不自动授予系统权限。
+
+默认profile中正式签名Share Extension的激活与系统授权仍按既有范围独立验收；此条件检查不能冒充正式签名/公证或系统扩展通过。没有wire、trust/任务库迁移或正文路径变化。

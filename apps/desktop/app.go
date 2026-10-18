@@ -1098,9 +1098,8 @@ func (a *App) Devices() ([]linksendapp.DeviceInfo, error) {
 		ctx = context.Background()
 	}
 	devices, err := a.core.Devices(ctx)
-	if err == nil {
-		a.nativeEntryError(publishNativeShareDevices(a.dataDir, devices))
-	}
+	// The owned native-entry worker publishes its bounded device snapshot.
+	// A system container prompt or filesystem wait must not hold this RPC.
 	return devices, err
 }
 

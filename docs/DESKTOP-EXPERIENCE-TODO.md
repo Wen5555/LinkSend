@@ -12,7 +12,7 @@
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
-| D / N4 托盘快速发送 | quick/Go入队、Mac标签/主点击完成 | 两模块/race/108前端/QUIC/重启幂等通过 | 98469ce准确Mac原生picker/取消重开/入队31B QUIC实收hash/主草稿保持/后台菜单唤起/重启无重复PASS；目标夹具预置且用户协助 | 98469ce五项CI/三平台包success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Win真实托盘、离线/撤权等原生缺项继续 |
+| D / N4 托盘快速发送 | quick/Go入队、Mac标签/主点击完成 | 两模块/race/108前端/QUIC/重启幂等通过 | 98469ce准确Mac原生picker/取消重开/入队31B QUIC实收hash/主草稿保持/后台菜单唤起/重启无重复PASS；目标夹具预置且用户协助 | 98469ce五项CI/三平台包success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：6f29814原生目录被同步共享I/O阻塞已定位并修源码，待新准确包复验后继续离线/撤权；Win托盘仍缺 |
 | E 同提交候选/最终回归/文档 | 6f29814四资产/来源核验；原包分项保留来源 | 核心off/desktop/vet/build/115前端及五项CI通过 | 新Mac arm64原生错误提示PASS；98469ce原生quick文件PASS；Intel实机与物理/网络待验 | 同一Draft PR #9、6f29814五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
