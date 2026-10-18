@@ -2,6 +2,12 @@
 
 分项证据，状态仅在[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。物理双机、系统托盘、双NAT与原生loopback分别记录。
 
+## 6ec3cc4准确Mac N3活动预算（2026-10-18）
+
+同一准确arm64包的原生256→1024KiB/s动态保存与32MiB实际文件通过；每阶段两个稳定4MiB确认区间约253/1005KiB/s，排除过渡与合并ACK。1KiB/s等待时原生暂停/恢复新attempt/取消、遗留待确认队列显式取消及独立4MiB等待中保存0及时完成/hash/双方确认通过。真实重启后0/quick/旧历史保持、无重复派发；完整口径、源码/EXE/文件hash、主动中断CLI exit1、失败观察器与收尾见[N3证据](DESKTOP-AE-FILE-BUDGET.md)。
+
+本轮无产品源码改动，仍绑定6ec3cc4已核验五项CI/三平台四资产；没有新增物理或OS剪贴板证明。最新隔离根`budget-native-6ec3cc4`的app/四次CLI/只读采样器/专属rendezvous均终态、监听关闭、clipboard=false/enabled grants=0。最终4queues/4tasks（3completed/1cancelled，含原各1）、main revision7空、quick revision4保持，原profile/源/备份保留，完整收据`mac-budget-6ec3cc4-final-receipt.json`已下载。
+
 ## 6ec3cc4准确Mac Finder Services原生闭环（2026-10-18）
 
 本轮无产品源码修改。准确包仍为`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`及其五项success CI/四资产核验，来源见[N4证据](DESKTOP-AE-QUICK-SEND.md)。实际arm64 EXE SHA256 `e13f0391f5074996c74fdd7e6ebedd241f0966612a827f9ce676cef39cee3e87`；新独立根`/Users/wen/.codex/supervision/linksend-ae-20261018/finder-native-6ec3cc4`复制准确app和已停止的前一测试profile，启动前无其他LinkSend进程。原profile/数据库/文件保留，仅在新clone进行系统入口旅程，私有备份仅在Mac。
