@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Wen5555/LinkSend/releases"><img src="https://img.shields.io/github/v/release/Wen5555/LinkSend?include_prereleases&amp;sort=date&amp;label=pre-release" alt="最新预发布版本"></a>
+  <a href="https://github.com/Wen5555/LinkSend/releases"><img src="https://img.shields.io/github/v/release/Wen5555/LinkSend?include_prereleases&amp;sort=date&amp;label=release" alt="最新版本"></a>
   <a href="https://github.com/Wen5555/LinkSend/actions/workflows/core.yml"><img src="https://github.com/Wen5555/LinkSend/actions/workflows/core.yml/badge.svg?branch=main" alt="Go 核心检查"></a>
   <a href="https://github.com/Wen5555/LinkSend/actions/workflows/desktop.yml"><img src="https://github.com/Wen5555/LinkSend/actions/workflows/desktop.yml/badge.svg?branch=main" alt="桌面端检查"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0 许可证"></a>
@@ -26,15 +26,15 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 **文件正文由两端设备直接传输，信令服务只负责协调连接。** 同一局域网内可发现并添加附近设备；跨网络时使用可自托管的信令服务和 ICE 建立直连。
 
 > [!NOTE]
-> LinkSend 目前处于测试预发布阶段。最新公开版本是 [v0.5.0-desktop-preview.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.5.0-desktop-preview.2)，主分支包含其后的修复。下载包与当前源码的能力、测试结果需分别查看，详见[当前状态与限制](#当前状态与限制)。
+> 最新公开版本是 [v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)，包含目录预设、多设备分发、正文限速和托盘快速发送。签名、平台与网络验证范围见[发布说明](docs/RELEASE-v0.6.0.md)和[当前状态与限制](#当前状态与限制)。
 
 ## 主要功能
 
 - **文件与目录传输**：支持单文件、多文件、目录及空目录，提供发送草稿、顺序队列与任务记录。
-- **目录预设（开发候选）**：完整发送或源码目录预设，支持有限自定义排除、数量/体积/条目预览和恢复完整发送；规则随草稿、队列与恢复保存，见[记录](docs/evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
-- **多设备分发（开发候选）**：同一草稿选择2–16台已配对设备，原子加入独立目标队列，逐个发送并单独处理等待、取消与重试；当前公开包不据此升级能力，证据见[阶段记录](docs/evidence/DESKTOP-AE-DEVICE-BATCHES.md)。
-- **文件正文限速（开发候选）**：在设置中选择不限速或KiB/MiB每秒上限，保存后作用于本进程当前及后续文件，自动剪贴板使用独立通路；协议开销另计，见[证据](docs/evidence/DESKTOP-AE-FILE-BUDGET.md)。
-- **托盘快速发送（开发候选）**：从托盘/菜单栏打开轻量面板，选择最近设备和文件；独立草稿保留主窗口选择，仍通过同一Go队列发送。原生入口实机状态见[记录](docs/evidence/DESKTOP-AE-QUICK-SEND.md)。
+- **目录预设（0.6.0）**：完整发送或源码目录预设，支持有限自定义排除、数量/体积/条目预览和恢复完整发送；规则随草稿、队列与恢复保存，见[记录](docs/evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
+- **多设备分发（0.6.0）**：同一草稿选择2–16台已配对设备，原子加入独立目标队列，逐个发送并单独处理等待、取消与重试；各平台验证范围见[阶段记录](docs/evidence/DESKTOP-AE-DEVICE-BATCHES.md)。
+- **文件正文限速（0.6.0）**：在设置中选择不限速或KiB/MiB每秒上限，保存后作用于本进程当前及后续文件，自动剪贴板使用独立通路；协议开销另计，见[证据](docs/evidence/DESKTOP-AE-FILE-BUDGET.md)。
+- **托盘快速发送（0.6.0）**：从托盘/菜单栏打开轻量面板，选择最近设备和文件；独立草稿保留主窗口选择，仍通过同一Go队列发送。原生入口实机状态见[记录](docs/evidence/DESKTOP-AE-QUICK-SEND.md)。
 - **附近设备与跨网络配对**：局域网内发现设备并经双方同意添加；跨网络使用一次性配对码建立设备组。
 - **加密与完整性校验**：使用 Ed25519 设备身份、TLS 1.3 双向认证及公钥固定，使用 BLAKE3 校验文件块和完整文件。
 - **暂停与恢复**：支持暂停、取消及应用重启后的恢复；恢复时重新验证暂存数据，只请求缺失或损坏的块。
@@ -45,7 +45,7 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 
 ## 下载与安装
 
-以下链接对应 **v0.5.0-desktop-preview.2**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
+以下链接对应 **v0.6.0**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
 
 | 平台 | 架构 | 下载 | 说明 |
 | --- | --- | --- | --- |
@@ -53,13 +53,13 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 | macOS | Apple Silicon / arm64 | [DMG][macos-arm64] | 最低 macOS 13 |
 | macOS | Intel / amd64 | [DMG][macos-amd64] | 最低 macOS 13；最低版本与 Intel 实机验收仍有缺项 |
 
-发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。此预发布包来自提交 `0229cbf`；主分支的后续修复未重新发布为该包。
+发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。本版包由主分支提交 `8bad932` 的干净 Actions 构建，包内产品版本为 `0.6.0`，文件协议仍为 V1。
 
-A–E开发候选的[同提交 Actions 产物](https://github.com/Wen5555/LinkSend/actions/runs/39095472398)绑定 `6ec3cc4`，含Windows便携/安装包和Mac两架构DMG，四资产来源与hash已核验。准确Mac补齐原生目录预设/自定义排除与80B三文件集合、快速目标原生选择保存，并通过双目标批次的离线等待/源变化确认/独立取消/批次取消与重启屏障、活动限速/等待控制、quick目标边界/同机文件与Finder Services真实菜单、后台唤回、草稿去重/重启及110B文件/空目录闭环，均为同机loopback范围；旧Windows分项仍绑定6edddad。分项证据见[检查点](docs/evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)，完整物理LAN、其余系统入口、OS剪贴板和跨NAT矩阵仍未完成，公开Release链接保持原版本。
+[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0) 的 Windows 便携包/安装程序与 Mac 两架构 DMG 来自[同一主分支构建](https://github.com/Wen5555/LinkSend/actions/runs/39103713740)，四项资产来源、版本、架构与哈希已核验。发布前 Mac 四项功能的原生实际传输证据仍绑定 `6ec3cc4`，旧 Windows 分项仍绑定 `6edddad`；本版不新增物理双机或双 NAT 通过声明。详细范围见[原生检查点](docs/evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)和[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
 
 Windows 包尚未进行代码签名；macOS 包采用 ad-hoc 签名，尚未公证。两端可能出现系统安全提示，安装与运行边界见[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
 
-Linux 当前用于信令服务与 CLI；Linux 桌面端属于尽力支持范围，本次预发布没有提供 Linux 桌面安装包。
+Linux 当前用于信令服务与 CLI；Linux 桌面端属于尽力支持范围，本版没有提供 Linux 桌面安装包。
 
 ## 开始传输
 
@@ -78,11 +78,11 @@ Linux 当前用于信令服务与 CLI；Linux 桌面端属于尽力支持范围�
 
 跨网络传输还需要网络允许 UDP 直连，并按部署配置 STUN。配对成功或设备在线只表示控制面状态；真正传输仍需完成 ICE 与 QUIC 握手。
 
-开发候选提供“设备 → 服务重建后重新连接”：确认恢复后选择新建本机设备组或加入另一台设备的新组。它保留身份、文件、历史、设置和有效局域网关系，隔离旧组任务；新关系的免确认和剪贴板权限需重新开启。网络暂时失败不会自动重置。请求可能已送达时可暂停，重启后继续核对实际结果；不会重放已消费的邀请码。此入口的准确包原生验收状态见[本轮证据](docs/evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
+0.6.0提供“设备 → 服务重建后重新连接”：确认恢复后选择新建本机设备组或加入另一台设备的新组。它保留身份、文件、历史、设置和有效局域网关系，隔离旧组任务；新关系的免确认和剪贴板权限需重新开启。网络暂时失败不会自动重置。请求可能已送达时可暂停，重启后继续核对实际结果；不会重放已消费的邀请码。此入口的准确包原生验收状态见[本轮证据](docs/evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。
 
-开发候选在发送页提供目录预设：默认发送完整内容，可选择“源码目录”排除依赖与构建目录，也可添加有限相对路径规则；预览包含/排除数量、体积与条目，随时恢复完整发送。已入队任务和重启恢复沿用各自保存的规则；预览不冻结源文件，派发仍会核对变化。实际验证与包级状态见[N1证据](docs/evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
+发送页提供目录预设：默认发送完整内容，可选择“源码目录”排除依赖与构建目录，也可添加有限相对路径规则；预览包含/排除数量、体积与条目，随时恢复完整发送。已入队任务和重启恢复沿用各自保存的规则；预览不冻结源文件，派发仍会核对变化。实际验证与包级状态见[N1证据](docs/evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
 
-使用上述Actions候选包时，四项入口如下：
+四项功能的入口如下：
 
 | 功能 | 操作 |
 |---|---|
@@ -220,9 +220,9 @@ LinkSend 采用 [Apache License 2.0](LICENSE)。
 
 网络与桌面能力建立在 [Pion ICE](https://github.com/pion/ice)、[quic-go](https://github.com/quic-go/quic-go)、[Wails](https://github.com/wailsapp/wails) 和 [BLAKE3 Go 实现](https://github.com/zeebo/blake3) 等开源项目之上。
 
-[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/LinkSend-v0.5.0-windows-amd64-0229cbf3e8373c544431102ed904c4a19ed02dc4.zip
-[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/LinkSend-v0.5.0-windows-amd64-installer-0229cbf3e8373c544431102ed904c4a19ed02dc4.exe
-[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/LinkSend-v0.5.0-macos-arm64-0229cbf3e8373c544431102ed904c4a19ed02dc4.dmg
-[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/LinkSend-v0.5.0-macos-amd64-0229cbf3e8373c544431102ed904c4a19ed02dc4.dmg
-[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/SHA256SUMS.txt
-[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.5.0-desktop-preview.2/RELEASE-MANIFEST.json
+[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.zip
+[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-installer-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.exe
+[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-arm64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg
+[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg
+[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/SHA256SUMS.txt
+[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/RELEASE-MANIFEST.json

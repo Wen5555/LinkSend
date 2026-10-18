@@ -2,7 +2,7 @@
 
 ## 2026-10-18 A–E Goal（已启动，当前 blocked）
 
-本聊天 Goal 已通过平台创建，2026-10-18 经 `update_goal` 返回状态 blocked；用户明确执行[目标文档](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)，整体未完成。起点 `638b2aa`，工作分支 `codex/lan-rebuild-ae`，沿用 Draft PR #9。不恢复旧代理/heartbeat；保留 `.playwright-cli/`、`apps/desktop/build/ios/`、`apps/desktop/build/linux/` 未跟踪内容。
+本聊天 Goal 已通过平台创建，2026-10-18 经 `update_goal` 返回状态 blocked；用户明确执行[目标文档](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)，整体未完成。起点 `638b2aa`，原工作分支 `codex/lan-rebuild-ae`，PR #9已合并main，当前交付分支main。不恢复旧代理/heartbeat；保留 `.playwright-cli/`、`apps/desktop/build/ios/`、`apps/desktop/build/linux/` 未跟踪内容。
 
 | 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
 |---|---|---|---|---|---|
@@ -13,15 +13,17 @@
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6ec3cc4准确Mac双目标在线/离线、源变化只确认C、独立子项及活动批次取消、两次重启/直接恢复屏障PASS；同机范围 | 6ec3cc4五项CI/三平台包已核验，本轮仅文档；旧Win6edddad保持 | [N2证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：物理双机仍待，不扩展重复矩阵 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 既有预算/race/QUIC/内存剪贴板夹具及6ec3cc4模块/119前端边界 | 6ec3cc4准确Mac原生256→1024KiB/s活动限速/32MiB hash、1KiB暂停/恢复/取消、活动改0完成4MiB、重启保持PASS；旧Win结果保留来源 | 6ec3cc4五项CI/三平台四资产核验；本轮仅文档 | [N3证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：OS剪贴板并存/物理速率仍待 |
 | D / N4 托盘快速发送 | quick/Go入队、菜单主点击/共享存储隔离与本机目标边界完成 | 两模块/off测试构建、119前端；本机/身份加载回归RED→GREEN | 6ec3cc4准确Mac self禁发/原生目标选择保存/picker/取消重开/45B QUIC及hash/后台重启退出PASS；0ae7cdf离线撤权保持来源 | 6ec3cc4五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Mac可用收尾完成，Win托盘与物理仍未验 |
-| E 同提交候选/最终回归/文档 | 6ec3cc4四资产/来源核验；旧包分项保留来源 | 两模块workspace/off测试及off构建、desktop vet/119前端通过 | 当前Mac N1集合/N2故障确认取消/N3活动限速/N4目标选择与文件等可用收尾通过；两平台正式healthz HTTPS200/TLS0；物理仍待 | 同一Draft PR #9、6ec3cc4五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：四项功能不扩展重复测试，完整A/B/B2/系统入口/双NAT缺项保持 |
+| E 同提交候选/最终回归/文档 | v0.6.0发布源8bad932；旧分项保留原来源 | main core/desktop/三平台CI全部通过；版本同步检查覆盖遗漏Windows清单 | 发布前6ec3cc4 Mac N1–N4可用收尾保持原来源；v0.6.0新包仅来源/版本/架构/签名核验，物理未验 | PR #9已合并main，v0.6.0/8bad932四程序包及六发布资产核验success | [发布说明](RELEASE-v0.6.0.md)：保留完整A/B/B2/系统入口/双NAT缺项，不扩展重复测试 |
 
-用户2026-10-18最新明确授权合并main并发布v0.6.0，覆盖此前本任务不合并/不正式发布的边界；当前正在同步版本与构建，发布结果另记。保持不force-push。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
+用户2026-10-18最新明确授权合并main并发布v0.6.0，覆盖此前本任务不合并/不正式发布的边界；已正常合并PR #9并公开发布[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)，tag/新包源码为`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`、main run 39103713740，版本和六项发布资产摘要核验通过。保持不force-push。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
 2026-10-18 用户最新要求：不做过多测试，优先功能可用；随后明确选择把上述四项现有功能收尾到可用。后续验证收敛到构建、关键操作与必要的一次实际传输；复用已有通过证据，不扩展重复矩阵，未验证的网络/原生范围仍如实保留，不新增F09等范围。
 
 阻塞收束：四项功能交付、随后阻塞复核及本轮只读复核中，相同Windows原生执行条件/JP UDP补充授权均未变化，当前无可继续的独立实现事项；平台Goal已标blocked而非complete或paused。本轮Windows LinkSend进程数为0，preset专属服务job仍finished/exit0，工作树无跟踪文件改动；未重试被自动审批在CreateProcess前拒绝的隔离LAN启动，也未改宿主防火墙/路由/代理。下一步需Windows原生执行条件解除后继续一次最小真实双机闭环，跨NAT还需可用拓扑及JP UDP3478精确补充授权。用户随后已明确答复Windows限制“尚未解除，保留未验项”；不再将该问题列为待答，不重复询问或启动测试。恢复时先核对本页、Git和实际外部状态，不重跑已完成四项矩阵。以下旧active记录保留历史含义。
 
-最近准确包源码：`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`，五项CI/三平台包/四资产来源、架构与hash核验success。四项功能可用收尾已完成：准确Mac N1原生目录/源码预设/自定义排除及80B三文件/中文空目录实际集合hash；N2双目标在线离线/源变化单项确认/独立与批次取消/重启屏障；N3活动256→1024KiB/s、1KiB等待暂停恢复取消、改0完成；N4真实菜单/目标原生选择保存/picker取消重开/45B QUIC/后台重启退出。Finder真实菜单/110B闭环也已记录。均为同机范围，不报物理或双NAT。0ae7cdf离线撤权、6f29814恢复、98469ce旧31B及6edddad旧Win仍绑定来源。全部新app/receiver/fixture终态、监听关闭、clipboard=false；Windows策略/托盘、物理/OS/双NAT和JP UDP3478授权条件保持。
+最近准确发布包：**v0.6.0**，源自主分支`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`，run 39103713740；全部源码CI/三平台构建通过，六资产GitHub digest与本地SHA256一致。Windows/Mac包均为新构建0.6.0，不重标旧包；本次无新物理包验收，旧原生证据继续绑定下述来源，完整Goal保持blocked。详情见[发布说明](RELEASE-v0.6.0.md)。
+
+发布前原生候选源码：`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`，五项CI/三平台包/四资产来源、架构与hash核验success。四项功能可用收尾已完成：准确Mac N1原生目录/源码预设/自定义排除及80B三文件/中文空目录实际集合hash；N2双目标在线离线/源变化单项确认/独立与批次取消/重启屏障；N3活动256→1024KiB/s、1KiB等待暂停恢复取消、改0完成；N4真实菜单/目标原生选择保存/picker取消重开/45B QUIC/后台重启退出。Finder真实菜单/110B闭环也已记录。均为同机范围，不报物理或双NAT。0ae7cdf离线撤权、6f29814恢复、98469ce旧31B及6edddad旧Win仍绑定来源。全部新app/receiver/fixture终态、监听关闭、clipboard=false；Windows策略/托盘、物理/OS/双NAT和JP UDP3478授权条件保持。
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 

@@ -1,5 +1,17 @@
 # Desktop E5 交付记录
 
+## 2026-10-18 v0.6.0主分支发布
+
+用户明确授权合并main并发布0.6.0，覆盖此前不合并/不正式发布的边界。PR [#9](https://github.com/Wen5555/LinkSend/pull/9)已正常合并，未force-push或改写历史。[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)已公开并设Latest，非Draft、非prerelease；tag精确指向主分支发布提交`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`，产品版本0.6.0、文件协议V1。发布时间2026-10-18 14:44:12（Asia/Shanghai）。
+
+三平台四个新程序包来自[packages 39103713740](https://github.com/Wen5555/LinkSend/actions/runs/39103713740)，准确源码全部core/desktop/包CI通过。原校验脚本核实干净COMMITTED/BUILD-INFO/目标架构/版本、四载荷及Windows内层哈希；发布六资产GitHub digest全部与本地SHA256一致。完整资产表见[发布说明](../RELEASE-v0.6.0.md)。PR合并后另以8bad932同步Windows Share Target/NSIS兜底版本并修正便携包旧固定测试码说明；扩展既有版本一致性检查覆盖这些清单，最终包从此后续提交构建。本机收据在忽略的`.artifacts/release-060/main-packages/`：PACKAGE-VERIFICATION.json、release-assets/RELEASE-MANIFEST.json、RELEASE-DRAFT.json、RELEASE-PUBLISHED.json。
+
+另在`mac-test-102342413`只读挂载两种新DMG，核对主app/Share Extension版本均0.6.0、arm64/x86_64架构、最低macOS元数据13.0.0及深度严格签名；未启动app，所有挂载已卸载。job `/tmp/codex-ssh/job-ls-release-060-mac-bundle-check-20261018-01` exit0，收据`PACKAGE-MAC-VERIFICATION.json`已下载并纳入Release manifest。草稿阶段按tag查询返回404后，改用本次准确release ID 416279872核对六项资产；不存在tag的commits查询422未当作发布成功，发布前改查Git ref，最终发布后解析tag/Latest均一致。
+
+本轮生成build assets到隔离目录，并用Go1.27.1构建的固定Wails beta.18重新生成绑定，无差异/警告；版本一致性、desktop off测试、两模块off构建、前端typecheck/build通过。旧CLI首次生成的Go版本警告已通过同版本CLI重建解决；首次在frontend目录执行的Go构建无包匹配，不计为构建通过，随后已在两个正确module分别构建通过。
+
+发布不等于完整A–E验收：6ec3cc4 Mac原生、6edddad旧Win、6f29814恢复和0ae7cdf撤权分别保留来源，不移记为0.6.0物理包通过。Windows unsigned、Mac ad-hoc/未公证，物理双向、OS剪贴板、Windows托盘/系统入口、双NAT与JP UDP授权缺项保持。用户已确认Windows限制尚未解除，整体Goal仍blocked；本轮没有新物理测试或生产部署，宿主网络/权限和日常profile保持。
+
 ## 2026-09-23 按用户要求终止并同步 main
 
 交付范围固定为已验证源码 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf` 加收尾文档；源码与该提交相同，复用下节七个成功 CI jobs。文档收尾使用 `[skip ci]`，不声称重新构建包。main 由其祖先 `3bcb73019d1ac6de1d9f341bb7d22e2813875081` 普通 fast-forward 推进，不强推；准确最终 Git SHA 写入本机收尾回执，Git 历史中的本节提交即对应文档来源。

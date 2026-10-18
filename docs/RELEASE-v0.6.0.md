@@ -33,3 +33,17 @@ Release 提供 `SHA256SUMS.txt` 和 `RELEASE-MANIFEST.json`。程序包由同一
 - 当前没有文件中继或 TURN allocation；UDP 或 NAT 条件不允许直连时，传输可能失败。新日本 STUN 的 UDP3478 补充授权仍待处理，未修改宿主防火墙、路由或代理。
 
 详细证据见[原生检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)、[目录预设](evidence/DESKTOP-AE-SOURCE-SELECTION.md)、[多设备分发](evidence/DESKTOP-AE-DEVICE-BATCHES.md)、[限速](evidence/DESKTOP-AE-FILE-BUDGET.md)、[快速发送](evidence/DESKTOP-AE-QUICK-SEND.md)和[唯一 TODO](DESKTOP-EXPERIENCE-TODO.md)。
+
+## 发布来源与资产
+
+- [Release](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)：已公开，Latest，非 Draft、非 prerelease。
+- 发布 tag 与程序包源码均为 `8bad9323ece46b2e32054ddb321340dfdd1e3ec8`；PR [#9](https://github.com/Wen5555/LinkSend/pull/9) 已正常合并 main。
+- [三平台包工作流](https://github.com/Wen5555/LinkSend/actions/runs/39103713740) 与该准确提交的全部 core/desktop 检查通过。
+- 四个程序包和两份校验/来源文件共六项资产，GitHub digest 与本地 SHA256 全部一致。
+
+| 平台 | 资产 | SHA256 |
+|---|---|---|
+| windows-amd64 | [LinkSend-v0.6.0-windows-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.zip](https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.zip) | `aa9269aa4f64e670a40c24742a8efcf0130e8348f0b901b1b25e5214192f3e9a` |
+| windows-amd64 | [LinkSend-v0.6.0-windows-amd64-installer-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.exe](https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-installer-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.exe) | `ea373c1513d9f415b69bcd10a1ab053c1147ff250bff2b17a59ff2c58e95670c` |
+| macos-arm64 | [LinkSend-v0.6.0-macos-arm64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-arm64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg) | `e63f89b59570c41c4701c994fd0527f7003ca0fcc50e4d97ecbf092e54b0a15d` |
+| macos-amd64 | [LinkSend-v0.6.0-macos-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg) | `8edca61f3b76edc5c15ee1ce90d977ce0db11e5b4bde52d3d742ad020a4b1e03` |

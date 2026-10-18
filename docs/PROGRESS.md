@@ -1,3 +1,8 @@
+## 2026-10-18 v0.6.0已合并main并发布
+
+- PR #9正常合并，准确源码`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`；[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)已公开并设Latest，tag与源码一致，包内版本0.6.0/协议V1。新包来自主分支run 39103713740，全部源码CI和三平台包成功，六项发布资产digest与本地SHA256一致。
+- README下载入口、版本使用说明、ROADMAP、唯一TODO及交付记录已同步；无新物理/原生矩阵或生产部署。旧功能证据保留原来源，完整Goal仍blocked。详见[发布说明](RELEASE-v0.6.0.md)与[交付记录](evidence/DESKTOP-E5-DELIVERY.md)。
+
 ## 2026-10-18 v0.6.0发布准备
 
 - 用户明确要求合并main并发布0.6.0，覆盖此前不合并/不正式发布的限制；既有未验项继续保留，未恢复受限Windows原生测试或宿主网络变更。
