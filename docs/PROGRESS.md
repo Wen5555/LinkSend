@@ -1,3 +1,8 @@
+## 2026-10-19 v0.6.2已发布
+
+- PR #11正常合并main，准确程序包源码`63c86c2c5ce183e1400d27ca0571610d50a42bdc`；[v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)已公开并设Latest，tag一致。main core/desktop及[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/39157767929)全部success，四个程序包加两份元数据共六项资产digest核验通过。
+- 两Mac DMG的版本、架构、最低OS元数据及严格签名检查通过，未启动新app且挂载已卸载。Windows真实GitHub更新检查与安装器下载/摘要验证结果见更新证据；未执行安装。README和发布说明同步来源，物理候选证据与准确发行包检查保持各自边界。
+
 ## 2026-10-19 v0.6.2发布准备
 
 - 用户明确要求GitHub版本更新推送。产品元数据统一0.6.2，合并本轮LAN连接修复、独立files授权/能力与schema12迁移、32MiB居中复制进度及既有GitHub更新入口；文件正文仍走认证QUIC/V1引擎，relay=false。

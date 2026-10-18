@@ -23,3 +23,7 @@
 本轮没有执行实际Windows安装/UAC或Mac原生DMG覆盖、升级后重启与最低OS矩阵；跨架构包选择由确定性测试覆盖。原物理剪贴板、系统入口与双NAT缺项保持。本地构建不替代正式发布CI或包验收。
 
 实现与授权边界见[ADR0014](../adr/0014-desktop-github-updates.md)。
+
+## v0.6.2正式发布后的真实更新检查
+
+PR #11正常合并，准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc，正式Release https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2 为Latest，六资产digest及准确包检查通过。发布后以LINKSEND_TEST_GITHUB_UPDATES=1、GOWORK=off执行go test ./updater -run ^TestLiveGitHubCheckAndDownload$ -count=1 -v -timeout 4m，真实HTTPS发现并完整下载0.6.2 Windows安装器、SHA256校验通过，未执行安装器。实际日志行：`updater_test.go:320: LIVE_CHECK_DOWNLOAD_VERIFIED version=0.6.2 platform=windows-amd64 bytes=75245859 sha256=d4e5d364d33c5b66fe57331fe588a9772d46874f5d88fd22e5b510040fdd2651 installer_launched=false`；完整日志.artifacts/release-062/live-update.log。0.0.0仅为显式测试旧版本，不是产品版本；旧0.6.1没有本轮更新入口，首次需手动升级。实际覆盖安装/重启与最低OS矩阵仍未验证。

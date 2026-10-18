@@ -109,3 +109,7 @@ Windows测试应用启动两次均被自动审批在CreateProcess前拒绝，理
 首个源码715d11c的push核心检查通过，但PR核心race run39156446822及Intel Mac包的核心测试均在TestClipboardLANConcurrentBootstrap失败。另12轮本地普通运行未复现；为两端inbound发布增加屏障、确保独立LAN TLS/QUIC均先完成拨出后，旧实现稳定失败（lan-collision-deterministic-before.log）。这是真实会话冲突，不能通过加大等待或只重跑CI消除：两端各保留自己拨出的会话，再关闭对方选中的会话。
 
 修复仅在尚未完成双向lease的LAN剪贴板bootstrap中按双方共有的认证SessionID选择较小者；普通文件预留、正在接收文件及已建立会话保持原owner。释放被替换bootstrap后按当前赢家报告就绪，不残留旧连接错误/等待。无wire或身份验证改变。屏障回归5轮通过（lan-collision-after.log），另覆盖文件/已建立会话不替换及WSS/旧能力排除；相关race和两模块workspace/off最终检查以release-062目录的最终日志为准。该生产并发修复晚于物理候选测试，正式发行包不声明已重复物理运行。
+
+## v0.6.2准确来源发布
+
+PR #11正常合并main，发行包准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc，main三平台构建run 39157767929与core/desktop全部success。四程序包的外层hash、内嵌版本与BUILD-INFO来源/COMMITTED/clean已核验；两Mac DMG只读挂载核对主app/Share Extension版本、arm64/x86_64架构、最低OS元数据与严格签名通过，挂载已卸载，未启动新app。正式Release https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2 为Latest，tag指向该源码，六项资产GitHub digest与本地一致。完整收据在.artifacts/release-062/main-packages/，公开来源/摘要见RELEASE-MANIFEST.json和SHA256SUMS.txt。上方物理证据不移记为本次发行包运行。

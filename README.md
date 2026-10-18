@@ -26,13 +26,13 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 **文件正文由两端设备直接传输，信令服务只负责协调连接。** 同一局域网内可发现并添加附近设备；跨网络时使用可自托管的信令服务和 ICE 建立直连。
 
 > [!NOTE]
-> 最新公开版本是 [v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)，修复文件查看、自动剪贴板、设备删除和统一收发队列。升级与验证范围见[发布说明](docs/RELEASE-v0.6.1.md)和[当前状态与限制](#当前状态与限制)。
+> 最新公开版本是 [v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)，修复局域网剪贴板连接，支持文件复制、大文件居中进度和手动GitHub更新。升级与验证范围见[发布说明](docs/RELEASE-v0.6.2.md)和[当前状态与限制](#当前状态与限制)。
 
-v0.6.1已包含本轮桌面修复：记录支持打开文件与所在文件夹；自动剪贴板恢复后立即续期，可逐台开启双向同步；删除与黑名单分离；传输页统一收发任务、真实速度/进度/取消、清理和新增接收红点。默认退出取消未完成任务并清空本页，可在通用设置关闭，文件和历史保留。[操作与验证](docs/evidence/DESKTOP-060-WORKFLOW-FIXES.md)。
+此前v0.6.1已包含桌面修复：记录支持打开文件与所在文件夹；自动剪贴板恢复后立即续期，可逐台开启双向同步；删除与黑名单分离；传输页统一收发任务、真实速度/进度/取消、清理和新增接收红点。默认退出取消未完成任务并清空本页，可在通用设置关闭，文件和历史保留。[操作与验证](docs/evidence/DESKTOP-060-WORKFLOW-FIXES.md)。
 
 ## 主要功能
 
-0.6.2候选新增“设置 → 软件更新”，支持手动检查、下载校验和打开安装包；修复LAN自动剪贴板连接，增加独立文件同步开关与32MiB大文件居中进度窗。文字、图片和文件已用候选在Windows↔Mac实测，正式发布包仍按下面的版本/来源核验；[更新功能](docs/evidence/DESKTOP-GITHUB-UPDATES.md)、[剪贴板与进度](docs/evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
+0.6.2新增“设置 → 软件更新”，支持手动检查、下载校验和打开安装包；修复LAN自动剪贴板连接，增加独立文件同步开关与32MiB大文件居中进度窗。文字、图片和文件已用候选在Windows↔Mac实测，正式发布包仍按下面的版本/来源核验；[更新功能](docs/evidence/DESKTOP-GITHUB-UPDATES.md)、[剪贴板与进度](docs/evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
 
 - **文件与目录传输**：支持单文件、多文件、目录及空目录，提供发送草稿、顺序队列与任务记录。
 - **目录预设（0.6.0）**：完整发送或源码目录预设，支持有限自定义排除、数量/体积/条目预览和恢复完整发送；规则随草稿、队列与恢复保存，见[记录](docs/evidence/DESKTOP-AE-SOURCE-SELECTION.md)。
@@ -49,7 +49,7 @@ v0.6.1已包含本轮桌面修复：记录支持打开文件与所在文件夹�
 
 ## 下载与安装
 
-以下链接对应 **v0.6.1**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
+以下链接对应 **v0.6.2**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
 
 | 平台 | 架构 | 下载 | 说明 |
 | --- | --- | --- | --- |
@@ -57,9 +57,9 @@ v0.6.1已包含本轮桌面修复：记录支持打开文件与所在文件夹�
 | macOS | Apple Silicon / arm64 | [DMG][macos-arm64] | 最低 macOS 13 |
 | macOS | Intel / amd64 | [DMG][macos-amd64] | 最低 macOS 13；最低版本与 Intel 实机验收仍有缺项 |
 
-发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。本版包由主分支提交 `72161e3` 的干净 Actions 构建，包内产品版本为 `0.6.1`，文件协议仍为 V1。
+发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。本版包由主分支提交 `63c86c2` 的干净 Actions 构建，包内产品版本为 `0.6.2`，文件协议仍为 V1。
 
-[v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)四个程序包来自[同一主分支构建](https://github.com/Wen5555/LinkSend/actions/runs/39113644308)，版本、来源、摘要及Mac包结构/签名已核验。四项修复的自动测试与本地可用收尾见[修复记录](docs/evidence/DESKTOP-060-WORKFLOW-FIXES.md)；本版没有新增Win↔Mac物理系统剪贴板或双NAT通过声明。
+[v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)四个程序包来自[同一主分支构建](https://github.com/Wen5555/LinkSend/actions/runs/39157767929)，版本、来源、摘要及Mac包结构/签名已核验。本地候选已完成Windows↔Mac同LAN文字、不同像素图片和文件条目双向验证；准确发行包未重复系统剪贴板运行，双NAT缺项保持。
 
 Windows 包尚未进行代码签名；macOS 包采用 ad-hoc 签名，尚未公证。两端可能出现系统安全提示，安装与运行边界见[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
 
@@ -125,7 +125,7 @@ flowchart LR
 | Windows / macOS 文件传输 | 已有局域网实机与恢复记录，结论绑定具体提交和包；不自动继承到后续版本 |
 | 跨 NAT P2P | 已有受控双 NAT、固定 UDP 映射的通过记录；仅 MASQUERADE 的场景曾返回 `CHECK_TIMEOUT`，更多真实 NAT 类型仍待验证 |
 | 中继 | 未实现文件中继或 TURN allocation，能力固定为 `relay=false`；直连失败会报告错误 |
-| 自动剪贴板 | 已实现权限、租约和认证 QUIC 路径；总开关及各设备、方向、格式权限默认关闭，物理 Windows ↔ macOS 系统剪贴板闭环仍未通过验收 |
+| 自动剪贴板 | 本地候选已通过同LAN Windows ↔ macOS系统文字、图片和文件条目双向；文件同步需独立开启，≥32MiB显示居中进度。发行包未重复物理运行，键盘粘贴及双NAT缺项保留 |
 | 原生系统共享 | Windows Share Target / macOS Share Extension 有源码及交接自测；正式签名、安装与系统激活验收仍有缺项 |
 | 网络与系统兼容 | 公网 IPv6、物理网络切换与睡眠唤醒、完整安装/卸载、最低 macOS 版本及部分原生交互矩阵仍待验证 |
 
@@ -224,9 +224,9 @@ LinkSend 采用 [Apache License 2.0](LICENSE)。
 
 网络与桌面能力建立在 [Pion ICE](https://github.com/pion/ice)、[quic-go](https://github.com/quic-go/quic-go)、[Wails](https://github.com/wailsapp/wails) 和 [BLAKE3 Go 实现](https://github.com/zeebo/blake3) 等开源项目之上。
 
-[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.zip
-[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-installer-72161e3f806d742d1d401564031ab4844fe88b2d.exe
-[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-arm64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg
-[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg
-[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/SHA256SUMS.txt
-[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/RELEASE-MANIFEST.json
+[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/LinkSend-v0.6.2-windows-amd64-63c86c2c5ce183e1400d27ca0571610d50a42bdc.zip
+[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/LinkSend-v0.6.2-windows-amd64-installer-63c86c2c5ce183e1400d27ca0571610d50a42bdc.exe
+[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/LinkSend-v0.6.2-macos-arm64-63c86c2c5ce183e1400d27ca0571610d50a42bdc.dmg
+[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/LinkSend-v0.6.2-macos-amd64-63c86c2c5ce183e1400d27ca0571610d50a42bdc.dmg
+[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/SHA256SUMS.txt
+[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.2/RELEASE-MANIFEST.json
