@@ -842,6 +842,9 @@ func (s *Service) setClipboardReady(peer *PeerSession, direction string, ready b
 		} else {
 			pooled.clipboardReceiveReady = ready
 		}
+		if pooled.clipboardSendReady && pooled.clipboardReceiveReady {
+			pooled.clipboardBootstrap = false
+		}
 		if ready {
 			s.setClipboardConnectionState(peer.PeerID, "")
 			if pooled.timer != nil {
@@ -976,6 +979,7 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 			s.setClipboardConnectionState(item.id, "connecting")
 			peerCfg := cfg
 			peerCfg.expectedAuthorizationGeneration = item.generation
+			peerCfg.clipboardBootstrap = true
 			// ConnectDirect already bounds lookup, signaling, ICE and QUIC with
 			// cfg.CheckTimeout. Do not truncate that budget for clipboard peers.
 			peer, connectErr := s.acquirePeerSession(connectRoot, item.id, peerCfg)
@@ -984,18 +988,25 @@ func (s *Service) EnsureClipboardSessions(ctx context.Context, cfg DirectConfig)
 				result = errors.Join(result, connectErr)
 			} else {
 				releaseErr := s.releasePeerSession(peer, nil)
-				if releaseErr != nil {
+				s.directPoolMu.Lock()
+				pooled := s.directPool[key]
+				healthy := pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil
+				if releaseErr != nil && !healthy {
 					s.setClipboardPeerError(item.id, "connection_failed")
 				} else {
-					s.directPoolMu.Lock()
-					pooled := s.directPool[key]
-					if pooled != nil && pooled.peer == peer && (pooled.clipboardSendReady || pooled.clipboardReceiveReady) {
+					// A simultaneous LAN dial may have replaced this bootstrap
+					// with the shared winner. Observe that current session, not
+					// the superseded peer or its close result.
+					if healthy && pooled.peer != peer {
+						releaseErr = nil
+					}
+					if healthy && (pooled.clipboardSendReady || pooled.clipboardReceiveReady) {
 						s.setClipboardConnectionState(item.id, "")
 					} else {
 						s.setClipboardConnectionState(item.id, "waiting_lease")
 					}
-					s.directPoolMu.Unlock()
 				}
+				s.directPoolMu.Unlock()
 				result = errors.Join(result, releaseErr)
 			}
 		}

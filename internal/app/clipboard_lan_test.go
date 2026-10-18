@@ -101,6 +101,25 @@ func testClipboardLAN(t *testing.T, concurrent bool) {
 		f.b.setClipboardPeerError(f.aID.ID(), "connection_failed")
 		var dialing atomic.Int32
 		bothDialing := make(chan struct{})
+		// Separate LAN TLS channels can both finish QUIC before either inbound
+		// session is published. Force that ordering instead of depending on the
+		// scheduler to expose the two-pool collision.
+		var adopting atomic.Int32
+		bothAdopting := make(chan struct{})
+		for _, service := range []*Service{f.a, f.b} {
+			service.directPoolBeforePublish = func(kind string) {
+				if kind != "adopt" {
+					return
+				}
+				if adopting.Add(1) == 2 {
+					close(bothAdopting)
+				}
+				select {
+				case <-bothAdopting:
+				case <-ctx.Done():
+				}
+			}
+		}
 		cfg.onPhase = func(phase string) {
 			if phase == "requesting_peer" {
 				if dialing.Add(1) == 2 {

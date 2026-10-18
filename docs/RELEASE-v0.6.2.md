@@ -21,6 +21,6 @@
 
 候选通过两Go模块workspace/off测试、vet、build、相关race、前端125项/typecheck/lint/build及440像素布局检查。实际Windows↔Mac同一LAN系统剪贴板的文字、不同像素图片和文件条目双向验证通过；64MiB文件超过原lease期限后仍完成并校验哈希，两端出现真实进度，取消测试确认未完成缓存删除且剪贴板原文件路径保持。
 
-上述物理结果属于记录中的本地候选，不移记为后续GitHub发行包已运行。Windows包未代码签名；Mac为ad-hoc签名、未公证，macOS13及Intel原生验收、Explorer/Finder键盘粘贴与双NAT缺项保留。未部署生产信令，也未改防火墙、路由、代理或宿主权限。
+上述物理结果属于记录中的本地候选，不移记为后续GitHub发行包已运行。其后文件完成状态与同时LAN拨号的会话冲突修复由确定性自动回归/race覆盖，未重新运行物理测试。Windows包未代码签名；Mac为ad-hoc签名、未公证，macOS13及Intel原生验收、Explorer/Finder键盘粘贴与双NAT缺项保留。未部署生产信令，也未改防火墙、路由、代理或宿主权限。
 
 实现、命令、准确候选hash及测试校验器的颜色空间误判纠正见[剪贴板验证记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)、[软件更新验证](evidence/DESKTOP-GITHUB-UPDATES.md)、[ADR0015](adr/0015-file-clipboard-progress.md)。

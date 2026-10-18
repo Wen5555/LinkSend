@@ -3,6 +3,7 @@
 - 用户明确要求GitHub版本更新推送。产品元数据统一0.6.2，合并本轮LAN连接修复、独立files授权/能力与schema12迁移、32MiB居中复制进度及既有GitHub更新入口；文件正文仍走认证QUIC/V1引擎，relay=false。
 - Windows↔Mac同LAN系统剪贴板的文字、不同像素图片和文件条目双向通过；64MiB文件校验、两端原生进度与取消/未完成缓存删除通过。图片校验器颜色空间误判已纠正；最后两端备份恢复成功，测试进程停止，日常Mac恢复同步。完整命令/包来源及最终FileID状态回归见[实施记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
 - 两模块workspace/off最终检查与三平台准确提交CI、资产版本/摘要、Mac包只读挂载和正式Release按顺序验收；本地候选实机不冒充后续发行包运行。Explorer/Finder键盘粘贴、Intel/macOS13原生、双NAT与历史A–E其他缺项保留，不部署生产或改宿主网络。
+- 首轮CI发现同时LAN拨号的真实会话冲突，确定性屏障先复现失败，再以bootstrap范围的认证SessionID一致选择修复；文件预留/接收与已建立会话不替换。最终结果及准确来源另列，失败保留[证据](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
 
 ## 2026-10-19 局域网自动剪贴板连接修复（首轮本地未发布记录）
 

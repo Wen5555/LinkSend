@@ -14,6 +14,31 @@ import (
 	quic "github.com/quic-go/quic-go"
 )
 
+func TestLANClipboardCollisionPreservesEstablishedAndFileSessions(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*pooledPeerSession, *PeerSession)
+		want   bool
+	}{
+		{"smaller_inbound_wins", func(*pooledPeerSession, *PeerSession) {}, true},
+		{"larger_inbound_loses", func(_ *pooledPeerSession, p *PeerSession) { p.SessionID = "zz" }, false},
+		{"established_session", func(p *pooledPeerSession, _ *PeerSession) { p.clipboardBootstrap = false }, false},
+		{"file_reservation", func(p *pooledPeerSession, _ *PeerSession) { p.clipboardBootstrap = false; p.inUse = true }, false},
+		{"receiving_file", func(p *pooledPeerSession, _ *PeerSession) { p.receiving = true }, false},
+		{"wss_session", func(_ *pooledPeerSession, p *PeerSession) { p.localPeer = false }, false},
+		{"legacy_session", func(_ *pooledPeerSession, p *PeerSession) { p.ClipboardSync = false }, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			previous := &pooledPeerSession{peer: &PeerSession{SessionID: "bb", localPeer: true, ClipboardSync: true}, clipboardBootstrap: true, inUse: true}
+			incoming := &PeerSession{SessionID: "aa", localPeer: true, ClipboardSync: true}
+			test.change(previous, incoming)
+			if got := preferInboundClipboardBootstrap(previous, incoming); got != test.want {
+				t.Fatalf("inbound replacement=%v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestSessionReuseRequiresBilateralCapability(t *testing.T) {
 	old, err := protocol.NewEnvelope("connect_response", "sender", "recipient",
 		"0123456789abcdef0123456789abcdef", 1, map[string]string{"ufrag": "u", "password": "p"})

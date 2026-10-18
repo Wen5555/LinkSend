@@ -103,3 +103,9 @@ Windows测试应用启动两次均被自动审批在CreateProcess前拒绝，理
 文件正文与原生路径验证后，新回归又复现完成时接收端仍显示“正在接收”。为运行态绑定私有FileID，结束仅清理自身文件等待态，成功清除旧file_copy_failed并保留独立原生错误；旧任务结束不能清掉新任务状态，取消不被晚到进度/finish恢复。TestClipboardFileCompletionCannotClearNewerCopyStatus及文件完成回归、相关race通过（files-status-before.log记录修复前失败，files-final-v3-race.log记录修复后结果）。设置新增copying_files中文映射。这一最终状态修复未重新运行物理测试，前述物理证据属于记录中的候选包。
 
 发布准备将产品元数据统一为0.6.2。最终本地检查两模块workspace/off的go test ./...、go vet ./...、go build ./...全部通过，日志为release062-core-*.log与release062-desktop-*.log。前端125项、typecheck/lint/build及相关race已通过。准确提交、三平台CI、程序包hash与正式发布另行记录，不把本地候选实机结果移记为GitHub发行包已运行。
+
+## 发布CI发现的同时拨号冲突
+
+首个源码715d11c的push核心检查通过，但PR核心race run39156446822及Intel Mac包的核心测试均在TestClipboardLANConcurrentBootstrap失败。另12轮本地普通运行未复现；为两端inbound发布增加屏障、确保独立LAN TLS/QUIC均先完成拨出后，旧实现稳定失败（lan-collision-deterministic-before.log）。这是真实会话冲突，不能通过加大等待或只重跑CI消除：两端各保留自己拨出的会话，再关闭对方选中的会话。
+
+修复仅在尚未完成双向lease的LAN剪贴板bootstrap中按双方共有的认证SessionID选择较小者；普通文件预留、正在接收文件及已建立会话保持原owner。释放被替换bootstrap后按当前赢家报告就绪，不残留旧连接错误/等待。无wire或身份验证改变。屏障回归5轮通过（lan-collision-after.log），另覆盖文件/已建立会话不替换及WSS/旧能力排除；相关race和两模块workspace/off最终检查以release-062目录的最终日志为准。该生产并发修复晚于物理候选测试，正式发行包不声明已重复物理运行。

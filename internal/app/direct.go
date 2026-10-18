@@ -50,6 +50,7 @@ type DirectConfig struct {
 	disableSessionReuse             bool
 	disableClipboardSync            bool
 	disableClipboardFiles           bool
+	clipboardBootstrap              bool
 	contentTaskID                   string
 	contentAttemptID                string
 	expectedAuthorizationGeneration uint64

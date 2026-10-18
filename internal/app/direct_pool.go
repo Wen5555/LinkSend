@@ -24,6 +24,7 @@ type pooledPeerSession struct {
 	serving               bool
 	clipboardSendReady    bool
 	clipboardReceiveReady bool
+	clipboardBootstrap    bool
 	timer                 *time.Timer
 }
 
@@ -85,6 +86,11 @@ func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg Dir
 	}
 	if pooled != nil && pooled.peer != nil && pooled.peer.Data != nil && pooled.peer.Data.Conn.Context().Err() == nil {
 		pooled.inUse = true
+		if !cfg.clipboardBootstrap {
+			// A real file reservation must never be replaced by a simultaneous
+			// clipboard-only LAN bootstrap.
+			pooled.clipboardBootstrap = false
+		}
 		if pooled.timer != nil {
 			pooled.timer.Stop()
 			pooled.timer = nil
@@ -126,7 +132,7 @@ func (s *Service) acquirePeerSession(ctx context.Context, peerID string, cfg Dir
 		}
 		replaced = previous.peer
 	}
-	pooled = &pooledPeerSession{peer: peer, generation: peer.AuthorizationGeneration, inUse: true, serving: true}
+	pooled = &pooledPeerSession{peer: peer, generation: peer.AuthorizationGeneration, inUse: true, serving: true, clipboardBootstrap: cfg.clipboardBootstrap}
 	s.directPool[key] = pooled
 	s.startPooledPeerServerLocked(key, pooled)
 	s.directPoolMu.Unlock()
@@ -239,6 +245,17 @@ func (s *Service) schedulePoolIdleLocked(key string, pooled *pooledPeerSession) 
 	})
 }
 
+// Independent LAN TLS channels do not share the WSS simultaneous-dial
+// arbitration. Until a clipboard bootstrap exchanges both leases, both ends
+// select the same (smaller) authenticated session ID. File reservations and
+// established sessions retain their existing owner.
+func preferInboundClipboardBootstrap(previous *pooledPeerSession, incoming *PeerSession) bool {
+	return previous.clipboardBootstrap && !previous.receiving &&
+		previous.peer.localPeer && incoming.localPeer &&
+		previous.peer.ClipboardSync && incoming.ClipboardSync &&
+		incoming.SessionID < previous.peer.SessionID
+}
+
 func (s *Service) adoptInboundPeerSession(peer *PeerSession) {
 	if peer == nil || peer.Data == nil {
 		_ = peer.Close()
@@ -267,7 +284,7 @@ func (s *Service) adoptInboundPeerSession(peer *PeerSession) {
 		return
 	}
 	if previous := s.directPool[key]; previous != nil && previous.peer != peer {
-		if previous.peer.Data != nil && previous.peer.Data.Conn.Context().Err() == nil {
+		if previous.peer.Data != nil && previous.peer.Data.Conn.Context().Err() == nil && !preferInboundClipboardBootstrap(previous, peer) {
 			s.directPoolMu.Unlock()
 			_ = peer.Close()
 			return
