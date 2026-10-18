@@ -1,3 +1,9 @@
+## 2026-10-18 6ec3cc4准确Mac Finder Services闭环
+
+- 实际Finder选择三项中文/空格文件和含空目录的文件夹，真实“访达→服务→使用LinkSend发送”两次从后台唤回同一PID，main合并四条唯一路径、原目标/规则/quick/旧任务队列保持；真实重启草稿保持。
+- 随后原生主发送完成三文件110B/五条manifest、实际hash与空目录结构一致、双方确认、relay=false；仅显式发送后清main。专属同机loopback，正常配对fixture复用一致性控制库副本，不是物理双机/B2整体通过。无产品源码修改或新增构建测试声明；沿用6ec3cc4准确四资产与CI来源。
+- App/receiver/专属服务均正常终态、监听关闭、原profile/源hash/身份偏好/备份保留、clipboard=false。准备/时序/备份脚本失败与续验收据均见[原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
+
 ## 2026-10-18 N4本机目标边界修复
 
 - 三项新增回归在旧实现真实失败：候选包含本机、保存本机目标发送按钮可用、本机身份未加载仍可选/可发。App传入配置身份或shell身份，面板过滤本机，身份未知时等待，保留不可发送的旧目标/路径；新增身份晚到正常恢复回归。Go授权/wire/schema无变化。

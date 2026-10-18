@@ -8,20 +8,20 @@
 |---|---|---|---|---|---|
 | A LAN 独立主流程 | 端口/reader/记忆、刷新/provider/早期host完成 | Pion/并发回归通过 | 后测发现/刷新双方10/10；Mac反控0/10；新准确Win LAN启动被工具策略阻断 | 6edddad五项CI及三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：可用原生环境下继续独立旅程，不绕过策略 |
 | B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI完成 | 两模块/兼容/race；输入回归6FAIL→115前端GREEN | 6f29814准确Mac正式HTTPS不同URL恢复PASS；同URL空库原生prepare/cancel/重启/加入/旧队列代次拒绝PASS（Mac loopback） | 6f29814五项CI/三平台包与四资产核验success | [恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：Win同URL原生、物理与legacy原生输入继续；外部STUN/双NAT条件保持 |
-| B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 既有夹具边界保持 | 同口径十轮无整体提速结论；原生CLI入口通过；文件/OS剪贴板待验 | f23383d已同步 | 文件分段/两方向各3次与OS/恢复旅程继续，Mac反控限制单列 |
+| B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 本轮未改源码，沿用6ec3cc4模块/119前端边界 | 6ec3cc4准确Mac Finder真实菜单两轮后台唤回/去重/重启/110B三文件及中文空目录loopback通过；物理/OS/性能仍待 | 6ec3cc4准确包已核验，本轮仅文档证据 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：继续拖放/Windows入口与物理、OS剪贴板、两方向各3次分段性能 |
 | C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 完整模块/race/95前端/兼容/QUIC恢复通过；JP路径5项无SKIP | 6edddad准确Win原生筛选到两个CLI，集合/空目录/hash PASS；物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：物理与恢复矩阵继续 |
 | C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6edddad准确Win原生一批两CLI目标顺序实际接收PASS；物理待验 | 6edddad五项CI/三平台包success；77b831b旧失败保留 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：单项失败/取消/重启原生与物理继续 |
 | D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 假时钟/两模块/race/101前端、QUIC/剪贴板夹具通过 | 6edddad准确Win设置256KiB/s、两个1MiB粗略时长3.979/3.942s PASS；OS/物理待验 | 6edddad四资产核验通过 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：动态活动任务/OS/物理继续 |
 | D / N4 托盘快速发送 | quick/Go入队、菜单主点击/共享存储隔离与本机目标边界完成 | 两模块/off测试构建、119前端；本机/身份加载回归RED→GREEN | 6ec3cc4准确Mac self禁发/真实picker/取消重开/45B QUIC及hash/后台重启退出PASS；0ae7cdf离线撤权保持原来源 | 6ec3cc4五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Win托盘、Mac目标选择、快速双击送达与物理/完整同提交矩阵继续 |
-| E 同提交候选/最终回归/文档 | 6ec3cc4四资产/来源核验；旧包分项保留来源 | 两模块workspace/off测试及off构建、desktop vet/119前端通过 | 新Mac self边界/45B loopback文件/后台重启退出PASS；旧恢复/离线撤权保持原来源，物理仍待验 | 同一Draft PR #9、6ec3cc4五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
+| E 同提交候选/最终回归/文档 | 6ec3cc4四资产/来源核验；旧包分项保留来源 | 两模块workspace/off测试及off构建、desktop vet/119前端通过 | 新Mac Finder菜单/110B文件目录及N4 self/45B/后台重启退出PASS；旧恢复/离线撤权保持原来源，物理仍待验 | 同一Draft PR #9、6ec3cc4五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：完整A/B/B2/系统入口/双NAT缺项保持 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近准确包源码：`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`，远端一致、五项CI/三平台包/四资产来源、架构与hash核验success。快速面板排除本机/等待identity，旧self草稿保持；新准确Mac self即使勾等待仍禁发、真实picker/取消重开/45B固定身份QUIC及唯一目标hash/双方确认/后台唤回/真实重启无重复/原生退出均PASS。正常目标是夹具业务API预置，原生下拉AX只读外壳，不报选择成功；不报物理或双NAT。全部新app/receiver/fixture终态，端口关闭、clipboard=false。0ae7cdf离线撤权、6f29814两种恢复、98469ce旧31B及6edddad旧Win仍绑定各自来源；Windows策略/托盘、legacy输入、物理/OS/双NAT和JP UDP3478授权条件保持。
+最近准确包源码：`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`，远端一致、五项CI/三平台包/四资产来源、架构与hash核验success。快速面板排除本机/等待identity，旧self草稿保持；新准确Mac self即使勾等待仍禁发、真实picker/取消重开/45B固定身份QUIC及唯一目标hash/双方确认/后台唤回/真实重启无重复/原生退出均PASS。正常目标是夹具业务API预置，原生下拉AX只读外壳，不报选择成功；另完成真实Finder Services菜单两轮后台唤回/合并去重/真实重启，随后原生主发送110B三文件/中文空目录、实际hash与双方确认。两者均不报物理或双NAT。全部新app/receiver/fixture终态，端口关闭、clipboard=false。0ae7cdf离线撤权、6f29814两种恢复、98469ce旧31B及6edddad旧Win仍绑定各自来源；Windows策略/托盘、legacy输入、物理/OS/双NAT和JP UDP3478授权条件保持。
 
 本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 
-运行现场：6ec3cc4 Mac根`/Users/wen/.codex/supervision/linksend-ae-20261018/quick-target-native-6ec3cc4`；新app经原生菜单退出，receiver及fixture均finished/exit0，监听关闭，clipboard=false/enabled grants=0。最终仅一条completed队列/一任务、唯一45B接收、main revision1与quick revision4空路径；身份/偏好字节/源hash、旧self profile私有备份保持。收据`.artifacts/ae-20261018/mac-quick-target-6ec3cc4-final-receipt.json`。之前两种原生恢复已完成/收尾，用户手动短码已核对且未提交，不再等待该输入。Windows启动策略与Mac录屏未授权保持。
+运行现场：最新Mac根`/Users/wen/.codex/supervision/linksend-ae-20261018/finder-native-6ec3cc4`；准确app已原生退出，CLI receiver与专属rendezvous均finished/exit0，监听关闭，专用Finder窗口关闭，clipboard=false/enabled grants=0。仅本轮新增一completed队列/一任务（clone最终各2，含原各1），显式主发送后main revision4空、quick原revision4保持，身份/偏好/源hash及原profile/私有备份保持。收据`.artifacts/ae-20261018/mac-finder-6ec3cc4-final-receipt.json`。前述quick-target根/原45B收据及更旧恢复现场均已停止并保留；用户手动短码已核对且未提交，不再等待该输入。Windows启动策略与Mac录屏未授权保持。
 
 早期原生候选（历史检查点）来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
 

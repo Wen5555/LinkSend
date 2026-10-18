@@ -2,6 +2,32 @@
 
 分项证据，状态仅在[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。物理双机、系统托盘、双NAT与原生loopback分别记录。
 
+## 6ec3cc4准确Mac Finder Services原生闭环（2026-10-18）
+
+本轮无产品源码修改。准确包仍为`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`及其五项success CI/四资产核验，来源见[N4证据](DESKTOP-AE-QUICK-SEND.md)。实际arm64 EXE SHA256 `e13f0391f5074996c74fdd7e6ebedd241f0966612a827f9ce676cef39cee3e87`；新独立根`/Users/wen/.codex/supervision/linksend-ae-20261018/finder-native-6ec3cc4`复制准确app和已停止的前一测试profile，启动前无其他LinkSend进程。原profile/数据库/文件保留，仅在新clone进行系统入口旅程，私有备份仅在Mac。
+
+实际打开专用Finder目录`LinkSend-6ec3cc4-入口验收`。System Events只操作该精确窗口，实读确认`plain file.txt`、`服务 中文.txt`、`目录 空格`三项AXSelected=true；后者内含`空目录`。先原生关闭owned app主窗，窗口数0/同PID仍在，再点击Finder“访达→服务→使用 LinkSend 发送”。服务项确实可见且enabled，实际点击后同PID唤回一个窗口；生产入口日志/Go owner把三路径合并进main，原held-main.txt、目标及筛选规则保持，quick整行、旧queue/task整行不变。这是实际Finder菜单动作，没有调用Go回调/CLI入口或NSPerformService代替。
+
+第二次执行同一实际菜单旅程，main revision2→3，仍只有四条唯一来源；同PID从零窗口再次唤回，UI真实显示四来源。真实原生菜单退出并重启准确app后，main revision3、quick与旧queue/task整行、身份/偏好字节保持，SQLite quick_check=ok。最初外部信令使用已关闭loopback测试URL，入口合并/后台唤醒与重启不依赖信令可用。
+
+为继续验证入口后的真实文件路径，使用原已停止夹具控制库的一致性副本和独立B profile副本，在专属loopback同URL启动既有rendezvous；未更改生产服务/原库/宿主网络。临时rendezvous由与6ec3cc4相同core/cmd源码编译（已核对git diff），EXE SHA256 `faa1eeb49589973d213ff317bbf0b5c48c1169729469aa75628e12af8314f292`；启动命令`rendezvous-6ec3cc4-darwin-arm64 --config finder-server.toml`。正常配对CLI接收端仅允许loopback，源码/EXE SHA同N4测试工具；桌面自然重新连接，实读目标B在线、发送可用，未在UI显示信令连接错误。
+
+真实点击主窗口发送按钮，唯一新queue `75038f41b618ff7e305163216a73e935`、request `23e416c4e067be30d6e0022892df89d3`、sender `20261018T042243.587864000Z-00000001`、transfer `fe7fa7cb80ce761e6585e2b3efdc0bae`。经正常Pion/固定身份QUIC完成110B、verified/committed110、重传0、bilateral_confirmed=true、relay=false/direct_unknown；CLI completed/exit0，selected_files=3/selected_entries=5。实际接收恰有以下三文件，源/目标hash一致，且`目录 空格/空目录`结构存在并为空：
+
+| 文件 | 字节 | SHA256 |
+|---|---:|---|
+| held-main.txt | 38 | eb2adf72e84bb5e0ce1613f1d76311504bbbc218a98c93787cf15cb869b8d6a5 |
+| 服务 中文.txt | 36 | e64ec2eae302eb711d8d51786005fb7e814401533a394fd46cc386db0ac91c52 |
+| plain file.txt | 36 | 714ddf46fcdab3fc02eb8abf780bbbb344e9c6a71a7bd720d189c4ccbe8d2bfd |
+
+原main来源在系统合并/重启阶段完整保持，仅在上述明确发送成功后按正常行为清空为revision4；quick revision4原空行保持。旧completed queue/task整行仍在，最终共2条completed queue/2tasks。App原生菜单退出，专属rendezvous正常SIGTERM退出、receiver exit0、监听关闭；只关闭专用Finder窗口，测试文件/clone/原profile/私有备份保留，身份/偏好/全部源hash保持、clipboard=false/enabled grants=0、两库quick_check=ok。
+
+保留失败：首轮准备因task BLOB不能直接JSON序列化，在app启动前停止；改为BLOB hash摘要后复核原现场续行，没有覆盖用户数据。第二次菜单检查原先只等路径存在，旧路径已存在导致读到revision2/窗口尚未唤回；没有重发菜单，只读核对新revision3和同PID窗口1后通过。复制已停止控制库的首轮SQLite backup出现unable to open database file；核对原库40960B/无WAL/quick_check=ok、目标仅0B空文件后，以原库immutable只读快照完成复制，原库未变。首次健康检查随后因启动未成功而停止，receiver尚未启动；所有失败都保留原job日志，不记为产品失败或PASS。
+
+最终收据`.artifacts/ae-20261018/mac-finder-6ec3cc4-final-receipt.json`已下载。关键job前缀`/tmp/codex-ssh/job-ls-ae-mac-`：`finder-start-reconcile-6ec3cc4-20261018-01`、`finder-inspect-6ec3cc4-20261018-01`、`finder-select-services-6ec3cc4-20261018-01/02`、`finder-services-submenu-6ec3cc4-20261018-01/02`、`finder-service-click-6ec3cc4-20261018-01`、`finder-repeat-reconcile-6ec3cc4-20261018-01`、`finder-restart-6ec3cc4-20261018-01`、`finder-signal-start-6ec3cc4-20261018-02`、`finder-signal-health-6ec3cc4-20261018-02`、`finder-receiver-6ec3cc4-20261018-01`、`finder-presend-inspect-6ec3cc4-20261018-01`、`finder-send-6ec3cc4-20261018-01`、`finder-final-cleanup-6ec3cc4-20261018-01`均exit0。`finder-service-click`第二次script因过早窗口检查exit1，其已送达的第二次激活随后只读复核成功，不重复调用。
+
+范围：准确Mac已有Finder Services实际菜单、两轮后台唤回/去重、草稿/重启、入口后普通原生发送与同机QUIC/实际目录文件。不是物理双机、Windows SendTo、拖放、冷启动到日常profile、正式Share Extension激活、性能或完整B2通过；这些必验/暂缓边界分别保持。
+
 ## f23383d 来源和 CI
 
 提交 `f23383dc12945df42bc095cd9a2adc8dc011e7c0`，分支 `codex/lan-rebuild-ae`，[Draft PR #9](https://github.com/Wen5555/LinkSend/pull/9)。通过 `gh run list --commit <SHA>` 与 `gh pr view 9` 回读：core push/PR `39081829479/39081832198`、desktop push/PR `39081829495/39081832379`、[packages39081829568](https://github.com/Wen5555/LinkSend/actions/runs/39081829568) 全部success，PR head一致。
