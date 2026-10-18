@@ -68,7 +68,7 @@ func (s *Service) ResendInbox(ctx context.Context, request ResendInboxRequest) (
 	if recovery.ContentMode != "" || recovery.ContentSnapshotID != "" {
 		return QueueItem{}, errors.New("CONTENT_SNAPSHOT_UNAVAILABLE")
 	}
-	prepared, err := transfer.PrepareForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID)
+	prepared, err := transfer.PrepareSelectedForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
 	if err != nil {
 		return QueueItem{}, classifyTaskError(err)
 	}
@@ -76,7 +76,7 @@ func (s *Service) ResendInbox(ctx context.Context, request ResendInboxRequest) (
 	if prepared.Manifest.Digest() != recovery.ManifestDigest {
 		return QueueItem{}, classifyTaskError(transfer.ErrChanged)
 	}
-	return s.Enqueue(EnqueueRequest{RequestID: requestID, PeerID: recovery.PeerID, Paths: append([]string(nil), recovery.SourcePaths...), WaitForPeer: request.WaitForPeer, ExpectedSourceDigest: inboxSourceDigest(prepared.Manifest)})
+	return s.Enqueue(EnqueueRequest{RequestID: requestID, PeerID: recovery.PeerID, Paths: append([]string(nil), recovery.SourcePaths...), SourceSelection: cloneSourceSelection(recovery.SourceSelection), WaitForPeer: request.WaitForPeer, ExpectedSourceDigest: inboxSourceDigest(prepared.Manifest)})
 }
 
 // Content identity survives the new task's independently chosen chunk layout.

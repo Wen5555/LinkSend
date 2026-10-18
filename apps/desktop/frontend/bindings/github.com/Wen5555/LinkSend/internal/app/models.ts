@@ -20,6 +20,23 @@ export interface AcceptIncomingDefaultResult {
     "message"?: string;
 }
 
+export interface BatchSnapshot {
+    "id": string;
+    "request_id": string;
+    "draft_id": string;
+    "draft_revision": number;
+    "revision": number;
+    "created_at": string;
+    "cancelled": boolean;
+    "state": string;
+    "total": number;
+    "completed": number;
+    "waiting": number;
+    "running": number;
+    "needs_attention": number;
+    "stopped": number;
+}
+
 export interface ClipboardGrant {
     "peer_id": string;
     "direction": string;
@@ -150,6 +167,7 @@ export interface Diagnostics {
     "trusted_peers": number;
     "generated_at": string;
     "health_failure"?: string;
+    "lan_provider_errors"?: { [_ in string]?: string } | null;
 }
 
 export interface DirectTimings {
@@ -163,12 +181,25 @@ export interface DirectTimings {
 }
 
 export interface DraftPreview {
+    "excluded_files"?: number;
+    "excluded_directories"?: number;
+    "excluded_bytes"?: number;
+    "entries"?: transfer$0.SourcePreviewEntry[] | null;
+    "entries_truncated"?: boolean;
     "revision": number;
     "files": number;
     "directories": number;
     "bytes": number;
     "complete": boolean;
     "problem"?: string;
+}
+
+export interface EnqueueBatchRequest {
+    "request_id": string;
+    "draft_id": string;
+    "draft_revision": number;
+    "wait_for_peer": boolean;
+    "expires_at": string;
 }
 
 export interface EnqueueContentRequest {
@@ -182,6 +213,9 @@ export interface EnqueueContentRequest {
 }
 
 export interface EnqueueRequest {
+    "draft_id"?: string;
+    "draft_revision"?: number;
+    "source_selection"?: transfer$0.SourceSelection | null;
     "request_id": string;
     "peer_id": string;
     "paths": string[] | null;
@@ -278,6 +312,7 @@ export interface InboxStatus {
     "lan_available": boolean;
     "lan_peer_count": number;
     "lan_last_error"?: string;
+    "lan_provider_errors"?: { [_ in string]?: string } | null;
 }
 
 export interface IncomingFile {
@@ -347,9 +382,16 @@ export interface LANPairResult {
     "server_state": string;
 }
 
+export interface MembershipRecoveryStatus {
+    "state": string;
+    "id"?: string;
+    "mode"?: string;
+    "message"?: string;
+}
+
 export interface MembershipStatus {
     /**
-     * pending, member, not_member, auth_failed, unavailable
+     * pending, member, not_member, auth_failed, unavailable, recovery_pending
      */
     "state": string;
 
@@ -361,6 +403,11 @@ export interface MembershipStatus {
 }
 
 export interface QueueItem {
+    "batch_id"?: string;
+    "batch_position"?: number;
+    "draft_id"?: string;
+    "draft_revision"?: number;
+    "source_selection"?: transfer$0.SourceSelection | null;
     "id": string;
     "request_id": string;
     "peer_id": string;
@@ -389,6 +436,8 @@ export interface ResendInboxRequest {
  * persisting a draft does not authorise a send or open any of its file bodies.
  */
 export interface SendDraft {
+    "peer_ids"?: string[] | null;
+    "source_selection"?: transfer$0.SourceSelection | null;
     "id": string;
     "paths": string[] | null;
     "peer_id": string;
@@ -418,6 +467,8 @@ export interface TaskPhaseEvent {
 }
 
 export interface TaskSnapshot {
+    "batch_id"?: string;
+
     /**
      * compatibility alias for task_id
      */
@@ -501,6 +552,7 @@ export interface WorkspaceChange {
  * recovery maps, checkpoint paths and file/image bytes never cross this DTO.
  */
 export interface WorkspaceSnapshot {
+    "batches"?: BatchSnapshot[] | null;
     "epoch": string;
     "revision": number;
     "draft": SendDraft;

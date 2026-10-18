@@ -5,14 +5,16 @@ import type { ClipboardPeerStatus, Diagnostics, InboxStatus } from '../../bindin
 import type { CommandRunner } from '../hooks/useDesktop';
 import { BackgroundSettings } from '../components/BackgroundSettings';
 import { ContentSettings } from '../components/ContentSettings';
+import { FileSendLimit, validFileSendLimit } from '../components/FileSendLimit';
 
-export type SettingsCategory = 'general' | 'receive' | 'clipboard' | 'system' | 'network' | 'storage' | 'diagnostics';
+export type SettingsCategory = 'general' | 'receive' | 'sending' | 'clipboard' | 'system' | 'network' | 'storage' | 'diagnostics';
 export type SettingsCategoryRequest = { category: SettingsCategory; revision: number };
-type EditableSection = 'general' | 'receive' | 'clipboard' | 'network';
-type DirtyField = 'device_name' | 'receive_directory' | 'conflict_policy' | 'clipboard_enabled' | 'server_url' | 'bind_address' | 'interface_priority' | 'excluded_interfaces' | 'stun_urls';
+type EditableSection = 'general' | 'receive' | 'sending' | 'clipboard' | 'network';
+type DirtyField = 'file_send_bytes_per_second' | 'device_name' | 'receive_directory' | 'conflict_policy' | 'clipboard_enabled' | 'server_url' | 'bind_address' | 'interface_priority' | 'excluded_interfaces' | 'stun_urls';
 type Props = { preferences: DesktopPreferences; effective?: EffectiveConfig; preferencesStatus?: PreferencesStatus; interfaces: NetworkInterfaceInfo[]; diagnostics?: Diagnostics; inbox?: InboxStatus; background?: BackgroundStatus; clipboard?: ClipboardWatchStatus; run: CommandRunner; controlRun: CommandRunner; op: string; available: boolean; sendToSupported?: boolean; onOpenLegacyQueue?: () => void; initialCategory?: SettingsCategory; categoryRequest?: SettingsCategoryRequest };
 const categories: { id: SettingsCategory; label: string; hint: string }[] = [
   { id: 'general', label: '通用', hint: '名称与外观' }, { id: 'receive', label: '文件接收', hint: '目录与同名策略' },
+  { id: 'sending', label: '文件发送', hint: '正文速率上限' },
   { id: 'clipboard', label: '自动剪贴板', hint: '同步与运行状态' },
   { id: 'system', label: '系统集成', hint: '后台、通知与分享' }, { id: 'network', label: '网络与发现', hint: '服务与接口' },
   { id: 'storage', label: '存储与记录', hint: '旧内容与清理' }, { id: 'diagnostics', label: '诊断与关于', hint: '连接与版本' },
@@ -21,6 +23,7 @@ const splitNames = (value: string) => value.split(',').map(item => item.trim()).
 const sectionFields: Record<EditableSection, DirtyField[]> = {
   general: ['device_name'],
   receive: ['receive_directory', 'conflict_policy'],
+  sending: ['file_send_bytes_per_second'],
   clipboard: ['clipboard_enabled'],
   network: ['server_url', 'bind_address', 'interface_priority', 'excluded_interfaces', 'stun_urls'],
 };
@@ -98,6 +101,7 @@ export function SettingsPage({ preferences, effective, preferencesStatus, interf
   return <div className="settings-shell">
     <aside className="settings-nav" aria-label="设置分类">{categories.map(item => <button key={item.id} disabled={!!savingSection} className={category === item.id ? 'active' : ''} onClick={() => setCategory(item.id)}><strong>{item.label}</strong><small>{item.hint}</small></button>)}</aside>
     <div className="settings-panel">
+      {category === 'sending' && <section className="surface settings-page"><span className="section-kicker">文件发送</span><h2>正文速率上限</h2><FileSendLimit rate={prefs.file_send_bytes_per_second ?? 0} disabled={savingSection === 'sending'} change={rate => update('sending', { file_send_bytes_per_second: rate })} /><button className="primary" disabled={!!op || !available || mergeRequired || savingSection === 'sending' || !validFileSendLimit(prefs.file_send_bytes_per_second ?? 0)} onClick={() => void save('sending', 'preferences-sending', '文件正文速率上限已保存，当前发送立即使用新预算')}>保存文件发送设置</button></section>}
       {preferencesStatus?.state && !['valid', 'missing'].includes(preferencesStatus.state) && <div className="banner error-banner" role="alert">{preferencesStatus.message || '偏好文件异常，原文件已保留。'}</div>}
       {mergeRequired && <div className="queue-notice" role="alert"><strong>设置已在其他位置更新</strong><p>未编辑字段已采用新值，你正在输入的字段仍保留。确认后可重试当前分类。</p><button className="secondary" onClick={() => { setBaselineRevision(latestSeenRevision); setMergeRequired(false); }}>保留输入并合并最新设置</button></div>}
       {category === 'general' && <section className="surface settings-page"><span className="section-kicker">通用</span><h2>本机显示</h2><label className="field-label">本机名称<input disabled={savingSection === 'general'} value={prefs.device_name} onChange={event => update('general', { device_name: event.target.value })} /></label><label className="field-label">外观<select value="system" disabled><option>跟随系统</option></select></label><label className="field-label">语言<select value="zh-CN" disabled><option>简体中文</option></select></label><button className="primary" disabled={!!op || !available || mergeRequired || savingSection === 'general'} onClick={() => void save('general', 'preferences-general', '通用设置已保存')}>保存通用设置</button></section>}

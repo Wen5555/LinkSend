@@ -566,7 +566,11 @@ func SendWithOptions(ctx context.Context, rw io.ReadWriteCloser, p *Prepared, op
 				return Result{}, e
 			}
 			progress.Read += int64(len(data))
-			if e = writeFrame(rw, data, m.ChunkSize); e != nil {
+			budget := options.BodyBudget
+			if descriptor != nil && !fallback {
+				budget = nil
+			}
+			if e = writeBodyFrame(ctx, rw, data, m.ChunkSize, budget); e != nil {
 				return Result{}, e
 			}
 			progress.Sent += int64(len(data))

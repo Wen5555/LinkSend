@@ -12,6 +12,7 @@ import type * as app$0 from "../../../../Wen5555/LinkSend/internal/app/models.js
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "quick-send:open": number;
             "workspace:changed": app$0.WorkspaceChange;
         }
     }

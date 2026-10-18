@@ -18,16 +18,17 @@ import (
 // InboxStatus describes the persistent receiver without creating a visible
 // transfer task merely because the application is idle.
 type InboxStatus struct {
-	Enabled            bool   `json:"enabled"`
-	SignalingConnected bool   `json:"signaling_connected"`
-	Listening          bool   `json:"listening"`
-	Directory          string `json:"directory,omitempty"`
-	ConnectedAt        string `json:"connected_at,omitempty"`
-	ConnectionCount    uint64 `json:"connection_count"`
-	LastError          string `json:"last_error,omitempty"`
-	LANAvailable       bool   `json:"lan_available"`
-	LANPeerCount       int    `json:"lan_peer_count"`
-	LANLastError       string `json:"lan_last_error,omitempty"`
+	Enabled            bool              `json:"enabled"`
+	SignalingConnected bool              `json:"signaling_connected"`
+	Listening          bool              `json:"listening"`
+	Directory          string            `json:"directory,omitempty"`
+	ConnectedAt        string            `json:"connected_at,omitempty"`
+	ConnectionCount    uint64            `json:"connection_count"`
+	LastError          string            `json:"last_error,omitempty"`
+	LANAvailable       bool              `json:"lan_available"`
+	LANPeerCount       int               `json:"lan_peer_count"`
+	LANLastError       string            `json:"lan_last_error,omitempty"`
+	LANProviderErrors  map[string]string `json:"lan_provider_errors,omitempty"`
 }
 
 type inboxManager struct {
@@ -96,6 +97,9 @@ func (s *Service) InboxStatus() InboxStatus {
 	status := InboxStatus{Enabled: s.inbox.enabled, SignalingConnected: s.inbox.connected, Listening: s.inbox.listening, Directory: s.inbox.directory, ConnectedAt: s.inbox.connectedAt, ConnectionCount: s.inbox.connectionCount, LastError: s.inbox.lastError}
 	s.inbox.mu.Unlock()
 	status.LANAvailable, status.LANPeerCount, status.LANLastError = s.lanStatus()
+	if manager := s.lanManager(); manager != nil {
+		status.LANProviderErrors = manager.ChannelErrors()
+	}
 	return status
 }
 

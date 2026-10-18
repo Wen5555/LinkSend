@@ -10,6 +10,8 @@ import { SettingsPage, type SettingsCategory, type SettingsCategoryRequest } fro
 import { ReceivePlanDialog } from './components/ReceivePlanDialog';
 import { InboxPage } from './pages/InboxPage';
 import { LANPairPrompt } from './components/LANPairPrompt';
+import { QuickSendDialog } from './components/QuickSendDialog';
+import { Events } from '@wailsio/runtime';
 import './App.css';
 
 type Tab = 'transfer' | 'inbox' | 'devices' | 'settings';
@@ -19,6 +21,8 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 const emptyPreferences: DesktopPreferences = { format_version: 1, revision: 0, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', conflict_policy: 'keep_both', device_name: '', background: { close_mode: '', notifications: false, prevent_sleep: false }, clipboard_enabled: false };
 
 export default function App() {
+  const [quickOpen, setQuickOpen] = useState(false);
+  const quickRevision = useRef(0);
   const [tab, setTab] = useState<Tab>('transfer');
   const [transferInitialView, setTransferInitialView] = useState<'send' | 'queue' | 'active'>('send');
   const [settingsRequest, setSettingsRequest] = useState<SettingsCategoryRequest>({ category: 'general', revision: 0 });
@@ -34,6 +38,17 @@ export default function App() {
   }, [workspace?.queue]);
   const devices = desktop.devices.data ?? [];
   const shell = desktop.shell.data;
+  useEffect(() => {
+    const revision = shell?.background.quick_send_revision ?? 0;
+    if (revision > quickRevision.current) { quickRevision.current = revision; setQuickOpen(true); }
+  }, [shell?.background.quick_send_revision]);
+  useEffect(() => {
+    if (!desktop.enabled) return;
+    return Events.On('quick-send:open', event => {
+      const revision = event.data;
+      if (typeof revision === 'number' && Number.isSafeInteger(revision) && revision > quickRevision.current) { quickRevision.current = revision; setQuickOpen(true); }
+    });
+  }, [desktop.enabled]);
   const entryRevision = useRef(0);
   useEffect(() => {
     const revision = shell?.entries.draft_revision ?? 0;
@@ -82,10 +97,11 @@ export default function App() {
       {control.notice && <div className="banner notice-banner" role="status"><p>{control.notice}</p><button onClick={control.clearNotice} aria-label="关闭传输控制提示">×</button></div>}
       {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} initialView={transferInitialView} /> :
         tab === 'inbox' ? <InboxPage devices={devices} run={control.run} op={control.op} available={available} focusTaskID={focusTaskID} navigationRevision={shell?.background.navigation_revision} /> :
-        tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
+        tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} inbox={inbox} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
           <SettingsPage initialCategory={settingsRequest.category} categoryRequest={settingsRequest} sendToSupported={shell?.entries.send_to_supported} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} background={shell?.background} clipboard={shell?.clipboard} run={command.run} controlRun={control.run} op={command.op || control.op} available={desktop.enabled} onOpenLegacyQueue={() => { setTransferInitialView('queue'); setTab('transfer'); }} />}
     </section>
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
+    {!incoming && quickOpen && <QuickSendDialog devices={devices} identityID={config?.identity.id || shell?.status.identity} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}
     {!incoming && <LANPairPrompt run={control.run} op={control.op} available={desktop.enabled} />}
   </div>;
 }

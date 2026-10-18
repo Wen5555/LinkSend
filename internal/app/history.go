@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const taskStoreSchema = 9
+const taskStoreSchema = 11
 
 // Individual revision-guarded rows avoid read/modify/write losses between
 // instances. Recovery metadata is local-only and never crosses Wails or WSS.
@@ -176,6 +176,35 @@ func historyDB(path string) (*sql.DB, error) {
 			if _, err = tx.Exec("ALTER TABLE clipboard_grants ADD COLUMN authorization_generation INTEGER NOT NULL DEFAULT 0"); err != nil {
 				return rollback(err)
 			}
+		}
+	}
+	if schema < 10 {
+		for _, table := range []string{"send_drafts", "send_queue"} {
+			hasSelection, columnErr := tableHasColumn(tx, table, "source_selection")
+			if columnErr != nil {
+				return rollback(columnErr)
+			}
+			if !hasSelection {
+				if _, err = tx.Exec("ALTER TABLE " + table + " ADD COLUMN source_selection TEXT NOT NULL DEFAULT ''"); err != nil {
+					return rollback(err)
+				}
+			}
+		}
+		for _, column := range []struct{ name, declaration string }{{"draft_id", "TEXT NOT NULL DEFAULT ''"}, {"draft_revision", "INTEGER NOT NULL DEFAULT 0"}} {
+			hasColumn, columnErr := tableHasColumn(tx, "send_queue", column.name)
+			if columnErr != nil {
+				return rollback(columnErr)
+			}
+			if !hasColumn {
+				if _, err = tx.Exec("ALTER TABLE send_queue ADD COLUMN " + column.name + " " + column.declaration); err != nil {
+					return rollback(err)
+				}
+			}
+		}
+	}
+	if schema < 11 {
+		if err = migrateBatchMetadata(tx); err != nil {
+			return rollback(err)
 		}
 	}
 	if _, err = tx.Exec("INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", fmt.Sprint(taskStoreSchema)); err != nil {

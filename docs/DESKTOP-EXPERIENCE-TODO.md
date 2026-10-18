@@ -1,5 +1,52 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-18 A–E Goal（已启动，当前 blocked）
+
+本聊天 Goal 已通过平台创建，2026-10-18 经 `update_goal` 返回状态 blocked；用户明确执行[目标文档](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)，整体未完成。起点 `638b2aa`，工作分支 `codex/lan-rebuild-ae`，沿用 Draft PR #9。不恢复旧代理/heartbeat；保留 `.playwright-cli/`、`apps/desktop/build/ios/`、`apps/desktop/build/linux/` 未跟踪内容。
+
+| 工作包 | 实现 | 自动测试 | 原生/网络 | GitHub | 下一具体动作 |
+|---|---|---|---|---|---|
+| A LAN 独立主流程 | 端口/reader/记忆、刷新/provider/早期host完成 | Pion/并发回归通过 | 后测发现/刷新双方10/10；Mac反控0/10；新准确Win LAN启动被工具策略阻断 | 6edddad五项CI及三平台包success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：可用原生环境下继续独立旅程，不绕过策略 |
+| B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI完成 | 两模块/兼容/race；输入回归6FAIL→115前端GREEN | 6f29814准确Mac正式HTTPS不同URL恢复PASS；同URL空库原生prepare/cancel/重启/加入/旧队列代次拒绝PASS（Mac loopback） | 6f29814五项CI/三平台包与四资产核验success | [恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：Win同URL原生、物理与legacy原生输入继续；外部STUN/双NAT条件保持 |
+| B2 LAN 性能/剪贴板/撤销/系统入口 | 既有实现待物理闭环；发现前后测完成 | 本轮未改源码，沿用6ec3cc4模块/119前端边界 | 6ec3cc4准确Mac Finder真实菜单两轮后台唤回/去重/重启/110B三文件及中文空目录loopback通过；物理/OS/性能仍待 | 6ec3cc4准确包已核验，本轮仅文档证据 | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：继续拖放/Windows入口与物理、OS剪贴板、两方向各3次分段性能 |
+| C / N1 目录预设 | Go筛选/预览、schema10草稿/队列、恢复v2与UI完成 | 既有完整模块/race/兼容/QUIC恢复及6ec3cc4模块/119前端通过 | 6ec3cc4准确Mac原生picker/源码预设/自定义排除与80B三文件/空目录集合hash PASS；旧Win保留6edddad来源 | 6ec3cc4五项CI/三平台四资产核验；本轮仅文档 | [N1证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：可用收尾已完成，物理与新包恢复未追加 |
+| C / N2 多设备分发 | Go原子批次、schema11/独立子项/取消/重启与UI完成 | 完整模块/race/100前端/兼容/真实QUIC三目标通过 | 6ec3cc4准确Mac双目标在线/离线、源变化只确认C、独立子项及活动批次取消、两次重启/直接恢复屏障PASS；同机范围 | 6ec3cc4五项CI/三平台包已核验，本轮仅文档；旧Win6edddad保持 | [N2证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：物理双机仍待，不扩展重复矩阵 |
+| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面完成 | 既有预算/race/QUIC/内存剪贴板夹具及6ec3cc4模块/119前端边界 | 6ec3cc4准确Mac原生256→1024KiB/s活动限速/32MiB hash、1KiB暂停/恢复/取消、活动改0完成4MiB、重启保持PASS；旧Win结果保留来源 | 6ec3cc4五项CI/三平台四资产核验；本轮仅文档 | [N3证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：OS剪贴板并存/物理速率仍待 |
+| D / N4 托盘快速发送 | quick/Go入队、菜单主点击/共享存储隔离与本机目标边界完成 | 两模块/off测试构建、119前端；本机/身份加载回归RED→GREEN | 6ec3cc4准确Mac self禁发/原生目标选择保存/picker/取消重开/45B QUIC及hash/后台重启退出PASS；0ae7cdf离线撤权保持来源 | 6ec3cc4五项CI/三平台包/四资产完整核验success | [N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)：Mac可用收尾完成，Win托盘与物理仍未验 |
+| E 同提交候选/最终回归/文档 | 6ec3cc4四资产/来源核验；旧包分项保留来源 | 两模块workspace/off测试及off构建、desktop vet/119前端通过 | 当前Mac N1集合/N2故障确认取消/N3活动限速/N4目标选择与文件等可用收尾通过；两平台正式healthz HTTPS200/TLS0；物理仍待 | 同一Draft PR #9、6ec3cc4五项CI/三平台包与四资产核验success | [原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)：四项功能不扩展重复测试，完整A/B/B2/系统入口/双NAT缺项保持 |
+
+用户2026-10-18最新明确授权合并main并发布v0.6.0，覆盖此前本任务不合并/不正式发布的边界；当前正在同步版本与构建，发布结果另记。保持不force-push。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
+
+2026-10-18 用户最新要求：不做过多测试，优先功能可用；随后明确选择把上述四项现有功能收尾到可用。后续验证收敛到构建、关键操作与必要的一次实际传输；复用已有通过证据，不扩展重复矩阵，未验证的网络/原生范围仍如实保留，不新增F09等范围。
+
+阻塞收束：四项功能交付、随后阻塞复核及本轮只读复核中，相同Windows原生执行条件/JP UDP补充授权均未变化，当前无可继续的独立实现事项；平台Goal已标blocked而非complete或paused。本轮Windows LinkSend进程数为0，preset专属服务job仍finished/exit0，工作树无跟踪文件改动；未重试被自动审批在CreateProcess前拒绝的隔离LAN启动，也未改宿主防火墙/路由/代理。下一步需Windows原生执行条件解除后继续一次最小真实双机闭环，跨NAT还需可用拓扑及JP UDP3478精确补充授权。用户随后已明确答复Windows限制“尚未解除，保留未验项”；不再将该问题列为待答，不重复询问或启动测试。恢复时先核对本页、Git和实际外部状态，不重跑已完成四项矩阵。以下旧active记录保留历史含义。
+
+最近准确包源码：`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`，五项CI/三平台包/四资产来源、架构与hash核验success。四项功能可用收尾已完成：准确Mac N1原生目录/源码预设/自定义排除及80B三文件/中文空目录实际集合hash；N2双目标在线离线/源变化单项确认/独立与批次取消/重启屏障；N3活动256→1024KiB/s、1KiB等待暂停恢复取消、改0完成；N4真实菜单/目标原生选择保存/picker取消重开/45B QUIC/后台重启退出。Finder真实菜单/110B闭环也已记录。均为同机范围，不报物理或双NAT。0ae7cdf离线撤权、6f29814恢复、98469ce旧31B及6edddad旧Win仍绑定来源。全部新app/receiver/fixture终态、监听关闭、clipboard=false；Windows策略/托盘、物理/OS/双NAT和JP UDP3478授权条件保持。
+
+本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
+
+运行现场：最新Mac根`/Users/wen/.codex/supervision/linksend-ae-20261018/preset-native-6ec3cc4`；app真实菜单退出、CLI receive与专属rendezvous均exit0、监听关闭。clone最终2queues/2tasks均completed（含原各1）、0batch、main revision5空且source/*.tmp规则保持；quick原生清空/选回B为revision6，内容除revision/timestamp恢复相同；rate=0、clipboard=false/grants=0，身份/偏好/全部源与目标hash/原profile/私有备份保持，两库quick_check=ok。收据`.artifacts/ae-20261018/mac-preset-6ec3cc4-final-receipt.json`。前述batch/budget/Finder/quick及更旧现场均终态并保留，batch的预期SOURCE_CHANGED failed历史未覆盖。用户手动短码已核对且未提交，不再等待输入；Windows启动策略与Mac录屏未授权保持。
+
+早期原生候选（历史检查点）来源：`d5412642e49460413fdda249f77d03647075f41c`，五项workflow success，包run `39060667017`。测量器与基线同步提交 `d70d923`。修复前发现harness十轮已收束；Mac反控失败不能随批次exit0标PASS。Windows/Mac准确包隔离profile启动、LAN监听/Windows状态读取已核验；Mac辅助访问拒绝、Windows UI未形成可验证导航，未做配对/文件旅程。owned Windows PID135152、Mac PID31256均已停止，剪贴板master=false、接收目录为空。
+
+服务现场：`linksend.oooai.de` 已指85.149.217.165并仅该hostname启用Cloudflare strict；后端127.0.0.1:8787，源站/公共WSS及重启通过。b8ad809的standalone备份修复已事务安装；v2完整恢复及最新撤销快照恢复均exit0，主库未替换，8788测试监听已停止。主服务最终PID283864、备份timer active。首轮root sidecar失败保留，不覆盖历史。
+
+公共信令最新复验：本轮Windows/Mac各一次严格`https://linksend.oooai.de/healthz`均200/TLS verify0；首次Windows误用`/health`返回426，更正后200，未当作服务异常或WSS通过。此前两平台正常Initialize/Join/邀请码重放拒绝/两路认证WSS/同身份verify与6edddad准确Mac正式主页“可以接收文件”的结果保持各自来源；旧TLS超时未确认根因。此前JP只读信令/STUN-only/备份timer active；没有新外部STUN/双NAT声明或宿主修改，见[信令证据](evidence/DESKTOP-AE-SIGNALING-REBUILD.md)。
+
+B/STUN现场：18a88f2/eb421f9已推送。新独立STUN-only服务本机Pion srflx/Binding/TURN负例通过，User=turnserver、PID285596、67/96 tasks、约7MiB；标准coturn.service保持masked/inactive。首轮TasksMax64导致auth线程创建失败，已安全停用后准确unit事务修复，证据/回退见信令重建文档。外部Windows/Mac UDP无响应，JP UFW只开放TCP22/80/443；已异步询问仅UDP3478授权，答复前不改规则/不切STUN DNS。旧默认STUN在Windows可取得srflx，Mac假IP/TUN公网路径仍失败；不替代双NAT文件。固定Node24.21.0/pnpm12.4.1及嵌套命令已核验，86前端测试和其余检查通过。
+
+B客户端：显式intent/API/UI、已退休context永久拒绝、首次DELETE前live-actor检查和完整快照/成员操作所有权已实现；独立LAN、LocalBlock、identity/文件/历史/偏好保留。schema3精确备份及旧库拒绝通过；正常新码重配保持，旧队列/撤销不自动重绑。核心off/desktop/前端90tests、并发race五轮等已通过，最终identity/app完整race终态exit0（app122.250s），e43043d已推送且五项workflow/三平台包success；[证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。客户端原生与新服务实际恢复旅程仍待准确包，不能标B整体完成。edb67ef、STUN资产修复eb421f9的五项workflow均success，18a88f2 package被后续并发策略cancelled。
+
+B来源记录：Git内部导出的两个server二进制仍被Go标记父仓库dirty，不用于部署。已在Git仓库外重建 `rendezvous-d541264-export-linux-amd64`，源归档SHA256 `13d69b85062a2a2dcba506081bfa7648b1df7b70fca93d09a8f415610868af6b`，二进制SHA256 `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`；Go metadata为(devel)，提交/归档另有明确来源。首次部署/恢复及DNS已完成，原preflight仍保留独立历史。
+
+> **2026-10-18 A–E Goal提示词：** 用户要求撰写覆盖A、B、B2、C、D、E所有任务的执行提示词，并明确授权较大改动完成后阶段commit/push。见[完整执行提示词](prompts/DESKTOP-AE-IMPLEMENTATION-GOAL.md)。N1–N4均列必做；本次撰写/同步提示词不等于已启动功能实施，明确执行后再更新本Goal状态。
+
+> **2026-10-18 前提与P0修正：** 用户确认原信令数据已丢失，改为日本猫猫机重建新控制库和显式重新配对；此前“迁移原组/旧数据库”方案已被替代。局域网独立发现、同意/配对、双向传输及性能优化列为P0，测试必须覆盖信令/STUN不可达，不以新服务完成为前置。完整开发/测试范围见[重建方案](DESKTOP-RESUMPTION-PLAN.md#4-信令服务重建与客户端恢复)和[LAN主线](DESKTOP-RESUMPTION-PLAN.md#5-局域网独立开发与优化主线p0)。本次仍为规划修订。
+
+> **2026-10-18 功能规划补正：** 本轮规划不只验收。具体开发行为、建议新增N1目录预设/N2多设备分发/N3限速/N4托盘快速发送，以及逐项测试见[功能建设清单](DESKTOP-RESUMPTION-PLAN.md#3-功能建设清单与实施顺序)。现有托盘/草稿/队列/收件箱继续复用；一次性临时分享列独立后续批次。N编号仅用于本规划功能映射，不表示已实施或用户已接受新增范围。
+
+> **2026-10-18 规划修订（尚未恢复功能实施）：** IPv6 暂缓；信令目标改为日本猫猫机 `85.149.217.165`，Mac 当前 LAN 地址更正为 `192.168.1.243`，两机均已只读 SSH 连通核验。按[修订计划](DESKTOP-RESUMPTION-PLAN.md)先固定环境/准备迁移与收敛 U3，再完成新入口的同版包联合验收；签名/公证仍暂缓。以下旧地址、Goal、任务归属与历史待办保留原日期边界，不据此自动执行。
+
 > **2026-09-23 用户终止实施并要求主分支推送、整理日志。** 当前 Goal 已 `paused`，子代理已中断，旧 heartbeat 仍 PAUSED；不再自动恢复或执行待授权的宿主规则实验。主分支收录已验证源码 `8fcc76d5059ab49b5d7cb81415e4a37885bc7abf` 及本次收尾文档，U1–U7 未全完成。最后 U3 候选没有进入主分支：保留在 `208a/Osend` 原实施树，并按 SHA256 备份至 `D:/apps/Osend/.artifacts/astra-stop-20260923/`。恢复须另有明确指令；见 E5-X / DELIVERY。
 
 > **2026-09-22 恢复实施：** 用户明确要求当前 Astra ultra 接管；旧停止指令已由本次恢复覆盖。实际接管 HEAD 为 `6eb23bab94e2a3d9fe615c0adceb1509e28494e0`，与远端/开放 Draft PR #8 一致，既有七个 check 均成功。preview.2 产物仍绑定 `0229cbf3e8373c544431102ed904c4a19ed02dc4`；旧包验证不迁移到新源码。Mac 本轮暂不可用，香港/荷兰可用；U1–U7 未全部验收，Goal 保持 active。

@@ -9,13 +9,12 @@ export function connectionMethodLabel(method: string): string {
   }
 }
 
-export function formatPairingCodeInput(value: string): string {
-  const trimmed = value.trimStart();
-  // Legacy protocol-v1 invitations are base64url and must retain case.
-  if (trimmed.length > 12) return trimmed.slice(0, 43);
+export function normalizePairingCode(value: string): string {
+  const trimmed = value.trim();
+  // Normalize only complete short codes at submission. Editing must preserve
+  // legacy base64url invitations, including their case and all 43 characters.
   const compact = trimmed.toUpperCase().replace(/[\s\-‐‑‒–—―]/g, '');
-  if (!/^[A-Z2-7]*$/.test(compact)) return trimmed.slice(0, 12);
-  return compact.length > 4 ? `${compact.slice(0, 4)}-${compact.slice(4, 8)}` : compact;
+  return /^[A-Z2-7]{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4)}` : trimmed;
 }
 
 export function shouldClearPairingCode(raw: unknown): boolean {
@@ -103,7 +102,8 @@ export function humanizeBackendError(raw: unknown): string {
   if (text.includes('invitation invalid, expired or used')) {
     return '配对码无效、已过期或已使用，请在另一台设备上重新生成。';
   }
-  const code = text.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0];
+  const code = text.match(/^(?:RuntimeError:\s*)?signaling HTTP \d{3}:\s*([A-Z][A-Z0-9_]{2,})(?=:|\s|$)/)?.[1]
+    ?? text.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0];
   const byCode: Record<string, string> = {
     CLIPBOARD_IMAGE_NOT_AVAILABLE: '剪贴板中没有可用图片，请先复制图片再读取。',
     CLIPBOARD_IMAGE_FORMAT_UNSUPPORTED: '暂不支持剪贴板中的图片格式，请重新复制为 PNG 图片。',
@@ -150,6 +150,9 @@ export function humanizeBackendError(raw: unknown): string {
     QUEUE_RESTART_CONFIRMATION_REQUIRED: '应用已重启，请核对文件与目标设备后确认继续。',
     APP_CLOSING: '应用正在保存并退出，暂不接受新操作。',
     RESOURCE_LIMIT: '已达到可处理数量上限，请减少文件或队列项后重试。',
+    INVALID_SOURCE_SELECTION: '排除规则无效：请使用相对路径、每行一条，最多 32 条；不支持取反或括号表达式。',
+    BATCH_CANCELLED: '此批次已取消，旧子任务不能继续。需要重新发送时请创建新的发送草稿。',
+    BATCH_TARGET_REQUIRES_CONFIRMATION: '请在待发送队列中确认此批次目标；已完成的其他目标不会重发。',
     INVALID_ARGUMENT: '输入不完整，请选择设备、文件和接收目录后重试。',
     DESKTOP_NOT_READY: '桌面窗口尚未准备好，请稍后重试。',
     BACKEND_UNAVAILABLE: '桌面服务尚未启动完成，请稍后重试。',

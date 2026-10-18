@@ -263,12 +263,15 @@ type TrustedPeer struct {
 	LANRequestID       string    `json:"lan_request_id,omitempty"`
 }
 type TrustFile struct {
-	SchemaVersion       int                   `json:"schema_version,omitempty"`
-	Peers               []TrustedPeer         `json:"peers"`
-	DeniedPeers         []DeniedPeer          `json:"denied_peers,omitempty"`
-	MembershipSnapshots []MembershipSnapshot  `json:"membership_snapshots,omitempty"`
-	ProvisionalLAN      []ProvisionalLANGrant `json:"provisional_lan,omitempty"`
-	AuthorizationEpochs map[string]uint64     `json:"authorization_epochs,omitempty"`
+	SchemaVersion       int                        `json:"schema_version,omitempty"`
+	Peers               []TrustedPeer              `json:"peers"`
+	DeniedPeers         []DeniedPeer               `json:"denied_peers,omitempty"`
+	MembershipSnapshots []MembershipSnapshot       `json:"membership_snapshots,omitempty"`
+	ProvisionalLAN      []ProvisionalLANGrant      `json:"provisional_lan,omitempty"`
+	AuthorizationEpochs map[string]uint64          `json:"authorization_epochs,omitempty"`
+	MembershipRecovery  *MembershipRecovery        `json:"membership_recovery,omitempty"`
+	RetiredMemberships  []MembershipSnapshot       `json:"retired_memberships,omitempty"`
+	LastRecovery        *MembershipRecoveryReceipt `json:"last_membership_recovery,omitempty"`
 }
 
 type ProvisionalLANGrant struct {
@@ -298,9 +301,10 @@ type DeniedPeer struct {
 	SeenRevision            uint64    `json:"seen_revision,omitempty"`
 	RequestID               string    `json:"request_id,omitempty"`
 	PendingSync             bool      `json:"pending_sync,omitempty"`
+	ContextRetired          bool      `json:"context_retired,omitempty"`
 }
 
-const trustSchemaVersion = 2
+const trustSchemaVersion = 3
 const trustMigrationBackup = "trust.json.pre-schema-1"
 
 func LoadTrust(dir string) ([]TrustedPeer, error) {
@@ -419,17 +423,19 @@ func commitLANPeerFile(f *TrustFile, peer TrustedPeer, expectedGeneration uint64
 		peer.GrantGeneration = existing.GrantGeneration
 		peer.AutoAccept = existing.AutoAccept
 		peer.GrantedAt = existing.GrantedAt
-		if existing.GrantKind == "group" || existing.GrantKind == "group+lan" {
+		if f.MembershipRecovery == nil && (existing.GrantKind == "group" || existing.GrantKind == "group+lan") {
 			peer.GroupID, peer.PeerIncarnation, peer.LocalIncarnation, peer.MembershipRevision = existing.GroupID, existing.PeerIncarnation, existing.LocalIncarnation, existing.MembershipRevision
 			peer.GrantKind = "group+lan"
 		} else {
 			peer.GrantKind = "lan"
+			peer.GroupID, peer.PeerIncarnation, peer.LocalIncarnation, peer.MembershipRevision = "", "", "", 0
 		}
 		f.Peers[index] = peer
 		return nil
 	}
 	peer.AutoAccept = false
 	peer.GrantKind = "lan"
+	peer.GroupID, peer.PeerIncarnation, peer.LocalIncarnation, peer.MembershipRevision = "", "", "", 0
 	peer.GrantGeneration = expectedGeneration
 	peer.GrantedAt = time.Now().UTC()
 	f.Peers = append(f.Peers, peer)
@@ -440,6 +446,13 @@ func checkPeerAllowed(f TrustFile, peerID string) error {
 	for _, denied := range f.DeniedPeers {
 		if denied.ID == peerID {
 			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
+		}
+	}
+	if f.MembershipRecovery != nil {
+		for _, peer := range f.Peers {
+			if peer.ID == peerID && hasMembershipGrant(peer) {
+				return ErrMembershipRecoveryPending
+			}
 		}
 	}
 	return nil
@@ -516,6 +529,9 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 	if f.SchemaVersion < 0 || f.SchemaVersion > trustSchemaVersion || (f.SchemaVersion == 0 && len(f.DeniedPeers) != 0) {
 		return TrustFile{}, errUnsupportedTrustSchema
 	}
+	if err := validateMembershipRecoveryPolicy(f); err != nil {
+		return TrustFile{}, err
+	}
 	seen := map[string]bool{}
 	if len(f.AuthorizationEpochs) > 1024 {
 		return TrustFile{}, errors.New("too many authorization epochs")
@@ -541,7 +557,9 @@ func parseTrustFile(data []byte) (TrustFile, error) {
 			return TrustFile{}, errors.New("invalid denied peer record")
 		}
 		if (denied.ActorGroupID != "" || denied.ActorIncarnation != "") && (denied.ActorGroupID == "" || len(denied.ActorIncarnation) != 32) {
-			return TrustFile{}, errors.New("invalid revocation actor binding")
+			if !(f.SchemaVersion >= 3 && !denied.PendingSync && denied.ActorGroupID != "" && denied.ActorIncarnation == "") {
+				return TrustFile{}, errors.New("invalid revocation actor binding")
+			}
 		}
 		seen[denied.ID] = true
 	}
@@ -843,8 +861,19 @@ func TrustMembershipPeer(dir string, peer TrustedPeer) error {
 }
 
 func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
+	if f.MembershipRecovery != nil {
+		return ErrMembershipRecoveryPending
+	}
+	for _, retired := range f.RetiredMemberships {
+		if retired.GroupID == peer.GroupID && retired.LocalIncarnation == peer.LocalIncarnation {
+			return authenticationError("membership context was explicitly retired")
+		}
+	}
 	if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || peer.GroupID == "" || len(peer.PeerIncarnation) != 32 || len(peer.LocalIncarnation) != 32 || peer.MembershipRevision == 0 {
 		return authenticationError("invalid membership_v2 grant")
+	}
+	if f.AuthorizationEpochs[peer.ID] == ^uint64(0) {
+		return authenticationError("peer grant generation exhausted")
 	}
 	generation := max(uint64(1), f.AuthorizationEpochs[peer.ID]+1)
 	for index := 0; index < len(f.DeniedPeers); index++ {
@@ -852,8 +881,12 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 		if denied.ID != peer.ID {
 			continue
 		}
-		if denied.LocalBlock || denied.TargetIncarnation == peer.PeerIncarnation || peer.MembershipRevision <= denied.SeenRevision {
+		sameRevisionScope := denied.ActorGroupID == "" || denied.ActorGroupID == peer.GroupID
+		if denied.LocalBlock || !denied.ContextRetired && (denied.TargetIncarnation == peer.PeerIncarnation || sameRevisionScope && peer.MembershipRevision <= denied.SeenRevision) {
 			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
+		}
+		if denied.AuthorizationGeneration == ^uint64(0) {
+			return authenticationError("peer grant generation exhausted")
 		}
 		generation = denied.AuthorizationGeneration + 1
 		retainAuthorizationEpoch(f, peer.ID, denied.AuthorizationGeneration)
@@ -877,12 +910,22 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 			peer.GrantGeneration = existing.GrantGeneration
 			peer.GrantedAt = existing.GrantedAt
 		} else {
+			if existing.GrantGeneration == ^uint64(0) {
+				return authenticationError("peer grant generation exhausted")
+			}
 			peer.AutoAccept = false
 			peer.LastLANAddress = ""
-			peer.GrantGeneration = max(generation, existing.GrantGeneration+1)
+			peer.GrantGeneration = max(generation, max(uint64(1), existing.GrantGeneration)+1)
+			peer.GrantedAt = time.Now().UTC()
 		}
 		if existing.GrantKind == "lan" || existing.GrantKind == "group+lan" {
 			peer.GrantKind = "group+lan"
+			// Membership responses carry no independent LAN consent metadata.
+			// Keep that evidence across a refresh or a new group/incarnation,
+			// while the new generation and GrantedAt fence all earlier tasks.
+			peer.LastLANAddress = existing.LastLANAddress
+			peer.LANAddressHistory = existing.LANAddressHistory
+			peer.LANRequestID = existing.LANRequestID
 		} else {
 			peer.GrantKind = "group"
 		}
@@ -902,6 +945,29 @@ func applyMembershipPeer(f *TrustFile, peer TrustedPeer) error {
 func ApplyMembershipSnapshot(dir, localID string, peers []TrustedPeer) error {
 	trustMu.Lock()
 	defer trustMu.Unlock()
+	f, err := loadTrustFile(dir)
+	if err != nil {
+		return err
+	}
+	beforeSchema := f.SchemaVersion
+	if err = applyMembershipSnapshotFile(&f, localID, peers); err != nil {
+		return err
+	}
+	if beforeSchema < 3 && f.SchemaVersion >= 3 {
+		if err = ensureRecoveryTrustBackup(dir, trustMigrationBackup); err != nil {
+			return err
+		}
+		if err = ensureRecoveryTrustBackup(dir, trustRecoveryBackup); err != nil {
+			return err
+		}
+	}
+	return saveTrust(dir, f)
+}
+
+func applyMembershipSnapshotFile(f *TrustFile, localID string, peers []TrustedPeer) error {
+	if f.MembershipRecovery != nil {
+		return ErrMembershipRecoveryPending
+	}
 	if len(peers) == 0 {
 		return authenticationError("empty membership snapshot")
 	}
@@ -909,6 +975,9 @@ func ApplyMembershipSnapshot(dir, localID string, peers []TrustedPeer) error {
 	var revision uint64
 	present := map[string]bool{}
 	for _, peer := range peers {
+		if len(peer.PublicKey) != 32 || DeviceID(peer.PublicKey) != peer.ID || present[peer.ID] || peer.GroupID == "" || len(peer.LocalIncarnation) != 32 || len(peer.PeerIncarnation) != 32 || peer.MembershipRevision == 0 || peer.ID == localID && peer.PeerIncarnation != peer.LocalIncarnation {
+			return authenticationError("invalid complete membership snapshot identity")
+		}
 		if groupID == "" {
 			groupID, localInc, revision = peer.GroupID, peer.LocalIncarnation, peer.MembershipRevision
 		}
@@ -917,16 +986,25 @@ func ApplyMembershipSnapshot(dir, localID string, peers []TrustedPeer) error {
 		}
 		present[peer.ID] = true
 	}
-	f, err := loadTrustFile(dir)
-	if err != nil {
+	if !present[localID] {
+		return authenticationError("complete membership snapshot missing local identity")
+	}
+	for _, retired := range f.RetiredMemberships {
+		if retired.GroupID == groupID && retired.LocalIncarnation == localInc {
+			return authenticationError("membership context was explicitly retired")
+		}
+	}
+	for _, snapshot := range f.MembershipSnapshots {
+		if snapshot.GroupID == groupID && (revision < snapshot.Revision || localInc != snapshot.LocalIncarnation && revision <= snapshot.Revision) {
+			return authenticationError("stale membership snapshot")
+		}
+	}
+	if err := retireSupersededMembershipContexts(f, groupID, localInc); err != nil {
 		return err
 	}
 	for index := range f.MembershipSnapshots {
 		snapshot := &f.MembershipSnapshots[index]
 		if snapshot.GroupID == groupID {
-			if revision < snapshot.Revision || localInc != snapshot.LocalIncarnation && revision <= snapshot.Revision {
-				return authenticationError("stale membership snapshot")
-			}
 			snapshot.Revision, snapshot.LocalIncarnation = revision, localInc
 			goto snapshotReady
 		}
@@ -935,14 +1013,26 @@ func ApplyMembershipSnapshot(dir, localID string, peers []TrustedPeer) error {
 snapshotReady:
 	for index := len(f.Peers) - 1; index >= 0; index-- {
 		peer := f.Peers[index]
-		if peer.GroupID == "" || peer.GroupID == groupID {
+		if !hasMembershipGrant(peer) || peer.GroupID == "" || peer.GroupID == groupID {
 			continue
 		}
 		if peer.GrantKind == "group+lan" {
+			if peer.GrantGeneration == ^uint64(0) {
+				return authenticationError("peer grant generation exhausted")
+			}
+			// A queue/task is bound to the aggregate authorization generation,
+			// not just the remaining LAN pin. Retiring group authority must not
+			// let old work silently continue through the independent LAN grant.
+			f.Peers[index].GrantGeneration = max(uint64(1), peer.GrantGeneration) + 1
+			f.Peers[index].GrantedAt = time.Now().UTC()
 			f.Peers[index].GroupID, f.Peers[index].PeerIncarnation, f.Peers[index].LocalIncarnation, f.Peers[index].MembershipRevision, f.Peers[index].GrantKind, f.Peers[index].AutoAccept = "", "", "", 0, "lan", false
 			continue
 		}
-		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, SeenRevision: revision}
+		actorGroup, actorInc := membershipActorBinding(peer)
+		if actorGroup != "" && actorInc == "" {
+			f.SchemaVersion = 3
+		}
+		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, ActorGroupID: actorGroup, ActorIncarnation: actorInc, SeenRevision: peer.MembershipRevision}
 		f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
 		already := false
 		for _, existing := range f.DeniedPeers {
@@ -956,10 +1046,14 @@ snapshotReady:
 	}
 	for index := len(f.Peers) - 1; index >= 0; index-- {
 		peer := f.Peers[index]
-		if peer.ID == localID || peer.GroupID != groupID || present[peer.ID] {
+		if !hasMembershipGrant(peer) || peer.ID == localID || peer.GroupID != groupID || present[peer.ID] {
 			continue
 		}
-		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, SeenRevision: revision}
+		actorGroup, actorInc := membershipActorBinding(peer)
+		if actorGroup != "" && actorInc == "" {
+			f.SchemaVersion = 3
+		}
+		denied := DeniedPeer{ID: peer.ID, Name: peer.Name, DeniedAt: time.Now().UTC(), AuthorizationGeneration: max(uint64(1), peer.GrantGeneration+1), TargetIncarnation: peer.PeerIncarnation, ActorGroupID: actorGroup, ActorIncarnation: actorInc, SeenRevision: revision}
 		f.Peers = append(f.Peers[:index], f.Peers[index+1:]...)
 		already := false
 		for _, existing := range f.DeniedPeers {
@@ -973,12 +1067,12 @@ snapshotReady:
 	}
 	for _, peer := range peers {
 		if peer.ID != localID {
-			if err = applyMembershipPeer(&f, peer); err != nil && !errors.Is(err, ErrPeerDenied) {
+			if err := applyMembershipPeer(f, peer); err != nil && !errors.Is(err, ErrPeerDenied) {
 				return err
 			}
 		}
 	}
-	return saveTrust(dir, f)
+	return nil
 }
 
 func appendRememberedAddress(history []string, address string) []string {
@@ -1215,7 +1309,9 @@ func saveTrust(dir string, f TrustFile) error {
 			f.DeniedPeers[index].LocalBlock = true
 		}
 	}
-	f.SchemaVersion = trustSchemaVersion
+	// Normal writes retain schema2 compatibility. Explicit recovery opts into
+	// schema3 so older clients cannot ignore its durable retirement barriers.
+	f.SchemaVersion = max(2, f.SchemaVersion)
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err

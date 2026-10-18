@@ -7,5 +7,7 @@ export {
 
 export type {
     ContentDescriptor,
-    PlanSummary
+    PlanSummary,
+    SourcePreviewEntry,
+    SourceSelection
 } from "./models.js";

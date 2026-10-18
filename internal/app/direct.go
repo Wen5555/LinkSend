@@ -26,6 +26,8 @@ const firstGeneration uint64 = 1
 const candidateExchangeBudget = 10 * time.Second
 
 type DirectConfig struct {
+	originBatchID                   string
+	sourceSelection                 *transfer.SourceSelection
 	BindAddress                     string
 	InterfacePriority               []string
 	ExcludedInterfaces              []string
@@ -781,6 +783,10 @@ func (s *Service) SendPreparedWithHooksDetailed(ctx context.Context, peerID stri
 }
 
 func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks) (DirectTransferResult, error) {
+	return s.sendPreparedOverPeerAttempt(ctx, peer, prepared, cfg, hooks, true)
+}
+
+func (s *Service) sendPreparedOverPeerAttempt(ctx context.Context, peer *PeerSession, prepared *transfer.Prepared, cfg DirectConfig, hooks transfer.SendHooks, reconnectBeforeOffer bool) (DirectTransferResult, error) {
 	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "authorization"}, err
 	}
@@ -788,9 +794,27 @@ func (s *Service) sendPreparedOverPeer(ctx context.Context, peer *PeerSession, p
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
 	}
+	options.BodyBudget = processFileBudget
 	cfg.phase("opening_stream")
+	if hook := s.beforeFileOpen; hook != nil {
+		hook(peer)
+	}
 	stream, err := peer.Data.Conn.OpenStreamSync(ctx)
 	if err != nil {
+		// A remote idle timer can close a cached connection after acquire checked
+		// it. No stream/offer/body has been emitted here, so one newly authenticated
+		// connection is safe. Never replay a transfer after its offer was written.
+		if reconnectBeforeOffer && ctx.Err() == nil && peer.SessionReuse && peer.Data.Conn.Context().Err() != nil {
+			s.removePeerSession(peer)
+			_ = peer.Close()
+			cfg.expectedAuthorizationGeneration = peer.AuthorizationGeneration
+			replacement, connectErr := s.acquirePeerSession(ctx, peer.PeerID, cfg)
+			if connectErr != nil {
+				return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "connecting"}, connectErr
+			}
+			result, sendErr := s.sendPreparedOverPeerAttempt(ctx, replacement, prepared, cfg, hooks, false)
+			return result, s.releasePeerSession(replacement, sendErr)
+		}
 		return DirectTransferResult{Evidence: peer.Evidence()}, err
 	}
 	result, err := transfer.SendWithOptions(ctx, transport.WrapStream(stream), prepared, options)
@@ -823,7 +847,7 @@ func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []
 	preparedCh := make(chan prepareResult, 1)
 	peerCh := make(chan peerResult, 1)
 	go func() {
-		prepared, err := transfer.Prepare(parallelCtx, paths, 0)
+		prepared, err := transfer.PrepareSelected(parallelCtx, paths, 0, cfg.sourceSelection)
 		preparedCh <- prepareResult{prepared: prepared, err: err}
 	}()
 	go func() {
@@ -995,15 +1019,8 @@ func (s *Service) trustedDevice(ctx context.Context, id string) (signaling.Devic
 	// A newly joined group member may not be pinned by this already-running
 	// device yet. Refresh only on a local miss; established peers stay off the
 	// latency-sensitive HTTP devices path.
-	c, err := s.client()
+	devices, err := s.refreshMembershipDevices(ctx)
 	if err != nil {
-		return signaling.Device{}, err
-	}
-	devices, err := c.Devices(ctx)
-	if err != nil {
-		return signaling.Device{}, err
-	}
-	if err = s.syncPairedDevices(devices); err != nil {
 		return signaling.Device{}, err
 	}
 	peers, err = identity.LoadTrust(s.cfg.DataDir)
@@ -1236,10 +1253,11 @@ func connectWithTrickle(ctx context.Context, session candidateSession, endpoint 
 		case connected = <-connectCh:
 			if connected.err != nil {
 				cancel()
-			} else if connected.path.ConnectionMethod == "lan_direct" {
-				// A verified on-link host path is already the preferred V1 LAN
-				// result. End trickle cleanly instead of waiting for unrelated
-				// public STUN candidates.
+			} else if connected.path.LocalType == "host" && connected.path.RemoteType == "host" {
+				// Pion has checked and nominated the signed host pair. Route
+				// classification is diagnostic evidence, not a prerequisite
+				// for using that live pair. End trickle cleanly without waiting
+				// for unrelated STUN (including direct_unknown host paths).
 				close(stopGathering)
 			}
 		}

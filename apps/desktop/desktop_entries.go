@@ -42,6 +42,10 @@ func desktopProfileDirectory() string {
 	if directory := os.Getenv("LINKSEND_DATA_DIR"); directory != "" {
 		return directory
 	}
+	return defaultDesktopProfileDirectory()
+}
+
+func defaultDesktopProfileDirectory() string {
 	if root, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(root, "LinkSend")
 	}

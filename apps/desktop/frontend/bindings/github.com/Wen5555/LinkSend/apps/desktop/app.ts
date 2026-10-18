@@ -42,6 +42,14 @@ export function BlockPeer(id: string): $CancellablePromise<void> {
     return $Call.ByID(1661110154, id);
 }
 
+export function CancelBatch(id: string, revision: number): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(3900665653, id, revision);
+}
+
+export function CancelMembershipRecovery(requestID: string): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(887065632, requestID);
+}
+
 export function CancelQueue(id: string, revision: number): $CancellablePromise<void> {
     return $Call.ByID(3632256226, id, revision);
 }
@@ -94,6 +102,10 @@ export function ContentTask(taskID: string): $CancellablePromise<app$0.ContentTa
     return $Call.ByID(2173688711, taskID);
 }
 
+export function ContinueMembershipRecovery(requestID: string, code: string, name: string): $CancellablePromise<app$0.DeviceInfo> {
+    return $Call.ByID(3912033515, requestID, code, name);
+}
+
 export function CopyReceivedText(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
     return $Call.ByID(2054701800, taskID);
 }
@@ -134,12 +146,24 @@ export function Enqueue(request: app$0.EnqueueRequest): $CancellablePromise<app$
     return $Call.ByID(2200678053, request);
 }
 
+export function EnqueueBatch(request: app$0.EnqueueBatchRequest): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(2722231227, request);
+}
+
 export function EnqueueContent(request: app$0.EnqueueContentRequest): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(3042055810, request);
 }
 
+export function EnqueueQuickSend(revision: number, waitForPeer: boolean): $CancellablePromise<app$0.QueueItem> {
+    return $Call.ByID(2822745730, revision, waitForPeer);
+}
+
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
     return $Call.ByID(2230930606, records);
+}
+
+export function GetBatch(id: string): $CancellablePromise<app$0.BatchSnapshot> {
+    return $Call.ByID(144054913, id);
 }
 
 export function GetTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
@@ -182,12 +206,24 @@ export function Membership(): $CancellablePromise<app$0.MembershipStatus> {
     return $Call.ByID(3247912641);
 }
 
+export function MembershipRecoveryStatus(): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(3129518668);
+}
+
 export function NetworkChanged(reason: string): $CancellablePromise<void> {
     return $Call.ByID(465047923, reason);
 }
 
 export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfaceInfo[] | null> {
     return $Call.ByID(1900295361);
+}
+
+/**
+ * Revision is a request to show one panel in the existing process/window. It
+ * does not enqueue work and does not mutate either persistent draft.
+ */
+export function OpenQuickSend(): $CancellablePromise<void> {
+    return $Call.ByID(783052630);
 }
 
 export function OpenReceivedURL(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
@@ -234,6 +270,10 @@ export function PreferencesStatus(): $CancellablePromise<$models.PreferencesStat
     return $Call.ByID(2639668847);
 }
 
+export function PrepareMembershipRecovery(mode: string, confirmed: boolean): $CancellablePromise<app$0.MembershipRecoveryStatus> {
+    return $Call.ByID(2419553939, mode, confirmed);
+}
+
 export function PreviewDraft(): $CancellablePromise<app$0.DraftPreview> {
     return $Call.ByID(887061994);
 }
@@ -244,6 +284,10 @@ export function PreviewReceivedText(taskID: string): $CancellablePromise<app$0.C
 
 export function ProbeLANAddress(address: string): $CancellablePromise<void> {
     return $Call.ByID(4182654780, address);
+}
+
+export function QuickSendDraft(): $CancellablePromise<app$0.SendDraft> {
+    return $Call.ByID(834672985);
 }
 
 export function QuitApplication(): $CancellablePromise<void> {
@@ -317,6 +361,10 @@ export function SavePreferences(next: $models.DesktopPreferences): $CancellableP
  */
 export function SavePreferencesSection(section: string, expectedRevision: number, patch: $models.DesktopPreferences): $CancellablePromise<$models.DesktopPreferences> {
     return $Call.ByID(3171888101, section, expectedRevision, patch);
+}
+
+export function SaveQuickSendDraft(draft: app$0.SendDraft): $CancellablePromise<app$0.SendDraft> {
+    return $Call.ByID(955677608, draft);
 }
 
 export function SaveReceivedImage(taskID: string): $CancellablePromise<app$0.ContentActionResult> {

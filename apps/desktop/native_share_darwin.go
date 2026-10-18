@@ -4,7 +4,7 @@ package main
 
 /*
 #cgo CFLAGS: -mmacosx-version-min=13.0 -x objective-c
-#cgo LDFLAGS: -mmacosx-version-min=13.0 -framework Foundation
+#cgo LDFLAGS: -mmacosx-version-min=13.0 -framework Foundation -framework Security
 #include <stdlib.h>
 char *linksendShareContainerPath(void);
 char *linksendResolveShareBookmark(const char *requestID, const char *bookmark);
@@ -15,6 +15,7 @@ import "C"
 
 import (
 	"errors"
+	"os"
 	"sync"
 	"unsafe"
 )
@@ -25,17 +26,15 @@ var shareContainer struct {
 }
 
 func nativeShareRoots(profile string) []string {
-	roots := []string{profile}
-	shareContainer.Do(func() {
-		if value := C.linksendShareContainerPath(); value != nil {
-			defer C.free(unsafe.Pointer(value))
-			shareContainer.path = C.GoString(value)
-		}
+	return nativeShareRootsForProfile(profile, defaultDesktopProfileDirectory(), os.Getenv("LINKSEND_DATA_DIR") != "", func() string {
+		shareContainer.Do(func() {
+			if value := C.linksendShareContainerPath(); value != nil {
+				defer C.free(unsafe.Pointer(value))
+				shareContainer.path = C.GoString(value)
+			}
+		})
+		return shareContainer.path
 	})
-	if shareContainer.path != "" && shareContainer.path != profile {
-		roots = append(roots, shareContainer.path)
-	}
-	return roots
 }
 
 func resolveNativeShareActivation(activation fileActivation) (fileActivation, error) {

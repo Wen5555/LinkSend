@@ -1,0 +1,16 @@
+# Installed by install-stun-only-jp.sh with one verified local IPv4.
+listening-ip=@LISTEN_IPV4@
+listening-port=3478
+stun-only
+fingerprint
+no-tcp
+no-tls
+no-dtls
+no-cli
+no-rfc5780
+no-software-attribute
+relay-threads=0
+realm=stun.oooai.de
+pidfile=/run/linksend-stun/turnserver.pid
+log-file=stdout
+simple-log

@@ -242,19 +242,24 @@ func TestMembershipRevocationRefreshPreservesAuthorizationBoundaries(t *testing.
 			if (err == nil) != (scenario == "retry_success") {
 				t.Fatalf("unexpected revocation result: %v", err)
 			}
-			wantDeletes, wantSnapshots := int32(1), int32(1)
-			if scenario == "retry_forbidden" || scenario == "retry_success" || scenario == "repaired_before_writeback" {
+			// Live identity/context proof now precedes the first DELETE. Invalid
+			// snapshots and a replaced tombstone must cause zero mutations.
+			wantDeletes, wantSnapshots := int32(0), int32(1)
+			switch scenario {
+			case "missing_target", "unadvanced_revision", "authentication_401":
+				wantDeletes = 1
+			case "retry_forbidden", "retry_success", "repaired_before_writeback":
 				wantDeletes = 2
-			}
-			if scenario == "authentication_401" {
-				wantSnapshots = 0
 			}
 			if deletes.Load() != wantDeletes || snapshots.Load() != wantSnapshots {
 				t.Fatalf("unsafe or unbounded retry: DELETE=%d GET=%d", deletes.Load(), snapshots.Load())
 			}
-			first := <-requests
-			if first.RequestID == "" || first.TargetIncarnation != grant.PeerIncarnation || first.ExpectedRevision != 1 {
-				t.Fatalf("initial request changed authorization binding: %+v", first)
+			var first request
+			if wantDeletes != 0 {
+				first = <-requests
+				if first.RequestID == "" || first.TargetIncarnation != grant.PeerIncarnation || first.ExpectedRevision != 1 {
+					t.Fatalf("initial request changed authorization binding: %+v", first)
+				}
 			}
 			if wantDeletes == 2 {
 				second := <-requests
@@ -271,7 +276,7 @@ func TestMembershipRevocationRefreshPreservesAuthorizationBoundaries(t *testing.
 				if loadErr != nil || len(denied) != 0 || len(peers) != 1 || peers[0].PeerIncarnation != newGrant.PeerIncarnation {
 					t.Fatalf("old request overwrote the new relationship: denied=%+v peers=%+v err=%v", denied, peers, loadErr)
 				}
-			} else if len(denied) != 1 || denied[0].RequestID != first.RequestID || denied[0].PendingSync != (scenario != "retry_success") {
+			} else if len(denied) != 1 || denied[0].RequestID == "" || wantDeletes != 0 && denied[0].RequestID != first.RequestID || denied[0].TargetIncarnation != grant.PeerIncarnation || denied[0].ActorGroupID != grant.GroupID || denied[0].ActorIncarnation != grant.LocalIncarnation || denied[0].PendingSync != (scenario != "retry_success") {
 				t.Fatalf("unexpected outbox state: %+v", denied)
 			}
 		})

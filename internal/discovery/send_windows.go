@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -21,7 +22,12 @@ func (m *Manager) writeOnRoute(body []byte, destination *net.UDPAddr, route inte
 		<-m.responseSlots
 		return err
 	}
+	stopClose := func() bool { return true }
+	if m.ctx != nil {
+		stopClose = context.AfterFunc(m.ctx, func() { _ = conn.Close() })
+	}
 	if _, err = conn.WriteToUDP(body, destination); err != nil {
+		stopClose()
 		_ = conn.Close()
 		<-m.responseSlots
 		return err
@@ -29,6 +35,7 @@ func (m *Manager) writeOnRoute(body []byte, destination *net.UDPAddr, route inte
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer stopClose()
 		defer func() { <-m.responseSlots }()
 		defer conn.Close()
 		buffer := make([]byte, maxPacketBytes+1)

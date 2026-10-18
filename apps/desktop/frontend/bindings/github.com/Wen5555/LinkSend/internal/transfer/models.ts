@@ -46,3 +46,21 @@ export interface PlanSummary {
     "remaining_bytes": number;
     "commit_bytes": number;
 }
+
+export interface SourcePreviewEntry {
+    "path": string;
+    "directory": boolean;
+    "excluded": boolean;
+    "bytes": number;
+}
+
+/**
+ * SourceSelection is a local, versioned file-selection policy, not gitignore.
+ * Nil means full contents. Patterns use /, are case sensitive on every OS,
+ * support * and ?, and support ** only as an entire path segment.
+ */
+export interface SourceSelection {
+    "version": number;
+    "preset": string;
+    "exclude"?: string[] | null;
+}

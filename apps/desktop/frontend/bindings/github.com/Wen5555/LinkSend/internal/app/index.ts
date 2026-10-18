@@ -3,6 +3,7 @@
 
 export type {
     AcceptIncomingDefaultResult,
+    BatchSnapshot,
     ClipboardGrant,
     ClipboardGrantPatch,
     ClipboardPeerStatus,
@@ -18,6 +19,7 @@ export type {
     Diagnostics,
     DirectTimings,
     DraftPreview,
+    EnqueueBatchRequest,
     EnqueueContentRequest,
     EnqueueRequest,
     IdentityInfo,
@@ -38,6 +40,7 @@ export type {
     InvitationInfo,
     LANPairRequestInfo,
     LANPairResult,
+    MembershipRecoveryStatus,
     MembershipStatus,
     QueueItem,
     ResendInboxRequest,

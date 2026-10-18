@@ -10,6 +10,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.1'
+      - name: Verify online backup and isolated restore
+        run: python3 -m unittest discover -s deploy/systemd -p 'test_*.py' -v
       - run: test -z "$(gofmt -l .)"
         shell: bash
       - run: GOWORK=off go mod verify

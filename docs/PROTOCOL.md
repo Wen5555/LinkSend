@@ -1,5 +1,27 @@
 # Protocol
 
+## 2026-10-18 托盘快速发送
+
+任务库11与wire保持。quick为现有send_drafts的独立本地行；Go命令按精确revision与等待选择读取草稿，稳定请求收据在清空/重启后可核对，不能借主草稿或新授权重发。typed quick-send:open及BackgroundStatus revision只传面板唤起元数据，不传正文。边界见[ADR0012](adr/0012-tray-quick-send.md)。
+
+## 2026-10-18 本地文件正文预算
+
+wire与任务库11保持，正文帧仍为相同长度头与字节。进程共享预算仅延迟文件正文分段写入，不限制ICE/QUIC/控制或自动剪贴板；file fallback与应用级文件块重传计费。桌面format1增加可选file_send_bytes_per_second，缺省0；旧程序忽略该字段而不具有限速，不能将回退解释为保留该能力。数值/CAS/生效/突发边界见[ADR0011](adr/0011-process-file-body-budget.md)。
+
+## 2026-10-18 本地多目标批次
+
+文件/manifest V1、信令和剪贴板wire保持。多目标与批次仅为Go本地控制元数据；任务库10→11新增有序目标、parent与子队列关联，兼容旧单目标。`EnqueueBatch`绑定精确持久草稿revision，原子创建全部目标并保留幂等收据；子项独立保留原授权代次/规则/内容摘要，派发时重验。取消与重启不授权继续，旧schema10端明确拒绝11。具体API/迁移及完成回执优先规则见[ADR0010](adr/0010-atomic-device-batches.md)。
+
+## 2026-10-18 本地目录预设
+
+文件/manifest V1与信令、剪贴板wire保持。`source_selection`仅本地草稿、队列与任务恢复元数据；Go生成正常的选中文件manifest，接收端沿用原有确认、hash与安全落盘。任务库9→10，筛选发送恢复记录version2；版本1完整发送兼容。规范化规则参与队列内容身份，精确草稿来源/revision与内容摘要原子保存；未支持规则拒绝，不能退成完整发送。语义和迁移见[ADR0009](adr/0009-versioned-source-selection.md)。
+
+## 2026-10-18 本地成员恢复与退休
+
+信令membership_v2、文件V1与剪贴板wire保持；客户端trust最大schema3，显式恢复/成员上下文替换时升级，其他普通schema2策略写入保持兼容。新增恢复intent、128项退休上下文上限和最近幂等收据；邀请码不持久化。旧客户端拒绝schema3，缺失/损坏策略不自动使用旧备份。
+
+恢复仅经正常Initialize/Join/Devices；先持久旧任务generation屏障，成功后原子退休旧group/local-incarnation，高revision旧快照也不能复活。有效LAN、本地拒绝、identity、文件、历史和偏好保留，新关系不继承免确认/剪贴板。普通撤销在首次DELETE前验证live actor/原目标，新actor仅通过用户新意图和CAS更新；原actor最多一次revision重试。状态、取消、兼容和独立LAN见[ADR0008](adr/0008-membership-recovery-and-retired-contexts.md)。
+
 ## 2026-09-22 本地失败诊断输出
 
 `DirectTransferResult` / CLI `--evidence` 新增可选 `failure_phase` 和 `failure_diagnostic`（stage/category/code/origin），只属于本地 API/JSON，不进入文件、信令或剪贴板 wire。错误时可以保留已经观测到的 session、ICE 候选对和计数；这不表示 QUIC/TLS 或文件传输成功，未协商 TLS 的版本为 0、ALPN 为空。底层 errno/TLS/QUIC 类型使用既有白名单分类，不包含原始错误正文、证书或 ICE 密码。前置文件准备、开流、正文协议和关闭错误按实际边界标明，连接观察器继续向既有 Task 调用方传递。

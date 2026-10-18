@@ -129,6 +129,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .queue-actions .ghost { padding-inline: 10px; }
 .queue-empty, .loading-status { color: var(--muted); padding: 18px 0; font-size: 13px; }
 .queue-notice { padding: 11px 13px; margin: 10px 0; border-left: 3px solid var(--blue); background: var(--blue-soft); color: var(--text); font-size: 12px; line-height: 1.6; }
+.membership-recovery { margin-top: 12px; }
+.membership-recovery .checkbox-label { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; }
+.membership-recovery .checkbox-label input { width: 16px; height: 16px; min-height: 0; margin: 2px 0 0; flex: 0 0 16px; accent-color: var(--blue); }
 .queue-wait { display: flex; gap: 9px; align-items: center; margin: 16px 0; font-size: 12px; color: var(--text); }
 .queue-wait input, .preference-checks input { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--blue); }
 .draft-status { display: block; margin-top: 10px; color: var(--muted); font-size: 11px; }
@@ -316,4 +319,40 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .nav-item { min-height: 40px; }
   .settings-shell { padding-top: 6px; }
   .settings-nav { padding-bottom: 5px; }
+}
+.source-selection { display: grid; gap: .65rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); min-width: 0; }
+.source-selection textarea { width: 100%; resize: vertical; min-height: 5rem; }
+.source-selection-entries { max-height: 14rem; overflow: auto; padding-left: 1.25rem; overflow-wrap: anywhere; }
+.source-selection-entries li { margin: .35rem 0; }
+@media (prefers-color-scheme: dark) {
+  .source-selection select, .source-selection textarea { background: rgba(0,0,0,.22); color: var(--text); border-color: var(--line-strong); }
+  .source-selection .secondary { background: rgba(255,255,255,.08); color: var(--text); border-color: var(--line-strong); }
+}
+.batch-targets { margin-block: .8rem; }
+.batch-target-list { display: grid; gap: .35rem; margin-block: .65rem; }
+.batch-target-choice { display: flex; align-items: center; gap: .65rem; min-height: 42px; padding: .35rem; }
+.batch-target-choice input { width: 17px; height: 17px; flex: 0 0 17px; }
+.batch-target-choice span { min-width: 0; }
+.batch-target-choice strong, .batch-target-choice small { display: block; overflow-wrap: anywhere; }
+.batch-target-choice small { font-size: 11px; color: var(--muted); margin-top: .2rem; }
+.batch-summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-block: .65rem; }
+.file-send-limit .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
+.file-send-limit .toggle-row strong, .file-send-limit .toggle-row small { display: block; }
+.file-send-limit .toggle-row small { color: var(--muted); margin-top: .3rem; }
+.file-send-limit .toggle-row input { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; }
+.file-send-limit .picker-row { flex-wrap: wrap; align-items: flex-start; }
+.quick-send-backdrop { position: fixed; inset: 0; z-index: 1100; background: #17203360; display: grid; place-items: center; padding: 18px; }
+.quick-send-dialog { width: min(520px,100%); max-height: calc(100vh - 36px); overflow-y: auto; }
+.quick-send-dialog .section-heading { margin-bottom: 12px; }
+.quick-send-dialog .file-list { max-height: 180px; overflow-y: auto; min-height: 60px; }
+.quick-send-dialog .file-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-send-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+@media (prefers-color-scheme: dark) {
+  .quick-send-dialog { background: #2c2c2e; }
+  .quick-send-dialog .field-label input, .quick-send-dialog .field-label select,
+  .quick-send-dialog .field-label input:focus, .quick-send-dialog .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }
+}
+@media (prefers-color-scheme: dark) {
+  .file-send-limit .field-label input, .file-send-limit .field-label select,
+  .file-send-limit .field-label input:focus, .file-send-limit .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }
 }

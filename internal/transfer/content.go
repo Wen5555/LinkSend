@@ -47,8 +47,9 @@ type ContentAcceptance struct {
 }
 
 type SendOptions struct {
-	Hooks   SendHooks
-	Content *ContentDescriptor
+	BodyBudget BodyBudget
+	Hooks      SendHooks
+	Content    *ContentDescriptor
 	// The caller must obtain the user's explicit file-fallback choice. Absence
 	// of content_v1 acceptance otherwise stops before the first body frame.
 	AllowFileFallback bool

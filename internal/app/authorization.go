@@ -14,17 +14,15 @@ func (s *Service) currentAuthorizationGeneration(peerID string) (uint64, error) 
 	if err == nil {
 		return generation, nil
 	}
-	c, clientErr := s.client()
-	if clientErr != nil {
+	if errors.Is(err, identity.ErrMembershipRecoveryPending) {
+		return 0, err
+	}
+	if _, clientErr := s.client(); clientErr != nil {
 		return 0, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	devices, clientErr := c.Devices(ctx)
-	if clientErr != nil {
-		return 0, err
-	}
-	if clientErr = s.syncPairedDevices(devices); clientErr != nil {
+	if _, clientErr := s.refreshMembershipDevices(ctx); clientErr != nil {
 		return 0, clientErr
 	}
 	return identity.AuthorizationGeneration(s.cfg.DataDir, peerID)

@@ -3,6 +3,29 @@
 2026-09-14 E4-03修复候选：认证QUIC会话只有在双方分别声明`session_reuse`和独立`clipboard_sync`能力后才承载自动剪贴板单向流；双方各自的本地authorization generation可以不同，wire按消息方向绑定接收方实际代次。自动剪贴板持久总开关和全部peer/方向/text|link|image权限默认关闭；lease及event同时绑定permission revision，撤权、暂停、新复制和期限会淘汰旧正文。真实本地复制先推进唯一状态owner，再判断lease、发送权限和格式，因此不会在重连后补发旧内容。发送/接收各最多两路，正文有deadline、分块速率预算，原生图片验证在最终状态锁外完成，mutation前复核暂停、授权、permission revision、OS generation和deadline。loopback QUIC、Windows隔离原生测试与Mac命名pasteboard只证明对应边界，物理Win↔Mac用户剪贴板仍留E5。
 
 # LinkSend protocol V1 implementation specification
+
+2026-10-18 N4目标边界增量：快速发送排除本机；身份尚未读取时等待，保存为本机的草稿保留但不可发送。最终Go授权、文件wire与schema保持；准确包原生结果另列。
+
+2026-10-18原生错误提示增量：识别Wails `RuntimeError`与信令HTTP包装后的稳定协议码，继续使用既有中文配对提示；不显示已识别码后的原始诊断详情。只修改桌面展示，不改变配对请求、授权、wire或schema；准确包原生恢复结果单列。
+
+2026-10-18原生picker修复：Windows锁定Wails beta.18取消精确错误在picker边界归一为空选择，不显示失败也不改变草稿；真实错误保持。无wire/schema改变，见[原生检查点](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
+
+2026-10-18 N4候选：托盘/菜单栏快速发送请求打开同一窗口轻量面板，quick持久草稿与main隔离；Go以保存revision派生稳定入队收据，复用现有认证队列。取消保留选择、picker取消无修改、已提交后只清quick来源，重启不自动派发。无新快捷键权限/实例/文件正文IPC，准确包原生入口另验，见ADR0012。
+
+2026-10-18 N3候选：文件发送正文的进程共享预算、不限速或KiB/MiB上限、分类CAS偏好与运行中动态生效已实现；恢复/应用级重传同样计费，控制与自动剪贴板独立。可取消等待、突发有界，暂停派发不等于暂停当前任务。不声称精确UDP线速，见ADR0011与本轮证据。
+
+2026-10-18 N2候选：持久草稿选择2–16个已配对目标，Go一次命令预检并以单SQLite事务创建parent/全部独立子队列；顺序派发、等待上线、源变化确认与单项重试保持原授权代次。schema10→11可读备份迁移，幂等收据在草稿清空后可核对；批次取消持久并覆盖重启/直接RPC，durable完成保持。文件wire与正文路径不变，见ADR0010及唯一TODO。
+
+2026-10-18 N1候选：默认完整发送，可选Go版本化源码预设/有限排除。预览与正式准备共用受限遍历和筛选，显示包含/排除数量、体积及有界条目；规则可撤销。任务库9→10备份迁移，队列内容身份绑定规则和精确草稿revision，派发/暂停/重启/重试/重发保持规则。带筛选本地恢复版本2，文件wire仍V1，正文不经JS/信令。准确包原生/物理状态见ADR0009及唯一TODO。
+
+2026-10-18 A增量：重复发现刷新共享在途结果并在完成后750ms内限频，周期公告/记忆退避有界抖动。设备页进入主动触发并显示provider降级，手动IP仍不等于自动发现成功。真实Pion已检查并选中的host↔host可及时结束trickle，不等待无关STUN；连接方法仍按真实路由证据分类，不将host类型等同LAN。wire与身份、文件完整性契约保持；物理验收另记。
+
+2026-10-18 B客户端恢复候选：显式Prepare/Continue/Cancel与桌面恢复面板、同URL空库初始化/新码加入、响应丢失后核对/暂停/重启、持久旧context退休与outbox首发live-actor检查已实现。普通新码重配保持，组/本机incarnation替换同样退休旧快照；独立LAN不因恢复补组失败失去授权。trust升级schema3并精确备份、旧端明确拒绝，wire/控制库/任务库保持。准确包原生与真实跨NAT仍单列待验，见ADR0008和本轮证据。
+
+2026-10-18 B恢复前置修复：成员上下文切换或旧group+lan降为独立LAN均提升授权代次/时间屏障，旧任务、队列及剪贴板权限不能借保留LAN关系继续。保留独立LAN地址/历史/request证据，普通同上下文刷新不丢同意；不改wire/schema。完整灾后恢复仍单列待实施，见ADR0007与TODO。
+
+2026-10-18 A 首批恢复：发现固定 UDP 端口不可用时使用临时源端口，保留有界组播/广播/单播与独立 TLS 控制入口，并暴露 `listen=fixed_port_unavailable`；既有刷新/公告定时器在端口释放后恢复固定监听。旧 socket reader 不能覆盖替代 socket 的状态或触发其重建。受限单播对所有匹配源路由尝试（最多32条），成功写入 UDP 只表示发出探测。已认证配对/恢复成功后立即更新当前发现器的记忆地址；拒绝配对不添加地址，记忆失败不撤销已持久授权。文件 wire、身份校验与明确同意边界未变；本批自动测试不代表物理网络验收完成。
+
 2026-09-14 E3 源码候选：Windows `windows.shareTarget` 与 macOS `com.apple.share-services` 使用原生小面板选择真实已配对设备。两端把有界路径/bookmark 元数据以本机 `request_id` 持久交给 Go，Go 再经现有授权代际和幂等队列派发；文件正文不经 JavaScript、信令或本地 IPC。macOS 只在系统给出临时表示时于回调期限内复制，原位文件使用 security-scoped bookmark。正式 App Group 和 Windows package identity 的签名安装实测按用户要求暂缓，不将无签名注册或模拟交接记为通过；文件 wire 仍为 V1。
 
 2026-09-13 E2-C1 修复：默认同名策略可全局保存并按设备覆盖继承，桌面任务库 schema 7；设置按字段保留 dirty 输入。LAN 同意为应用级弹窗并处理跨组后续，旧内容草稿恢复管理入口，主发送动作在小客户区保持可见。文件 wire 与 E1 网络结论不变。
@@ -24,7 +47,7 @@ persistent queue (ADR0004). Go holds all scheduling and source validation; UI co
 are revision checked and enqueue is idempotent. The user explicitly set minimum
 macOS13 on 2026-09-12, permitting Go1.27.1, and approved one combined M0/M1 prerelease.
 
-Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. The current source product line is `0.5.x`; protocol V1 is an independent compatibility contract and is not the same as product SemVer. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from protocol V1.
+Normative requirements supplied by Zhang Yaowen on 2026-09-07. This file records the complete product scope and acceptance obligations. The current source product line is `0.6.x`; protocol V1 is an independent compatibility contract and is not the same as product SemVer. PROGRESS.md records implementation evidence separately. A pending feature here is not permission to remove it from protocol V1.
 
 ## 1. Product scope
 

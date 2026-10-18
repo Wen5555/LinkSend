@@ -1,10 +1,41 @@
 #import <Foundation/Foundation.h>
+#import <Security/Security.h>
+#import <Security/SecTask.h>
 #include <string.h>
 
 static NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSURL *> *> *linksendScopedShareURLs;
 
+static BOOL linksendHasSharedGroupSignature(void) {
+    SecCodeRef self = NULL;
+    SecStaticCodeRef code = NULL;
+    CFDictionaryRef info = NULL;
+    BOOL allowed = NO;
+    if (SecCodeCopySelf(kSecCSDefaultFlags, &self) == errSecSuccess &&
+        SecCodeCopyStaticCode(self, kSecCSDefaultFlags, &code) == errSecSuccess &&
+        SecCodeCopySigningInformation(code, kSecCSSigningInformation, &info) == errSecSuccess && info) {
+        CFTypeRef team = CFDictionaryGetValue(info, kSecCodeInfoTeamIdentifier);
+        if (team && CFGetTypeID(team) == CFStringGetTypeID() && CFStringGetLength((CFStringRef)team) > 0) {
+            SecTaskRef task = SecTaskCreateFromSelf(kCFAllocatorDefault);
+            if (task) {
+                CFTypeRef groups = SecTaskCopyValueForEntitlement(task, CFSTR("com.apple.security.application-groups"), NULL);
+                if (groups && CFGetTypeID(groups) == CFArrayGetTypeID()) {
+                    allowed = CFArrayContainsValue((CFArrayRef)groups, CFRangeMake(0, CFArrayGetCount((CFArrayRef)groups)), CFSTR("group.com.linksend.desktop"));
+                }
+                if (groups) CFRelease(groups);
+                CFRelease(task);
+            }
+        }
+    }
+    if (info) CFRelease(info);
+    if (code) CFRelease(code);
+    if (self) CFRelease(self);
+    return allowed;
+}
+
 char *linksendShareContainerPath(void) {
     @autoreleasepool {
+        // Ad-hoc preview builds must not enter another app's group container.
+        if (!linksendHasSharedGroupSignature()) return NULL;
         NSURL *url = [[NSFileManager defaultManager]
             containerURLForSecurityApplicationGroupIdentifier:@"group.com.linksend.desktop"];
         return url.fileSystemRepresentation ? strdup(url.fileSystemRepresentation) : NULL;

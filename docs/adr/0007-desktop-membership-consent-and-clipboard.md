@@ -113,6 +113,8 @@ Lamport clock 独立表示逻辑因果顺序：本机新复制先将 clock 加�
 
 ## 所有权和会话调度
 
+2026-10-18 授权屏障修复：完整成员快照使旧 `group+lan` 关系降为独立LAN时，也必须提升聚合grant generation并重置GrantedAt/免确认；保留LAN pin不允许旧组的任务/队列继续运行。新组或本机incarnation替换同样建立新的时间与代次屏障。已有服务owner按代次变化撤销剪贴板grant、关闭该peer会话并取消旧任务；旧队列确认必须拒绝，重启后仍绑定原代次。有效独立LAN的地址、历史和LAN request ID保留，未参与成员变化的LAN-only peer不受影响；普通同上下文刷新不提升代次或重置已存在同意。代次耗尽拒绝整个原子快照，不回绕。该修复不改变wire/trust schema，不代表完整灾后恢复intent/API、旧快照退休和pending revoke上下文隔离已交付。
+
 每 profile 唯一 Go owner；先测量 historyDB 频繁开关和已有队列 store 的成本，再收敛连接生命周期。身份授权仍只有一份真实来源。
 入队、授权、接收计划、恢复检查点和终态承诺必须等待必要提交；UI 进度可有界合并，不削弱 fsync、commit intent 和文件身份验证。
 按同一已认证对端/双方 grant generation 复用 QUIC 会话；每文件任务与剪贴板事件使用独立受限流。取消任务只关对应流，身份撤销/网络失效/退出关闭相应会话。

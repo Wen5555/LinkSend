@@ -21,13 +21,14 @@ type changeHub struct {
 // WorkspaceSnapshot contains local presentation metadata only. Private source
 // recovery maps, checkpoint paths and file/image bytes never cross this DTO.
 type WorkspaceSnapshot struct {
-	Epoch                string         `json:"epoch"`
-	Revision             uint64         `json:"revision"`
-	Draft                SendDraft      `json:"draft"`
-	Queue                []QueueItem    `json:"queue"`
-	Tasks                []TaskSnapshot `json:"tasks"`
-	QueuePaused          bool           `json:"queue_paused"`
-	PersistenceAvailable bool           `json:"persistence_available"`
+	Batches              []BatchSnapshot `json:"batches,omitempty"`
+	Epoch                string          `json:"epoch"`
+	Revision             uint64          `json:"revision"`
+	Draft                SendDraft       `json:"draft"`
+	Queue                []QueueItem     `json:"queue"`
+	Tasks                []TaskSnapshot  `json:"tasks"`
+	QueuePaused          bool            `json:"queue_paused"`
+	PersistenceAvailable bool            `json:"persistence_available"`
 }
 
 type WorkspaceChange struct {
@@ -122,11 +123,32 @@ func (s *Service) Workspace() (WorkspaceSnapshot, error) {
 	if err != nil {
 		return WorkspaceSnapshot{}, err
 	}
+	batches, err := s.batchSnapshots()
+	if err != nil {
+		return WorkspaceSnapshot{}, err
+	}
 	s.queue.mu.Lock()
 	paused := s.queue.paused
 	persistent := !s.queue.persistFailed && s.tasks.historyAvailable()
 	s.queue.mu.Unlock()
-	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Tasks: s.workspaceTasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
+	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Batches: batches, Tasks: s.workspaceTasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
+}
+
+func (s *Service) SendDraft(id string) (SendDraft, error) {
+	done, err := s.beginWorkspaceWork()
+	if err != nil {
+		return SendDraft{}, err
+	}
+	defer done()
+	id, err = normalizeDraftID(id)
+	if err != nil {
+		return SendDraft{}, err
+	}
+	draft, err := s.store.Draft(id)
+	if errors.Is(err, ErrMetadataNotFound) {
+		return SendDraft{ID: id, Paths: []string{}}, nil
+	}
+	return draft, err
 }
 
 func (s *Service) SaveDraft(draft SendDraft, workingDir string) (SendDraft, error) {
@@ -268,7 +290,10 @@ func (s *Service) initializeWorkspace() {
 	s.workCtx, s.workCancel = context.WithCancel(context.Background())
 	s.store, s.storeErr = desktopStoreFromDB(s.tasks.sharedHistoryDB())
 	if s.storeErr == nil {
-		_, s.storeErr = s.store.db.Exec(`UPDATE send_queue SET state='needs_attention',last_error='RESTART_CONFIRMATION_REQUIRED',revision=revision+1,updated_at=? WHERE state IN ('queued','waiting_peer','running')`, time.Now().UTC().Format(time.RFC3339Nano))
+		s.storeErr = s.restoreCancelledBatches()
+		if s.storeErr == nil {
+			_, s.storeErr = s.store.db.Exec(`UPDATE send_queue SET state='needs_attention',last_error='RESTART_CONFIRMATION_REQUIRED',revision=revision+1,updated_at=? WHERE state IN ('queued','waiting_peer','running')`, time.Now().UTC().Format(time.RFC3339Nano))
+		}
 		var paused string
 		if err := s.store.db.QueryRow(`SELECT value FROM metadata WHERE key='queue_paused'`).Scan(&paused); err == nil {
 			s.queue.paused = paused == "1"

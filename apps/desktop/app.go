@@ -63,18 +63,19 @@ type App struct {
 }
 
 type DesktopPreferences struct {
-	FormatVersion      int               `json:"format_version"`
-	Revision           uint64            `json:"revision"`
-	ServerURL          string            `json:"server_url"`
-	BindAddress        string            `json:"bind_address"`
-	InterfacePriority  []string          `json:"interface_priority"`
-	ExcludedInterfaces []string          `json:"excluded_interfaces"`
-	STUNURLs           []string          `json:"stun_urls"`
-	ReceiveDirectory   string            `json:"receive_directory"`
-	ConflictPolicy     string            `json:"conflict_policy"`
-	DeviceName         string            `json:"device_name"`
-	Background         BackgroundOptions `json:"background"`
-	ClipboardEnabled   bool              `json:"clipboard_enabled"`
+	FileSendBytesPerSecond int64             `json:"file_send_bytes_per_second,omitempty"`
+	FormatVersion          int               `json:"format_version"`
+	Revision               uint64            `json:"revision"`
+	ServerURL              string            `json:"server_url"`
+	BindAddress            string            `json:"bind_address"`
+	InterfacePriority      []string          `json:"interface_priority"`
+	ExcludedInterfaces     []string          `json:"excluded_interfaces"`
+	STUNURLs               []string          `json:"stun_urls"`
+	ReceiveDirectory       string            `json:"receive_directory"`
+	ConflictPolicy         string            `json:"conflict_policy"`
+	DeviceName             string            `json:"device_name"`
+	Background             BackgroundOptions `json:"background"`
+	ClipboardEnabled       bool              `json:"clipboard_enabled"`
 }
 
 type PreferencesStatus struct {
@@ -140,6 +141,9 @@ func (a *App) startup(ctx context.Context) {
 	name := firstNonEmpty(a.prefs.DeviceName, "LinkSend desktop")
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	a.core, a.initErr = linksendapp.New(linksendapp.Config{DataDir: dataDir, ServerURL: serverURL, AllowInsecureLoopback: allowLoopback, Name: name})
+	if a.initErr == nil && !a.configBlocked {
+		a.initErr = linksendapp.ConfigureFileSendLimit(a.prefs.FileSendBytesPerSecond)
+	}
 	a.startBackground()
 	if a.initErr == nil && a.core != nil && !a.configBlocked {
 		a.startNativeSystemEvents()
@@ -477,6 +481,9 @@ func loadPreferencesDetailed(dataDir string) (DesktopPreferences, PreferencesSta
 	if loaded.FormatVersion != 1 {
 		return p, PreferencesStatus{State: "unsupported", Message: "偏好文件版本不受支持；原文件已保留，请重置桌面偏好"}
 	}
+	if transfer.ValidateFileSendLimit(loaded.FileSendBytesPerSecond) != nil {
+		return p, PreferencesStatus{State: "corrupt", Message: "文件正文速率上限无效；原文件已保留，请修复桌面偏好"}
+	}
 	if loaded.Revision == 0 {
 		// Files written before section-scoped saves did not carry a revision.
 		// Treat that valid snapshot as the first revision without rewriting it
@@ -556,6 +563,8 @@ func (a *App) SavePreferencesSection(section string, expectedRevision uint64, pa
 	case "receive":
 		next.ReceiveDirectory = patch.ReceiveDirectory
 		next.ConflictPolicy = patch.ConflictPolicy
+	case "sending":
+		next.FileSendBytesPerSecond = patch.FileSendBytesPerSecond
 	case "network":
 		next.ServerURL = patch.ServerURL
 		next.BindAddress = patch.BindAddress
@@ -591,6 +600,9 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	next.ReceiveDirectory = strings.TrimSpace(next.ReceiveDirectory)
 	next.ConflictPolicy = strings.TrimSpace(next.ConflictPolicy)
 	next.DeviceName = strings.TrimSpace(next.DeviceName)
+	if err := transfer.ValidateFileSendLimit(next.FileSendBytesPerSecond); err != nil {
+		return err
+	}
 	if next.ConflictPolicy == "" {
 		next.ConflictPolicy = string(transfer.ConflictKeepBoth)
 	}
@@ -633,6 +645,9 @@ func (a *App) savePreferencesLocked(next DesktopPreferences, updateReceiver bool
 	a.prefsStatus = PreferencesStatus{State: "valid"}
 	a.configBlocked = false
 	a.prefsMu.Unlock()
+	if previous.FileSendBytesPerSecond != next.FileSendBytesPerSecond {
+		_ = linksendapp.ConfigureFileSendLimit(next.FileSendBytesPerSecond) // validated before durable save
+	}
 	if previous.ClipboardEnabled != next.ClipboardEnabled {
 		a.setClipboardSuspended("master", !next.ClipboardEnabled)
 	}
@@ -837,6 +852,44 @@ func (a *App) SwitchMembership(token, name string) (linksendapp.DeviceInfo, erro
 	return a.core.SwitchMembership(ctx, token, name)
 }
 
+func (a *App) MembershipRecoveryStatus() (linksendapp.MembershipRecoveryStatus, error) {
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.MembershipRecoveryStatus()
+}
+
+func (a *App) PrepareMembershipRecovery(mode string, confirmed bool) (linksendapp.MembershipRecoveryStatus, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.MembershipRecoveryStatus{}, err
+	}
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.PrepareMembershipRecovery(mode, confirmed)
+}
+
+func (a *App) ContinueMembershipRecovery(requestID, code, name string) (linksendapp.DeviceInfo, error) {
+	if err := a.ensureConfig(); err != nil {
+		return linksendapp.DeviceInfo{}, err
+	}
+	if a.core == nil {
+		return linksendapp.DeviceInfo{}, errBackendUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.core.ContinueMembershipRecovery(ctx, requestID, code, name)
+}
+
+func (a *App) CancelMembershipRecovery(requestID string) (linksendapp.MembershipRecoveryStatus, error) {
+	if a.core == nil {
+		return linksendapp.MembershipRecoveryStatus{}, errBackendUnavailable
+	}
+	return a.core.CancelMembershipRecovery(requestID)
+}
+
 // PairDevice is the user-facing alias for the simplified pairing-code flow.
 // JoinGroup remains for CLI/binding compatibility with existing clients.
 func (a *App) PairDevice(code, name string) (linksendapp.DeviceInfo, error) {
@@ -966,31 +1019,31 @@ func (a *App) PickFiles() ([]string, error) {
 	if a.runtimeApp == nil {
 		return nil, errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedFiles(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择要发送的文件").
 		CanChooseFiles(true).
 		CanChooseDirectories(false).
-		PromptForMultipleSelection()
+		PromptForMultipleSelection)
 }
 func (a *App) PickDirectory() (string, error) {
 	if a.runtimeApp == nil {
 		return "", errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedDirectory(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择接收目录").
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
-		PromptForSingleSelection()
+		PromptForSingleSelection)
 }
 func (a *App) PickSourceDirectory() (string, error) {
 	if a.runtimeApp == nil {
 		return "", errors.New("DESKTOP_NOT_READY: 原生窗口尚未就绪")
 	}
-	return a.runtimeApp.Dialog.OpenFile().
+	return selectedDirectory(a.runtimeApp.Dialog.OpenFile().
 		SetTitle("选择要发送的目录").
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
-		PromptForSingleSelection()
+		PromptForSingleSelection)
 }
 
 // Status reports this running shell only; it does not claim a P2P connection.
@@ -1045,9 +1098,8 @@ func (a *App) Devices() ([]linksendapp.DeviceInfo, error) {
 		ctx = context.Background()
 	}
 	devices, err := a.core.Devices(ctx)
-	if err == nil {
-		a.nativeEntryError(publishNativeShareDevices(a.dataDir, devices))
-	}
+	// The owned native-entry worker publishes its bounded device snapshot.
+	// A system container prompt or filesystem wait must not hold this RPC.
 	return devices, err
 }
 

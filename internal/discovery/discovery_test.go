@@ -54,7 +54,7 @@ func TestRebuildUDPSocketCannotOutliveClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	rebuilt := make(chan error, 1)
-	go func() { rebuilt <- m.rebuildUDPSocket() }()
+	go func() { rebuilt <- m.rebuildUDPSocket(nil) }()
 	if err = m.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Fatal(err)
 	}

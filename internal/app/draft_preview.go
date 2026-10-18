@@ -3,21 +3,23 @@ package app
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"math"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
+
+	"github.com/Wen5555/LinkSend/internal/transfer"
 )
 
 type DraftPreview struct {
-	Revision    uint64 `json:"revision"`
-	Files       int    `json:"files"`
-	Directories int    `json:"directories"`
-	Bytes       int64  `json:"bytes"`
-	Complete    bool   `json:"complete"`
-	Problem     string `json:"problem,omitempty"`
+	ExcludedFiles       int                           `json:"excluded_files,omitempty"`
+	ExcludedDirectories int                           `json:"excluded_directories,omitempty"`
+	ExcludedBytes       int64                         `json:"excluded_bytes,omitempty"`
+	Entries             []transfer.SourcePreviewEntry `json:"entries,omitempty"`
+	EntriesTruncated    bool                          `json:"entries_truncated,omitempty"`
+	Revision            uint64                        `json:"revision"`
+	Files               int                           `json:"files"`
+	Directories         int                           `json:"directories"`
+	Bytes               int64                         `json:"bytes"`
+	Complete            bool                          `json:"complete"`
+	Problem             string                        `json:"problem,omitempty"`
 }
 
 // Metadata only, with bounded work. Prepare still performs authoritative path,
@@ -42,54 +44,16 @@ func (s *Service) PreviewDraft() (DraftPreview, error) {
 
 func previewDraftPaths(ctx context.Context, draft SendDraft) DraftPreview {
 	result := DraftPreview{Revision: draft.Revision, Complete: true}
-	seen := make(map[string]bool)
-	for _, root := range draft.Paths {
-		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			key := filepath.Clean(path)
-			if runtime.GOOS == "windows" {
-				key = strings.ToLower(key)
-			}
-			if seen[key] {
-				if entry.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if len(seen) >= 100000 {
-				return errors.New("preview bound exceeded")
-			}
-			seen[key] = true
-			if entry.Type()&fs.ModeSymlink != 0 {
-				return errors.New("unsupported symbolic link")
-			}
-			if entry.IsDir() {
-				result.Directories++
-				return nil
-			}
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			if !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > math.MaxInt64-result.Bytes {
-				return errors.New("unsupported file")
-			}
-			result.Files++
-			result.Bytes += info.Size()
-			return nil
-		})
-		if err != nil {
-			result.Complete = false
-			result.Problem = "部分路径无法读取或超出预览限额；加入队列前会重新核对。"
-		}
-		if ctx.Err() != nil || len(seen) >= 100000 {
-			break
-		}
+	if len(draft.Paths) == 0 {
+		return result
+	}
+	preview, err := transfer.PreviewSources(ctx, draft.Paths, draft.SourceSelection)
+	result.Files, result.Directories, result.Bytes = preview.Files, preview.Directories, preview.Bytes
+	result.ExcludedFiles, result.ExcludedDirectories, result.ExcludedBytes = preview.ExcludedFiles, preview.ExcludedDirectories, preview.ExcludedBytes
+	result.Entries, result.EntriesTruncated = preview.Entries, preview.EntriesTruncated
+	if err != nil {
+		result.Complete = false
+		result.Problem = "部分路径无法读取或超出预览限额；加入队列前会重新核对。"
 	}
 	return result
 }

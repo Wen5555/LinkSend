@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
@@ -165,9 +164,10 @@ type source struct {
 	info     fs.FileInfo
 }
 type Prepared struct {
-	Manifest Manifest
-	sources  map[uint32]source
-	roots    []*os.Root
+	Manifest        Manifest
+	SourceSelection *SourceSelection
+	sources         map[uint32]source
+	roots           []*os.Root
 }
 
 func (p *Prepared) Close() error {
@@ -181,7 +181,11 @@ func (p *Prepared) Close() error {
 
 // Prepare precomputes both chunk and content hashes; it never serializes absolute source paths.
 func Prepare(ctx context.Context, paths []string, chunkSize int) (_ *Prepared, err error) {
-	return prepare(ctx, paths, chunkSize, "")
+	return prepare(ctx, paths, chunkSize, "", nil)
+}
+
+func PrepareSelected(ctx context.Context, paths []string, chunkSize int, selection *SourceSelection) (*Prepared, error) {
+	return prepare(ctx, paths, chunkSize, "", selection)
 }
 
 // PrepareForResume rebuilds a manifest for an existing logical transfer. The
@@ -191,10 +195,21 @@ func PrepareForResume(ctx context.Context, paths []string, chunkSize int, transf
 	if !validHex(transferID, 16) {
 		return nil, errors.New("INVALID_TRANSFER_ID")
 	}
-	return prepare(ctx, paths, chunkSize, transferID)
+	return prepare(ctx, paths, chunkSize, transferID, nil)
 }
 
-func prepare(ctx context.Context, paths []string, chunkSize int, transferID string) (_ *Prepared, err error) {
+func PrepareSelectedForResume(ctx context.Context, paths []string, chunkSize int, transferID string, selection *SourceSelection) (*Prepared, error) {
+	if !validHex(transferID, 16) {
+		return nil, errors.New("INVALID_TRANSFER_ID")
+	}
+	return prepare(ctx, paths, chunkSize, transferID, selection)
+}
+
+func prepare(ctx context.Context, paths []string, chunkSize int, transferID string, selection *SourceSelection) (_ *Prepared, err error) {
+	selection, err = NormalizeSourceSelection(selection)
+	if err != nil {
+		return nil, err
+	}
 	if chunkSize == 0 {
 		chunkSize = DefaultChunkSize
 	}
@@ -208,7 +223,7 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 		}
 		transferID = hex.EncodeToString(id)
 	}
-	p := &Prepared{Manifest: Manifest{Version: 1, TransferID: transferID, ChunkSize: chunkSize}, sources: make(map[uint32]source)}
+	p := &Prepared{Manifest: Manifest{Version: 1, TransferID: transferID, ChunkSize: chunkSize}, SourceSelection: selection, sources: make(map[uint32]source)}
 	defer func() {
 		if err != nil {
 			_ = p.Close()
@@ -219,77 +234,42 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 		src   source
 	}
 	var entries []found
-	for _, input := range paths {
-		abs, e := filepath.Abs(input)
-		if e != nil {
-			return nil, e
-		}
-		info, e := os.Lstat(abs)
-		if e != nil {
-			return nil, e
-		}
-		if info.Mode()&os.ModeSymlink != 0 || (!info.Mode().IsRegular() && !info.IsDir()) {
-			return nil, ErrPath
-		}
-		root, e := os.OpenRoot(filepath.Dir(abs))
-		if e != nil {
-			return nil, e
-		}
-		p.roots = append(p.roots, root)
-		base := filepath.Base(abs)
-		e = fs.WalkDir(root.FS(), filepath.ToSlash(base), func(rel string, d fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if e := ctx.Err(); e != nil {
-				return e
-			}
-			if ValidatePath(rel) != nil {
+	p.roots, err = walkSelectedSources(ctx, paths, selection, false, func(root *os.Root, rel string, stat fs.FileInfo, _ bool) error {
+		entry := FileEntry{Path: rel, Type: "directory", Modified: stat.ModTime().UnixNano()}
+		if !stat.IsDir() {
+			if !stat.Mode().IsRegular() {
 				return ErrPath
 			}
-			if d.Type()&os.ModeSymlink != 0 {
-				return ErrPath
-			}
-			stat, e := d.Info()
+			entry.Type = "file"
+			entry.Size = stat.Size()
+			f, e := root.Open(rel)
 			if e != nil {
 				return e
 			}
-			entry := FileEntry{Path: rel, Type: "directory", Modified: stat.ModTime().UnixNano()}
-			if !stat.IsDir() {
-				if !stat.Mode().IsRegular() {
-					return ErrPath
-				}
-				entry.Type = "file"
-				entry.Size = stat.Size()
-				f, e := root.Open(rel)
-				if e != nil {
-					return e
-				}
-				entry.Hash, entry.Chunks, e = hashFile(ctx, f, chunkSize)
-				after, statErr := f.Stat()
-				closeErr := f.Close()
-				if e != nil {
-					return e
-				}
-				if statErr != nil {
-					return statErr
-				}
-				if closeErr != nil {
-					return closeErr
-				}
-				if !os.SameFile(stat, after) || stat.Size() != after.Size() || !stat.ModTime().Equal(after.ModTime()) {
-					return ErrChanged
-				}
+			entry.Hash, entry.Chunks, e = hashFile(ctx, f, chunkSize)
+			after, statErr := f.Stat()
+			closeErr := f.Close()
+			if e != nil {
+				return e
 			}
-			entries = append(entries, found{entry, source{root, rel, stat}})
-			if len(entries) > MaxEntries {
-				return errors.New("RESOURCE_LIMIT")
+			if statErr != nil {
+				return statErr
 			}
-			return nil
-		})
-		if e != nil {
-			return nil, e
+			if closeErr != nil {
+				return closeErr
+			}
+			if !os.SameFile(stat, after) || stat.Size() != after.Size() || !stat.ModTime().Equal(after.ModTime()) {
+				return ErrChanged
+			}
 		}
+		entries = append(entries, found{entry, source{root, rel, stat}})
+		if len(entries) > MaxEntries {
+			return errors.New("RESOURCE_LIMIT")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].entry.Path < entries[j].entry.Path })
 	for i, item := range entries {

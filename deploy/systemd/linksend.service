@@ -1,0 +1,32 @@
+[Unit]
+Description=LinkSend authenticated signaling (no file relay)
+After=network.target
+
+[Service]
+Type=simple
+User=linksend
+Group=linksend
+WorkingDirectory=/var/lib/linksend
+EnvironmentFile=/etc/linksend/bootstrap.env
+ExecStart=/opt/linksend/current/rendezvous --config /etc/linksend/server.toml
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=15s
+UMask=0077
+StateDirectory=linksend
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/linksend
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=256M
+TasksMax=128
+LogNamespace=linksend
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=500
+
+[Install]
+WantedBy=multi-user.target

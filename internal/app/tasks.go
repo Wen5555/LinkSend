@@ -39,6 +39,7 @@ type TaskFailureDiagnostic struct {
 }
 
 type TaskSnapshot struct {
+	BatchID                  string                       `json:"batch_id,omitempty"`
 	ID                       string                       `json:"id"` // compatibility alias for task_id
 	TaskID                   string                       `json:"task_id"`
 	AttemptID                string                       `json:"attempt_id"`
@@ -125,28 +126,30 @@ type taskRecord struct {
 }
 
 type taskRecovery struct {
-	ContentSnapshotID       string            `json:"content_snapshot_id,omitempty"`
-	ContentMode             string            `json:"content_mode,omitempty"`
-	ContentBinding          string            `json:"content_binding,omitempty"`
-	ReceivePlanDigest       string            `json:"receive_plan_digest,omitempty"`
-	SelectionDigest         string            `json:"selection_digest,omitempty"`
-	Version                 int               `json:"version"`
-	Direction               string            `json:"direction"`
-	PeerID                  string            `json:"peer_id"`
-	PeerFingerprint         string            `json:"peer_fingerprint"`
-	SourcePaths             []string          `json:"source_paths,omitempty"`
-	TargetDirectory         string            `json:"target_directory,omitempty"`
-	TransferID              string            `json:"transfer_id,omitempty"`
-	ManifestDigest          string            `json:"manifest_digest,omitempty"`
-	ChunkSize               int               `json:"chunk_size,omitempty"`
-	TotalBytes              int64             `json:"total_bytes,omitempty"`
-	FileCount               int               `json:"file_count,omitempty"`
-	ActualSentBytes         int64             `json:"actual_sent_bytes,omitempty"`
-	ReceivedBytes           int64             `json:"received_bytes,omitempty"`
-	RetransmitBytes         int64             `json:"retransmit_bytes,omitempty"`
-	LogicalCompleted        int64             `json:"logical_completed_bytes,omitempty"`
-	SentChunks              map[uint32][]bool `json:"sent_chunks,omitempty"`
-	AuthorizationGeneration uint64            `json:"authorization_generation,omitempty"`
+	BatchID                 string                    `json:"batch_id,omitempty"`
+	SourceSelection         *transfer.SourceSelection `json:"source_selection,omitempty"`
+	ContentSnapshotID       string                    `json:"content_snapshot_id,omitempty"`
+	ContentMode             string                    `json:"content_mode,omitempty"`
+	ContentBinding          string                    `json:"content_binding,omitempty"`
+	ReceivePlanDigest       string                    `json:"receive_plan_digest,omitempty"`
+	SelectionDigest         string                    `json:"selection_digest,omitempty"`
+	Version                 int                       `json:"version"`
+	Direction               string                    `json:"direction"`
+	PeerID                  string                    `json:"peer_id"`
+	PeerFingerprint         string                    `json:"peer_fingerprint"`
+	SourcePaths             []string                  `json:"source_paths,omitempty"`
+	TargetDirectory         string                    `json:"target_directory,omitempty"`
+	TransferID              string                    `json:"transfer_id,omitempty"`
+	ManifestDigest          string                    `json:"manifest_digest,omitempty"`
+	ChunkSize               int                       `json:"chunk_size,omitempty"`
+	TotalBytes              int64                     `json:"total_bytes,omitempty"`
+	FileCount               int                       `json:"file_count,omitempty"`
+	ActualSentBytes         int64                     `json:"actual_sent_bytes,omitempty"`
+	ReceivedBytes           int64                     `json:"received_bytes,omitempty"`
+	RetransmitBytes         int64                     `json:"retransmit_bytes,omitempty"`
+	LogicalCompleted        int64                     `json:"logical_completed_bytes,omitempty"`
+	SentChunks              map[uint32][]bool         `json:"sent_chunks,omitempty"`
+	AuthorizationGeneration uint64                    `json:"authorization_generation,omitempty"`
 }
 
 type taskManager struct {
@@ -201,7 +204,7 @@ func (m *taskManager) create(s TaskSnapshot, cancel context.CancelFunc) (*taskRe
 	s.PhaseTimeline = append(s.PhaseTimeline, TaskPhaseEvent{Phase: s.Phase, At: now})
 	s.Revision = 1
 	s.HistoryPersisted = m.historyAvailable()
-	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory, AuthorizationGeneration: s.AuthorizationGeneration}}
+	t := &taskRecord{snap: s, cancel: cancel, recovery: taskRecovery{BatchID: s.BatchID, Version: 1, Direction: s.Direction, PeerID: s.PeerID, PeerFingerprint: s.PeerID, TargetDirectory: s.TargetDirectory, AuthorizationGeneration: s.AuthorizationGeneration}}
 	if s.Direction == "receive" {
 		t.decision = make(chan bool, 1)
 	}
@@ -243,6 +246,7 @@ func (t *taskRecord) recoverySnapshot() taskRecovery {
 	defer t.mu.RUnlock()
 	recovery := t.recovery
 	recovery.SourcePaths = append([]string(nil), recovery.SourcePaths...)
+	recovery.SourceSelection = cloneSourceSelection(recovery.SourceSelection)
 	return recovery
 }
 func (t *taskRecord) update(fn func(*TaskSnapshot)) {
@@ -519,7 +523,11 @@ func (t *taskRecord) recoverWithCode(attemptID string, code protocol.Code, phase
 }
 
 func recoveryUsable(recovery taskRecovery) bool {
-	if recovery.Version != 1 || recovery.Direction == "" || recovery.PeerID == "" || recovery.PeerFingerprint != recovery.PeerID || len(recovery.TransferID) != 32 || len(recovery.ManifestDigest) != 64 || recovery.ChunkSize < 64<<10 || recovery.ChunkSize > 8<<20 || recovery.TotalBytes < 0 {
+	if recovery.BatchID != "" && (len(recovery.BatchID) != 32 || recovery.Direction != "send") {
+		return false
+	}
+	selection, selectionErr := transfer.NormalizeSourceSelection(recovery.SourceSelection)
+	if selectionErr != nil || (recovery.Version != 1 && recovery.Version != 2) || recovery.Version == 1 && selection != nil || recovery.Version == 2 && (selection == nil || recovery.Direction != "send") || recovery.Direction == "" || recovery.PeerID == "" || recovery.PeerFingerprint != recovery.PeerID || len(recovery.TransferID) != 32 || len(recovery.ManifestDigest) != 64 || recovery.ChunkSize < 64<<10 || recovery.ChunkSize > 8<<20 || recovery.TotalBytes < 0 {
 		return false
 	}
 	if recovery.Direction == "send" {
@@ -705,6 +713,10 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	}
 	authorizationGeneration := cfg.expectedAuthorizationGeneration
 	var err error
+	cfg.sourceSelection, err = transfer.NormalizeSourceSelection(cfg.sourceSelection)
+	if err != nil {
+		return TaskSnapshot{}, err
+	}
 	if authorizationGeneration == 0 {
 		authorizationGeneration, err = s.currentAuthorizationGeneration(peerID)
 		if err != nil {
@@ -730,10 +742,13 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	if s.isClosing() {
 		return TaskSnapshot{}, errors.New("APP_CLOSING")
 	}
+	if err := s.requireBatchAllowed(cfg.originBatchID); err != nil {
+		return TaskSnapshot{}, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	base := make([]string, len(paths))
 	copy(base, paths)
-	t, err := s.tasks.create(TaskSnapshot{Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
+	t, err := s.tasks.create(TaskSnapshot{BatchID: cfg.originBatchID, Direction: "send", PeerID: peerID, SourceSummary: sourceSummary(paths), AuthorizationGeneration: authorizationGeneration}, cancel)
 	if err != nil {
 		cancel()
 		s.ensureInboxLocked()
@@ -767,6 +782,10 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 	attemptID := t.snapshot().AttemptID
 	t.updateRecovery(attemptID, func(recovery *taskRecovery) {
 		recovery.SourcePaths = append([]string(nil), base...)
+		recovery.SourceSelection = cloneSourceSelection(cfg.sourceSelection)
+		if recovery.SourceSelection != nil {
+			recovery.Version = 2
+		}
 		recovery.PeerID = peerID
 		recovery.PeerFingerprint = peerID
 		if cfg.contentSnapshot != nil {
@@ -798,7 +817,7 @@ func (s *Service) StartSend(peerID string, paths []string, cfg DirectConfig) (Ta
 		defer s.ensureInbox()
 		var result DirectTransferResult
 		prepared, peer, runErr := s.prepareAndConnect(ctx, peerID, base, cfg)
-		if runErr == nil && cfg.expectedSourceDigest != "" && queueSourceDigest(prepared.Manifest) != cfg.expectedSourceDigest {
+		if runErr == nil && cfg.expectedSourceDigest != "" && selectedQueueSourceDigest(prepared.Manifest, cfg.sourceSelection) != cfg.expectedSourceDigest {
 			_ = prepared.Close()
 			_ = s.releasePeerSession(peer, nil)
 			runErr = transfer.ErrChanged
@@ -1097,6 +1116,14 @@ func (s *Service) PauseTask(id string) error {
 }
 
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batch, err := s.taskBatchID(id); err != nil {
+		return TaskSnapshot{}, err
+	} else if batch != "" && cfg.beforeDispatch == nil {
+		return TaskSnapshot{}, errors.New("BATCH_TARGET_REQUIRES_CONFIRMATION")
+	}
 	s.signalHandoffMu.Lock()
 	defer s.signalHandoffMu.Unlock()
 	if s.isClosing() || s.workCtx.Err() != nil {
@@ -1129,6 +1156,10 @@ func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) 
 	if t == nil {
 		s.ensureInboxLocked()
 		return TaskSnapshot{}, errors.New("TASK_NOT_FOUND")
+	}
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		s.ensureInboxLocked()
+		return TaskSnapshot{}, err
 	}
 	t.mu.Lock()
 	if t.cancel != nil || !t.snap.CanResume || !recoveryUsable(t.recovery) {
@@ -1236,7 +1267,7 @@ func taskAttemptConfig(t *taskRecord, attemptID string, cfg DirectConfig) Direct
 func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID string, recovery taskRecovery, cfg DirectConfig) {
 	defer s.tasks.workers.Done()
 	defer s.ensureInbox()
-	prepared, err := transfer.PrepareForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID)
+	prepared, err := transfer.PrepareSelectedForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
 	if prepared != nil {
 		defer prepared.Close()
 	}
@@ -1349,6 +1380,14 @@ func (s *Service) decideTask(id string, accepted bool) error {
 	return nil
 }
 func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
+	if err := s.requireTaskBatchAllowed(id); err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batch, err := s.taskBatchID(id); err != nil {
+		return TaskSnapshot{}, err
+	} else if batch != "" {
+		return TaskSnapshot{}, errors.New("BATCH_TARGET_REQUIRES_CONFIRMATION")
+	}
 	s.tasks.mu.RLock()
 	t := s.tasks.tasks[id]
 	s.tasks.mu.RUnlock()
@@ -1359,7 +1398,17 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 	if snap.State != "failed" || t.peerID == "" || len(t.paths) == 0 {
 		return TaskSnapshot{}, errors.New("TASK_NOT_RETRYABLE")
 	}
-	return s.StartSend(t.peerID, t.paths, t.cfg)
+	cfg := t.cfg
+	batchID, err := s.taskBatchID(id)
+	if err != nil {
+		return TaskSnapshot{}, err
+	}
+	if batchID != "" {
+		cfg.originBatchID = batchID
+	}
+	cfg.expectedAuthorizationGeneration = snap.AuthorizationGeneration
+	cfg.sourceSelection = cloneSourceSelection(t.recoverySnapshot().SourceSelection)
+	return s.StartSend(t.peerID, t.paths, cfg)
 }
 
 // Shutdown preserves resumable tasks and joins all application workers.

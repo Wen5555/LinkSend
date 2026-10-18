@@ -147,8 +147,26 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	devices, err := f.a.Devices(ctx)
-	if err != nil || len(devices) != 2 {
+	if err != nil {
 		t.Fatalf("paired devices were not automatically pinned: %v %+v", err, devices)
+	}
+	// Devices also contains unpaired LAN discoveries. A running desktop on the
+	// test machine or LAN must not change this membership/pinning assertion.
+	for _, expected := range []string{f.aID.ID(), f.bID.ID()} {
+		matches := 0
+		for _, device := range devices {
+			if device.ID == expected {
+				matches++
+				if !device.Trusted || device.Relationship != "group_paired" {
+					t.Fatalf("paired device was not trusted: %+v", device)
+				}
+			} else if device.ID != f.aID.ID() && device.ID != f.bID.ID() && device.Trusted {
+				t.Fatalf("unpaired discovery became trusted: %+v", device)
+			}
+		}
+		if matches != 1 {
+			t.Fatalf("paired device %s appeared %d times: %+v", expected, matches, devices)
+		}
 	}
 	if err := f.a.BlockPeer(f.bID.ID()); err != nil {
 		t.Fatal(err)

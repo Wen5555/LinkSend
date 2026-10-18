@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,91 @@ import (
 type candidateSessionStub struct {
 	send func(context.Context, protocol.Envelope) error
 	read func(context.Context) (signaling.Wire, error)
+}
+
+// Real Pion agents, live shared UDP sockets and signed candidates. A bound UDP
+// STUN sink never answers, so successful nomination must not wait for its 3s
+// gathering deadline. Loopback is a timing fixture, not physical LAN evidence.
+func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
+	blackhole, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blackhole.Close()
+	newEndpoint := func() *connectivity.Endpoint {
+		ep, err := connectivity.New(connectivity.Config{BindAddress: "127.0.0.1:0", AllowLoopback: true, Generation: firstGeneration, STUNURLs: []string{"stun:" + blackhole.LocalAddr().String()}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = ep.Close() })
+		return ep
+	}
+	a, b := newEndpoint(), newEndpoint()
+	aID, _ := lifecycleFixture(t)
+	bID, err := identity.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bPeer := signaling.Device{ID: bID.ID(), PublicKey: bID.PublicKey()}
+	aPeer := signaling.Device{ID: aID.ID(), PublicKey: aID.PublicKey()}
+	ab, ba := make(chan signaling.Wire, 32), make(chan signaling.Wire, 32)
+	pipe := func(id *identity.Identity, outbound chan<- signaling.Wire, inbound <-chan signaling.Wire) candidateSession {
+		return candidateSessionStub{
+			send: func(ctx context.Context, env protocol.Envelope) error {
+				env.Signature = id.Sign(env.SigningBytes())
+				select {
+				case outbound <- signaling.Wire{Type: "signal", Message: &env}:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			},
+			read: func(ctx context.Context) (signaling.Wire, error) {
+				select {
+				case wire := <-inbound:
+					return wire, nil
+				case <-ctx.Done():
+					return signaling.Wire{}, ctx.Err()
+				}
+			},
+		}
+	}
+	if err = a.Gather(); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Gather(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
+	defer cancel()
+	start := time.Now()
+	id := protocol.RandomID()
+	results := make(chan pathResult, 2)
+	go func() {
+		path, err := connectWithTrickle(ctx, pipe(aID, ab, ba), a, aID, bPeer, id, firstGeneration, b.Credentials(), true)
+		results <- pathResult{path, err}
+	}()
+	go func() {
+		path, err := connectWithTrickle(ctx, pipe(bID, ba, ab), b, bID, aPeer, id, firstGeneration, a.Credentials(), false)
+		results <- pathResult{path, err}
+	}()
+	for range 2 {
+		result := <-results
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if result.path.LocalType != "host" || result.path.RemoteType != "host" || result.path.Relay {
+			t.Fatal("expected a real nominated host pair without relay")
+		}
+	}
+	elapsed := time.Since(start)
+	t.Logf("real nominated host pair ready in %v; STUN sink never answered", elapsed)
+	if elapsed >= 2*time.Second {
+		t.Fatalf("nominated host pair waited for unrelated STUN: %v", elapsed)
+	}
+	if a.Stats().STUNRequestsSent == 0 || b.Stats().STUNRequestsSent == 0 {
+		t.Fatal("STUN sink was never probed")
+	}
 }
 
 func (s candidateSessionStub) SendEnvelope(ctx context.Context, env protocol.Envelope) error {

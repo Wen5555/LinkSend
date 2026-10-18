@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -55,6 +56,8 @@ func TestLANPairingRequiresRemoteConsentAndCommitsBothPins(t *testing.T) {
 	}
 	a.lan = &lanRuntime{manager: am}
 	defer func() { a.lanMu.Lock(); a.lan = nil; a.lanMu.Unlock() }()
+	b.lan = &lanRuntime{manager: bm}
+	defer func() { b.lanMu.Lock(); b.lan = nil; b.lanMu.Unlock() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	source := filepath.Join(t.TempDir(), "lan-only.txt")
@@ -109,6 +112,26 @@ func TestLANPairingRequiresRemoteConsentAndCommitsBothPins(t *testing.T) {
 	if queued, err := a.Enqueue(queueRequest); err != nil || queued.ID == "" || queued.WaitForPeer || queued.State != "queued" {
 		t.Fatalf("paired nearby peer requires no server-online waiting override: item=%+v err=%v", queued, err)
 	}
+	for _, manager := range []*discovery.Manager{am, bm} {
+		requireCurrentLANMemory(t, manager, "127.0.0.1")
+	}
+}
+
+// Observe the live manager through its public capacity contract, without
+// exposing a test-only getter or sending probes to an external interface.
+func requireCurrentLANMemory(t *testing.T, manager *discovery.Manager, address string) {
+	t.Helper()
+	for index := 1; index <= 63; index++ {
+		if err := manager.RememberAddress(fmt.Sprintf("192.0.2.%d", index)); err != nil {
+			t.Fatalf("unexpected remembered-address occupancy at %d: %v", index, err)
+		}
+	}
+	if err := manager.RememberAddress("192.0.2.64"); err == nil {
+		t.Fatal("authenticated address was not added to the current discovery manager")
+	}
+	if err := manager.RememberAddress(address); err != nil {
+		t.Fatalf("current manager did not retain the exact authenticated address: %v", err)
+	}
 }
 
 func TestLANPairingRejectLeavesNoAuthorization(t *testing.T) {
@@ -139,7 +162,9 @@ func TestLANPairingRejectLeavesNoAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.lan = &lanRuntime{manager: am}
-	defer func() { a.lan = nil }()
+	defer func() { a.lanMu.Lock(); a.lan = nil; a.lanMu.Unlock() }()
+	b.lan = &lanRuntime{manager: bm}
+	defer func() { b.lanMu.Lock(); b.lan = nil; b.lanMu.Unlock() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	go func() { incoming := <-bm.Incoming(); b.receiveLANSession(ctx, incoming, "", DirectConfig{}) }()
@@ -166,6 +191,13 @@ func TestLANPairingRejectLeavesNoAuthorization(t *testing.T) {
 		peers, loadErr := identity.LoadTrust(service.cfg.DataDir)
 		if loadErr != nil || len(peers) != 0 {
 			t.Fatalf("rejected pairing left authorization: %+v %v", peers, loadErr)
+		}
+	}
+	for _, manager := range []*discovery.Manager{am, bm} {
+		for index := 1; index <= 64; index++ {
+			if err := manager.RememberAddress(fmt.Sprintf("192.0.2.%d", index)); err != nil {
+				t.Fatalf("rejected pairing seeded live discovery memory: %v", err)
+			}
 		}
 	}
 }
@@ -199,6 +231,10 @@ func TestLANPairingQueryRecoversReadyAfterTLSDisconnect(t *testing.T) {
 	if err = bm.RememberVerifiedPeer(discovery.Device{ID: a.identity.ID(), Name: "a", PublicKey: a.identity.PublicKey()}, routeToA); err != nil {
 		t.Fatal(err)
 	}
+	a.lan = &lanRuntime{manager: am}
+	defer func() { a.lanMu.Lock(); a.lan = nil; a.lanMu.Unlock() }()
+	b.lan = &lanRuntime{manager: bm}
+	defer func() { b.lanMu.Lock(); b.lan = nil; b.lanMu.Unlock() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	serveSessions := func(count int) {
@@ -266,7 +302,7 @@ func TestLANPairingQueryRecoversReadyAfterTLSDisconnect(t *testing.T) {
 	if peers, loadErr := identity.LoadTrust(a.cfg.DataDir); loadErr != nil || len(peers) != 0 {
 		t.Fatalf("ready-only helper recovery enabled a local pin: %+v err=%v", peers, loadErr)
 	}
-	serveSessions(2)
+	serveSessions(3)
 	second, _, _, err := am.Dial(ctx, b.identity.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -297,13 +333,16 @@ func TestLANPairingQueryRecoversReadyAfterTLSDisconnect(t *testing.T) {
 	if wire, readErr := third.Read(ctx); readErr != nil || wire.LANPair == nil || wire.LANPair.Phase != "done" {
 		t.Fatalf("query recovered done wire=%+v err=%v", wire, readErr)
 	}
-	if err = identity.CommitProvisionalLAN(a.cfg.DataDir, requestID, nonce); err != nil {
-		t.Fatal(err)
+	if recovered, _ := a.recoverLANPair(ctx, am, peer, requestID, nonce, 1, expires); !recovered {
+		t.Fatal("final done recovery failed to commit pairing")
 	}
 	for name, service := range map[string]*Service{"a": a, "b": b} {
 		peers, loadErr := identity.LoadTrust(service.cfg.DataDir)
 		if loadErr != nil || len(peers) != 1 {
 			t.Fatalf("%s recovery trust=%+v err=%v", name, peers, loadErr)
 		}
+	}
+	for _, manager := range []*discovery.Manager{am, bm} {
+		requireCurrentLANMemory(t, manager, "127.0.0.1")
 	}
 }

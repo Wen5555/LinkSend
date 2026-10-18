@@ -19,6 +19,7 @@ type BackgroundOptions struct {
 }
 
 type BackgroundStatus struct {
+	QuickSendRevision      uint64            `json:"quick_send_revision,omitempty"`
 	Options                BackgroundOptions `json:"options"`
 	TrayAvailable          bool              `json:"tray_available"`
 	SleepInhibited         bool              `json:"sleep_inhibited"`
@@ -102,6 +103,12 @@ func (a *App) attachBackground(host *application.App, window *application.Webvie
 	b.notifier = newNativeNotifier(a.navigateToTask)
 	b.sleep = newNativeSleepInhibitor()
 	b.tray, _ = newNativeTray(host, icon, nativeTrayCallbacks{
+		QuickSend: func() {
+			if err := a.OpenQuickSend(); err != nil {
+				a.backgroundError("快速发送尚未就绪，请打开窗口重试。")
+				a.showEntryWindow()
+			}
+		},
 		Show: a.showEntryWindow, Inbox: func() { a.navigateToTask("") },
 		PauseQueue: func(paused bool) {
 			go func() {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
-import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
+import type { ClipboardGrant, DeviceInfo, DeviceProfile, InvitationInfo, MembershipStatus, InboxStatus } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
 import type { CommandRunner } from '../hooks/useDesktop';
-import { formatPairingCodeInput, shouldClearPairingCode } from '../connection';
+import { normalizePairingCode, shouldClearPairingCode } from '../connection';
 import { deviceConnectionLabel, deviceName } from '../presentation';
+import { MembershipRecoveryPanel } from './MembershipRecoveryPanel';
 
-type Props = { devices: DeviceInfo[]; identityID?: string; membership?: MembershipStatus; name: string; run: CommandRunner; op: string; available: boolean };
+type Props = { devices: DeviceInfo[]; identityID?: string; membership?: MembershipStatus; inbox?: InboxStatus; name: string; run: CommandRunner; op: string; available: boolean };
 type DirectoryKind = 'paired' | 'nearby' | 'removed';
 type CloseReason = 'close' | 'removed';
 type Pages = Record<DirectoryKind, number>;
@@ -29,7 +30,7 @@ export function LANPairResultNotice({ name, server, onSwitch }: { name: string; 
   return <div className="queue-notice" role="status"><strong>{name} 已完成局域网添加</strong><p>{lanPairServerMessage(server)}</p>{server === 'switch_required' && <button className="secondary" onClick={onSwitch}>输入配对码并切换</button>}</div>;
 }
 
-export function DevicesPage({ devices, identityID, membership, name, run, op, available }: Props) {
+export function DevicesPage({ devices, identityID, membership, inbox, name, run, op, available }: Props) {
   const [invite, setInvite] = useState<InvitationInfo>();
   const [code, setCode] = useState('');
   const [address, setAddress] = useState('');
@@ -41,6 +42,18 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
   const pairingCode = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const detailTrigger = useRef<HTMLButtonElement | null>(null);
+  const [discoveryError, setDiscoveryError] = useState('');
+
+  useEffect(() => {
+    if (!available) return;
+    let current = true;
+    void Backend.RefreshLANDiscovery().then(() => {
+      if (current) setDiscoveryError('');
+    }).catch(() => {
+      if (current) setDiscoveryError('局域网发现暂未就绪，可刷新重试。');
+    });
+    return () => { current = false; };
+  }, [available]);
 
   const paired = devices.filter(device => device.id !== identityID && device.trusted && !device.blocked);
   const nearby = devices.filter(device => device.id !== identityID && device.nearby && !device.trusted && !device.blocked);
@@ -93,6 +106,8 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
   return <div className="page-stack">
     <div className="page-intro"><div><p className="eyebrow">可信设备</p><h2>设备</h2><p>配对关系与当前连接状态分开显示。</p></div>{membership?.state === 'not_member' ? <button className="primary" disabled={!!op} onClick={() => void run('initialize', () => Backend.InitializeMembership(name || 'LinkSend desktop'), '本机设备组已初始化')}>初始化本机</button> : <button className="primary" disabled={!!op || membership?.state !== 'member'} onClick={() => void run('invite', async () => setInvite(await Backend.CreateInvitation()))}>生成配对码</button>}</div>
     {invite && <InvitationPanel key={invite.token} invite={invite} run={run} />}
+    <MembershipRecoveryPanel available={available} membershipState={membership?.state} name={name} run={run} op={op} />
+    <LANDiscoveryNotice inbox={inbox} error={inbox?.lan_available ? '' : discoveryError} />
     <div className="device-columns">
       <section className="surface device-directory" aria-label="设备目录">
         <div className="section-heading compact"><div><h2>设备目录</h2><small className="field-help">搜索结果按类别分页显示。</small></div><span className="task-count">{paired.length + nearby.length + removed.length} 台</span></div>
@@ -105,8 +120,9 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
       <section className="surface pairing-form"><span className="section-kicker">连接另一台设备</span><h2>跨网络配对</h2><p className="muted">输入一次性配对码建立信任，接收时仍按本机策略确认。</p>
         <form onSubmit={event => {
           event.preventDefault();
-          void run('join', async () => { try { await Backend.PairDevice(code.trim(), name || 'LinkSend desktop'); setCode(''); } catch (cause) { if (String(cause).includes('PAIRING_IDENTITY_CONFLICT')) setSwitchCode(code.trim()); throw cause; } }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
-        }}><label className="field-label">配对码<input ref={pairingCode} className="pairing-input" value={code} onChange={event => setCode(formatPairingCodeInput(event.target.value))} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
+          const invitation = normalizePairingCode(code);
+          void run('join', async () => { try { await Backend.PairDevice(invitation, name || 'LinkSend desktop'); setCode(''); } catch (cause) { if (String(cause).includes('PAIRING_IDENTITY_CONFLICT')) setSwitchCode(invitation); throw cause; } }, '配对成功', cause => { if (shouldClearPairingCode(cause)) setCode(''); });
+        }}><label className="field-label">配对码<input ref={pairingCode} className="pairing-input" value={code} onChange={event => setCode(event.target.value)} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
         {switchCode && <div className="queue-notice"><strong>本机已属于另一设备组</strong><p>切换会离开当前设备组；历史记录和已接收文件保留。</p><button className="secondary" disabled={!!op} onClick={() => void run('switch-membership', async () => { await Backend.SwitchMembership(switchCode, name || 'LinkSend desktop'); setSwitchCode(''); setCode(''); }, '已切换并完成配对')}>确认切换设备组</button></div>}
         {membership?.message && <p className="field-help pairing-help">{membership.message}</p>}
         <div className="divider" /><h3>附近设备没有出现？</h3><p className="field-help">输入对方的局域网 IPv4 地址，只查找这一台设备。</p>
@@ -115,6 +131,17 @@ export function DevicesPage({ devices, identityID, membership, name, run, op, av
     </div>
     {selected && <DeviceDetailDrawer key={selected.id} device={selected} run={run} op={op} onClose={closeDetail} />}
   </div>;
+}
+
+export function LANDiscoveryNotice({ inbox, error }: { inbox?: Pick<InboxStatus, 'lan_last_error' | 'lan_provider_errors'>; error?: string }) {
+  const labels: Record<string, string> = { listen: '固定发现端口不可用，正在使用临时端口并自动重试。', receive: '发现接收暂不可用，正在自动重建。', interfaces: '局域网网卡信息暂不可用。', multicast: '组播发现受限。', broadcast: '广播发现受限。', multicast_send: '组播探测发送失败。', broadcast_send: '广播探测发送失败。', announcement: '自动探测暂时无法发送。' };
+  const providers = Object.keys(inbox?.lan_provider_errors ?? {}).sort();
+  if (!error && !inbox?.lan_last_error && providers.length === 0) return null;
+  return <aside className="queue-notice" role="status"><strong>局域网发现通道受限</strong>
+    {(error || inbox?.lan_last_error) && <p>{error || '局域网发现暂未就绪。'}</p>}
+    {providers.map(provider => <p key={provider}>{labels[provider] || '部分发现通道暂不可用。'}</p>)}
+    <p>其他通道会继续尝试；也可在下方输入对方的局域网地址。发现设备后仍需明确配对。</p>
+  </aside>;
 }
 
 function DeviceDirectorySection({ kind, title, total, devices, page, query, available, op, run, onPage, onOpen, onLANResult }: { kind: DirectoryKind; title: string; total: number; devices: DeviceInfo[]; page: number; query: string; available: boolean; op: string; run: CommandRunner; onPage: (kind: DirectoryKind, page: number) => void; onOpen: (id: string, trigger: HTMLButtonElement) => void; onLANResult?: (result: { name: string; server: string }) => void }) {

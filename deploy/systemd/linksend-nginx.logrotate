@@ -1,0 +1,13 @@
+/var/log/nginx/linksend-error.log {
+    daily
+    maxsize 1M
+    rotate 7
+    maxage 7
+    missingok
+    notifempty
+    compress
+    create 0640 www-data adm
+    postrotate
+        /usr/sbin/nginx -s reopen
+    endscript
+}
