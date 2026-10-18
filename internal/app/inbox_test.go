@@ -466,11 +466,16 @@ func TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile(t *testing.T)
 	release()
 	var cancelled TaskSnapshot
 	waitFor(t, 10*time.Second, func() bool {
-		var ok bool
-		cancelled, ok = f.a.Task(first.ID)
 		// A remotely reset file can retain a resumable task. Its worker must
 		// have relinquished the session before starting the next file.
-		return ok && !f.a.tasks.hasActive()
+		if f.a.tasks.hasActive() {
+			return false
+		}
+		// Read after the worker finishes. Reading before hasActive can retain
+		// a stale transferring snapshot when completion races these two reads.
+		var ok bool
+		cancelled, ok = f.a.Task(first.ID)
+		return ok
 	}, "sender did not observe remote stream cancellation")
 	if cancelled.State == "completed" || cancelled.ErrorCode == "" {
 		t.Fatalf("remote stream cancellation returned success: %+v", cancelled)
