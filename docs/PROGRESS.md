@@ -1,3 +1,9 @@
+## 2026-10-18 v0.6.0发布准备
+
+- 用户明确要求合并main并发布0.6.0，覆盖此前不合并/不正式发布的限制；既有未验项继续保留，未恢复受限Windows原生测试或宿主网络变更。
+- 产品常量、Wails/Windows/macOS/Share Extension/前端和打包workflow版本统一到0.6.0；协议保持V1。生成build assets到隔离artifact，保留项目定制模板及原未跟踪目录；版本一致性检查通过。legacy-server测试中的0.5.0保持为旧服务fixture。
+- Go1.27.1重建的固定Wails beta.18已无警告生成绑定（无差异），desktop GOWORK=off测试通过；前端构建/typecheck及两模块GOWORK=off构建也已通过。待CI完成后，从合并后的准确主分支提交构建全新包，发布来源与资产收据在完成后补记；旧6ec3cc4功能原生结果不移记为0.6.0新包物理验收。说明见[0.6.0发布说明](RELEASE-v0.6.0.md)。
+
 ## 2026-10-18 Goal外部阻塞收束
 
 - 四项功能可用收尾已交付，按用户要求不再扩展重复矩阵。相同Windows原生启动策略与JP UDP补充授权条件跨三轮保持，平台`update_goal`已返回blocked；整体A–E未标完成。
