@@ -92,3 +92,5 @@ Playwright独立session `ae-recovery` 对真实DevicesPage/RecoveryPanel、生�
 实际面板还暴露错误显示缺陷：`RuntimeError: signaling HTTP 400: PAIRING_CODE_INVALID: ...`被首个大写token HTTP遮蔽，原有中文映射未命中。新增真实包装格式回归RED，局部提取传输包装后的协议码，输入异常与错误显示分别记录；该后续源码不改变98469ce包的以上证据。当前恢复尚未完成，旧context退休/远端加入/重启后新组在线与文件保留最终核验仍待执行。
 
 错误提示修复本地终态：固定Node24.21.0/pnpm12.4.1，12files/109tests、typecheck（含绑定）、lint/build均exit0，日志`native-error-frontend-*.log`。核心`GOWORK=off go test ./...`缓存通过；desktop workspace/off test7.246/6.928s、off vet/build全部exit0，日志`native-error-core-off.log`和`native-error-desktop.log`。必要dist重新生成，原协议码、配对输入/请求与Go源码不变；新准确包原生错误文案尚未复验。
+
+cf19349后续五项CI/三平台包与四资产完整核验已通过；新准确Mac独立空profile的真实无效配对操作已显示既有中文提示，见[准确包续验](DESKTOP-AE-NATIVE-CHECKPOINT.md)。该独立错误测试已收尾；恢复profile保持98469ce，同一started intent在进一步真实停止/重启后仍保持，owned43588/恢复面板显示，新码字段为空，等待手动合成输入观察。检查点收据确认偏好字节、两草稿、源hash、唯一completed task/queue仍保持；独立服务仍2成员/旧测试身份未加入，恢复尚未完成。

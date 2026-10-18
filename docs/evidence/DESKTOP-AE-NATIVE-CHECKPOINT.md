@@ -96,10 +96,29 @@ Windows150828/fixture149664/CLI159128与156456均已退出，10729无监听；ta
 
 用户随后选择在Mac授权现有控制方式后继续。只读复核job `/tmp/codex-ssh/job-linksend-ae-mac-accessibility-20261018-02` exit0仍返回 `UI_AUTOMATION_ENABLED=false`，已请求开启完成后的通知；该选择没有被当作权限已生效的证明，未自动开启或输入Mac UI。
 
-## 用户启用 Mac 辅助功能后的原生续验（进行中）
+## 用户启用 Mac 辅助功能后的原生续验（历史过程）
 
 用户明确回复已开启，再以新只读job `.../job-linksend-ae-mac-accessibility-20261018-03` 取得 `UI_AUTOMATION_ENABLED=true`。不重跑initializer，核对原app EXE hash/codesign和旧进程已停后，仅重启同一准确app/既有隔离profile，owned PID38062；clipboard仍false。启动后读取脚本变量rows与System Events保留字冲突，job `.../job-linksend-ae-mac-restart-ui-6edddad-20261018-01` exit1，但启动收据已产生，未重复启动。
+
+后续原生quick实际文件闭环由98469ce准确包完成，详见[N4最新记录](DESKTOP-AE-QUICK-SEND.md)，不沿用本节早期“未观察到菜单”作为当前结论。
 
 独立read job `.../job-linksend-ae-mac-ui-read-6edddad-20261018-01` exit0，读取一个LinkSend窗口和两条菜单栏；第2条唯一item为status menu、AXPress动作。将准确进程置前后，`.../job-linksend-ae-mac-front-ax-6edddad-20261018-01` exit0，主窗75个AX元素包含真实Wails前端的传输、设置、目录预设等。背景读取起初只有6个window chrome元素，不将它判成空白产品故障。
 
 菜单栏AXPress实际唤起主窗；菜单未展开。按真实AX位置698,4/尺寸40×24执行右键输入后，仍未观察到status item下的菜单；不能声称quick入口已通过，也未直接调用Go API替代。原生Wails beta.18源码确认左键Show/右键菜单的边界；进一步脚本语法及CFArray桥接读取失败仅为自动化问题。已请用户在Mac菜单栏右键LinkSend并保持菜单展开，再根据真实菜单内容继续。当前owned PID38062仍运行，唯一TODO记录恢复入口，后续需按准确路径收尾。
+
+## cf19349错误提示候选与准确包复验（2026-10-18 10:33）
+
+源码`cf1934908a9ae64266bd1cef44735d5818397929`，只修复信令HTTP包装后的中文错误码解析，含109th回归及必要dist。五项workflow全部success：core push/PR39089866173/39089869409、desktop push/PR39089866169/39089869403、packages39089866167，三平台job全部success。四资产外层GitHub digest、内层SHA/BUILD-INFO/COMMITTED/clean/版本均完整核验，`pkg-cf19349/PACKAGE-VERIFICATION.json`。
+
+| 资产 | SHA256 |
+|---|---|
+| Windows portable | 405201f6485ed7e0e272f0281ce2a272b03cf4a5fa3bad136ae48afed6582a57 |
+| Windows installer | 2937f7b520e9c56297b25d88c78464865ec2ed62d2ba9ef8e5ed7b7a48e46dcc |
+| Mac arm64 DMG | 07f01763a739565c31c8cd0ca07c9927d7304897ac33fab6495da57d3585409b |
+| Mac amd64 DMG | 175fb5aec275a522da1152c367c032b5ce0191c1551a12902eb76946ab2ea6f1 |
+
+Mac准确arm64新独立空profile：DMG/严格deep codesign/arm64/bundle通过，实际EXE SHA256 `aef765e787143155783958e351e2d0d410415346c3bf8843b073e7fd03acc0ba`。正式HTTPS地址、clipboard=false，真实设备页输入合成无效文本/点击完成配对，实际出现“配对码格式不正确或不存在，请核对后重试。”；job `/tmp/codex-ssh/job-ls-ae-mac-native-error-cf19349-smoke-20261018-03` exit0，收据`native-error-receipt.json`已下载。仅证明新错误提示准确包复验，不是有效配对或恢复完成。
+
+首轮两task-owned app共享bundleID，foreground guard在按键前拒绝；第二轮仅运行新app后遇到AX旧引用失效，未当作产品故障。第三轮以新鲜对象并忽略已失效的只读节点完成。新准确app43357已按精确路径停止，独立profile/received空/clipboard=false，清理收据已下载。原98469ce恢复app重新启动为43588，同一started intent精确保持，恢复面板可见、新码字段空；不重新prepare或绕过恢复。根/profile及备份见唯一TODO。未改权限/宿主网络、未触碰系统剪贴板，签名仍ad-hoc/未公证。
+
+Mac N4的31B真实发送、后台/重启证据仍绑定98469ce；旧Win原生分项仍绑定6edddad，不升级为cf19349整个原生/物理矩阵通过。恢复输入、Windows真实托盘/新LAN策略拒绝、OS剪贴板、B2性能、独立物理文件及双NAT条件继续，Goal active。

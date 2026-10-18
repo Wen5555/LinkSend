@@ -1,3 +1,8 @@
+## 2026-10-18 cf19349准确包错误提示复验
+
+- cf19349五项CI/Windows与Mac两架构打包success，四资产完整来源/校验通过；新准确Mac arm64真实无效配对已显示中文提示，独立空profile包/签名/hash核验及收尾通过。见[准确包证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。没有升级旧包的文件/网络验收范围。
+- 98469ce准确Mac原生31B quick发送、取消重开/主草稿保持/后台菜单唤起/重启无重复已有收据。公共恢复原生prepare/cancel/重启保持通过，但join输入无效仍started、未加入；进一步重启同intent保持、窗口已还原，新码字段空，等手动合成输入观察。新CF错误测试app已停，原恢复43588保留，clipboard=false，Goal active。
+
 ## 2026-10-18 Mac原生quick实收与错误提示修复
 
 - 98469ce准确Mac真实菜单/picker/取消重开/入队完成31B Pion/固定身份QUIC，实际接收hash一致、双方确认、仅quick清空、main整行保持；后台关闭/菜单quick唤起与真实重启无重复通过。目标由夹具业务API预置且用户协助选择，该边界与Win托盘/物理缺项保持，见[N4证据](evidence/DESKTOP-AE-QUICK-SEND.md)。
