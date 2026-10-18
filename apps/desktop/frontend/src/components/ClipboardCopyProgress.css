@@ -1,0 +1,11 @@
+.clipboard-copy-progress{box-sizing:border-box;min-height:100vh;max-width:440px;margin:auto;padding:18px 30px 22px;color:#172033;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;background:#f7f9fb}
+.clipboard-copy-progress .clipboard-copy-symbol{font-size:24px;color:#2067d5;text-align:center;height:30px}
+.clipboard-copy-progress h1{font-size:18px;font-weight:600;text-align:center;margin:5px 0 7px}
+.clipboard-copy-progress p{font-size:12px;color:#657185;text-align:center;margin:0 0 18px}
+.clipboard-copy-progress progress{width:100%;height:8px;accent-color:#2067d5;display:block;border:0;border-radius:8px;overflow:hidden}
+.clipboard-copy-progress progress::-webkit-progress-bar{background:#e0e7f0;border-radius:8px}
+.clipboard-copy-progress progress::-webkit-progress-value{background:#2067d5;border-radius:8px;transition:width .18s linear}
+.clipboard-copy-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:#657185}
+.clipboard-copy-bottom button{border:0;background:none;color:#2067d5;font-size:12px;cursor:pointer;padding:4px 0}
+.clipboard-file-permission{padding-left:18px!important}.clipboard-file-permission small{max-width:540px}
+.clipboard-progress-body{min-width:0!important;margin:0;background:#f7f9fb}

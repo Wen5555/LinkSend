@@ -39,6 +39,7 @@ export interface ClipboardWatchStatus {
     "last": nativeclipboard$0.Change;
     "error"?: string;
     "peers": app$0.ClipboardPeerStatus[] | null;
+    "files"?: app$0.ClipboardFileProgress[] | null;
 }
 
 export interface DesktopEntryStatus {

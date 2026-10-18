@@ -16,6 +16,41 @@ static NSPasteboard *linksendPasteboard(const char *name) {
     return name ? [NSPasteboard pasteboardWithName:[NSString stringWithUTF8String:name]] : NSPasteboard.generalPasteboard;
 }
 
+int linksendClipboardReadFiles(const char *name, uint64_t expected, void **output, size_t *size, uint64_t *current) {
+    *output = NULL; *size = 0;
+    @autoreleasepool { @try {
+        NSPasteboard *board = linksendPasteboard(name);
+        *current = (uint64_t)board.changeCount;
+        if (*current != expected) return 1;
+        NSArray *urls = [board readObjectsForClasses:@[[NSURL class]] options:@{NSPasteboardURLReadingFileURLsOnlyKey:@YES}];
+        if (urls.count == 0 || urls.count > 128) return 2;
+        NSMutableArray *paths = [NSMutableArray array];
+        for (NSURL *url in urls) { if (!url.isFileURL || !url.path.isAbsolutePath) return 2; [paths addObject:url.path]; }
+        NSData *data = [NSJSONSerialization dataWithJSONObject:paths options:0 error:NULL];
+        *current = (uint64_t)board.changeCount;
+        if (*current != expected) return 1;
+        if (!data || data.length == 0 || data.length > 65536) return 2;
+        *output = malloc(data.length); if (!*output) return 2;
+        memcpy(*output, data.bytes, data.length); *size = data.length; return 0;
+    } @catch (NSException *e) { (void)e; return 2; } }
+}
+
+int linksendClipboardWriteFiles(const char *name, const void *bytes, size_t size, uint64_t expected, uint64_t *current) {
+    @autoreleasepool { @try {
+        NSPasteboard *board = linksendPasteboard(name);
+        *current = (uint64_t)board.changeCount;
+        if (*current != expected) return 1;
+        if (size == 0 || size > 65536) return 2;
+        id paths = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:bytes length:size] options:0 error:NULL];
+        if (![paths isKindOfClass:[NSArray class]] || [paths count] == 0 || [paths count] > 128) return 2;
+        NSMutableArray *urls = [NSMutableArray array];
+        for (id path in paths) { if (![path isKindOfClass:[NSString class]] || ![path isAbsolutePath]) return 2; [urls addObject:[NSURL fileURLWithPath:path]]; }
+        if ((uint64_t)board.changeCount != expected) return 1;
+        [board clearContents]; BOOL ok = [board writeObjects:urls];
+        *current = (uint64_t)board.changeCount; return ok ? 0 : 2;
+    } @catch (NSException *e) { (void)e; return 2; } }
+}
+
 uint64_t linksendClipboardChangeCount(const char *name) {
     @autoreleasepool {
         @try {
@@ -36,6 +71,7 @@ uint32_t linksendClipboardTypes(const char *name) {
             if ([types containsObject:NSPasteboardTypeString]) result |= 1;
             if ([types containsObject:NSPasteboardTypeURL]) result |= 2;
             if ([types containsObject:NSPasteboardTypePNG] || [types containsObject:NSPasteboardTypeTIFF]) result |= 4;
+            if ([types containsObject:NSPasteboardTypeFileURL]) result |= 8;
             return result;
         } @catch (NSException *exception) {
             (void)exception;

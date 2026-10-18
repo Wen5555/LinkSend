@@ -4,6 +4,7 @@
 export type {
     AcceptIncomingDefaultResult,
     BatchSnapshot,
+    ClipboardFileProgress,
     ClipboardGrant,
     ClipboardGrantPatch,
     ClipboardPeerStatus,

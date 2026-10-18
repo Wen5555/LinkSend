@@ -1,10 +1,16 @@
+2026-10-19 文件剪贴板：双方协商 clipboard_files_v1 并分别开启 files 收发权限后，原生文件列表经10秒内预约进入现有认证文件引擎，正文不经JS/信令。预约最长24h但新复制/暂停/撤权/取消优先；完成校验后写本机路径，失败不发布部分文件。大于等于32MiB显示居中“正在复制”，准备不确定进度、传输按 verified 字节；小文字/图片不弹窗。任务库11→12备份迁移，成功缓存暂保留，重启不补发。本地候选的物理双向文字、图片和文件条目、原生进度及取消已验证；准确发行包与其余验收边界单列，见ADR0015和实施记录。
+
 2026-10-18 0.6.0后工作流修复：记录支持明确打开文件/所在文件夹（含发送源）；自动剪贴板修复原生ready、PNG/忙读取与恢复即续期；本地忘记与黑名单拆分；统一收发队列、清理/默认退出清空与新增接收红点。信任schema3仅加可选forgotten，任务库/文件wire不变；准确边界见[ADR0013](adr/0013-desktop-transfer-workflows.md)和[实施记录](evidence/DESKTOP-060-WORKFLOW-FIXES.md)。
 
 2026-09-22 恢复实施增量：双重 `group+lan` 关系与 `group` 一样持久化离线撤销 outbox；剪贴板 lease 兼容携带签发时逻辑时钟，成功安装后才建立因果顺序，防止两端独立复制次数不同导致新事件被误判。极端跳跃、重放、旧复制回灌与写入竞态仍受限制，详见 PROTOCOL / ADR0007。原生共享满容量时已有相同 request 继续幂等，新请求仍受 64 条限制。Mac 本轮暂不可用；本次源码/自动测试不替代既有包级和原生缺项。
 
 2026-09-14 E4-03修复候选：认证QUIC会话只有在双方分别声明`session_reuse`和独立`clipboard_sync`能力后才承载自动剪贴板单向流；双方各自的本地authorization generation可以不同，wire按消息方向绑定接收方实际代次。自动剪贴板持久总开关和全部peer/方向/text|link|image权限默认关闭；lease及event同时绑定permission revision，撤权、暂停、新复制和期限会淘汰旧正文。真实本地复制先推进唯一状态owner，再判断lease、发送权限和格式，因此不会在重连后补发旧内容。发送/接收各最多两路，正文有deadline、分块速率预算，原生图片验证在最终状态锁外完成，mutation前复核暂停、授权、permission revision、OS generation和deadline。loopback QUIC、Windows隔离原生测试与Mac命名pasteboard只证明对应边界，物理Win↔Mac用户剪贴板仍留E5。
 
+2026-10-19 局域网剪贴板修复：LAN TLS入口与WSS入口相同，在认证后立即启动可复用会话的文件/剪贴板owner；不再等待文件流才允许同步。自动连接沿用核心分阶段超时，不叠加10秒总期限；新尝试与lease就绪淘汰旧连接失败状态，原生I/O错误保持。文件wire、剪贴板wire、schema及明确授权默认值不变；回归与物理未验边界见[实施记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
+
 # LinkSend protocol V1 implementation specification
+
+2026-10-18 用户新增授权：桌面增加手动触发的 GitHub 正式版检查、按平台下载、SHA256校验及原生安装包入口；安装由Windows向导或Mac DMG完成。此增量不改文件协议、配对或正文路径，详见[ADR0014](adr/0014-desktop-github-updates.md)。
 
 2026-10-18 N4目标边界增量：快速发送排除本机；身份尚未读取时等待，保存为本机的草稿保留但不可发送。最终Go授权、文件wire与schema保持；准确包原生结果另列。
 
@@ -57,7 +63,7 @@ Build a Go desktop application whose self-hosted server discovers devices and co
 
 Direct failure must identify stage, stable error code and diagnostic evidence. Relay is explicitly unavailable (`relay=false`). Never substitute HTTP upload/download, object storage, WSS file forwarding, TURN allocations, third-party relay SDKs, WebRTC or TCP while claiming the specified solution. Future encrypted relay is only a capability/method/error reservation. STUN alone is not traversal; UDP blocking, mapping/filtering, routes, firewalls and isolation can prevent direct connectivity. Do not guarantee 100% success or fixed network throughput.
 
-V1 targets Windows/macOS desktop, Linux signaling server and portable CLI; Linux desktop is best effort. Mandatory features: trusted pairing, online devices, single/multiple files, folders including empty directories, receiver confirmation, progress, pause, cancel, connection and application-restart resume, integrity and diagnostics. Excluded: mobile/web clients, SaaS tenancy, payments, OAuth, automatic updates/port mapping. Healthy established P2P must survive temporary signaling outages.
+V1 targets Windows/macOS desktop, Linux signaling server and portable CLI; Linux desktop is best effort. Mandatory features: trusted pairing, online devices, single/multiple files, folders including empty directories, receiver confirmation, progress, pause, cancel, connection and application-restart resume, integrity and diagnostics. User-requested desktop updates use an explicit check/download/native-installer flow. Excluded: mobile/web clients, SaaS tenancy, payments, OAuth, unattended updates and automatic port mapping. Healthy established P2P must survive temporary signaling outages.
 
 ## 2. Technology and implementation discipline
 

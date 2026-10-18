@@ -267,7 +267,7 @@ func TestObservedLocalChangeCannotBeBackfilledAfterLeaseArrives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = state.PrepareObserved(unsupported, Kind("files"), []byte("ignored")); !errors.Is(err, ErrStale) {
+	if _, err = state.PrepareObserved(unsupported, Kind("unsupported"), []byte("ignored")); !errors.Is(err, ErrStale) {
 		t.Fatal("unsupported format was accepted", err)
 	}
 	fresh, err := state.ObserveLocalEvent(13)

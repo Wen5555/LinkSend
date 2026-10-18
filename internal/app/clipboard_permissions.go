@@ -32,7 +32,7 @@ type ClipboardGrantPatch struct {
 
 func validClipboardGrant(direction, kind string) bool {
 	return (direction == "send" || direction == "receive") &&
-		(kind == "text" || kind == "link" || kind == "image")
+		(kind == "text" || kind == "link" || kind == "image" || kind == "files")
 }
 
 func (s *Service) ClipboardGrants(ctx context.Context, peerID string) ([]ClipboardGrant, error) {
@@ -135,6 +135,7 @@ func (s *Service) SetClipboardGrant(ctx context.Context, patch ClipboardGrantPat
 	if err != nil {
 		return ClipboardGrant{}, err
 	}
+	s.cancelStaleClipboardFiles()
 	if renewLease {
 		s.renewClipboardLeases(patch.PeerID)
 	}

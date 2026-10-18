@@ -29,6 +29,7 @@ type Message struct {
 	SenderGrantRevision   uint64  `json:"sender_grant_revision,omitempty"`
 	ReceiverGrantRevision uint64  `json:"receiver_grant_revision,omitempty"`
 	PayloadBytes          uint32  `json:"payload_bytes,omitempty"`
+	FileID                string  `json:"file_id,omitempty"`
 }
 
 func Write(w io.Writer, message Message, payload []byte) error {
@@ -116,6 +117,12 @@ func validateHeader(m Message) error {
 		}
 		return nil
 	}
+	if m.Type == "file_ready" || m.Type == "file_cancel" {
+		if len(m.FileID) != 32 || len(m.Digest) != 64 || m.PayloadBytes != 0 {
+			return ErrStale
+		}
+		return nil
+	}
 	if m.Type == "event" {
 		if m.OriginID == "" || m.Boot == "" || m.OriginSeq == 0 || m.Lamport == 0 || !validKind(m.Kind) || len(m.Digest) != 64 || m.SenderGrantRevision == 0 || m.ReceiverGrantRevision == 0 {
 			return ErrStale
@@ -130,6 +137,10 @@ func validateMessage(m Message, payload []byte) error {
 		return ErrStale
 	}
 	switch m.Type {
+	case "file_ready", "file_cancel":
+		if err := validateHeader(m); err != nil || len(payload) != 0 {
+			return ErrStale
+		}
 	case "lease":
 		if len(payload) != 0 || !validLeaseMessage(m) {
 			return ErrStale
@@ -152,7 +163,7 @@ func validateMessage(m Message, payload []byte) error {
 }
 
 func validLeaseMessage(m Message) bool {
-	if m.PayloadBytes != 0 || m.TTLMillis == 0 || m.TTLMillis > 10_000 || (len(m.Kinds) == 0) == (len(m.Grants) == 0) || len(m.Kinds)+len(m.Grants) > 3 {
+	if m.PayloadBytes != 0 || m.TTLMillis == 0 || m.TTLMillis > 10_000 || (len(m.Kinds) == 0) == (len(m.Grants) == 0) || len(m.Kinds)+len(m.Grants) > 4 {
 		return false
 	}
 	seen := make(map[Kind]bool, len(m.Kinds)+len(m.Grants))

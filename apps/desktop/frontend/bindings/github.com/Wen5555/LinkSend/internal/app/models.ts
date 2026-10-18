@@ -37,6 +37,18 @@ export interface BatchSnapshot {
     "stopped": number;
 }
 
+export interface ClipboardFileProgress {
+    "id": string;
+    "peer_id": string;
+    "direction": string;
+    "state": string;
+    "total": number;
+    "verified": number;
+    "file_count": number;
+    "large": boolean;
+    "error"?: string;
+}
+
 export interface ClipboardGrant {
     "peer_id": string;
     "direction": string;

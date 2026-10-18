@@ -150,6 +150,65 @@ func TestClipboardEnsureIsSingleflight(t *testing.T) {
 	service.clipboardEnsureMu.Unlock()
 }
 
+func TestClipboardConnectionUsesDirectPhaseBudget(t *testing.T) {
+	f := newDirectFixtureServices(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	defer cancel()
+	for _, item := range []struct {
+		service *Service
+		peerID  string
+	}{{f.a, f.bID.ID()}, {f.b, f.aID.ID()}} {
+		if _, err := item.service.Devices(ctx); err != nil {
+			t.Fatal(err)
+		}
+		item.service.ConfigureClipboard(ClipboardAdapter{Generation: func() uint64 { return 1 }})
+		for _, direction := range []string{"send", "receive"} {
+			if _, err := item.service.SetClipboardGrant(ctx, ClipboardGrantPatch{PeerID: item.peerID, Direction: direction, Kind: "text", Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	cfg := DirectConfig{AllowLoopback: true, BindAddress: "127.0.0.1:0", CheckTimeout: 15 * time.Second}
+	if err := f.b.StartInbox(t.TempDir(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 2*time.Second, func() bool { return f.b.InboxStatus().Listening }, "receiver not ready")
+	// A slow setup still fits the configured direct phase budget. The old
+	// clipboard-specific ten-second deadline aborted it before the request.
+	cfg.onPhase = func(phase string) {
+		if phase == "session_prepare" {
+			time.Sleep(10100 * time.Millisecond)
+		}
+	}
+	if err := f.a.EnsureClipboardSessions(ctx, cfg); err != nil {
+		t.Fatalf("clipboard truncated the direct connection budget: %v", err)
+	}
+	waitFor(t, 2*time.Second, func() bool {
+		for _, status := range f.a.ClipboardPeerStatuses() {
+			if status.SendReady && status.ReceiveReady && status.Error == "" {
+				return true
+			}
+		}
+		return false
+	}, "slow clipboard setup did not exchange leases")
+}
+
+func TestClipboardReconnectPreservesUnrelatedIOError(t *testing.T) {
+	service := &Service{clipboardPeerRuntime: make(map[string]clipboardPeerRuntimeStatus)}
+	service.setClipboardPeerError("peer", "connection_failed")
+	service.setClipboardConnectionState("peer", "connecting")
+	status := service.ClipboardPeerStatuses()
+	if len(status) != 1 || status[0].Error != "" || status[0].Waiting != "connecting" {
+		t.Fatalf("retry kept an old connection failure: %+v", status)
+	}
+	service.setClipboardPeerError("peer", "write_failed")
+	service.setClipboardConnectionState("peer", "")
+	status = service.ClipboardPeerStatuses()
+	if len(status) != 1 || status[0].Error != "write_failed" {
+		t.Fatalf("reconnect hid a native clipboard failure: %+v", status)
+	}
+}
+
 func TestClipboardPeerSenderKeepsOnlyLatestPendingEvent(t *testing.T) {
 	sender := &clipboardPeerSender{wake: make(chan struct{}, 1)}
 	activeCtx, cancel := context.WithCancel(t.Context())

@@ -2,6 +2,7 @@
 package transport
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -21,7 +22,25 @@ const streamAbortErrorCode quic.StreamErrorCode = 0x100
 // QUICStream keeps quic-go stream-specific abort operations inside transport.
 // Normal Close still only completes the send direction; Abort is reserved for
 // local cancellation or protocol failure and cancels both directions.
-type QUICStream struct{ *quic.Stream }
+type QUICStream struct {
+	*quic.Stream
+	peek *bufio.Reader
+}
+
+func (s *QUICStream) Read(p []byte) (int, error) {
+	if s.peek != nil {
+		return s.peek.Read(p)
+	}
+	return s.Stream.Read(p)
+}
+
+// PeekPrefix preserves all bytes for the stream's single read owner.
+func (s *QUICStream) PeekPrefix(n int) ([]byte, error) {
+	if s.peek == nil {
+		s.peek = bufio.NewReaderSize(s.Stream, 128)
+	}
+	return s.peek.Peek(n)
+}
 
 func WrapStream(stream *quic.Stream) *QUICStream { return &QUICStream{Stream: stream} }
 

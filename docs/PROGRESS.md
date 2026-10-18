@@ -1,3 +1,21 @@
+## 2026-10-19 v0.6.2发布准备
+
+- 用户明确要求GitHub版本更新推送。产品元数据统一0.6.2，合并本轮LAN连接修复、独立files授权/能力与schema12迁移、32MiB居中复制进度及既有GitHub更新入口；文件正文仍走认证QUIC/V1引擎，relay=false。
+- Windows↔Mac同LAN系统剪贴板的文字、不同像素图片和文件条目双向通过；64MiB文件校验、两端原生进度与取消/未完成缓存删除通过。图片校验器颜色空间误判已纠正；最后两端备份恢复成功，测试进程停止，日常Mac恢复同步。完整命令/包来源及最终FileID状态回归见[实施记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
+- 两模块workspace/off最终检查与三平台准确提交CI、资产版本/摘要、Mac包只读挂载和正式Release按顺序验收；本地候选实机不冒充后续发行包运行。Explorer/Finder键盘粘贴、Intel/macOS13原生、双NAT与历史A–E其他缺项保留，不部署生产或改宿主网络。
+
+## 2026-10-19 局域网自动剪贴板连接修复（首轮本地未发布记录）
+
+- 用户反馈同一局域网设置显示“连接失败”。补充经过LAN TLS控制入口的真实Pion/QUIC回归：旧接收路径始终等待文件双向流，未启动剪贴板单向流owner；单独恢复旧owner后，同一回归实际FAIL。现与WSS入口一致，把可复用认证会话立即交给pool，并释放该连接独占的LAN TLS控制通道。
+- 剪贴板外层两处10秒期限会截断桌面既有30秒分阶段连接预算；10.1秒受控延迟在旧实现实际FAIL，移除额外截断后PASS，保留核心阶段超时、singleflight和关闭取消。重试/lease就绪清除旧连接错误及连接等待态，保留原生读写错误。
+- 新回归覆盖无文件先行的LAN双向文本、同时连接、相同会话ID、文件空闲期限后保持及文件复用/实际落盘内容；两Go模块off test/vet/build、核心定向race、桌面完整race及前端123项/typecheck/lint通过。包与最后验收见[实施记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。这些是同机隔离loopback控制路径证据，物理双机系统剪贴板仍未复测；无wire/schema/授权默认值变化，未提交、推送或发布。
+
+## 2026-10-18 桌面GitHub更新功能（本地未发布）
+
+- 基于main `3aa5148`在`codex/github-desktop-updates`加入“设置 → 软件更新”：手动查正式Release、按平台下载、进度/取消、摘要校验后打开安装包。Go负责网络与缓存，不依赖信令；Windows使用安装向导，Mac使用DMG，安装前需退出旧应用，用户配置和文件保持。关于页改为真实后端版本，协议V1与正文路径不变。
+- 前端123 tests/typecheck/lint/build、两Go模块GOWORK=off test/vet/build与更新模块race通过；Mac两架构仅更新模块测试二进制交叉编译。真实HTTPS下载当前0.6.1的75,189,777B Windows安装包并核对SHA256通过，测试未执行安装器；本地Windows生产试用EXE已构建、未启动。前端重建与Go embed并行的一次资源读取失败已记录，完成前端后顺序重跑通过。
+- 未提交、推送或发布新版本，原0.6.1 tag/资产与物理原生/NAT缺项保持。具体命令、下载摘要、试用来源及安装限制见[实施记录](evidence/DESKTOP-GITHUB-UPDATES.md)与[ADR0014](adr/0014-desktop-github-updates.md)。
+
 ## 2026-10-18 v0.6.1已发布
 
 - PR #10已合并main，准确源码`72161e3f806d742d1d401564031ab4844fe88b2d`；[v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)已公开并设Latest，tag与源码一致。main core/desktop/三平台包CI全部success，四新程序包加校验/来源清单共六项资产digest核验通过。

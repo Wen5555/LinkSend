@@ -307,7 +307,7 @@ func (s *Service) servePooledPeer(key string, pooled *pooledPeerSession) {
 		enabled := s.inbox.enabled
 		s.inbox.mu.Unlock()
 		wrapped := transport.WrapStream(stream)
-		if !enabled || !s.receiveIncomingStream(pooled.peer.Data.Conn.Context(), pooled.peer, directory, wrapped) {
+		if !s.receiveClipboardFileStream(pooled.peer, wrapped) && (!enabled || !s.receiveIncomingStream(pooled.peer.Data.Conn.Context(), pooled.peer, directory, wrapped)) {
 			wrapped.Abort()
 		}
 		s.directPoolMu.Lock()
