@@ -1,3 +1,8 @@
+## 2026-10-19 可靠性 Goal R1 健康会话保护
+
+- 新定向真实ICE/QUIC回归先复现 `NetworkChanged` 关闭剪贴板活跃/文件空闲连接的缺陷；仅清理已由QUIC报告关闭的空闲会话后，通过通知后双向剪贴板、同SessionID文件完整传输/确认及失效连接清理。保持原transport失效与恢复机制，无wire/schema改变。
+- 五项定向组合普通3轮及race3轮（42.175秒）、两Go模块workspace/off的test/vet/build退出0；准确提交CI按[增量证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)另核对。R1物理双机/睡眠/真实跨网仍未完成，Goal保持active；不覆盖旧证据边界。
+
 ## 2026-10-19 可靠性 Goal R0 基线
 
 - 用户明确启动 Goal，当前 active；基线为 `f8358ce`，工作分支与远端一致。保留三个未跟踪目录，复用现有便携合规工具链。Mac arm64/macOS26.5 与日本支持主机只读 SSH 核对通过，未影响日常进程或生产服务；台湾 NAT 别名探测255且无原因证据，不计可用环境。

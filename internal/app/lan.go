@@ -271,7 +271,7 @@ func (s *Service) NetworkChanged(reason string) error {
 	s.networkMu.Lock()
 	s.network = cachedNetworkSelection{}
 	s.networkMu.Unlock()
-	s.closeIdlePooledSessions()
+	s.pruneClosedIdlePooledSessions()
 	manager := s.lanManager()
 	if manager == nil {
 		s.ensureLANDiscovery()

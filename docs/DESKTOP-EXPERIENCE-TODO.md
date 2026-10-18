@@ -5,7 +5,7 @@
 用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。
 
 - [x] R0：核对 `f8358ce`、干净 tracked 工作区及三个既有未跟踪目录；复用本地 Go1.27.1/Node24.21.0/pnpm12.4.1；Mac arm64/macOS26.5 和日本自托管信令/STUN 主机 SSH 可用；修正 README 过期版本。见[基线证据](evidence/RELIABILITY-R0-BASELINE.md)。
-- [ ] R1：审查连接/恢复并添加实际缺陷回归；准确候选双向 LAN、中断恢复、睡眠/网络变化与真实不同网络传输仍待。
+- [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；新增真实LAN TLS/Pion/QUIC回归，通知后双向剪贴板及同会话文件复用/关闭清理通过。见[源码增量证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)；准确候选双向 LAN、中断恢复、睡眠/网络变化与真实不同网络传输仍待。
 - [ ] R2：缓存 ADR、自动管理、安全回归及 Finder/Explorer 真实键盘粘贴待实施/验证；现有文件条目读回不抵扣。
 - [ ] R3：可操作原因/下一步、安全诊断 DTO 与本地脱敏导出待实施。
 - [ ] R4：准确候选覆盖安装、活动任务退出/重启和受影响系统入口待验。
