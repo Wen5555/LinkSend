@@ -2,6 +2,34 @@
 
 实现契约见[ADR0010](../adr/0010-atomic-device-batches.md)，当前状态只在[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。测试profile、DB、原始日志和文件夹具位于忽略的`.artifacts/ae-20261018/`，不进入Git。
 
+## 6ec3cc4准确Mac原生等待、源变化、独立重试与取消（2026-10-18）
+
+本轮无产品源码修改，沿用`6ec3cc48d89552e2d681a6d3bef88540f2d4fa84`准确arm64包及五项CI/三平台四资产核验；EXE SHA256 `e13f0391f5074996c74fdd7e6ebedd241f0966612a827f9ce676cef39cee3e87`。新根`/Users/wen/.codex/supervision/linksend-ae-20261018/batch-native-6ec3cc4`复制已停止测试A/B/C profile、准确app与一致性控制库，保留私有备份，正常配对关系来自原Initialize/Invitation/Join。三个软件identity表示发送端A和两个软件目标B/C，不能当作三台物理机或三目标原生验收。
+
+独立C正常签名Devices确认A/B在线、C离线。原main保存的B目标保持，实际展开“多设备分发”并原生勾选C，Go持久草稿peer_ids变为有序[B,C]/revision2；未勾等待时批次按钮禁用，原生勾等待后启用。真实系统picker添加batch-source.txt，保留原held-main.txt，main revision3；quick整行与原任务队列保持。原生只点击一次“分发给2台设备”，经既有EnqueueBatch创建一parent/两个独立child，主草稿仅在成功后清空为revision4，B/C目标仍保持，quick原revision4整行不变。
+
+第一批`3f1b7e24277c46d759c1277ee5284d9d`：B child `b4f761c4fb7d7543f4d34c076ed9ac2c`实际完成74B/两个文件/hash/双方确认，C child `75bc34b87c74e084e75bbb01d96c2638`为waiting_peer且尚无task。随后只修改专用batch-source.txt并保留原字节副本；C上线后被SOURCE_CHANGED阻止发送变更内容，留下真实failed/SOURCE_CHANGED task `20261018T050825.617903000Z-00000002`，C无提交文件，B完成row/task/文件均不变。原生菜单退出/真实重启后同一C子项仍needs_attention/SOURCE_CHANGED，B与主/quick草稿保持，没有重复批次或自动发送。
+
+原生队列确实显示“源内容已变化，请核对原始文件后确认。”，实际只点击该C行“确认继续”。其源摘要重新绑定新内容，同一child复用；C一次性接收器已在前一次源保护的连接中退出1/DIRECT_FAILED，确认后子项正常等候离线对端。观察器等完成10秒exit1后，先核对该job终态与waiting_peer，没有再点击确认或重新入队；仅重开C接收器，原child完成98B/两个文件/hash/双方确认。B task/queue完全保持，没有重新发送B；B收到旧36B版本、C在明确确认后收到新60B版本，不宣称批次是冻结快照。
+
+| 来源 | 字节 | 实际源/目标SHA256 |
+|---|---:|---|
+| held-main.txt（B/C相同） | 38 | eb2adf72e84bb5e0ce1613f1d76311504bbbc218a98c93787cf15cb869b8d6a5 |
+| batch-source.txt（B确认的原版本） | 36 | b4330cbcfb3ffdb18fab15b544d3b3dcbc4758415b7d0bae597877d7cbfcc7ba |
+| batch-source.txt（C重新确认的新版本） | 60 | aff3afd4c3cf0f12dc7b0c1c6831223453317c6e8cef7b94004473894d636506 |
+
+B sender `20261018T050731.504112000Z-00000001`/transfer `2da09189add4219a1e96a0084d720280`；C新sender `20261018T051201.929417000Z-00000001`/transfer `d369a9ffd40b2a8c9482abe8abc23877`。两次均为正常Pion/固定身份QUIC、bilateral_confirmed=true、relay=false/direct_unknown；实际每个接收目录各两份唯一文件，排除受管暂存后没有额外副本。旧失败task仍保留，不能把最终批次完成解读为历史没有失败。
+
+第二批`886eee4a9bd750b8aa1789be9a05e032`：原生设置256KiB/s以保留有界活动窗口，真实picker选择专用16MiB文件，main revision5；继续B/C两个明确目标并勾等待、真实提交。B子项处于running且接收暂存已建立，C子项queued/未开始且task_id空。原生先只取消C行：C持久cancelled且仍无task，B维持同一running task，未被替换或停止。随后原生点击唯一待完成批次的“取消此批次未完成目标”：parent.cancelled持久为1，剩余B task `20261018T051637.051124000Z-00000002`和两个child最终cancelled，B此次没有提交用户文件，第一批B/C的完成rows/实际hash全保持。
+
+原生恢复不限速0后真实菜单退出/重启，send_batches/send_queue/tasks/send_drafts全部整行保持，取消意图未丢失、没有重复parent或派发。GUI最终原生退出释放profile owner后，才独占同profile用CLI执行`resume --task <上述已取消B task> --bind 127.0.0.1:0 --allow-loopback`：实际exit1/BATCH_CANCELLED，无新parent/queue、task仍cancelled。这里单列直接Resume负例，不扩大成新跑了所有直接Retry负例；既有后端取消屏障测试保留原范围。
+
+终态为2batches/5queues（3completed/2cancelled）/5tasks（3completed/1个预期SOURCE_CHANGED failed/1cancelled），包含原有completed queue/task各1。main revision6空，quick原revision4整行、identity字节和其他偏好保持；16MiB源hash、旧/新小源两版本与原profile/私有备份保留。四次receive均终态：B首次、C确认后exit0；C源保护连接、B批次取消各exit1/DIRECT_FAILED，保留原始日志，后两者不记作接收完成。专属rendezvous正常exit0、监听关闭，两库quick_check=ok，clipboard=false/enabled grants=0，未改宿主网络、生产服务或系统权限。
+
+非敏感完整收据`.artifacts/ae-20261018/mac-batch-6ec3cc4-final-receipt.json`已下载。关键job统一前缀`/tmp/codex-ssh/job-ls-ae-mac-`：`batch-start-6ec3cc4-20261018-01`、`batch-signal-start-6ec3cc4-20261018-01`、`batch-select-c-wait-6ec3cc4-20261018-01`、`batch-picker-{goto,path-small,confirm-small}-6ec3cc4-20261018-01`、`batch-enqueue-first-6ec3cc4-20261018-01`、`batch-change-source-6ec3cc4-20261018-01`、`batch-source-change-check-6ec3cc4-20261018-01`、`batch-restart-first-6ec3cc4-20261018-01`、`batch-verify-c-first-6ec3cc4-20261018-01`、`batch-enqueue-cancel-6ec3cc4-20261018-01`、`batch-cancel-child-c-6ec3cc4-20261018-01`、`batch-cancel-parent-6ec3cc4-20261018-01`、`batch-restart-cancelled-6ec3cc4-20261018-01`、`batch-quit-probe-6ec3cc4-20261018-01`、`batch-final-cleanup-6ec3cc4-20261018-01`均exit0。`batch-confirm-c-first-6ec3cc4-20261018-01`已实际送达确认，但其完成观察器因接收器已退出而exit1；后续仅重新接收和只读复核，没有重复确认。完整脚本和原始日志保存在忽略artifact/对应jobPath。
+
+本节证明准确Mac原生checkbox/picker/一批入队、混合在线离线、源变化反馈与独立确认、实际两目标文件、等待子项独立取消、活动批次取消与两次重启/取消恢复屏障。同机Pion/QUIC不替代物理LAN、多物理目标、双NAT或完整A–E；三目标自动fixture和旧6edddad Windows正常路径继续分别绑定原证据。
+
 ## 行为证据
 
 - `TestBatchAtomicRollbackAndConcurrentIdempotency`：SQLite trigger在第三个子项执行`RAISE(ABORT)`，parent和全部子项为0；8个并发相同请求只产生一批。参数冲突拒绝、草稿清空后返回原收据。

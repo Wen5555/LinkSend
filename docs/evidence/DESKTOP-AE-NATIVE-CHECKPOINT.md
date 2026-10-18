@@ -2,6 +2,12 @@
 
 分项证据，状态仅在[唯一TODO](../DESKTOP-EXPERIENCE-TODO.md)维护。物理双机、系统托盘、双NAT与原生loopback分别记录。
 
+## 6ec3cc4准确Mac N2原生故障矩阵（2026-10-18）
+
+同一准确arm64包原生扩展为B/C两个软件目标并明确等待，真实picker/一批原子入队后B完成74B、C离线等待。源变化触发C SOURCE_CHANGED失败且B保持；真实重启后只原生确认C，重新等待的接收器完成新98B/hash/双方确认，B未重复发送。另16MiB活动批次中原生独立取消等待C不停止B，再取消剩余批次使B取消且无提交文件；前一批完成文件保持。
+
+取消后真实重启四张表整行不变/无自动派发，GUI释放owner后直接Resume被BATCH_CANCELLED拒绝。终态2批/5queues（3completed/2cancelled）/5tasks（3completed/1预期SOURCE_CHANGED failed/1cancelled）、main revision6空/quick原revision4保持。四receive（两个完成exit0、两个保护/取消中断exit1）与app/专属服务均终态，监听关闭、clipboard=false/enabled grants=0，原数据与源版本/备份保留。准确来源/角色边界、IDs、源hash、一次性接收器重开及失败观察器见[N2证据](DESKTOP-AE-DEVICE-BATCHES.md)；无新产品源码/构建或物理通过声明，收据`mac-batch-6ec3cc4-final-receipt.json`已下载。
+
 ## 6ec3cc4准确Mac N3活动预算（2026-10-18）
 
 同一准确arm64包的原生256→1024KiB/s动态保存与32MiB实际文件通过；每阶段两个稳定4MiB确认区间约253/1005KiB/s，排除过渡与合并ACK。1KiB/s等待时原生暂停/恢复新attempt/取消、遗留待确认队列显式取消及独立4MiB等待中保存0及时完成/hash/双方确认通过。真实重启后0/quick/旧历史保持、无重复派发；完整口径、源码/EXE/文件hash、主动中断CLI exit1、失败观察器与收尾见[N3证据](DESKTOP-AE-FILE-BUDGET.md)。

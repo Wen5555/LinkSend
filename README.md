@@ -54,7 +54,7 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 
 发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。此预发布包来自提交 `0229cbf`；主分支的后续修复未重新发布为该包。
 
-A–E开发候选的[同提交 Actions 产物](https://github.com/Wen5555/LinkSend/actions/runs/39095472398)绑定 `6ec3cc4`，含Windows便携/安装包和Mac两架构DMG，四资产来源与hash已核验。准确Mac通过原生活动限速/等待控制、quick目标边界/同机文件与Finder Services真实菜单、后台唤回、草稿去重/重启及110B文件/空目录闭环，均为同机loopback范围；旧Windows分项仍绑定6edddad。分项证据见[检查点](docs/evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)，完整物理LAN、其余系统入口、OS剪贴板和跨NAT矩阵仍未完成，公开Release链接保持原版本。
+A–E开发候选的[同提交 Actions 产物](https://github.com/Wen5555/LinkSend/actions/runs/39095472398)绑定 `6ec3cc4`，含Windows便携/安装包和Mac两架构DMG，四资产来源与hash已核验。准确Mac通过原生双目标批次的离线等待/源变化确认/独立取消/批次取消与重启屏障、活动限速/等待控制、quick目标边界/同机文件与Finder Services真实菜单、后台唤回、草稿去重/重启及110B文件/空目录闭环，均为同机loopback范围；旧Windows分项仍绑定6edddad。分项证据见[检查点](docs/evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)，完整物理LAN、其余系统入口、OS剪贴板和跨NAT矩阵仍未完成，公开Release链接保持原版本。
 
 Windows 包尚未进行代码签名；macOS 包采用 ad-hoc 签名，尚未公证。两端可能出现系统安全提示，安装与运行边界见[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
 
