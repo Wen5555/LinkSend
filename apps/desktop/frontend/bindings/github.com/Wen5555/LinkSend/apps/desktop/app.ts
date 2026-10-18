@@ -70,6 +70,10 @@ export function CleanupInboxStaging(limit: number): $CancellablePromise<app$0.In
     return $Call.ByID(1036648570, limit);
 }
 
+export function ClearTransferQueue(all: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2367093388, all);
+}
+
 export function ClipboardGrants(peerID: string): $CancellablePromise<app$0.ClipboardGrant[] | null> {
     return $Call.ByID(1458346422, peerID);
 }
@@ -216,6 +220,13 @@ export function NetworkChanged(reason: string): $CancellablePromise<void> {
 
 export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfaceInfo[] | null> {
     return $Call.ByID(1900295361);
+}
+
+/**
+ * OpenInboxFile is an explicit user action; receiving a file never opens it.
+ */
+export function OpenInboxFile(taskID: string, fileID: number): $CancellablePromise<void> {
+    return $Call.ByID(4064713249, taskID, fileID);
 }
 
 /**

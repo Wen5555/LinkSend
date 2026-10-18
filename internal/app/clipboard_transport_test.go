@@ -767,6 +767,23 @@ func TestClipboardConcurrentEnsureSessionsRemainReady(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("concurrent clipboard session did not deliver: sender=%+v receiver=%+v", f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses())
 	}
+	// Both desktop masters can be enabled/unpaused after the connection already
+	// exists. Their leases must renew before the three-second idle timer closes
+	// that healthy session; a seven-second periodic renewal is too late.
+	f.a.ResetClipboard(true, aGeneration.Load())
+	f.b.ResetClipboard(true, bGeneration.Load())
+	f.a.ResetClipboard(false, aGeneration.Load())
+	f.b.ResetClipboard(false, bGeneration.Load())
+	waitFor(t, 2*time.Second, func() bool { return ready(f.a, f.bID.ID()) && ready(f.b, f.aID.ID()) }, "unpausing did not immediately renew clipboard leases")
+	aGeneration.Add(1)
+	if err := f.a.ClipboardChanged(ctx, ClipboardChange{Generation: aGeneration.Load(), Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-written:
+	case <-time.After(2 * time.Second):
+		t.Fatal("clipboard did not deliver after unpausing")
+	}
 }
 
 func TestClipboardEnsureHandoffCancelsBlockedBootstrapDuringShutdown(t *testing.T) {

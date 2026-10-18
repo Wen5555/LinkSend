@@ -107,6 +107,7 @@ func main() {
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
 		slog.Info("desktop runtime ready")
 		desktop.runtimeEntriesReady()
+		desktop.clipboardReady()
 		if startHidden && !nativeShareWake && (desktop.Preferences().Background.CloseMode != "background" || desktop.background.tray == nil) {
 			// A missing tray must not leave the application unreachable.
 			window.Show()

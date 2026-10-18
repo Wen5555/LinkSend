@@ -131,7 +131,11 @@ func (s *Service) Workspace() (WorkspaceSnapshot, error) {
 	paused := s.queue.paused
 	persistent := !s.queue.persistFailed && s.tasks.historyAvailable()
 	s.queue.mu.Unlock()
-	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Batches: batches, Tasks: s.workspaceTasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
+	queue, tasks, err := s.filterTransferView(queue, s.workspaceTasks())
+	if err != nil {
+		return WorkspaceSnapshot{}, err
+	}
+	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Batches: batches, Tasks: tasks, QueuePaused: paused, PersistenceAvailable: persistent}, nil
 }
 
 func (s *Service) SendDraft(id string) (SendDraft, error) {

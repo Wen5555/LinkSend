@@ -356,3 +356,44 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .file-send-limit .field-label input, .file-send-limit .field-label select,
   .file-send-limit .field-label input:focus, .file-send-limit .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }
 }
+
+/* One workspace for composing and following both directions of a transfer. */
+.nav-item { position: relative; }
+.nav-item .nav-badge { position: absolute; top: 5px; right: 8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 10px; background: #c73636; color: white; font-size: 11px; line-height: 18px; text-align: center; }
+.transfer-workspace .transfer-grid { display: block; }
+.transfer-workspace .send-surface { padding: 20px 24px; }
+.transfer-workspace .send-surface .compact-file-list { max-height: 160px; overflow-y: auto; }
+.transfer-queue > .section-heading { flex-wrap: wrap; gap: 12px; }
+.transfer-entry + .transfer-entry { border-top: 1px solid var(--border, #e4e9ed); }
+.transfer-entry .task-row { border: 0; box-shadow: none; }
+.transfer-waiting { display: flex; align-items: center; gap: 14px; padding: 18px 0; }
+.transfer-waiting > div { flex: 1; min-width: 0; }
+.transfer-waiting strong { overflow-wrap: anywhere; }
+.transfer-waiting p { color: var(--muted, #687785); margin: 5px 0 0; font-size: 13px; }
+.transfer-queue-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 12px 12px; }
+.manual-lan-discovery { margin-top: 20px; }
+.manual-lan-discovery summary { cursor: pointer; color: var(--accent, #236b5e); padding: 10px 0; }
+.clipboard-device-list { margin: 20px 0; border-top: 1px solid var(--border, #e4e9ed); padding-top: 16px; }
+.clipboard-device-list .toggle-row small { display: block; margin-top: 4px; }
+@media (max-width: 850px) {
+  .transfer-workspace .send-surface { padding: 16px; }
+  .transfer-queue .inline-actions { flex-wrap: wrap; }
+  .transfer-entry .task-row { grid-template-columns: auto minmax(0, 1fr); }
+  .transfer-entry .task-actions { grid-column: 2; flex-wrap: wrap; }
+}
+
+.send-compose { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(220px, 1.25fr); gap: 24px; align-items: start; }
+.send-controls .field-label { margin-top: 0; }
+.send-controls .picker-row { margin: 12px 0 8px; flex-wrap: wrap; }
+.send-controls .queue-wait { margin-bottom: 0; font-size: 11px; }
+.send-files .compact-file-list { margin-top: 0; min-height: 94px; max-height: 110px !important; padding: 0 10px; }
+.send-files .file-row { min-height: 42px; padding: 8px 0; }
+.send-files .empty-picker { min-height: 94px; padding: 16px 8px; }
+.send-files .send-button { margin-top: 12px; }
+.send-options { margin-top: 12px; color: var(--muted); font-size: 12px; }
+.send-options > summary { cursor: pointer; width: fit-content; padding: 4px 0; }
+.send-options[open] > summary { margin-bottom: 12px; }
+.send-options .source-selection { color: var(--text); }
+@media (max-width: 850px) { .send-compose { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+
+.transfer-workspace { gap: 18px; }

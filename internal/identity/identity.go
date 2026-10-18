@@ -290,6 +290,7 @@ type MembershipSnapshot struct {
 	Revision         uint64 `json:"revision"`
 }
 type DeniedPeer struct {
+	Forgotten               bool      `json:"forgotten,omitempty"`
 	ID                      string    `json:"id"`
 	Name                    string    `json:"name,omitempty"`
 	DeniedAt                time.Time `json:"denied_at"`
@@ -444,7 +445,7 @@ func commitLANPeerFile(f *TrustFile, peer TrustedPeer, expectedGeneration uint64
 
 func checkPeerAllowed(f TrustFile, peerID string) error {
 	for _, denied := range f.DeniedPeers {
-		if denied.ID == peerID {
+		if denied.ID == peerID && (!denied.Forgotten || denied.LocalBlock) {
 			return fmt.Errorf("%w: %w", ErrPeerDenied, ErrAuthentication)
 		}
 	}
@@ -1161,6 +1162,14 @@ func RevokePeer(dir, peerID string) error {
 		return nil
 	}
 	denied := DeniedPeer{ID: peerID, DeniedAt: time.Now().UTC(), LocalBlock: true, AuthorizationGeneration: 1}
+	for index := len(f.DeniedPeers) - 1; index >= 0; index-- {
+		prior := f.DeniedPeers[index]
+		if prior.ID == peerID {
+			denied.Name = prior.Name
+			denied.AuthorizationGeneration = prior.AuthorizationGeneration
+			f.DeniedPeers = append(f.DeniedPeers[:index], f.DeniedPeers[index+1:]...)
+		}
+	}
 	for index, peer := range f.Peers {
 		if peer.ID == peerID {
 			denied.Name = peer.Name

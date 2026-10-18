@@ -7,12 +7,12 @@ import { deviceConnectionLabel, deviceName } from '../presentation';
 import { MembershipRecoveryPanel } from './MembershipRecoveryPanel';
 
 type Props = { devices: DeviceInfo[]; identityID?: string; membership?: MembershipStatus; inbox?: InboxStatus; name: string; run: CommandRunner; op: string; available: boolean };
-type DirectoryKind = 'paired' | 'nearby' | 'removed';
+type DirectoryKind = 'paired' | 'nearby' | 'blocked';
 type CloseReason = 'close' | 'removed';
 type Pages = Record<DirectoryKind, number>;
 
 const pageSize = 10;
-const emptyPages: Pages = { paired: 0, nearby: 0, removed: 0 };
+const emptyPages: Pages = { paired: 0, nearby: 0, blocked: 0 };
 
 export const lanPairServerMessage = (state: string) => state === 'joined' ? '跨网络设备组也已同步完成。' : state === 'switch_required' ? '局域网可立即使用；跨网络使用前需输入对方配对码并确认切换设备组。' : state === 'pending' ? '局域网可立即使用；跨网络使用请在服务恢复后输入对方配对码继续。' : '当前仅建立局域网信任。';
 
@@ -57,11 +57,11 @@ export function DevicesPage({ devices, identityID, membership, inbox, name, run,
 
   const paired = devices.filter(device => device.id !== identityID && device.trusted && !device.blocked);
   const nearby = devices.filter(device => device.id !== identityID && device.nearby && !device.trusted && !device.blocked);
-  const removed = devices.filter(device => device.id !== identityID && device.blocked && device.relationship === 'removed');
+  const blocked = devices.filter(device => device.id !== identityID && device.blocked && device.relationship === 'blocked');
   const directory = {
     paired: paired.filter(device => matchesDeviceSearch(device, query)),
     nearby: nearby.filter(device => matchesDeviceSearch(device, query)),
-    removed: removed.filter(device => matchesDeviceSearch(device, query)),
+    blocked: blocked.filter(device => matchesDeviceSearch(device, query)),
   };
   const selected = detailDeviceID ? devices.find(device => device.id === detailDeviceID) : undefined;
 
@@ -70,14 +70,14 @@ export function DevicesPage({ devices, identityID, membership, inbox, name, run,
       const next: Pages = {
         paired: clampDevicePage(current.paired, directory.paired.length),
         nearby: clampDevicePage(current.nearby, directory.nearby.length),
-        removed: clampDevicePage(current.removed, directory.removed.length),
+        blocked: clampDevicePage(current.blocked, directory.blocked.length),
       };
-      return next.paired === current.paired && next.nearby === current.nearby && next.removed === current.removed ? current : next;
+      return next.paired === current.paired && next.nearby === current.nearby && next.blocked === current.blocked ? current : next;
     });
-  }, [directory.paired.length, directory.nearby.length, directory.removed.length]);
+  }, [directory.paired.length, directory.nearby.length, directory.blocked.length]);
 
   useEffect(() => {
-    if ((!selected || (selected.blocked && selected.relationship === 'removed')) && detailDeviceID) {
+    if ((!selected || selected.blocked) && detailDeviceID) {
       setDetailDeviceID(undefined);
       requestAnimationFrame(() => searchInput.current?.focus());
     }
@@ -110,11 +110,11 @@ export function DevicesPage({ devices, identityID, membership, inbox, name, run,
     <LANDiscoveryNotice inbox={inbox} error={inbox?.lan_available ? '' : discoveryError} />
     <div className="device-columns">
       <section className="surface device-directory" aria-label="设备目录">
-        <div className="section-heading compact"><div><h2>设备目录</h2><small className="field-help">搜索结果按类别分页显示。</small></div><span className="task-count">{paired.length + nearby.length + removed.length} 台</span></div>
+        <div className="section-heading compact"><div><h2>设备目录</h2><small className="field-help">搜索结果按类别分页显示。</small></div><span className="task-count">{paired.length + nearby.length + blocked.length} 台</span></div>
         <label className="device-search"><span>查找设备</span><input ref={searchInput} aria-label="按名称、别名或身份查找设备" value={query} onChange={event => changeQuery(event.target.value)} placeholder="名称、别名或完整身份" /></label>
         <DeviceDirectorySection kind="paired" title="已配对设备" total={paired.length} devices={directory.paired} page={pages.paired} query={query} available={available} op={op} run={run} onPage={changePage} onOpen={openDetail} />
-        <DeviceDirectorySection kind="nearby" title="添加附近设备" total={nearby.length} devices={directory.nearby} page={pages.nearby} query={query} available={available} op={op} run={run} onPage={changePage} onOpen={openDetail} onLANResult={setLanResult} />
-        <DeviceDirectorySection kind="removed" title="已删除设备" total={removed.length} devices={directory.removed} page={pages.removed} query={query} available={available} op={op} run={run} onPage={changePage} onOpen={openDetail} />
+
+        <DeviceDirectorySection kind="blocked" title="黑名单" total={blocked.length} devices={directory.blocked} page={pages.blocked} query={query} available={available} op={op} run={run} onPage={changePage} onOpen={openDetail} />
         {lanResult && <LANPairResultNotice name={lanResult.name} server={lanResult.server} onSwitch={() => { pairingCode.current?.focus(); pairingCode.current?.scrollIntoView({ block: 'center' }); }} />}
       </section>
       <section className="surface pairing-form"><span className="section-kicker">连接另一台设备</span><h2>跨网络配对</h2><p className="muted">输入一次性配对码建立信任，接收时仍按本机策略确认。</p>
@@ -125,8 +125,8 @@ export function DevicesPage({ devices, identityID, membership, inbox, name, run,
         }}><label className="field-label">配对码<input ref={pairingCode} className="pairing-input" value={code} onChange={event => setCode(event.target.value)} placeholder="ABCD-EFGH" maxLength={43} autoComplete="off" spellCheck={false} /></label><button className="primary full" disabled={!!op || !code.trim() || !available}>完成配对</button></form>
         {switchCode && <div className="queue-notice"><strong>本机已属于另一设备组</strong><p>切换会离开当前设备组；历史记录和已接收文件保留。</p><button className="secondary" disabled={!!op} onClick={() => void run('switch-membership', async () => { await Backend.SwitchMembership(switchCode, name || 'LinkSend desktop'); setSwitchCode(''); setCode(''); }, '已切换并完成配对')}>确认切换设备组</button></div>}
         {membership?.message && <p className="field-help pairing-help">{membership.message}</p>}
-        <div className="divider" /><h3>附近设备没有出现？</h3><p className="field-help">输入对方的局域网 IPv4 地址，只查找这一台设备。</p>
-        <form onSubmit={event => { event.preventDefault(); void run('lan-probe', () => Backend.ProbeLANAddress(address.trim()), '已发送定向发现请求'); }}><label className="field-label">对方局域网地址<input value={address} onChange={event => setAddress(event.target.value)} placeholder="例如 192.168.1.20" inputMode="decimal" spellCheck={false} /></label><button className="secondary full" disabled={!!op || !address.trim() || !available}>查找设备</button></form>
+        <div className="divider" /><DeviceDirectorySection kind="nearby" title="局域网发现的设备" total={nearby.length} devices={directory.nearby} page={pages.nearby} query={query} available={available} op={op} run={run} onPage={changePage} onOpen={openDetail} onLANResult={setLanResult} /><details className="manual-lan-discovery"><summary>附近没有设备出现，或没有想要的设备？</summary><p className="field-help">输入对方的局域网 IPv4 地址，只查找这一台设备。</p>
+        <form onSubmit={event => { event.preventDefault(); void run('lan-probe', () => Backend.ProbeLANAddress(address.trim()), '已发送定向发现请求'); }}><label className="field-label">对方局域网地址<input value={address} onChange={event => setAddress(event.target.value)} placeholder="例如 192.168.1.20" inputMode="decimal" spellCheck={false} /></label><button className="secondary full" disabled={!!op || !address.trim() || !available}>查找设备</button></form></details>
       </section>
     </div>
     {selected && <DeviceDetailDrawer key={selected.id} device={selected} run={run} op={op} onClose={closeDetail} />}
@@ -152,7 +152,7 @@ function DeviceDirectorySection({ kind, title, total, devices, page, query, avai
   const hasNoMatches = !hasNoDevices && visible.length === 0;
   return <section className={'device-directory-section ' + kind} aria-labelledby={'device-section-' + kind}>
     <div className="section-heading compact"><h3 id={'device-section-' + kind}>{title}</h3><span className="task-count">{total} 台{query && ' · 匹配 ' + devices.length + ' 台'}</span></div>
-    {hasNoDevices && <div className="empty-state small"><strong>{kind === 'paired' ? '还没有已配对设备' : kind === 'nearby' ? '没有附近设备' : '没有已删除设备'}</strong><p>{kind === 'paired' ? '可输入配对码，或从附近设备发起添加。' : kind === 'nearby' ? '在另一台设备打开 LinkSend 后会出现在这里。' : '已撤销的设备会保留在这里，避免刷新后误认为重新配对。'}</p></div>}
+    {hasNoDevices && <div className="empty-state small"><strong>{kind === 'paired' ? '还没有已配对设备' : kind === 'nearby' ? '没有附近设备' : '黑名单为空'}</strong><p>{kind === 'paired' ? '可输入配对码，或从附近设备发起添加。' : kind === 'nearby' ? '在另一台设备打开 LinkSend 后会出现在这里。' : '加入黑名单的设备会被拒绝连接，可在此移除。'}</p></div>}
     {hasNoMatches && <p className="field-help device-search-empty">没有匹配的设备。</p>}
     {visible.map(device => <DeviceListRow key={device.id} kind={kind} device={device} available={available} op={op} run={run} onOpen={onOpen} onLANResult={onLANResult} />)}
     {!hasNoDevices && <div className="device-pagination" aria-label={title + '分页'}><button className="ghost" aria-label={title + '上一页'} disabled={activePage === 0} onClick={() => onPage(kind, activePage - 1)}>上一页</button><span>第 {activePage + 1} / {pageCount} 页</span><button className="ghost" aria-label={title + '下一页'} disabled={activePage + 1 >= pageCount} onClick={() => onPage(kind, activePage + 1)}>下一页</button></div>}
@@ -162,31 +162,21 @@ function DeviceDirectorySection({ kind, title, total, devices, page, query, avai
 function DeviceListRow({ kind, device, available, op, run, onOpen, onLANResult }: { kind: DirectoryKind; device: DeviceInfo; available: boolean; op: string; run: CommandRunner; onOpen: (id: string, trigger: HTMLButtonElement) => void; onLANResult?: (result: { name: string; server: string }) => void }) {
   const label = deviceName(device);
   const identity = device.id.slice(0, 12);
-  const pendingRevoke = kind === 'removed' && device.service_state === 'pending_revoke_sync';
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
-  const retryButton = useRef<HTMLButtonElement>(null);
-  const hadConfirmation = useRef(false);
   const actionsDisabled = !!op || !available;
-  useEffect(() => { setConfirmRevoke(false); }, [device.id, device.group_id, device.incarnation, device.relationship, pendingRevoke]);
-  useEffect(() => {
-    if (!confirmRevoke && hadConfirmation.current) retryButton.current?.focus();
-    hadConfirmation.current = confirmRevoke;
-  }, [confirmRevoke]);
-  const relationship = kind === 'removed' ? pendingRevoke ? '已移除 · 待同步撤销' : '已移除' : device.blocked ? '已屏蔽' : device.trusted ? '已配对' : '尚未配对';
+  const relationship = kind === 'blocked' ? '已加入黑名单' : device.blocked ? '已屏蔽' : device.trusted ? '已配对' : '尚未配对';
   return <article className={'device-entry ' + (device.blocked ? 'device-blocked' : '')} data-device-id={device.id}>
     <div className="device-row"><span className="avatar" aria-hidden="true">{label[0] || '?'}</span><div><strong>{label}</strong>{device.profile.alias && <small>对方名称：{device.name || '未命名设备'}</small>}<small>{relationship} · {deviceConnectionLabel(device)}</small><div className="device-tags">{device.profile.my_device && <span>我的设备</span>}{device.profile.pinned && <span>固定 · {device.profile.position}</span>}{device.always_accept && !device.blocked && <span>免确认接收</span>}</div><code>身份 {identity}</code></div>
       {kind === 'paired' && <button className="ghost" aria-label={'打开 ' + label + ' 的设备详情，身份 ' + identity} disabled={!available} onClick={event => onOpen(device.id, event.currentTarget)}>详情</button>}
       {kind === 'nearby' && <button className="secondary" aria-label={'请求添加 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => void run('lan-add-' + device.id, async () => { const result = await Backend.RequestLANPair(device.id); onLANResult?.({ name: device.name || '附近设备', server: result.server_state }); })}>请求添加</button>}
-      {kind === 'removed' && <span className="inline-actions">{pendingRevoke && !confirmRevoke && <button ref={retryButton} className="secondary" aria-label={'继续撤销 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => setConfirmRevoke(true)}>继续撤销</button>}<button className="secondary" aria-label={'允许重新添加 ' + label + '，身份 ' + identity} disabled={actionsDisabled || confirmRevoke} onClick={() => void run('allow-readd-' + device.id, () => Backend.UnblockDevice(device.id), '已允许重新添加；请重新发起配对')}>允许重新添加</button></span>}
+      {kind === 'blocked' && <button className="secondary" aria-label={'移出黑名单 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => void run('unblock-' + device.id, () => Backend.UnblockDevice(device.id), '已移出黑名单；请重新发起配对')}>移出黑名单</button>}
     </div>
-    {pendingRevoke && confirmRevoke && <div className="queue-notice device-remove-confirm" role="alert"><div><strong>继续撤销此设备？</strong><p>本机已移除该设备，服务端尚未确认。继续将再次提交删除请求，历史记录和已接收文件会保留。</p></div><div className="inline-actions"><button className="ghost danger" aria-label={'确认继续撤销 ' + label + '，身份 ' + identity} disabled={actionsDisabled} onClick={() => void run('retry-revoke-' + device.id, () => Backend.RemoveDevice(device.id), '已完成撤销同步').then(ok => { if (ok) setConfirmRevoke(false); })}>确认继续撤销</button><button autoFocus className="secondary" aria-label={'取消继续撤销 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => setConfirmRevoke(false)}>取消</button></div></div>}
+
   </article>;
 }
 
 function DeviceDetailDrawer({ device, run, op, onClose }: { device: DeviceInfo; run: CommandRunner; op: string; onClose: (reason: CloseReason) => void }) {
   const closeButton = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
-  const [confirmRemove, setConfirmRemove] = useState(false);
   const [submitProfile, setSubmitProfile] = useState<(() => void)>();
   const [profileSaving, setProfileSaving] = useState(false);
   useEffect(() => { closeButton.current?.focus(); }, []);
@@ -205,7 +195,7 @@ function DeviceDetailDrawer({ device, run, op, onClose }: { device: DeviceInfo; 
       <div className="device-detail-heading"><div><span className="section-kicker">设备详情</span><h2 id={'device-detail-title-' + device.id}>{label}</h2><code>身份 {identity}</code></div><button ref={closeButton} className="ghost" aria-label={'关闭 ' + label + ' 的设备详情'} onClick={() => onClose('close')}>关闭</button></div>
       <div className="device-detail-content"><DeviceEditor device={device} run={run} op={op} onSubmitReady={registerProfileSubmit} onSavingChange={setProfileSaving} /></div>
       <footer className="device-detail-footer">
-        {confirmRemove ? <div className="device-remove-confirm" role="alert"><div><strong>删除此设备？</strong><p>将撤销本机授权并停止未完成传输；历史记录和已接收文件会保留。</p></div><div className="inline-actions"><button className="ghost danger" aria-label={'确认删除 ' + label + '，身份 ' + identity} disabled={!!op} onClick={() => void run('remove-' + device.id, () => Backend.RemoveDevice(device.id), '设备已删除；服务不可用时会在恢复后继续同步').then(removed => { if (removed) onClose('removed'); })}>确认删除</button><button className="secondary" disabled={!!op} onClick={() => setConfirmRemove(false)}>取消</button></div></div> : <div className="device-detail-actions"><button type="button" className="primary" disabled={!!op || profileSaving || !submitProfile} onClick={() => submitProfile?.()}>保存设备偏好</button><button className="ghost danger" aria-label={'删除 ' + label + '，身份 ' + identity} disabled={!!op || profileSaving} onClick={() => setConfirmRemove(true)}>删除设备</button></div>}
+        <div className="device-detail-actions"><button type="button" className="primary" disabled={!!op || profileSaving || !submitProfile} onClick={() => submitProfile?.()}>保存设备偏好</button><button className="ghost" disabled={!!op || profileSaving} onClick={() => void run('block-' + device.id, () => Backend.BlockPeer(device.id), '已加入黑名单，将拒绝此设备连接').then(ok => { if (ok) onClose('removed'); })}>加入黑名单</button><button className="ghost danger" aria-label={'删除 ' + label + '，身份 ' + identity} disabled={!!op || profileSaving} onClick={() => void run('remove-' + device.id, () => Backend.RemoveDevice(device.id), '已删除设备，可重新发起配对').then(ok => { if (ok) onClose('removed'); })}>删除设备</button></div>
       </footer>
     </aside>
   </div>;

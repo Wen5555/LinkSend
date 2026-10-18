@@ -1,3 +1,14 @@
+## 2026-10-18 v0.6.1发布准备
+
+- 用户明确授权推送0.6.1；在现有修复分支同步产品常量、Wails/Windows/Mac/Share Extension/前端与打包workflow。复用上一轮四项功能验证，继续记录准确提交和全新包的CI/版本/来源/hash；不部署生产信令或恢复受限物理矩阵。
+- 修复源码与已验本地来源逐项匹配，备份未提交patch和新增文件于`.artifacts/release-061/`；原三个未跟踪目录保持。版本一致性与必要构建通过后提交/合并main，发布结果另记。
+
+## 2026-10-18 0.6.0后四项桌面工作流修复
+
+- 用户反馈后在`codex/fix-desktop-workflows`实现文件打开/定位、自动剪贴板原生监听与恢复即续期、删除与黑名单分离、统一收发队列/清理/退出设置/红点。修复源码与原0.6.0发布分开，未提交推送或覆盖Release。
+- 剪贴板暂停恢复回归在旧实现实际失败，立即续期后真实认证QUIC新文本到达；核心定向race、桌面完整race及119项前端通过。布局夹具1120/720无横向溢出；物理Windows↔Mac OS剪贴板/文件关联/新Mac包仍NOT_RUN。原A–E外部阻塞保持。
+- [ADR0013](adr/0013-desktop-transfer-workflows.md)与[实施记录](evidence/DESKTOP-060-WORKFLOW-FIXES.md)列出行为、命令与来源；当前修复留本地可审阅工作树。
+
 ## 2026-10-18 v0.6.0已合并main并发布
 
 - PR #9正常合并，准确源码`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`；[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)已公开并设Latest，tag与源码一致，包内版本0.6.0/协议V1。新包来自主分支run 39103713740，全部源码CI和三平台包成功，六项发布资产digest与本地SHA256一致。

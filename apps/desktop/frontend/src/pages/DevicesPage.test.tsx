@@ -8,7 +8,7 @@ import { DevicesPage, LANDiscoveryNotice } from './DevicesPage';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const backend = vi.hoisted(() => ({ PairDevice: vi.fn(), SwitchMembership: vi.fn(), ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })), RefreshLANDiscovery: vi.fn(async () => {}) }));
+const backend = vi.hoisted(() => ({ PairDevice: vi.fn(), SwitchMembership: vi.fn(), ClipboardGrants: vi.fn(), SetClipboardGrant: vi.fn(), RemoveDevice: vi.fn(), BlockPeer: vi.fn(), UnblockDevice: vi.fn(), SaveDeviceProfile: vi.fn(), MembershipRecoveryStatus: vi.fn(async () => ({ state: 'idle' })), RefreshLANDiscovery: vi.fn(async () => {}) }));
 vi.mock('../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app', () => backend);
 
 const run: CommandRunner = async (_key, action, _message, onError) => {
@@ -124,84 +124,44 @@ describe('设备目录和详情', () => {
     expect(status()).not.toContain('连接待验证');
   });
 
-  it('does not turn a removed device into a reachable peer from stale discovery or session evidence', () => {
+  it('keeps only explicit blacklists in the blocked directory and hides old removal tombstones', async () => {
+    backend.UnblockDevice.mockResolvedValue(undefined);
     const container = document.createElement('div'); document.body.append(container);
-    renderDevices(container, [makeDevice('removed-peer', { trusted: false, blocked: true, relationship: 'removed', service_state: 'pending_revoke_sync', nearby: true, online: true, connection_state: 'connected' })]);
-    const row = container.querySelector('article[data-device-id="removed-peer"]')!.textContent!;
-    expect(row).toContain('待同步撤销');
-    expect(row).toContain('已阻止连接');
-    expect(row).not.toMatch(/局域网可达|已连接|直连待检查/);
+    renderDevices(container, [makeDevice('forgotten', { trusted: false, blocked: true, relationship: 'removed' }), makeDevice('blacklisted', { trusted: false, blocked: true, relationship: 'blocked', nearby: true, online: true, connection_state: 'connected' })]);
+    expect(container.querySelector('article[data-device-id="forgotten"]')).toBeNull();
+    const row = container.querySelector('article[data-device-id="blacklisted"]')!;
+    expect(row.textContent).toContain('已加入黑名单');
+    expect(row.textContent).not.toContain('已连接');
+    click(row.querySelector('button'));
+    await settle();
+    expect(backend.UnblockDevice).toHaveBeenCalledExactlyOnceWith('blacklisted');
   });
 
-  it('confirms a pending revocation explicitly without allowing the device to rejoin', async () => {
+  it('deletes immediately and offers blacklisting as a separate command', async () => {
+    backend.ClipboardGrants.mockResolvedValue([]);
     backend.RemoveDevice.mockResolvedValue(undefined);
-    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+    backend.BlockPeer.mockResolvedValue(undefined);
     const container = document.createElement('div'); document.body.append(container);
-    const root = renderDevices(container, [pending]);
-    expect(container.textContent).toContain('待同步撤销');
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
-    expect(backend.RemoveDevice).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(container.querySelector('button[aria-label^="取消继续撤销 "]'));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="取消继续撤销 "]'));
-    expect(backend.RemoveDevice).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(container.querySelector('button[aria-label^="继续撤销 "]'));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]'));
+    renderDevices(container, [makeDevice()]);
+    click(openButton(container)); await settle();
+    click(container.querySelector('button[aria-label^="删除 "]')); await settle();
+    expect(backend.RemoveDevice).toHaveBeenCalledExactlyOnceWith('peer');
+    expect(backend.BlockPeer).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    click(openButton(container)); await settle();
+    click([...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '加入黑名单') ?? null);
     await settle();
-    expect(backend.RemoveDevice).toHaveBeenCalledExactlyOnceWith(pending.id);
-    expect(backend.UnblockDevice).not.toHaveBeenCalled();
-    const synced = { ...pending, service_state: 'revoked' };
-    act(() => root.render(<DevicesPage devices={[synced]} identityID="self" name="本机" run={run} op="" available />));
-    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeNull();
-    expect(container.textContent).not.toContain('待同步撤销');
-    expect(container.querySelector('button[aria-label^="允许重新添加 "]')).toBeTruthy();
+    expect(backend.BlockPeer).toHaveBeenCalledExactlyOnceWith('peer');
   });
 
-  it('keeps a failed revocation pending and clears stale confirmation when the status changes', async () => {
-    backend.RemoveDevice.mockRejectedValue(new Error('SIGNALING_UNREACHABLE'));
-    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
+  it('puts LAN discovery under pairing and keeps manual IP folded away', () => {
     const container = document.createElement('div'); document.body.append(container);
-    const root = renderDevices(container, [pending]);
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]'));
-    await settle();
-    expect(backend.RemoveDevice).toHaveBeenCalledTimes(1);
-    expect(backend.UnblockDevice).not.toHaveBeenCalled();
-    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeTruthy();
-    act(() => root.render(<DevicesPage devices={[{ ...pending, service_state: 'revoked' }]} identityID="self" name="本机" run={run} op="" available />));
-    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} op="" available />));
-    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
-    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeTruthy();
-  });
-
-  it.each([{ available: false, op: '' }, { available: true, op: 'another-operation' }])('disables pending revocation when the backend is unavailable or busy: %j', state => {
-    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
-    const container = document.createElement('div'); document.body.append(container);
-    const root = renderDevices(container, [pending]);
-    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} {...state} />));
-    const retry = container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]');
-    expect(retry?.disabled).toBe(true);
-    click(retry);
-    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
-    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} op="" available />));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
-    act(() => root.render(<DevicesPage devices={[pending]} identityID="self" name="本机" run={run} {...state} />));
-    const confirm = container.querySelector<HTMLButtonElement>('button[aria-label^="确认继续撤销 "]');
-    expect(confirm?.disabled).toBe(true);
-    click(confirm);
-    expect(backend.RemoveDevice).not.toHaveBeenCalled();
-  });
-
-  it.each([{ group_id: 'new-group' }, { incarnation: 'new-incarnation' }])('discards confirmation when the same identity changes its membership: %j', membership => {
-    const pending = makeDevice('pending-target', { blocked: true, trusted: false, relationship: 'removed', service_state: 'pending_revoke_sync' });
-    const container = document.createElement('div'); document.body.append(container);
-    const root = renderDevices(container, [pending]);
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="继续撤销 "]'));
-    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeTruthy();
-    act(() => root.render(<DevicesPage devices={[{ ...pending, ...membership }]} identityID="self" name="本机" run={run} op="" available />));
-    expect(container.querySelector('button[aria-label^="确认继续撤销 "]')).toBeNull();
-    expect(container.querySelector('button[aria-label^="继续撤销 "]')).toBeTruthy();
-    expect(backend.RemoveDevice).not.toHaveBeenCalled();
+    renderDevices(container, [makeDevice('nearby', { nearby: true, trusted: false })]);
+    const pairing = container.querySelector('.pairing-form')!;
+    expect(pairing.querySelector('article[data-device-id="nearby"]')).toBeTruthy();
+    const manual = pairing.querySelector('details.manual-lan-discovery') as HTMLDetailsElement;
+    expect(manual.open).toBe(false);
+    expect(manual.querySelector('summary')?.textContent).toContain('没有想要的设备');
   });
 
   it('keeps a large paired directory to ten DOM rows and removes the exact searched identity', async () => {
@@ -217,7 +177,6 @@ describe('设备目录和详情', () => {
     expect(container.querySelector('article[data-device-id="peer-24"]')).toBeTruthy();
     click(openButton(container)); await settle();
     click(container.querySelector<HTMLButtonElement>('button[aria-label^="删除 同名设备"]'));
-    click(container.querySelector<HTMLButtonElement>('button[aria-label^="确认删除 同名设备"]'));
     await settle();
     expect(backend.RemoveDevice).toHaveBeenCalledWith(target.id);
   });
