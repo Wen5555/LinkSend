@@ -154,6 +154,10 @@ export function EnqueueContent(request: app$0.EnqueueContentRequest): $Cancellab
     return $Call.ByID(3042055810, request);
 }
 
+export function EnqueueQuickSend(revision: number, waitForPeer: boolean): $CancellablePromise<app$0.QueueItem> {
+    return $Call.ByID(2822745730, revision, waitForPeer);
+}
+
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
     return $Call.ByID(2230930606, records);
 }
@@ -214,6 +218,14 @@ export function NetworkInterfaces(): $CancellablePromise<$models.NetworkInterfac
     return $Call.ByID(1900295361);
 }
 
+/**
+ * Revision is a request to show one panel in the existing process/window. It
+ * does not enqueue work and does not mutate either persistent draft.
+ */
+export function OpenQuickSend(): $CancellablePromise<void> {
+    return $Call.ByID(783052630);
+}
+
 export function OpenReceivedURL(taskID: string): $CancellablePromise<app$0.ContentActionResult> {
     return $Call.ByID(240213127, taskID);
 }
@@ -272,6 +284,10 @@ export function PreviewReceivedText(taskID: string): $CancellablePromise<app$0.C
 
 export function ProbeLANAddress(address: string): $CancellablePromise<void> {
     return $Call.ByID(4182654780, address);
+}
+
+export function QuickSendDraft(): $CancellablePromise<app$0.SendDraft> {
+    return $Call.ByID(834672985);
 }
 
 export function QuitApplication(): $CancellablePromise<void> {
@@ -345,6 +361,10 @@ export function SavePreferences(next: $models.DesktopPreferences): $CancellableP
  */
 export function SavePreferencesSection(section: string, expectedRevision: number, patch: $models.DesktopPreferences): $CancellablePromise<$models.DesktopPreferences> {
     return $Call.ByID(3171888101, section, expectedRevision, patch);
+}
+
+export function SaveQuickSendDraft(draft: app$0.SendDraft): $CancellablePromise<app$0.SendDraft> {
+    return $Call.ByID(955677608, draft);
 }
 
 export function SaveReceivedImage(taskID: string): $CancellablePromise<app$0.ContentActionResult> {

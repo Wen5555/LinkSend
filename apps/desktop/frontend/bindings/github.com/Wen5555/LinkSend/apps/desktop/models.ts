@@ -18,6 +18,7 @@ export interface BackgroundOptions {
 }
 
 export interface BackgroundStatus {
+    "quick_send_revision"?: number;
     "options": BackgroundOptions;
     "tray_available": boolean;
     "sleep_inhibited": boolean;

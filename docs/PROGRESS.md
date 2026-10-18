@@ -1,3 +1,9 @@
+## 2026-10-18 N4 托盘快速发送候选
+
+- 托盘/菜单栏入口、typed事件/轮询补偿、独立quick持久草稿与轻量面板完成；Go按保存revision稳定入队，8并发/清空/重启不重复，main保持。取消保留选择，最近设备排序不增信任，离线等待与撤权门槛沿用原队列。
+- 两Go模块/核心off/vet/build、完整app race192.535s、108前端tests/typecheck/lint/build通过；真实QUIC中文文件/实际接收/主草稿不变通过。浏览器960浅色/1100深色、分页/键盘/取消重开通过，真实浏览器发现的异步select目标回退已修复并补测试。
+- 绑定99methods/66models/2events，任务库11/wire保持；[ADR0012](adr/0012-tray-quick-send.md)及[证据](evidence/DESKTOP-AE-QUICK-SEND.md)。Windows托盘/Mac菜单栏准确包点击、后台唤起与其他原生/物理缺项继续，Goal active。
+
 ## 2026-10-18 N3 正文预算候选
 
 - 进程共享文件正文预算、分类CAS偏好、KiB/MiB界面与动态生效完成；突发有界、恢复/应用级重传计费，控制/自动剪贴板独立，不宣称精确UDP线速。任务库11/wire保持，旧偏好默认不限速；旧程序忽略可选限速字段。

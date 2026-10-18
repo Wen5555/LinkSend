@@ -341,6 +341,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .file-send-limit .toggle-row small { color: var(--muted); margin-top: .3rem; }
 .file-send-limit .toggle-row input { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; }
 .file-send-limit .picker-row { flex-wrap: wrap; align-items: flex-start; }
+.quick-send-backdrop { position: fixed; inset: 0; z-index: 1100; background: #17203360; display: grid; place-items: center; padding: 18px; }
+.quick-send-dialog { width: min(520px,100%); max-height: calc(100vh - 36px); overflow-y: auto; }
+.quick-send-dialog .section-heading { margin-bottom: 12px; }
+.quick-send-dialog .file-list { max-height: 180px; overflow-y: auto; min-height: 60px; }
+.quick-send-dialog .file-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-send-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+@media (prefers-color-scheme: dark) {
+  .quick-send-dialog { background: #2c2c2e; }
+  .quick-send-dialog .field-label input, .quick-send-dialog .field-label select,
+  .quick-send-dialog .field-label input:focus, .quick-send-dialog .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }
+}
 @media (prefers-color-scheme: dark) {
   .file-send-limit .field-label input, .file-send-limit .field-label select,
   .file-send-limit .field-label input:focus, .file-send-limit .field-label select:focus { background: var(--bg); color: var(--text); border-color: var(--line-strong); }

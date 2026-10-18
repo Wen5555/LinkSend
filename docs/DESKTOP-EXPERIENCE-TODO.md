@@ -9,15 +9,17 @@
 | A LAN 独立主流程 | 端口/reader/记忆修复；刷新合并/抖动、设备页触发/provider状态与早期host候选完成 | 新Pion计时RED→GREEN、定向race三轮、92前端与两模块通过 | 原发现模块10/10；Mac反控FAIL | 2b9ee1c五项CI及三平台包success | [证据](evidence/DESKTOP-AE-LAN-RECOVERY.md)：准确原生独立旅程继续 |
 | B 新信令/客户端恢复/备份 | 服务/备份上线；显式恢复与schema3退休/UI候选完成 | 核心off/desktop/90前端/兼容/完整race通过 | 信令/备份恢复PASS；客户端原生待验；新STUN本机PASS、外部待授权；Mac公网FAIL | e43043d五项CI及三平台包success | [客户端证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)：准确包/双NAT缺项保留 |
 | B2 LAN 性能/剪贴板/撤销/系统入口 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 固定 A 的修复前物理基线，保留相同 fixture 和计时口径 |
-| C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过；JP路径/链接5项无SKIP | 浏览器夹具通过；原生/物理待验 | 0499cb5五项CI及三平台包success | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：准确包/物理缺项保留，继续N2 |
-| C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过 | 浏览器元数据夹具通过；原生/物理待验 | 77b831b四项源码CI success；包Windows旧流测试FAIL，两Mac成功 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：缓存连接首offer前过期RED→GREEN，修复同步后核对CI；N3实施中 |
-| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面候选完成 | 假时钟/两模块/完整race/101前端；真实QUIC粗略速率、剪贴板并存和控制通过 | 浏览器夹具通过；原生/物理待验 | 本轮待阶段推送 | [证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：核对CI与准确包，继续N4 |
-| D / N4 托盘快速发送 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 复用 Go owner，独立于主草稿 |
+| C / N1 目录预设 | Go统一筛选/预览、schema10草稿/队列、恢复v2及界面候选完成 | 完整core/desktop/app+transfer race/95前端/旧库拒绝与QUIC恢复通过；JP路径/链接5项无SKIP | 浏览器夹具通过；原生/物理待验 | 0499cb5五项CI及三平台包success | [证据](evidence/DESKTOP-AE-SOURCE-SELECTION.md)：同提交准确包/物理缺项转E |
+| C / N2 多设备分发 | Go原子批次、schema11目标/子项、取消/重启屏障与界面候选完成 | 完整core/desktop/app race、100前端、旧库拒绝与真实QUIC三目标通过；首offer过期RED→GREEN | 浏览器元数据夹具通过；原生/物理待验 | 290c828五项CI/三平台包success；77b831b原Windows失败保留 | [证据](evidence/DESKTOP-AE-DEVICE-BATCHES.md)：同提交准确包/物理缺项转E |
+| D / N3 文件正文限速 | 共享可取消预算、动态偏好CAS与KiB/MiB界面候选完成 | 假时钟/两模块/完整race/101前端；真实QUIC粗略速率、剪贴板并存和控制通过 | 浏览器夹具通过；原生/物理待验 | 038e481五项CI/三平台包success | [证据](evidence/DESKTOP-AE-FILE-BUDGET.md)：同提交准确包/物理缺项转E |
+| D / N4 托盘快速发送 | 托盘/菜单栏入口、quick草稿/稳定Go入队与轻量面板候选完成 | 两模块/完整app race/108前端与真实QUIC/重启幂等通过 | 浏览器键盘/布局通过；原生托盘与物理待验 | 本轮待阶段推送 | [证据](evidence/DESKTOP-AE-QUICK-SEND.md)：核对CI/准确包，然后原生入口与LAN矩阵 |
 | E 同提交候选/最终回归/文档 | 待实施 | NOT RUN | NOT RUN | NOT RUN | 按阶段验证/提交/推送，同一 Draft PR 交付 |
 
 阶段推送已授权；不 force-push、不自动合并、不正式发布。只有目标全部必交付证据满足后才标 complete。下面规划与旧里程碑保留原日期及证据边界，以上为本轮唯一当前工作包状态。
 
-最近源码同步：`77b831bd8897c5e567a706af82ffba9cd49bfba3`，远端一致；四项源码CI success、两Mac包success，Windows包旧远端取消测试FAIL，run39079813168保留。首offer前缓存连接过期已有确定RED→GREEN和组合race五轮，修复另阶段同步；N3正文预算/偏好/界面与实QUIC样本本地已实现，完整检查和界面收束中。下一动作是修复CI并完成N3阶段推送，再N4。JP生产组件/证据保留，宿主规则待授权缺项不变。
+最近源码同步：`038e48190427e898a6934c18804b1fd702ba7e9d`，远端一致，五项CI/三平台包success；N2修复290c828同样全部success，原77b831b失败保留。N4两模块/core off/vet/build、完整race192.535s、108前端与实际QUIC通过，当前收束阶段提交。下一动作：核对N4源码CI与三平台包，下载同提交候选验证来源/hash，继续准确Windows/Mac托盘、LAN独立配对/双向文件、恢复/剪贴板/B2与最终E。宿主规则/JP UDP3478补充授权仍待答，缺项不变。
+
+本地终态：N2/N3/N4浏览器夹具已停止，19346无owned Vite监听，临时入口/元数据配置移除；最新Go/前端本地作业已终态。原.playwright-cli与ios/linux保留，未更改日常profile、OS剪贴板或宿主网络。阶段记录已通过Orion writer备份/回读/收据和增量索引，项目/index SHA一致；其余无关pending未处理。
 
 运行现场：Mac inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-mac-20261018-01`、新机 inspect job `/tmp/codex-ssh/job-linksend-ae-inspect-jp-20261018-01` 均 exit0。无产品/剪贴板 owned 进程；用户睡前明确允许自动处理本轮 LinkSend Windows“公用网络”弹窗，当前未出现。其他宿主防火墙/路由/代理变更仍不授权。
 

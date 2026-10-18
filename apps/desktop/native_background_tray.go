@@ -10,6 +10,7 @@ import (
 )
 
 type nativeTrayCallbacks struct {
+	QuickSend      func()
 	Show           func()
 	Inbox          func()
 	PauseQueue     func(bool)
@@ -42,6 +43,7 @@ func newNativeTray(host *application.App, iconPNG []byte, callbacks nativeTrayCa
 	handle.tray.SetIcon(append([]byte(nil), iconPNG...))
 	handle.tray.SetTooltip("LinkSend")
 	handle.menu.Add("显示 LinkSend").OnClick(func(*application.Context) { handle.invoke(callbacks.Show) })
+	handle.menu.Add("快速发送文件").OnClick(func(*application.Context) { handle.invoke(callbacks.QuickSend) })
 	handle.menu.Add("打开收件箱").OnClick(func(*application.Context) { handle.invoke(callbacks.Inbox) })
 	handle.menu.AddSeparator()
 	// A normal menu item deliberately does not toggle a native checkbox before

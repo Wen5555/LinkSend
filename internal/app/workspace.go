@@ -134,6 +134,23 @@ func (s *Service) Workspace() (WorkspaceSnapshot, error) {
 	return WorkspaceSnapshot{Epoch: s.epoch, Revision: revision, Draft: draft, Queue: queue, Batches: batches, Tasks: s.workspaceTasks(), QueuePaused: paused, PersistenceAvailable: persistent}, nil
 }
 
+func (s *Service) SendDraft(id string) (SendDraft, error) {
+	done, err := s.beginWorkspaceWork()
+	if err != nil {
+		return SendDraft{}, err
+	}
+	defer done()
+	id, err = normalizeDraftID(id)
+	if err != nil {
+		return SendDraft{}, err
+	}
+	draft, err := s.store.Draft(id)
+	if errors.Is(err, ErrMetadataNotFound) {
+		return SendDraft{ID: id, Paths: []string{}}, nil
+	}
+	return draft, err
+}
+
 func (s *Service) SaveDraft(draft SendDraft, workingDir string) (SendDraft, error) {
 	done, err := s.beginWorkspaceWork()
 	if err != nil {

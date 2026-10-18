@@ -40,3 +40,5 @@ N2源码`77b831bd8897c5e567a706af82ffba9cd49bfba3`已推送且远端SHA一致。
 原始CI没有足够时间线确认其准确关连接者。进一步故障夹具在缓存连接检查后、首个offer前令对端关闭，确定复现同一opening_stream/DIRECT_FAILED（`pool-expiry-red.log`）。修复仅在OpenStreamSync失败且连接已关闭、context仍有效时，最多新建一次认证连接，固定原authorization generation；尚无offer/body，不重放已发起的传输。取消/撤权不借新授权，发送开始后仍走原恢复语义。
 
 故障夹具、原远端取消测试与N3真实限速/控制组合race五轮PASS（58.504s）；补充固定原generation后另有最终定向回归。该修复另作源码提交、核对CI，不能把原失败run改称success。原生Windows/Mac RPC、物理多目标与双NAT均未由上述夹具证明；N3/N4和其他A–E缺项继续。
+
+修复提交`290c82862c9390ef180744dde4c31262e1dddd3d`已推送、远端一致，最终定向race三轮9.410s。core push/PR39080523720/39080527175、desktop push/PR39080523684/39080527191及包39080523740全部success，三平台包job均success。原77b831b的失败保留；该后续准确构建才恢复阶段包检查。

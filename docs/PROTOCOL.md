@@ -1,5 +1,9 @@
 # Protocol
 
+## 2026-10-18 托盘快速发送
+
+任务库11与wire保持。quick为现有send_drafts的独立本地行；Go命令按精确revision与等待选择读取草稿，稳定请求收据在清空/重启后可核对，不能借主草稿或新授权重发。typed quick-send:open及BackgroundStatus revision只传面板唤起元数据，不传正文。边界见[ADR0012](adr/0012-tray-quick-send.md)。
+
 ## 2026-10-18 本地文件正文预算
 
 wire与任务库11保持，正文帧仍为相同长度头与字节。进程共享预算仅延迟文件正文分段写入，不限制ICE/QUIC/控制或自动剪贴板；file fallback与应用级文件块重传计费。桌面format1增加可选file_send_bytes_per_second，缺省0；旧程序忽略该字段而不具有限速，不能将回退解释为保留该能力。数值/CAS/生效/突发边界见[ADR0011](adr/0011-process-file-body-budget.md)。

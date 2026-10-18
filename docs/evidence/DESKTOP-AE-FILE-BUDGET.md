@@ -32,3 +32,7 @@
 Playwright独立session ae-budget、生产SettingsPage/FileSendLimit/CSS与明确mock偏好；960×640浅色、1100×720深色无水平溢出，保存按钮在视口内。空值显示错误并禁保存；Tab/字母/Enter切换单位保留精确值，MiB↔KiB换算核对。初次深色焦点select背景白、低对比，已以局部主题token修复并重新截图查看；原始失败截图保留，最终截图在`output/playwright/ae-budget-20261018/*-fixed.png`，不入Git。
 
 0 errors/1 warning，warning为Wails浏览器模式提示；未运行原生保存RPC。owned浏览器/Vite及两份临时入口收尾后核对无监听；原生Windows/Mac、物理限速/剪贴板和A–E其他缺项仍继续。日志/profile/原始正文全部位于忽略的本地artifact，不提交。
+
+## 阶段来源
+
+源码`038e48190427e898a6934c18804b1fd702ba7e9d`已推送，远端一致。core push/PR39080943294/39080947127、desktop push/PR39080943298/39080946995、包39080943292均success；Windows/Mac arm64/amd64三个job均success。构建不等于准确包物理通过。N2/N3的Orion writer收据linksend-ae-n2-n3-038e481-20261018-01和增量索引已核验，项目文件/index SHA一致；后续包成功为本节新增观察。
