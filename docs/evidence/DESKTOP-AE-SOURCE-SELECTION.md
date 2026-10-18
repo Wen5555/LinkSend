@@ -41,3 +41,5 @@ Playwright独立session `ae-selection`、生产SourceSelectionPanel/CSS和明确
 实际5项规则/计数/预览/链接测试全部PASS、无SKIP，包括`TestSourceSelectionNeverFollowsSymlink`与`TestRootRejectsEscapingLink`；脚本见本地`n1-linux-path-tests.sh`，SHA256 `b563496bba988f8cb583db7a061ddb3ff361ee1164022693bdd211496cb94a63`。job `/tmp/codex-ssh/job-linksend-ae-n1-paths-20261018-01`，request同名、exit0。测试无网络监听，Go清理自己的临时子目录后空TMPDIR及临时输出已移除，binary与job证据保留；不触碰信令/控制库/STUN/宿主规则。
 
 浏览器owned最终PID160740与Vite exec78883均已结束，19346无监听，两份`ae-source-selection-20261018`临时入口已移除。根`.playwright-cli/`及原ios/linux未跟踪内容保持。
+
+准确包增量：6edddad Windows原生源码预设预览包含1文件/2目录/1MiB，排除1文件/1目录/23B；同草稿两个CLI目标实际接收集合/中文空目录/hash均通过。三个原生picker取消修复也已准确包复验，草稿与接收偏好保持；物理/原生恢复仍另验。包与精确收据见[原生检查点](DESKTOP-AE-NATIVE-CHECKPOINT.md)。

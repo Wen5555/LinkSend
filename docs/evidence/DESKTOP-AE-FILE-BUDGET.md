@@ -36,3 +36,5 @@ Playwright独立session ae-budget、生产SettingsPage/FileSendLimit/CSS与明�
 ## 阶段来源
 
 源码`038e48190427e898a6934c18804b1fd702ba7e9d`已推送，远端一致。core push/PR39080943294/39080947127、desktop push/PR39080943298/39080946995、包39080943292均success；Windows/Mac arm64/amd64三个job均success。构建不等于准确包物理通过。N2/N3的Orion writer收据linksend-ae-n2-n3-038e481-20261018-01和增量索引已核验，项目文件/index SHA一致；后续包成功为本节新增观察。
+
+准确包增量：6edddad Windows原生保存256KiB/s、实际偏好262144B/s，顺序批次向两个CLI各发1MiB，实际接收hash一致；transferring→verifying分别3.979076/3.942472s，仅为含读写/校验开销的loopback粗略口径，非UDP线速/物理吞吐。动态活动任务与OS剪贴板原生矩阵仍待验。来源、双方快照和收尾见[原生检查点](DESKTOP-AE-NATIVE-CHECKPOINT.md)。

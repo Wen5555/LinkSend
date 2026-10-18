@@ -41,3 +41,65 @@ Windows UI只用computer-use的 `@oai/sky`。仅文本状态不足以给picker�
 Windows按PID156888/准确EXE核对后停止，fixture155472按路径核对并写stop-fixture正常退出；CLI146712此前完成退出。随后回读三个PID均无进程，10473无监听。源、接收文件、profile、证据保留。
 
 Mac按owned-pid/准确路径停止36699，job `/tmp/codex-ssh/job-linksend-ae-stop-native-f23383d-20261018-01` exit0，`OWNED_APP_STOPPED=true CLIPBOARD_MASTER=false RECEIVED_EMPTY=true`。辅助功能关闭、检查返回 `ACCESSIBILITY_DISABLED_NO_INPUT`，未操作Mac UI/启用权限；菜单栏、配对、文件、OS剪贴板仍NOT RUN。
+
+## 6edddad 五项 CI、四资产与原生复验
+
+修复提交 `6edddaddc078868171c613d62d61bedcbf8ee8f9` 已推送且远端一致。core push/PR `39084134447/39084137758`、desktop push/PR `39084134466/39084137848`、[packages39084134437](https://github.com/Wen5555/LinkSend/actions/runs/39084134437) 均success，Windows amd64/Mac arm64/amd64 job全部success。修复没有改前端或协议，沿用N4的108前端测试/完整app race，另补本节picker/核心断言验证。
+
+先在Windows job117547045714已success时单独下载Windows artifact，核对外层SHA256 `f14c87f41594d5df0f93616b0e7a86c8181e0bd9e7a82cd76042803edabd4242`、内层资产及EXE/元数据；当时父workflow仍运行，未宣称整体成功。随后整个run成功，正式fetch/verify脚本再次核对全部四资产、COMMITTED/clean/source SHA/BUILD-INFO/0.5.0。报告 `.artifacts/ae-20261018/pkg-6edddad/PACKAGE-VERIFICATION.json`。
+
+| 资产 | SHA256 |
+|---|---|
+| Windows portable | `ede9499662fda6459b206547a6ed10cbd9089395ce0a166ae36321159c5d3aee` |
+| Windows installer | `efa7517619bf232e2d15b8d8980ab88b645bc51baeab0cd948e2f31f0f072a79` |
+| Mac arm64 DMG | `aca50c8cc70568d367c1e8d3807c6f61bdefa96c2438c899dc8007d7ff131f47` |
+| Mac amd64 DMG | `573b005d7584a6ed1c10a0809fc21ed385cb70e3ccff1a9ae8ad21407a748d0f` |
+
+Windows实际运行EXE SHA256 `223d777738828b70cd7ea709a22f6ba6bcf9008a7bd8c9a370818c38d1635934`，owned PID150828。新现场 `native-6edddad-windows`，新配对fixture149664/10729，不重跑旧initializer，不复用日常profile。
+
+### 三个原生 picker 取消
+
+真实系统发送目录、发送文件、接收目录窗口均实际打开并点击取消。逐次读取父窗、检查截图/控件，无红色错误或RuntimeError。主草稿整行（含revision1/来源/peer/规则/更新时间）精确不变，接收偏好文件字节不变。`native-picker-fixed-receipt.json` PASS；f23383d旧UX失败仍保留。
+
+一次文件picker仅文本观察后输入被工具以geometry unavailable拒绝；重新激活/截图观察后同一取消成功。没有把工具拒绝判为产品失败，也未用RPC代替原生窗口。
+
+### N1/N2/N3 同一准确包原生闭环（loopback）
+
+通过正常邀请加入第二CLI目标，桌面是profile A唯一owner；两接收CLI为独立profile B/C，显式 `receive --allow-loopback --auto-accept --evidence --wait-timeout 20m`，所有非loopback接口排除。不是三台物理机。
+
+原生保存256KiB/s，偏好revision2/实际262144B/s/clipboard=false。CLI路径入口选入专用batch-project，界面选源码预设，预览含1文件/2目录/1MiB、排除1文件/1目录/23B。选择两个已配对目标并点击“分发给2台设备”，精确草稿revision4原子入队为一个批次 `01f0a40fb0b915d2f1a05814f17251cc`、两个不同目标子项，均completed。
+
+| 目标 | transfer ID | transferring→verifying | 结果 |
+|---|---|---|---|
+| B | `060054af73a502b9a4c7df7369782570` | 3.979076s | 双方完成、1MiB确认落盘 |
+| C | `e0dd77dd44408890d592d74baa8142aa` | 3.942472s | 双方完成、1MiB确认落盘 |
+
+sender均bilateral_confirmed=true、verified/committed1048576B、retransmitted0、quic/direct_unknown、relay=false。第一项ended早于第二项started，实际顺序派发。上述阶段口径包含读写/校验开销，有限突发存在，不是UDP线速或物理吞吐基准。
+
+两实际目标 `batch-project/main.bin` SHA256均与源一致：`631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769`。每个提交目录只有一个main.bin，中文空目录存在、node_modules不存在。隐藏 `.linksend-<transfer>` 中保留预期的恢复state/part，不当作额外提交副本。收据 `native-batch-budget-receipt.json`；实际只读断言/接收文件hash/双方快照校验exit0。
+
+### 单实例和后台边界
+
+原生第二次 `--send-files -- held-main.txt` 进程157936 exit0，复用原owner150828。点击主窗关闭后，窗口从sky清单消失、owned进程仍运行；无参数单实例唤回153616 exit0，原窗口重新出现。主草稿整行revision6/held-main路径/目标/规则/更新时间保持，仅有一个准确EXE owner。
+
+`Super_L+b` 后sky仍不暴露Windows通知区域/Explorer，未盲按其他图标；真实托盘“快速发送”与quick面板仍 **NOT RUN**，没有用后台API模拟。以上只证明普通后台关闭/单实例唤回，`native-background-receipt.json`单列该边界。
+
+### 同提交 Mac 启动与新 LAN 现场限制
+
+经已验证SSH条目上传同提交arm64 DMG，远端先核对精确SHA256，再只读挂载/ditto/深度严格codesign/lipo/usage description。LaunchServices启动新隔离profile，job `/tmp/codex-ssh/job-linksend-ae-native-6edddad-20261018-01` exit0。owned PID37667，TCP54065/UDP53318；实际EXE SHA256 `a7f79d34f86ad488301ba412780bad1dc486574966f33b4dd39202f616c1a0b0`。未操作Mac UI或开启权限；Mac Intel仅包构建/核验，物理启动NOT RUN。
+
+随后拟启动新Windows隔离LAN profile（精确同一包，外部信令https://127.0.0.1:1/STUN127.0.0.1:9，clipboard=false），以测试准确双机独立发现/同意。工具自动审批在CreateProcess前拒绝整条启动命令，仅返回 `blocked by policy`、无细分原因。只读复核新scene目录不存在；该原生LAN旅程为 **NOT RUN / BLOCKED_BY_EXECUTION_POLICY**。未换入口重试/绕过；没有据此推断产品网络故障。
+
+### 本批收尾
+
+Windows150828/fixture149664/CLI159128与156456均已退出，10729无监听；task SQLite quick_check=ok、剪贴板grants0、非completed队列0，源/接收/草稿/profile/恢复证据保留。Mac按准确路径停止37667，job `/tmp/codex-ssh/job-linksend-ae-stop-native-6edddad-20261018-01` exit0，clipboard=false/received empty，挂载由启动脚本清理。没有公用网络弹窗出现，未改宿主防火墙/路由/代理或Mac权限。A/B/B2原生/物理与双NAT、N4系统入口仍未完成，Goal active。
+
+用户随后选择在Mac授权现有控制方式后继续。只读复核job `/tmp/codex-ssh/job-linksend-ae-mac-accessibility-20261018-02` exit0仍返回 `UI_AUTOMATION_ENABLED=false`，已请求开启完成后的通知；该选择没有被当作权限已生效的证明，未自动开启或输入Mac UI。
+
+## 用户启用 Mac 辅助功能后的原生续验（进行中）
+
+用户明确回复已开启，再以新只读job `.../job-linksend-ae-mac-accessibility-20261018-03` 取得 `UI_AUTOMATION_ENABLED=true`。不重跑initializer，核对原app EXE hash/codesign和旧进程已停后，仅重启同一准确app/既有隔离profile，owned PID38062；clipboard仍false。启动后读取脚本变量rows与System Events保留字冲突，job `.../job-linksend-ae-mac-restart-ui-6edddad-20261018-01` exit1，但启动收据已产生，未重复启动。
+
+独立read job `.../job-linksend-ae-mac-ui-read-6edddad-20261018-01` exit0，读取一个LinkSend窗口和两条菜单栏；第2条唯一item为status menu、AXPress动作。将准确进程置前后，`.../job-linksend-ae-mac-front-ax-6edddad-20261018-01` exit0，主窗75个AX元素包含真实Wails前端的传输、设置、目录预设等。背景读取起初只有6个window chrome元素，不将它判成空白产品故障。
+
+菜单栏AXPress实际唤起主窗；菜单未展开。按真实AX位置698,4/尺寸40×24执行右键输入后，仍未观察到status item下的菜单；不能声称quick入口已通过，也未直接调用Go API替代。原生Wails beta.18源码确认左键Show/右键菜单的边界；进一步脚本语法及CFArray桥接读取失败仅为自动化问题。已请用户在Mac菜单栏右键LinkSend并保持菜单展开，再根据真实菜单内容继续。当前owned PID38062仍运行，唯一TODO记录恢复入口，后续需按准确路径收尾。

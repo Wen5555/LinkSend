@@ -42,3 +42,5 @@ N2源码`77b831bd8897c5e567a706af82ffba9cd49bfba3`已推送且远端SHA一致。
 故障夹具、原远端取消测试与N3真实限速/控制组合race五轮PASS（58.504s）；补充固定原generation后另有最终定向回归。该修复另作源码提交、核对CI，不能把原失败run改称success。原生Windows/Mac RPC、物理多目标与双NAT均未由上述夹具证明；N3/N4和其他A–E缺项继续。
 
 修复提交`290c82862c9390ef180744dde4c31262e1dddd3d`已推送、远端一致，最终定向race三轮9.410s。core push/PR39080523720/39080527175、desktop push/PR39080523684/39080527191及包39080523740全部success，三平台包job均success。原77b831b的失败保留；该后续准确构建才恢复阶段包检查。
+
+准确包增量：6edddad五项CI/三平台包和四资产核验通过。Windows原生界面从同一筛选草稿选择两个正常配对的CLI目标，实际一次创建一批两个子项并顺序Pion/QUIC完成，各1MiB/中文空目录/排除集合/hash和双方确认通过；不是三台物理机或完整原生失败/恢复矩阵。精确ID、时序、包来源和资源收尾见[原生检查点](DESKTOP-AE-NATIVE-CHECKPOINT.md)。

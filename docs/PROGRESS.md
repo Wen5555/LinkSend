@@ -1,3 +1,9 @@
+## 2026-10-18 6edddad 准确包复验
+
+- 取消修复6edddad五项CI/Windows与Mac两架构包全部success，四资产完整核验；准确Win三个原生picker取消无红色错误，草稿整行/接收偏好字节不变，f23383d旧失败保留。见[本轮原生证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
+- 同准确Win包原生选择源码预设/两个已配对CLI，产生一个批次两个子项、顺序真实Pion/固定身份QUIC完成；各1MiB/hash/中文空目录/排除集合及双方确认通过。256KiB/s原生设置持久，正文阶段3.979/3.942s为loopback粗略口径。后台关闭后单实例唤回、主草稿精确保持；真实托盘quick入口仍工具未暴露，不能替代。
+- 同提交Mac arm64实际启动/签名/架构/hash通过，未操作UI。新Win独立LAN现场启动被工具自动审批在CreateProcess前拒绝，仅blocked by policy/无细分原因，scene目录不存在，未绕过；该旅程NOT RUN。Win/Mac owned包/fixture全停止、clipboard=false、文件保留，Goal active及外部缺项保持。
+
 ## 2026-10-18 准确包原生检查点与取消选择器修复
 
 - f23383d五项CI/三平台包success，四资产/BUILD-INFO/COMMITTED/clean/hash核验通过；准确Windows包完成原生N3设置、N1预览/CLI入口/真实QUIC接收集合与hash。Mac准确arm64包启动/签名核验通过，辅助功能关闭，UI/配对未验；托盘/菜单栏及物理文件不冒充通过。见[证据](evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)。
