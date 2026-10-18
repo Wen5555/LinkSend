@@ -97,7 +97,11 @@ type ReceiveOptions struct {
 	// StorageReady observes engine-owned handles after the plan checkpoint and
 	// before accepting body bytes. Borrowers must not write or close them.
 	StorageReady func(ReceiveStorage) error
-	Progress     func(Progress)
+	// StorageClosing observes the final live storage before the receiver closes
+	// its handles, including failure/cancellation. It must not mutate or close
+	// borrowed handles. Errors prevent local post-receive publication.
+	StorageClosing func(ReceiveStorage) error
+	Progress       func(Progress)
 }
 
 // ReceiveStorage is Go-only provenance for a local storage owner, never wire
@@ -108,6 +112,11 @@ type ReceiveStorage struct {
 	Manifest    Manifest            `json:"-"`
 	Plan        ReceivePlan         `json:"-"`
 	Peer        string              `json:"-"`
+	Directories map[string]*os.File `json:"-"`
+	Checkpoint  *os.File            `json:"-"`
+	// DirectoryLimit means the optional closing inventory exceeded its handle
+	// budget. No directories/checkpoint are supplied as reclamation authority.
+	DirectoryLimit bool `json:"-"`
 }
 
 type PlanSummary struct {

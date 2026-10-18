@@ -1,3 +1,10 @@
+## 2026-10-19 可靠性 Goal R2 未发布对象生命周期
+
+- 同profile owner活动引用持续至真实句柄关闭，Go-only关闭观察器提供实际存储来源；当前worker在native前封存完整未发布清单，再接入有界分页、压力、启动继续删除意图及退避。取消/UI终态不释放引用，未知条目和用户改动不递归删除；具体测试、早期失败及预算见[证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。
+- 70个空目录的实际协议回归保持接收可用，超出清理封存预算不缩小文件协议。已发布、未封存/未知崩溃残留和大对象仍保护，原生读取结束许可与键盘粘贴继续，R2不标完成。
+- 上一持久owner `c4910f9` 的core/desktop及三平台包CI全部success；本增量最终检查与新CI单独记录，不移记旧包或原生通过。
+- 本增量最终两模块workspace/off的test/vet/build共12命令退出0；最终源码定向race3轮app43.659秒/transfer3.864秒，完整app文件/缓存/退出组合race3轮90.230秒。无前端改动，显式gofmt清单及diff检查通过；新提交CI推送后核对，不预记成功。
+
 ## 2026-10-19 可靠性 Goal R2 持久owner首批
 
 - 在现有SQLite metadata命名空间保存严格版本/用途/身份/运行代次及Ed25519签名的缓存归属，CAS+回读；实际引擎Root/Stage/File句柄来源在accept/body前登记，publishing先于原生写入，DB I/O在授权/状态锁外，实际mutation仍复核控制与CAS。无新数据库/schema/wire，损坏或未知记录保护。

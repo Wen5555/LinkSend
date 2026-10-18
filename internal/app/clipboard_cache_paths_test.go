@@ -91,8 +91,11 @@ func TestClipboardCachePinnedCleanupPreservesReplacement(t *testing.T) {
 	if data, err := d.object.ReadFile("owned.txt"); err != nil || string(data) != "owned" {
 		t.Fatal("pinned receiver lost its original directory", err)
 	}
-	if err := d.discardUnpublished(); err != nil {
-		t.Fatal(err)
+	if err := d.discardUnpublished(); err == nil {
+		t.Fatal("a directory handle alone authorized deletion of an unregistered file")
+	}
+	if data, err := d.object.ReadFile("owned.txt"); err != nil || string(data) != "owned" {
+		t.Fatal("unregistered original entry was removed", err)
 	}
 	if data, err := os.ReadFile(foreign); err != nil || string(data) != "replacement user data" {
 		t.Fatal("cleanup deleted replacement user data", err)

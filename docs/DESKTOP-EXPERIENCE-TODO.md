@@ -11,12 +11,14 @@
   R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
 
   R2持久owner首批：同一SQLite连接保存带用途/身份/运行代次的签名记录，实际stage/file句柄来源在body前登记，publishing在原生写入前登记；损坏/冲突/旧运行不能重获发送或未发布删除权限。见[持久记录证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。活动引用、启动对账/自动回收与原生完成证明继续。
+
+  R2生命周期增量：活动引用持续到接收器及目的目录句柄关闭；关闭前观察实际存储，当前worker在native前封存确定未发布清单，启动/退出/剪贴板/周期/压力接入有界分页回收、删除意图与退避。未知/用户改动/可能已发布对象仍保护，超出完整封存预算不拒收正常文件。见[生命周期证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。大对象增量封存、未封存崩溃残留、原生读取结束许可与真实键盘粘贴仍必做。
 - [ ] R3：可操作原因/下一步、安全诊断 DTO 与本地脱敏导出待实施。
 - [ ] R4：准确候选覆盖安装、活动任务退出/重启和受影响系统入口待验。
 - [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点：R2容量 `f2712dc` 之后继续固定目录/不确定发布保护，具体来源见[增量证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)；日志在 `.artifacts/reliability-20261019/`。继续R2持久所有权/安全引用/跨启动对账及自动回收，再做真实键盘粘贴；R3–R6及R1跨网/原生缺项保持必做。现有 `desktopStore` 借用 `tasks.sharedHistoryDB()`，缓存持久化应复用该owner；`inboxFileIdentity`可复用平台文件身份实现，禁止另起并行数据库。未知旧缓存不能因名称或TTL自动删除。
+当前接续点：R2持久owner `c4910f9` 的core/desktop与三平台包CI全部success（39170491604/39170491601/39170491614），现已进入确定未发布对象的活动引用、封存与有界回收增量，见[生命周期证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)；日志在 `.artifacts/reliability-20261019/`。继续完整缓存原生交接/回收与真实键盘粘贴；R3–R6及R1跨网/原生缺项保持必做。现有 `desktopStore` 借用 `tasks.sharedHistoryDB()`，禁止另起并行数据库。未知旧缓存不能因名称或TTL自动删除。
 
 接续时先核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG在本次记录时仍运行）。只读本地watch日志 `ci-39165099505.log`；待完成后更新准确结果，失败继续修复，不能把运行中记PASS。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

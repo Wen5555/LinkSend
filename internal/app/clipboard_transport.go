@@ -274,6 +274,7 @@ func containsClipboardKind(kinds []clipboardsync.Kind, kind clipboardsync.Kind) 
 }
 
 func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) error {
+	s.wakeClipboardCache()
 	if s.clipboardPaused.Load() || change.Generation == 0 {
 		return clipboardsync.ErrStale
 	}

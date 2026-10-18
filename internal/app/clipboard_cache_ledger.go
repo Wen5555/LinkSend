@@ -23,31 +23,35 @@ var errClipboardCacheOwnership = errors.New("CLIPBOARD_CACHE_OWNERSHIP_UNPROVEN"
 // are relative manifest names; no absolute path or native delete authority is
 // reconstructed from a row. Every filesystem operation still needs pinned roots.
 type clipboardCacheRecord struct {
-	Version    int                `json:"version"`
-	Purpose    string             `json:"purpose"`
-	Owner      string             `json:"owner"`
-	Run        string             `json:"run"`
-	ID         string             `json:"id"`
-	CacheRoot  string             `json:"cache_root"`
-	Directory  string             `json:"directory"`
-	Peer       string             `json:"peer"`
-	Created    int64              `json:"created"`
-	Revision   uint64             `json:"revision"`
-	State      string             `json:"state"`
-	Manifest   *transfer.Manifest `json:"manifest,omitempty"`
-	Digest     string             `json:"manifest_digest,omitempty"`
-	Stage      string             `json:"stage_identity,omitempty"`
-	PlanDigest string             `json:"plan_digest,omitempty"`
-	Parts      map[string]string  `json:"parts,omitempty"`
-	Signature  []byte             `json:"signature"`
+	Version    int                           `json:"version"`
+	Purpose    string                        `json:"purpose"`
+	Owner      string                        `json:"owner"`
+	Run        string                        `json:"run"`
+	ID         string                        `json:"id"`
+	CacheRoot  string                        `json:"cache_root"`
+	Directory  string                        `json:"directory"`
+	Peer       string                        `json:"peer"`
+	Created    int64                         `json:"created"`
+	Revision   uint64                        `json:"revision"`
+	State      string                        `json:"state"`
+	Manifest   *transfer.Manifest            `json:"manifest,omitempty"`
+	Digest     string                        `json:"manifest_digest,omitempty"`
+	Stage      string                        `json:"stage_identity,omitempty"`
+	PlanDigest string                        `json:"plan_digest,omitempty"`
+	Parts      map[string]string             `json:"parts,omitempty"`
+	Signature  []byte                        `json:"signature"`
+	Sealed     bool                          `json:"sealed,omitempty"`
+	Cleanup    map[string]clipboardCacheNode `json:"cleanup,omitempty"`
 }
 
 type clipboardCacheReceipt struct {
-	service       *Service
-	destination   *clipboardCacheDestination
-	record        clipboardCacheRecord
-	raw           string
-	nativeStarted bool // Current worker proof only; never inferred after restart.
+	service        *Service
+	destination    *clipboardCacheDestination
+	record         clipboardCacheRecord
+	raw            string
+	nativeStarted  bool // Current worker proof only; never inferred after restart.
+	finalInventory map[string]clipboardCacheNode
+	release        func()
 }
 
 func clipboardRootIdentity(root *os.Root) (string, error) {
@@ -69,6 +73,9 @@ func cacheRecordMessage(record clipboardCacheRecord) ([]byte, error) {
 }
 
 func (s *Service) encodeCacheRecord(record clipboardCacheRecord) (string, error) {
+	if err := validateClipboardCacheInventory(record); err != nil {
+		return "", err
+	}
 	message, err := cacheRecordMessage(record)
 	if err != nil {
 		return "", err
@@ -102,7 +109,7 @@ func (s *Service) decodeCacheRecord(id, raw string) (clipboardCacheRecord, error
 		return record, errClipboardCacheOwnership
 	}
 	switch record.State {
-	case "receiving", "verified", "publishing", "published", "protected", "abandoned":
+	case "receiving", "verified", "publishing", "published", "protected", "abandoned", "reclaimable", "deleting":
 	default:
 		return record, errClipboardCacheOwnership
 	}
@@ -119,6 +126,9 @@ func (s *Service) decodeCacheRecord(id, raw string) (clipboardCacheRecord, error
 	}
 	if len(record.Parts) > transfer.MaxEntries {
 		return record, errClipboardCacheOwnership
+	}
+	if err := validateClipboardCacheInventory(record); err != nil {
+		return record, err
 	}
 	for name, identity := range record.Parts {
 		if record.Manifest == nil || identity == "" {
@@ -147,6 +157,16 @@ func (s *Service) registerClipboardCache(d *clipboardCacheDestination, peer stri
 	if s.store == nil || s.storeErr != nil {
 		return nil, errors.New("CLIPBOARD_CACHE_METADATA_UNAVAILABLE")
 	}
+	release, err := s.clipboardCache.acquire(d.id)
+	if err != nil {
+		return nil, err
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			release()
+		}
+	}()
 	cache, err := clipboardRootIdentity(d.cache)
 	if err != nil {
 		return nil, err
@@ -155,7 +175,7 @@ func (s *Service) registerClipboardCache(d *clipboardCacheDestination, peer stri
 	if err != nil {
 		return nil, err
 	}
-	r := &clipboardCacheReceipt{service: s, destination: d, record: clipboardCacheRecord{Version: 1, Purpose: "clipboard-files", Owner: s.identity.ID(), Run: s.epoch,
+	r := &clipboardCacheReceipt{service: s, destination: d, release: release, record: clipboardCacheRecord{Version: 1, Purpose: "clipboard-files", Owner: s.identity.ID(), Run: s.epoch,
 		ID: d.id, CacheRoot: cache, Directory: directory, Peer: peer, Created: time.Now().Unix(), Revision: 1, State: "receiving"}}
 	raw, err := s.encodeCacheRecord(r.record)
 	if err != nil {
@@ -172,6 +192,7 @@ func (s *Service) registerClipboardCache(d *clipboardCacheDestination, peer stri
 		return nil, err
 	}
 	r.raw = raw
+	keep = true
 	return r, nil
 }
 
@@ -293,7 +314,7 @@ func (r *clipboardCacheReceipt) beginNative() error {
 // Forget only a proven, already removed unpublished object. Never erase a
 // publishing intent just because native completion could not be confirmed.
 func (r *clipboardCacheReceipt) forgetRemoved() error {
-	if r.record.Run != r.service.epoch || r.nativeStarted || (r.record.State != "receiving" && r.record.State != "verified" && r.record.State != "abandoned" && r.record.State != "publishing") {
+	if r.record.Run != r.service.epoch || r.nativeStarted || (r.record.State != "receiving" && r.record.State != "verified" && r.record.State != "abandoned" && r.record.State != "publishing" && r.record.State != "reclaimable" && r.record.State != "deleting") {
 		return errClipboardCacheOwnership
 	}
 	if _, err := r.destination.cache.Lstat(r.record.ID); !errors.Is(err, os.ErrNotExist) {

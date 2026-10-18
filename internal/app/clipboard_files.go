@@ -620,18 +620,32 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 	if err != nil {
 		return err
 	}
-	defer destination.Close()
 	directory := destination.directory
 	published, nativeAttempted := false, false
 	var receipt *clipboardCacheReceipt
 	defer func() {
+		// ReceiveWithOptions closed its receiver before returning. Close our
+		// pinned destination too before releasing the lifecycle reference.
+		_ = destination.Close()
+		if receipt != nil && receipt.release != nil {
+			receipt.release()
+		}
+	}()
+	defer func() {
 		var metadataErr error
 		if !published && !nativeAttempted {
-			cleanupErr := destination.discardUnpublished()
+			var cleanupErr error
+			if receipt != nil {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				cleanupErr = receipt.discardUnpublished(cleanupCtx)
+				cancel()
+			} else {
+				cleanupErr = destination.discardUnpublished()
+			}
 			if receipt != nil {
 				if cleanupErr == nil {
 					metadataErr = receipt.forgetRemoved()
-				} else {
+				} else if receipt.record.State != "reclaimable" && receipt.record.State != "deleting" {
 					metadataErr = receipt.advance("abandoned")
 				}
 			}
@@ -681,6 +695,10 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 			return transfer.ReceivePlan{}, clipboardsync.ErrStale
 		}
 		releaseSpace, err = s.clipboardCacheSpace.reserve(directory, offer.Manifest)
+		if errors.Is(err, syscall.ENOSPC) {
+			_, _ = s.collectClipboardCache(job.ctx, true, time.Now())
+			releaseSpace, err = s.clipboardCacheSpace.reserve(directory, offer.Manifest)
+		}
 		if err != nil {
 			// Record local rejection before the engine sends its terminal error.
 			// Otherwise the peer's resulting file_cancel can arrive first and
@@ -703,7 +721,8 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 			return cacheMetadataError(err)
 		}
 		return nil
-	}, Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "receiving", p) }})
+	}, StorageClosing: receipt.captureClosingStorage,
+		Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "receiving", p) }})
 	if err != nil {
 		return err
 	}

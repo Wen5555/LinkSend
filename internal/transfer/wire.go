@@ -741,6 +741,13 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		return Result{}, err
 	}
 	defer r.Close()
+	if options.StorageClosing != nil {
+		defer func() {
+			if observeErr := r.observeClosingStorage(options.StorageClosing); observeErr != nil {
+				err = errors.Join(err, observeErr)
+			}
+		}()
+	}
 	plan = r.Plan()
 	summary := r.Summary()
 	var selection *Selection

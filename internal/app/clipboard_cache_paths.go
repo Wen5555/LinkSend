@@ -129,5 +129,7 @@ func (d *clipboardCacheDestination) discardUnpublished() error {
 	if info.Mode()&os.ModeSymlink != 0 || !os.SameFile(info, d.objectInfo) {
 		return transfer.ErrPath
 	}
-	return d.cache.RemoveAll(d.id)
+	// No ownership inventory exists at this boundary. Only remove an empty
+	// directory; an unknown entry must never become recursive-delete authority.
+	return d.cache.Remove(d.id)
 }

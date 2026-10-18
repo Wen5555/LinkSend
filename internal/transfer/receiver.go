@@ -54,6 +54,7 @@ type Receiver struct {
 	verifiedBytes         int64
 	chunksSinceCheckpoint int
 	lastCheckpoint        time.Time
+	checkpointData        []byte
 	plan                  ReceivePlan
 	selected              map[uint32]PlannedEntry
 	planChanged           func(ReceivePlan) error
@@ -377,6 +378,7 @@ func (r *Receiver) checkpoint() error {
 		return err
 	}
 	committed = true
+	r.checkpointData = b
 	r.State.PlanDigest = snapshot.PlanDigest
 	r.chunksSinceCheckpoint = 0
 	r.lastCheckpoint = time.Now()

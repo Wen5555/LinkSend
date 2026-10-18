@@ -72,6 +72,7 @@ func (s *Service) shutdownOwners() {
 	s.directPoolWG.Wait()
 	s.clipboardWorkers.Wait()
 	s.tasks.workers.Wait()
+	s.clipboardCache.wg.Wait()
 	s.content.mu.Lock()
 	if s.content.store != nil {
 		_ = s.content.store.Close()

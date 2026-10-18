@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-19 R2生命周期增量：当前worker在native前封存确定未发布对象的实际引擎存储清单；同profile owner活动引用、分页扫描/压力重试及启动继续deleting已接入，不再递归删除未知缓存内容。可能已发布、未封存及超出完整封存预算的对象继续保护，R2完整原生回收/键盘粘贴仍待，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。无wire/schema变化或用户缓存配置。
+
 2026-10-18 用户新增授权：桌面增加手动触发的 GitHub 正式版检查、按平台下载、SHA256校验及原生安装包入口；安装由Windows向导或Mac DMG完成。此增量不改文件协议、配对或正文路径，详见[ADR0014](adr/0014-desktop-github-updates.md)。
 
 2026-10-18 N4目标边界增量：快速发送排除本机；身份尚未读取时等待，保存为本机的草稿保留但不可发送。最终Go授权、文件wire与schema保持；准确包原生结果另列。
