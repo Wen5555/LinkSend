@@ -44,17 +44,18 @@ type clipboardFileOffer struct {
 }
 
 type clipboardFileJob struct {
-	peer         *PeerSession
-	event        clipboardsync.Event
-	lease        clipboardsync.Lease
-	reservation  *clipboardsync.FileReservation
-	paths        []string
-	progress     ClipboardFileProgress
-	ctx          context.Context
-	cancel       context.CancelFunc
-	ready        chan struct{}
-	started      bool
-	localFailure bool // Rejection precedes peer cancellation/connection teardown.
+	peer                 *PeerSession
+	event                clipboardsync.Event
+	lease                clipboardsync.Lease
+	reservation          *clipboardsync.FileReservation
+	paths                []string
+	progress             ClipboardFileProgress
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	ready                chan struct{}
+	started              bool
+	localFailure         bool // Rejection precedes peer cancellation/connection teardown.
+	publicationUncertain bool
 }
 
 func validClipboardFileID(id string, size int) bool {
@@ -203,6 +204,9 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	if err != nil {
 		job.progress.State = "failed"
 		job.progress.Error = clipboardFileFailureCode(err)
+		if job.publicationUncertain {
+			job.progress.Error = "file_copy_publication_uncertain"
+		}
 		if !localFailure && (job.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, clipboardsync.ErrConflict)) {
 			job.progress.State = "cancelled"
 			job.progress.Error = ""
@@ -237,7 +241,7 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 }
 
 func clipboardFileError(code string) bool {
-	return code == "file_copy_failed" || code == "file_copy_disk_full"
+	return code == "file_copy_failed" || code == "file_copy_disk_full" || code == "file_copy_publication_uncertain"
 }
 
 func clipboardFileFailureCode(err error) string {
@@ -612,25 +616,16 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		return job.ctx.Err()
 	}
 	defer func() { <-s.clipboardFileReadSlots }()
-	root := filepath.Join(s.cfg.DataDir, "clipboard-files")
-	if err := os.MkdirAll(root, 0700); err != nil {
-		return err
-	}
-	directory := filepath.Join(root, job.progress.ID)
-	// Transfer IDs are fixed-width lowercase hex and the per-transfer directory
-	// must be new. No remote path can choose the local cache root.
-	if err := os.Mkdir(directory, 0700); err != nil {
-		return err
-	}
-	cache, err := os.OpenRoot(root)
+	destination, err := openClipboardCacheDestination(s.cfg.DataDir, job.progress.ID)
 	if err != nil {
 		return err
 	}
-	defer cache.Close()
-	published := false
+	defer destination.Close()
+	directory := destination.directory
+	published, nativeAttempted := false, false
 	defer func() {
-		if !published {
-			_ = cache.RemoveAll(job.progress.ID)
+		if !published && !nativeAttempted {
+			_ = destination.discardUnpublished()
 		}
 	}()
 	var roots []string
@@ -640,7 +635,7 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 			releaseSpace()
 		}
 	}()
-	_, err = transfer.ReceiveWithOptions(job.ctx, stream, transfer.ReceiveOptions{Directory: directory, Peer: job.peer.PeerID, Plan: func(_ context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
+	_, err = transfer.ReceiveWithOptions(job.ctx, stream, transfer.ReceiveOptions{Directory: directory, Root: destination.object, Peer: job.peer.PeerID, Plan: func(_ context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
 		if offer.Manifest.TransferID != job.progress.ID || offer.Content != nil || !s.clipboardFileCurrent(job) {
 			return transfer.ReceivePlan{}, clipboardsync.ErrStale
 		}
@@ -658,7 +653,7 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		if releaseSpace != nil {
 			return transfer.ReceivePlan{}, clipboardsync.ErrStale
 		}
-		releaseSpace, err = s.clipboardCacheSpace.reserve(root, offer.Manifest)
+		releaseSpace, err = s.clipboardCacheSpace.reserve(directory, offer.Manifest)
 		if err != nil {
 			// Record local rejection before the engine sends its terminal error.
 			// Otherwise the peer's resulting file_cancel can arrive first and
@@ -699,8 +694,20 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		if adapter.Generation() != expected {
 			return 0, clipboardsync.ErrConflict
 		}
+		if err := destination.visible(); err != nil {
+			return 0, err
+		}
+		// Even an error can follow a native mutation. Once the OS adapter has
+		// seen the paths, preserve verified files until ownership reconciliation
+		// can prove they are no longer in use. Never remove possibly visible data.
+		nativeAttempted = true
 		return adapter.WriteFiles(roots, expected, job.reservation.Deadline)
 	})
 	published = err == nil
+	if err != nil && nativeAttempted {
+		s.clipboardFilesMu.Lock()
+		job.publicationUncertain = true
+		s.clipboardFilesMu.Unlock()
+	}
 	return err
 }

@@ -1,3 +1,10 @@
+## 2026-10-19 可靠性 Goal R2 路径与不确定发布
+
+- 原生adapter已接收路径但确认报错的注入回归先复现文件被删；修复后保留已验证缓存并显示准确不确定状态。接收/checkpoint使用同profile owner固定的Root，目录字符串不再可替换写入授权；无wire/schema变化。Root闭合、错误目录/伪checkpoint、Windows junction及已有用户文件保护均有回归，真实QUIC夹具与文件系统/内存原生adapter范围见[证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。
+- 修正ADR0016的boot假设：系统恢复旧路径后仍可开始新粘贴，boot+TTL不构成安全回收证明；完整原生交接、持久所有权/自动回收和真实键盘粘贴继续，不记R2完成。
+- 最终两模块workspace/off test/vet/build、app定向race3轮（23.836秒）、Root race3轮及前端127项/typecheck/lint/build均退出0；Windows真实junction边界通过，固定目录重命名被系统拒绝，Linux替换分支待CI。没有日常剪贴板或生产改动。
+- `f2712dc` 的Intel Mac DMG随后success，core/desktop及三平台run39165099505全部通过。没有把CI包通过写成原生旅程或安装通过。
+
 ## 2026-10-19 可靠性 Goal R2 自动容量首批
 
 - 先形成ADR0016，再落实真实manifest自动空间预留、32路竞争容量保护、发布返回后幂等释放、低空间安全拒绝和下一次复制恢复。原代码低空间仍发布的负例及第一轮本地错误被取消覆盖的失败均保留，现已修复；健康会话不因单流磁盘拒绝关闭。无wire/schema变更，不新增缓存用户设置。

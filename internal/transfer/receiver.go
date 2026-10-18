@@ -74,6 +74,10 @@ func openReceiver(ctx context.Context, directory, peer string, m Manifest, reque
 }
 
 func openReceiverContent(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error, descriptor *ContentDescriptor) (_ *Receiver, err error) {
+	return openReceiverContentRoot(ctx, directory, peer, m, requested, planChanged, descriptor, nil)
+}
+
+func openReceiverContentRoot(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error, descriptor *ContentDescriptor, provided *os.Root) (_ *Receiver, err error) {
 	if err = m.Validate(); err != nil {
 		return nil, err
 	}
@@ -99,12 +103,17 @@ func openReceiverContent(ctx context.Context, directory, peer string, m Manifest
 		}
 	}
 	plan.Directory = directory
-	if requested == nil {
+	if requested == nil && provided == nil {
 		if err = os.MkdirAll(directory, 0700); err != nil {
 			return nil, err
 		}
 	}
-	root, err := os.OpenRoot(directory)
+	var root *os.Root
+	if provided != nil {
+		root, err = provided.OpenRoot(".")
+	} else {
+		root, err = os.OpenRoot(directory)
+	}
 	if err != nil {
 		return nil, err
 	}

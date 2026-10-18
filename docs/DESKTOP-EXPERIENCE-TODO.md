@@ -7,14 +7,18 @@
 - [x] R0：核对 `f8358ce`、干净 tracked 工作区及三个既有未跟踪目录；复用本地 Go1.27.1/Node24.21.0/pnpm12.4.1；Mac arm64/macOS26.5 和日本自托管信令/STUN 主机 SSH 可用；修正 README 过期版本。见[基线证据](evidence/RELIABILITY-R0-BASELINE.md)。
 - [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；新增真实LAN TLS/Pion/QUIC回归，通知后双向剪贴板及同会话文件复用/关闭清理通过。见[源码增量证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)；准确候选双向 LAN、中断恢复、睡眠/网络变化与真实不同网络传输仍待。
 - [ ] R2（实施中）：[缓存ADR0016](adr/0016-automatic-clipboard-file-cache.md)已先冻结；落实真实manifest自动空间预留、并发容量保护、拒绝后残留清理及稳定空间原因/新复制恢复。自动所有权/回收、跨启动保护及 Finder/Explorer 真实键盘粘贴仍待；现有文件条目读回不抵扣。见[容量增量证据](evidence/RELIABILITY-R2-CAPACITY.md)。
+
+  R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
 - [ ] R3：可操作原因/下一步、安全诊断 DTO 与本地脱敏导出待实施。
 - [ ] R4：准确候选覆盖安装、活动任务退出/重启和受影响系统入口待验。
 - [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点：R2容量增量 `f2712dc` 已推送；日志在 `.artifacts/reliability-20261019/`。继续R2持久所有权/安全引用/跨启动对账及自动回收，再做真实键盘粘贴；R3–R6及R1跨网/原生缺项保持必做。现有 `desktopStore` 借用 `tasks.sharedHistoryDB()`，缓存持久化应复用该owner；`inboxFileIdentity`可复用平台文件身份实现，禁止另起并行数据库。未知旧缓存不能因名称或TTL自动删除。
+当前接续点：R2容量 `f2712dc` 之后继续固定目录/不确定发布保护，具体来源见[增量证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)；日志在 `.artifacts/reliability-20261019/`。继续R2持久所有权/安全引用/跨启动对账及自动回收，再做真实键盘粘贴；R3–R6及R1跨网/原生缺项保持必做。现有 `desktopStore` 借用 `tasks.sharedHistoryDB()`，缓存持久化应复用该owner；`inboxFileIdentity`可复用平台文件身份实现，禁止另起并行数据库。未知旧缓存不能因名称或TTL自动删除。
 
 接续时先核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG在本次记录时仍运行）。只读本地watch日志 `ci-39165099505.log`；待完成后更新准确结果，失败继续修复，不能把运行中记PASS。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
+
+后续核对：`f2712dc` 的 run `39165099505` 已completed/success，三个包job均success；前述“仍运行”为当时记录，不是当前阻塞。当前继续缓存持久owner和原生交接完成证明，不以boot/TTL清理未知发布对象。
 
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 

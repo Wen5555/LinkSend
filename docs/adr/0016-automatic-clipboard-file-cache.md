@@ -16,9 +16,13 @@
 
 当前 Windows CF_HDROP / macOS file URL 发布没有可靠的“Finder/Explorer 已完成整个目录粘贴”回执。剪贴板变更、应用退出、TTL、某一时刻无打开句柄均不足以证明系统复制已结束。因此首版不以这些条件单独删除 published/publishing 对象：同一次系统启动内继续保留，包括应用重启与网络变化。
 
-只有能够证明发布时的系统启动已经结束，并重新核对当前系统剪贴板不再引用对象，才允许 published/publishing 对象进入 reclaimable。采用平台可靠的 kernel boot identity；标识不可用、未知或读取失败时继续保护。系统真正重启意味着上一次启动的原生读取进程已结束；快速启动/休眠若标识保持相同则额外保留。禁止以可调整墙钟推算启动身份。不请求用户重启，也不把重启当作正常错误解决提示。后续若引入原生受控交接，可用真实完成回执缩短保留，但须另做协议/原生回归。
+设计复核修正：kernel boot identity只能说明旧启动的进程已结束，不能排除系统恢复剪贴板路径后、应用启动前又开始的新粘贴；因此boot变化加“当前无引用”也不能单独授权删除。发布对象必须另外具备受控原生交接/读取结束证据，并排除当前引用和在途消费者后，才可进入reclaimable。缺少可靠回执时继续保护，不能以启动标识、墙钟或TTL推断安全。不请求用户重启，也不把重启当作正常错误解决提示。
+
+原生设计须分别实测：Windows的[IDataObjectAsyncCapability](https://learn.microsoft.com/en-us/windows/win32/api/shldisp/nn-shldisp-idataobjectasynccapability)提供可选的StartOperation/EndOperation协商，不能假设每个消费者都会使用；Mac的[NSFilePresenter](https://developer.apple.com/documentation/foundation/nsfilepresenter)仅通知协调访问，不证明任意低层读取已结束。[文件承诺](https://developer.apple.com/documentation/appkit/supporting-drag-and-drop-through-file-promises)文档以拖放为例，不可据此声称Finder键盘粘贴已通过。必须验证实际支持的原生交接及退出/重启持久性后再启用对应回收许可；未取得许可的发布对象保守保留，R2仍不能因此宣告整体完成。
 
 即使跨启动，当前剪贴板仍引用的对象也必须保留；读取忙、generation变化、格式不可判定均视为引用未知，暂不回收。检查只读取文件路径元数据，不读取或导出用户正文。第三方剪贴板历史无限期保存旧路径不在承诺内，但不因此缩短系统粘贴保护。
+
+一旦调用原生写入，返回错误也可能意味着路径已对系统可见。发布结果不确定时保留已验证缓存；只有能证明原生写入尚未尝试的失败才能沿未发布清理路径处理。接收和checkpoint通过存储owner持有的`os.Root`子句柄，目录字符串只作本地显示；发布前复核可见profile/cache/object与原句柄的文件身份，不能重新解析被替换的绝对路径作为写入授权。
 
 正常回收条件为安全无引用且创建后至少7天；空间压力仅可提前到安全无引用后至少24小时。时钟回拨、未来时间和缺失时间均延后回收；时钟快进不解除 boot、引用、所有权与原生读取保护。未发布失败对象不需要该保留期。
 

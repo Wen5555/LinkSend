@@ -83,8 +83,12 @@ type Offer struct {
 
 type ReceiveOptions struct {
 	Directory string
-	Peer      string
-	Accept    func(Manifest) bool
+	// Root is a Go-only pinned destination supplied by a local storage owner.
+	// When set, all checkpoint and receiver I/O uses a child handle of this
+	// root; Directory is presentation metadata, never a replacement authority.
+	Root   *os.Root `json:"-"`
+	Peer   string
+	Accept func(Manifest) bool
 	// Explicitly opt in only after the caller handles Offer.Content and provides
 	// safe post-receive actions. A pre-content Plan callback alone is insufficient.
 	AcceptNativeContent bool
@@ -403,6 +407,10 @@ func BuildReceivePlan(ctx context.Context, directory string, m Manifest, request
 // transfer has no checkpoint here. An empty peer is for preview only; opening
 // the receiver always performs the authenticated peer comparison again.
 func LoadReceivePlan(ctx context.Context, directory, peer string, m Manifest) (*ReceivePlan, error) {
+	return loadReceivePlanRoot(ctx, directory, peer, m, nil)
+}
+
+func loadReceivePlanRoot(ctx context.Context, directory, peer string, m Manifest, provided *os.Root) (*ReceivePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -413,7 +421,12 @@ func LoadReceivePlan(ctx context.Context, directory, peer string, m Manifest) (*
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(directory)
+	var root *os.Root
+	if provided != nil {
+		root, err = provided.OpenRoot(".")
+	} else {
+		root, err = os.OpenRoot(directory)
+	}
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

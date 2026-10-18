@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -118,6 +119,47 @@ func TestClipboardFilesUseAuthenticatedFileProtocolAndNativePaths(t *testing.T) 
 		}
 		return true
 	}, "receiver retained a stale file-copy status")
+}
+
+func TestClipboardFilesUncertainNativePublicationKeepsVerifiedPaths(t *testing.T) {
+	f := newClipboardFilesFixture(t)
+	f.b.clipboardAdapterMu.Lock()
+	write := f.b.clipboardAdapter.WriteFiles
+	f.b.clipboardAdapter.WriteFiles = func(paths []string, expected uint64, deadline time.Time) (uint64, error) {
+		generation, err := write(paths, expected, deadline)
+		if err != nil {
+			return generation, err
+		}
+		// A native mutation may succeed before its final acknowledgment fails.
+		return generation, errors.New("native publication result is uncertain")
+	}
+	f.b.clipboardAdapterMu.Unlock()
+	f.copy(t, 2)
+	var published []string
+	select {
+	case published = <-f.written:
+	case <-f.ctx.Done():
+		t.Fatal("native publication did not start")
+	}
+	waitFor(t, time.Second, func() bool {
+		for _, p := range f.b.ClipboardFileProgresses() {
+			if clipboardFileFinished(p.State) {
+				return true
+			}
+		}
+		return false
+	}, "uncertain native publication did not finish")
+	if len(published) != 1 {
+		t.Fatal("unexpected native roots")
+	}
+	if data, err := os.ReadFile(published[0]); err != nil || string(data) != "clipboard file bytes" {
+		t.Fatal("uncertain native result deleted an OS-visible verified file", err)
+	}
+	for _, p := range f.b.ClipboardFileProgresses() {
+		if p.Error != "file_copy_publication_uncertain" {
+			t.Fatal("uncertain native outcome was reported as definitely unpublished", p)
+		}
+	}
 }
 
 func TestClipboardFilesCancellationBeforeBodyDoesNotPublish(t *testing.T) {
@@ -263,7 +305,7 @@ func TestClipboardFileCompletionCannotClearNewerCopyStatus(t *testing.T) {
 	if got := s.clipboardPeerRuntime["peer"]; got.FileID != "new" || got.Waiting != "copying_files" {
 		t.Fatal("old completion cleared new copy", got)
 	}
-	for _, statusError := range []string{"file_copy_failed", "file_copy_disk_full", "write_failed"} {
+	for _, statusError := range []string{"file_copy_failed", "file_copy_disk_full", "file_copy_publication_uncertain", "write_failed"} {
 		ctx, cancel = context.WithCancel(t.Context())
 		job = &clipboardFileJob{peer: &PeerSession{PeerID: "peer"}, ctx: ctx, cancel: cancel, progress: ClipboardFileProgress{ID: "new", State: "transferring"}}
 		s.clipboardPeerRuntime["peer"] = clipboardPeerRuntimeStatus{FileID: "new", Waiting: "copying_files", Error: statusError}

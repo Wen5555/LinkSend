@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-19 可靠性R2增量：文件剪贴板接收/checkpoint支持借用profile owner固定的`os.Root`，目录字符串不能替换其文件系统授权；发布前复核可见路径的身份。原生写入被尝试后，错误也不能证明未发布，因此保留已验证缓存并显示不确定状态。boot变化与TTL不能单独证明粘贴结束；完整自动回收仍待可靠原生交接与读取结束证据。见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量验证](evidence/RELIABILITY-R2-CACHE-PATHS.md)。无文件wire/schema改变。
+
 桌面GitHub更新由用户明确触发，固定仓库/正式标签/平台与资产地址，保留HTTPS校验；下载在Go中以有界内存写入应用缓存，并核对GitHub提供的SHA256与大小。只有完整校验后的包可由原生入口打开，打开前再次核验，前端不能指定可执行路径。摘要是GitHub发布资产的一致性检查，不是独立发布者签名；现有Windows未签名及Mac ad-hoc/未公证边界保持。安装使用系统向导/DMG并由用户退出旧程序后完成，不自动改写运行中的程序或用户profile，见[ADR0014](adr/0014-desktop-github-updates.md)。
 
 ## 2026-10-18 快速发送

@@ -32,4 +32,13 @@ describe('large file clipboard progress',()=>{
    expect(container.querySelector('button')?.textContent).toBe('关闭');
   } finally {act(()=>root.unmount());}
  });
+ it('does not claim files are unpublished when native completion is uncertain',()=>{
+  const container=document.createElement('div');const root=createRoot(container);
+  try {
+   act(()=>root.render(<ClipboardCopyProgressView copies={[copy({state:'failed',error:'file_copy_publication_uncertain'})]} cancel={vi.fn()}/>));
+   expect(container.textContent).toContain('系统剪贴板状态未能确认，文件已保留。');
+   expect(container.textContent).not.toContain('文件未写入剪贴板');
+   expect(container.querySelector('button')?.textContent).toBe('关闭');
+  } finally {act(()=>root.unmount());}
+ });
 });
