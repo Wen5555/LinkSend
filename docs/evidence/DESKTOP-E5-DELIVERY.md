@@ -1,5 +1,15 @@
 # Desktop E5 交付记录
 
+## 2026-10-18 v0.6.1主分支发布
+
+PR [#10](https://github.com/Wen5555/LinkSend/pull/10)已正常合并main，四项工作流修复及统一0.6.1元数据从准确提交`72161e3f806d742d1d401564031ab4844fe88b2d`构建。[v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)已公开并设Latest，tag精确指向该提交；没有覆盖0.6.0标签/程序包或改写历史。
+
+main [packages 39113644308](https://github.com/Wen5555/LinkSend/actions/runs/39113644308)与准确源码core/desktop全部success。Windows便携ZIP/安装程序、Mac arm64/amd64 DMG为新构建0.6.1；BUILD-INFO、COMMITTED/clean/目标/版本/内外层摘要均核验，六发布资产GitHub digest与本地SHA256一致。两Mac包只读挂载检查版本、架构、最低OS元数据和深度严格签名通过，未启动app，所有挂载卸载。收据：`.artifacts/release-061/main-packages/`中的PACKAGE-VERIFICATION、PACKAGE-MAC-VERIFICATION、RELEASE-PUBLISHED及发布manifest；资产表见[发布说明](../RELEASE-v0.6.1.md)。
+
+复用[修复阶段记录](DESKTOP-060-WORKFLOW-FIXES.md)中119前端、两模块、race和真实QUIC剪贴板暂停恢复证据，不将本地源码或旧包结果移记为新包物理通过。当前物理Win-Mac OS剪贴板、文件关联、其余原生/双NAT缺项保持；本轮无生产信令部署或宿主网络/权限变更。
+
+Mac核验通过既有SSH别名`mac-test-102342413`运行，job `/tmp/codex-ssh/job-ls-release061-mac-bundles-72161e3-20261018-v1` finished/exit0；收据已下载。发布前工作树备份保留在`.artifacts/release-061/pre-release.patch`及`untracked-backup/`；原三个未跟踪目录保持。
+
 ## 2026-10-18 v0.6.0主分支发布
 
 用户明确授权合并main并发布0.6.0，覆盖此前不合并/不正式发布的边界。PR [#9](https://github.com/Wen5555/LinkSend/pull/9)已正常合并，未force-push或改写历史。[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)已公开并设Latest，非Draft、非prerelease；tag精确指向主分支发布提交`8bad9323ece46b2e32054ddb321340dfdd1e3ec8`，产品版本0.6.0、文件协议V1。发布时间2026-10-18 14:44:12（Asia/Shanghai）。

@@ -17,8 +17,21 @@
 
 ## 验证与限制
 
-修复已通过119项前端测试、两Go模块workspace/off测试与构建、相关race检查，以及Windows生产构建和Mac arm64定向测试/编译；剪贴板暂停恢复故障有真实认证QUIC回归的失败→通过证据。准确发布源码与三平台新包的CI、版本、架构和SHA256将在本次发布清单中记录；此前本地可用收尾不自动当作新发行包的物理验证。
+修复已通过119项前端测试、两Go模块workspace/off测试与构建、相关race检查，以及Windows生产构建和Mac arm64定向测试/编译；剪贴板暂停恢复故障有真实认证QUIC回归的失败→通过证据。准确发布源码与三平台新包的CI、版本、架构和SHA256已记录在随包发布的RELEASE-MANIFEST.json与SHA256SUMS.txt中；此前本地可用收尾不自动当作新发行包的物理验证。
 
 Windows包未代码签名，macOS为ad-hoc签名、未公证；最低macOS13和Intel原生范围仍有限。当前Win↔Mac物理系统剪贴板双向闭环、系统文件关联点击、Windows托盘/系统分享及完整双NAT未新增验收，不宣称这些缺项通过。本次不部署生产信令或改动宿主防火墙、路由、代理与权限；不提供中继或TURN allocation。
 
 详细实现与命令见[工作流修复记录](evidence/DESKTOP-060-WORKFLOW-FIXES.md)、[ADR0013](adr/0013-desktop-transfer-workflows.md)和[唯一TODO](DESKTOP-EXPERIENCE-TODO.md)。
+
+## 发布来源与资产
+
+- [Release](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)已公开，Latest，非Draft、非prerelease；tag与新包源码均为`72161e3f806d742d1d401564031ab4844fe88b2d`，PR [#10](https://github.com/Wen5555/LinkSend/pull/10)已正常合并main。
+- [三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/39113644308)及准确源码core/desktop检查全部通过；六项资产GitHub digest均与本地SHA256一致。
+- 两Mac DMG只读挂载核验主app/Share Extension版本、arm64/x86_64架构、最低OS元数据和严格签名，挂载已卸载；未启动新包，不替代物理验证。
+
+| 平台 | 资产 | SHA256 |
+|---|---|---|
+| windows-amd64 | [LinkSend-v0.6.1-windows-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.zip](https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.zip) | `db68c623ef351057275f8fd193baefd901792c970839eaccc378b83ba2245a32` |
+| windows-amd64 | [LinkSend-v0.6.1-windows-amd64-installer-72161e3f806d742d1d401564031ab4844fe88b2d.exe](https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-installer-72161e3f806d742d1d401564031ab4844fe88b2d.exe) | `ad3adaa4c446d49df11b324cf2aebcc70c7bbc8ea202ecc94d252f7854df2628` |
+| macos-arm64 | [LinkSend-v0.6.1-macos-arm64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-arm64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg) | `ef06abefdc12c3475748d3ad61e99c0e6dc1f1aab98f56a7d284d5368605edf6` |
+| macos-amd64 | [LinkSend-v0.6.1-macos-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg) | `204a752d39e39156cae7bf60435d0fed8776f7a8660d8172ece4e42375e8d3bd` |

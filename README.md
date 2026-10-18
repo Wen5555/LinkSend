@@ -26,9 +26,9 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 **文件正文由两端设备直接传输，信令服务只负责协调连接。** 同一局域网内可发现并添加附近设备；跨网络时使用可自托管的信令服务和 ICE 建立直连。
 
 > [!NOTE]
-> 最新公开版本是 [v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0)，包含目录预设、多设备分发、正文限速和托盘快速发送。签名、平台与网络验证范围见[发布说明](docs/RELEASE-v0.6.0.md)和[当前状态与限制](#当前状态与限制)。
+> 最新公开版本是 [v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)，修复文件查看、自动剪贴板、设备删除和统一收发队列。升级与验证范围见[发布说明](docs/RELEASE-v0.6.1.md)和[当前状态与限制](#当前状态与限制)。
 
-0.6.1正在准备发布，修复记录文件打开、自动剪贴板、设备删除与统一收发队列；下方公开下载仍指向0.6.0，待新包验证完成后更新。[0.6.1说明](docs/RELEASE-v0.6.1.md)包含操作与验证范围。
+v0.6.1已包含本轮桌面修复：记录支持打开文件与所在文件夹；自动剪贴板恢复后立即续期，可逐台开启双向同步；删除与黑名单分离；传输页统一收发任务、真实速度/进度/取消、清理和新增接收红点。默认退出取消未完成任务并清空本页，可在通用设置关闭，文件和历史保留。[操作与验证](docs/evidence/DESKTOP-060-WORKFLOW-FIXES.md)。
 
 ## 主要功能
 
@@ -47,7 +47,7 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 
 ## 下载与安装
 
-以下链接对应 **v0.6.0**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
+以下链接对应 **v0.6.1**。其他版本见 [Releases](https://github.com/Wen5555/LinkSend/releases)。
 
 | 平台 | 架构 | 下载 | 说明 |
 | --- | --- | --- | --- |
@@ -55,9 +55,9 @@ LinkSend 是一个开源点对点文件传输工具，适合在自己的电脑�
 | macOS | Apple Silicon / arm64 | [DMG][macos-arm64] | 最低 macOS 13 |
 | macOS | Intel / amd64 | [DMG][macos-amd64] | 最低 macOS 13；最低版本与 Intel 实机验收仍有缺项 |
 
-发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。本版包由主分支提交 `8bad932` 的干净 Actions 构建，包内产品版本为 `0.6.0`，文件协议仍为 V1。
+发行页同时提供 [SHA256SUMS.txt][release-checksums] 和 [RELEASE-MANIFEST.json][release-manifest]，用于核对包哈希与源码来源。本版包由主分支提交 `72161e3` 的干净 Actions 构建，包内产品版本为 `0.6.1`，文件协议仍为 V1。
 
-[v0.6.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0) 的 Windows 便携包/安装程序与 Mac 两架构 DMG 来自[同一主分支构建](https://github.com/Wen5555/LinkSend/actions/runs/39103713740)，四项资产来源、版本、架构与哈希已核验。发布前 Mac 四项功能的原生实际传输证据仍绑定 `6ec3cc4`，旧 Windows 分项仍绑定 `6edddad`；本版不新增物理双机或双 NAT 通过声明。详细范围见[原生检查点](docs/evidence/DESKTOP-AE-NATIVE-CHECKPOINT.md)和[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
+[v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)四个程序包来自[同一主分支构建](https://github.com/Wen5555/LinkSend/actions/runs/39113644308)，版本、来源、摘要及Mac包结构/签名已核验。四项修复的自动测试与本地可用收尾见[修复记录](docs/evidence/DESKTOP-060-WORKFLOW-FIXES.md)；本版没有新增Win↔Mac物理系统剪贴板或双NAT通过声明。
 
 Windows 包尚未进行代码签名；macOS 包采用 ad-hoc 签名，尚未公证。两端可能出现系统安全提示，安装与运行边界见[交付记录](docs/evidence/DESKTOP-E5-DELIVERY.md)。
 
@@ -222,9 +222,9 @@ LinkSend 采用 [Apache License 2.0](LICENSE)。
 
 网络与桌面能力建立在 [Pion ICE](https://github.com/pion/ice)、[quic-go](https://github.com/quic-go/quic-go)、[Wails](https://github.com/wailsapp/wails) 和 [BLAKE3 Go 实现](https://github.com/zeebo/blake3) 等开源项目之上。
 
-[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.zip
-[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-windows-amd64-installer-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.exe
-[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-arm64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg
-[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/LinkSend-v0.6.0-macos-amd64-8bad9323ece46b2e32054ddb321340dfdd1e3ec8.dmg
-[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/SHA256SUMS.txt
-[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.0/RELEASE-MANIFEST.json
+[windows-zip]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.zip
+[windows-installer]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-windows-amd64-installer-72161e3f806d742d1d401564031ab4844fe88b2d.exe
+[macos-arm64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-arm64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg
+[macos-amd64]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/LinkSend-v0.6.1-macos-amd64-72161e3f806d742d1d401564031ab4844fe88b2d.dmg
+[release-checksums]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/SHA256SUMS.txt
+[release-manifest]: https://github.com/Wen5555/LinkSend/releases/download/v0.6.1/RELEASE-MANIFEST.json

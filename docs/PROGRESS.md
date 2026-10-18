@@ -1,3 +1,9 @@
+## 2026-10-18 v0.6.1已发布
+
+- PR #10已合并main，准确源码`72161e3f806d742d1d401564031ab4844fe88b2d`；[v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)已公开并设Latest，tag与源码一致。main core/desktop/三平台包CI全部success，四新程序包加校验/来源清单共六项资产digest核验通过。
+- 两Mac DMG的版本、架构、最低OS元数据与严格签名通过；包未启动、所有挂载已卸载。README下载与使用说明、发布说明、ROADMAP、TODO和交付记录同步；物理系统剪贴板/文件关联/其余原生及完整双NAT未验范围保持，未部署生产信令。
+- 实际CI失败的测试观察窗口修正后，`go test ./internal/app -run '^TestRemoteCancelledStreamKeepsAuthenticatedSessionForNextFile$' -count=15 -timeout 90s`及相同用例`-race -count=5 -timeout 90s`均通过；最终准确提交的完整core/desktop检查与三平台打包通过。
+
 ## 2026-10-18 v0.6.1发布准备
 
 - 首个main候选e020d87的Windows打包在既有远端取消测试中读到过期快照而失败：先Task后hasActive会跨越worker结束。调整为确认worker结束后读取结果，保留ErrorCode/会话复用断言；15次旧实现定向运行未复现，但失败日志与锁内结束发布顺序确认了观察窗口。测试收尾提交后重新从准确main构建，不重标旧包。
