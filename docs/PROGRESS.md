@@ -1,3 +1,8 @@
+## 2026-10-18 准确Mac同URL空库恢复与旧队列隔离
+
+- 6f29814准确包在Mac loopback同URL切换独立新空控制库，原生prepare/cancel/再次prepare与真实重启保持、新码加入、再次重启/认证WebSocket通过；独立C核对旧身份加入新组。两草稿/身份/偏好/源hash/旧queue绑定保持，旧context退休。用户手动合成短码已新鲜AX实读9字符匹配，未提交该合成码；不升级旧18字符/legacy异常根因。
+- 原B同identity经正常恢复API加入新组后，准确Mac真实点击旧queue确认，被授权代次拒绝，revision/绑定保持、tasks=0。app/loopback夹具已正常停止，两个控制库与私有备份保留、端口关闭、clipboard=false。夹具来源/hash、失败与收据见[恢复证据](evidence/DESKTOP-AE-MEMBERSHIP-RECOVERY.md)。无生产源码或宿主网络修改；Win原生/物理/OS/双NAT及Goal仍未完成。
+
 ## 2026-10-18 6f29814准确Mac恢复闭环
 
 - 逐字符输入修复6f29814五项CI/三平台包全部success，四资产完整来源/hash/COMMITTED/clean/版本通过。新准确Mac以原profile、同started intent真实点击继续恢复，正式服务独立查询从2成员到3、原identity登记；重启后独立认证WSS在线，原身份/偏好/两草稿/源hash/唯一completed任务保持，旧context退休。属旧loopback组→不同正式URL，不是同URL空库或物理文件。

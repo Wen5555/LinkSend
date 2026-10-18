@@ -120,3 +120,21 @@ Mac只读job `/tmp/codex-ssh/job-ls-ae-mac-field-value-shape-20261018-03` exit0�
 原生43字符legacy合成输入额外检查未通过：首轮长度43但内容不匹配并已清空，逐字/区分大小写复核在第2字符即不匹配，未提交；不能用115项前端通过代替这项原生结果，也未据此推断产品根因。最后只读确认当前原生窗口未显示“无法连接信令服务”或待继续恢复按钮；准确owned app已停止，临时JS字段随退出丢弃、profile/文件/私有备份保留。
 
 远端job均在`/tmp/codex-ssh/`：`job-ls-ae-mac-start-input-6f29814-20261018-01`、`job-ls-ae-mac-input-slow-6f29814-20261018-02`、`job-ls-ae-mac-recovery-continue-6f29814-20261018-01`、`job-ls-ae-mac-recovery-restart-6f29814-20261018-01`、`job-ls-ae-mac-recovery-finish-6f29814-20261018-01`均exit0；输入失败原job保留。收据已下载为`.artifacts/ae-20261018/mac-native-recovery-6f29814-{receipt,final-receipt,cleanup-receipt}.json`。Mac测试资源为`/Users/wen/.codex/supervision/linksend-ae-20261018/recovery-input-6f29814`，原profile仍在`quick-native-98469ce/profile-a`；不再使用其旧43588 PID或把该目录名当作当前app版本。
+
+### 6f29814准确Mac同URL空库恢复与旧队列负例（2026-10-18）
+
+复用同一准确arm64包/EXE SHA。临时Go夹具使用现有`server.New`、真实SQLite、正常Initialize/Invitation/Join和持久SaveDraft/Enqueue API：先建立旧组A/B、两草稿和一条尚未发送的旧组队列，再在**同一HTTP listener/同一URL**切换到独立新空库，关闭旧server并保留旧DB。新C经正常API初始化新组；GUI独占旧A profile，未手改trust/任务库、未复用固定配对码。隔离地址`http://127.0.0.1:62293`，旧组`7fd11cd36e783989ccc1f9700f491ce6`、新组`3e3348ac78080ca31ba258ca7c648323`。这是Mac-only loopback同URL原生夹具，正式HTTPS验证仍见前节；没有重置生产库或改宿主网络。
+
+夹具源码仅在忽略的`.artifacts/ae-20261018/sameurl-native-fixture/main.go`，SHA256 `7b1bceb681b558151f554170f7e2bee44dfefa4d7378891231aa9ff9178f2fff`。构建时核对当前`internal/cmd/go.mod/go.sum`相对6f29814无差异；`GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false`构建临时夹具与CLI。夹具EXE SHA `8a6e26fed4dd9799baedafcae2fc6348a3274e5531a9b952ede668713caa2245`，CLI `935cc1b6b2d780e538b71e7e9bb79322396897919e6f70fd3af8f438291ad5e1`；它们是指定核心源码加单独夹具的临时工具，不冒充已提交正式包或内嵌VCS证明。
+
+新库未登记旧A时，独立C只查到1成员；旧A没有自动生成恢复intent或注册。原草稿保持，旧队列`1a8bcda7417c47f15b6b911051a8c9af`为needs_attention/RESTART_CONFIRMATION_REQUIRED、task_id空、tasks=0。原生设备页→恢复面板中确认框默认0、准备按钮禁用；明确勾选→prepare/join→原生取消通过，旧context、两草稿与旧队列绑定保持。再次prepare后真实停止/重启，完整prepared intent保持，同URL fingerprint准确一致。
+
+用户本轮回复已手动输入合成`ABCD-EFGH`且未确认。最初只读时字段仍空；后续输入控制步骤停止后，独立核对仍prepared、1成员/旧A未加入，新鲜AX实读手动合成文本恰好9字符且匹配。仅清空这一已核实的合成文本，未提交它。随后独立C正常生成新码，原生逐键输入且提交前实读匹配，真实点击“确认连接”成功：同intent `cadd1f2c21e3b1de5c20effe8131c32d`形成回执、pending清除，独立C确认2成员/原A身份加入新组。该手动短码观察绑定本轮6f29814；旧98469ce的18字符与legacy自动输入异常根因仍未确认。
+
+再用生产Prepare/Continue API恢复原B profile到新组，**B身份/密钥保持、成员incarnation改变**。临时工具源码SHA `a29970f7c5965aae2178bcb80910be74cb5c3223d80f2a1585a7bc840c565e39`，EXE SHA `b54cd78f46bb76e2628e4df679b4f57c89439980ab70a578c4e0281801e06fc1`。独立C确认3成员；原生A已同步同一个B的新组grant，其授权代次与旧queue不同。真实点击“传输→待发送→确认继续”后出现认证失败提示，旧queue内容/代次/revision保持、tasks仍0，证明旧任务没有借同identity的新组权限发送。首次查找按钮未先打开待发送视图，按键前失败；导航补齐后负例通过，原失败保留。
+
+真实再次停止/重启准确app后，独立C确认A经认证WebSocket在线；原身份字节、偏好字节、两草稿整行、源SHA、旧queue绑定保持。旧context退休、新context未退休，queue仍needs_attention且task_id空、tasks=0；clipboard master=false、enabled grants=0、免确认未自动开启，received空。首次只读检查已关闭的旧WAL库报unable to open database file；核对该旧库WAL不存在/为空后仅以`mode=ro&immutable=1`读取完成库，新活跃库继续普通ro；两个quick_check均ok，无产品修改或重复重启。
+
+最后准确app按owned PID/路径停止，stop-fixture令夹具正常exit0；独立socket检查原loopback端口已关闭，两个已关闭控制库再次只读quick_check=ok，文件/profile/私有备份保持。根为`/Users/wen/.codex/supervision/linksend-ae-20261018/sameurl-native-6f29814`；密钥/备份未回传。下载的非敏感收据为`.artifacts/ae-20261018/mac-sameurl-native-6f29814-{cleanup-receipt,fixture,old-peer-recovery}.json`。
+
+关键job均在`/tmp/codex-ssh/`：`job-ls-ae-mac-sameurl-fixture-6f29814-20261018-01`、`job-ls-ae-mac-sameurl-precheck-6f29814-20261018-01`、`job-ls-ae-mac-sameurl-cancel-6f29814-20261018-01`、`job-ls-ae-mac-sameurl-restart-prep-6f29814-20261018-01`、`job-ls-ae-mac-sameurl-continue-6f29814-20261018-02`、`job-ls-ae-mac-sameurl-old-peer-6f29814-20261018-01`、`job-ls-ae-mac-sameurl-queue-negative-20261018-02`、`job-ls-ae-mac-sameurl-verify-after-restart-20261018-01`、`job-ls-ae-mac-sameurl-final-closed-20261018-01`均终态exit0。Windows同URL原生、物理LAN/OS剪贴板/双NAT和完整A–E仍未完成。
