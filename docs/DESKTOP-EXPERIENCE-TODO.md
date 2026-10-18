@@ -1,5 +1,9 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-19 可靠性 自动缓存与临时分享规划
+
+用户要求的[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal启动提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)已形成，功能实施尚未启动。R0基线、R1连接/恢复/跨NAT、R2真实文件粘贴/全自动缓存、R3诊断、R4安装升级/退出、R5一次性临时分享、R6工程维护均为待实施。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因文档交付改变状态。
+
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 
 本地候选已完成Windows↔Mac同LAN系统文字、独立像素图片和文件条目双向验证；64MiB复制、两端原生居中进度、取消及未完成缓存删除通过。最终两端备份恢复，测试进程停止。新文件同步须独立开启，≥32MiB才弹进度窗。最终文件完成状态绑定FileID的自动回归通过；物理结果仍绑定修复前状态展示候选包。用户已明确要求GitHub版本更新推送，已通过PR #11合并并正式发布[0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)，准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc、三平台run 39157767929与六资产digest均通过；下方为历史状态，不代表仍在等待本轮实机。Explorer/Finder键盘粘贴、完整双NAT及其余A–E边界保持，见[本轮记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。

@@ -1,3 +1,8 @@
+## 2026-10-19 可靠性 自动缓存与临时分享计划
+
+- 形成[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal启动提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)：连接/恢复/跨NAT、文件键盘粘贴、程序全自动缓存、可操作诊断、安装升级/退出、一次性临时分享与工程维护。保存常用发送方案排除；自动缓存不设手动清理和容量/期限选项。
+- 记录用户本轮相关SSH及阶段commit/push授权，区分生产替换和宿主网络边界；明确各工作包验收、准确包来源和外部阻塞规则。本次为文档交付，未创建/恢复Goal、修改产品代码或执行远程测试。
+
 ## 2026-10-19 v0.6.2已发布
 
 - PR #11正常合并main，准确程序包源码`63c86c2c5ce183e1400d27ca0571610d50a42bdc`；[v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)已公开并设Latest，tag一致。main core/desktop及[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/39157767929)全部success，四个程序包加两份元数据共六项资产digest核验通过。

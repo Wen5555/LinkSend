@@ -1,5 +1,7 @@
 # Roadmap
 
+2026-10-19 新规划：[可靠性、全自动剪贴板缓存与一次性临时分享](RELIABILITY-AND-SHARING-PLAN.md)，配套[Goal启动提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。覆盖R0–R6，常用发送方案暂不做；当前仅文档交付，未启动功能实施。动态进度沿用唯一TODO。
+
 2026-10-19 [v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)已发布：LAN自动剪贴板连接、图片/文件复制、32MiB居中进度与GitHub更新入口；准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc和验证边界见[发布说明](RELEASE-v0.6.2.md)。
 
 2026-10-18 [v0.6.1](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.1)已发布，四项桌面工作流修复随main `72161e3`全新三平台构建交付；准确CI/包版本/摘要/签名边界见[发布说明](RELEASE-v0.6.1.md)。
