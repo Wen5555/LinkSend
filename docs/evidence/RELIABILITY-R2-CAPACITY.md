@@ -24,3 +24,7 @@
 - 最终产品源码与测试对应的两Go模块workspace/off完整 `go test ./...`、`go vet ./...`、`go build ./...` 均退出0，12条独立命令日志为 `r2-final-{core|desktop}-{workspace|off}-{test|vet|build}.log`；完整核心workspace app96.712秒。最终构建使用已完成的前端dist。提交/远端SHA/CI另行核对，未结束CI不计通过。
 
 日志目录 `.artifacts/reliability-20261019/`。测试只用自有临时文件和内存clipboard adapter，不操作日常剪贴板或安装；不能代替Finder/Explorer键盘粘贴、实机自动回收或准确包原生旅程。没有新删除已发布对象的行为。
+
+## GitHub 交付核对
+
+`f2712dccce6f6b7e90f9a7af6e52c40aefae283f` 已推送，`git ls-remote` 与本地一致。[core](https://github.com/Wen5555/LinkSend/actions/runs/39165099512) 与 [desktop](https://github.com/Wen5555/LinkSend/actions/runs/39165099516) 均 success；[三平台包](https://github.com/Wen5555/LinkSend/actions/runs/39165099505) 的 Windows amd64/Mac arm64 已 success，Intel Mac 在本次记录时仍为 `Build macOS DMG`，不能计三平台全部通过。其本地只读观察日志为 `ci-39165099505.log`，后续继续核对并处理真实失败；没有发布、合并main或替换生产。

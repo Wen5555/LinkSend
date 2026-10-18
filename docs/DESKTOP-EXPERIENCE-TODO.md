@@ -12,6 +12,10 @@
 - [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
+当前接续点：R2容量增量 `f2712dc` 已推送；日志在 `.artifacts/reliability-20261019/`。继续R2持久所有权/安全引用/跨启动对账及自动回收，再做真实键盘粘贴；R3–R6及R1跨网/原生缺项保持必做。现有 `desktopStore` 借用 `tasks.sharedHistoryDB()`，缓存持久化应复用该owner；`inboxFileIdentity`可复用平台文件身份实现，禁止另起并行数据库。未知旧缓存不能因名称或TTL自动删除。
+
+接续时先核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG在本次记录时仍运行）。只读本地watch日志 `ci-39165099505.log`；待完成后更新准确结果，失败继续修复，不能把运行中记PASS。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
+
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 
 本地候选已完成Windows↔Mac同LAN系统文字、独立像素图片和文件条目双向验证；64MiB复制、两端原生居中进度、取消及未完成缓存删除通过。最终两端备份恢复，测试进程停止。新文件同步须独立开启，≥32MiB才弹进度窗。最终文件完成状态绑定FileID的自动回归通过；物理结果仍绑定修复前状态展示候选包。用户已明确要求GitHub版本更新推送，已通过PR #11合并并正式发布[0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)，准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc、三平台run 39157767929与六资产digest均通过；下方为历史状态，不代表仍在等待本轮实机。Explorer/Finder键盘粘贴、完整双NAT及其余A–E边界保持，见[本轮记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。
