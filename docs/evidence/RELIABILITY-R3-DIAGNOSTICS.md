@@ -1,6 +1,6 @@
 # R3：可操作诊断与本地白名单导出（2026-10-19）
 
-基线`565840ec157f933f3d3dacb5100130e6a2c1ea2e`。Go安全投影、任务/记录入口和用户主动选择位置的JSON导出已实现；源码回归与浏览器布局通过。准确候选原生保存/取消旅程仍留R4/R6，R3暂不打整体完成勾。
+基线`565840ec157f933f3d3dacb5100130e6a2c1ea2e`。Go安全投影、任务/记录入口和用户主动选择位置的JSON导出已实现；源码回归与浏览器布局通过。01b5c16准确Windows候选的原生保存/取消和任务导航已验，Mac旅程仍待，R3暂不打整体完成勾。
 
 ## 行为与兼容
 
@@ -28,3 +28,5 @@ Windows PowerShell，Go1.27.1/Node24.21.0/pnpm12.4.1，Wails beta.18。绑定由
 上一修复565840e的core [39174347344](https://github.com/Wen5555/LinkSend/actions/runs/39174347344)、desktop [39174347400](https://github.com/Wen5555/LinkSend/actions/runs/39174347400)、三平台包 [39174347352](https://github.com/Wen5555/LinkSend/actions/runs/39174347352)全部success；旧1bc92e0 Mac arm64失败保持。这组通过不转记为R3代码CI或原生通过。
 
 01b5c16的三组CI及三平台包全部success；准确Windows候选原生保存/取消、报告脱敏回读及原任务到诊断设置的导航已通过，见[R4 Windows旅程](RELIABILITY-R4-WINDOWS-UPGRADE.md)。Mac原生仍待；实际旅程发现恢复阶段内部名可见，另行修复验证。R1物理LAN/恢复/跨网、R2完整原生回收/键盘粘贴、R4双平台完整安装退出、R5临时分享与R6同候选收尾保持必做。
+
+实机后修正：taskPhaseLabel将实际恢复阶段restart_recovery_available显示为“已保存，等待恢复”，更新既有阶段回归和dist；不改变恢复授权、wire或schema。前端typecheck/lint/130项test/build及两模块workspace/off的test -count=1 ./...、vet ./...、build ./...共12命令全部退出0，日志r3-recovery-label-*。这是新源码检查，不能把01b5c16原生截图倒记为修后新包实机。

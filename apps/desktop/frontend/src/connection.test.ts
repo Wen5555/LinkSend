@@ -57,6 +57,7 @@ describe('connection evidence labels', () => {
 	expect(taskPhaseLabel('endpoint_setup')).toBe('自动选择本机网络');
 	expect(taskPhaseLabel('quic_handshake')).toBe('建立加密传输通道');
     expect(taskPhaseLabel('lan_control_connect')).toBe('连接局域网设备');
+    expect(taskPhaseLabel('restart_recovery_available')).toBe('已保存，等待恢复');
     expect(taskPhaseLabel('future_phase')).toBe('future_phase');
   });
   it('maps transport and task errors without exposing raw internals', () => {

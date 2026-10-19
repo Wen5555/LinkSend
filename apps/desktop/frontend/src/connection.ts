@@ -58,6 +58,7 @@ export function taskPhaseLabel(phase: string): string {
 	paused: '已暂停',
     cancelling: '正在取消',
     recovering: '恢复传输',
+    restart_recovery_available: '已保存，等待恢复',
 	connection_interrupted: '连接已中断',
     completed: '已完成',
     failed: '失败',
