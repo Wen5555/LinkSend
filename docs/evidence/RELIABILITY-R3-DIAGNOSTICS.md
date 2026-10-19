@@ -27,4 +27,4 @@ Windows PowerShell，Go1.27.1/Node24.21.0/pnpm12.4.1，Wails beta.18。绑定由
 
 上一修复565840e的core [39174347344](https://github.com/Wen5555/LinkSend/actions/runs/39174347344)、desktop [39174347400](https://github.com/Wen5555/LinkSend/actions/runs/39174347400)、三平台包 [39174347352](https://github.com/Wen5555/LinkSend/actions/runs/39174347352)全部success；旧1bc92e0 Mac arm64失败保持。这组通过不转记为R3代码CI或原生通过。
 
-新提交推送后核对CI，在准确Windows/Mac候选补保存/取消及任务入口旅程。R1物理LAN/恢复/跨网、R2完整原生回收/键盘粘贴、R4安装退出、R5临时分享与R6同候选收尾保持必做。
+01b5c16的三组CI及三平台包全部success；准确Windows候选原生保存/取消、报告脱敏回读及原任务到诊断设置的导航已通过，见[R4 Windows旅程](RELIABILITY-R4-WINDOWS-UPGRADE.md)。Mac原生仍待；实际旅程发现恢复阶段内部名可见，另行修复验证。R1物理LAN/恢复/跨网、R2完整原生回收/键盘粘贴、R4双平台完整安装退出、R5临时分享与R6同候选收尾保持必做。

@@ -16,6 +16,11 @@
 - 上一持久owner `c4910f9` 的core/desktop及三平台包CI全部success；本增量最终检查与新CI单独记录，不移记旧包或原生通过。
 - 本增量最终两模块workspace/off的test/vet/build共12命令退出0；最终源码定向race3轮app43.659秒/transfer3.864秒，完整app文件/缓存/退出组合race3轮90.230秒。无前端改动，显式gofmt清单及diff检查通过；新提交CI推送后核对，不预记成功。
 
+## 2026-10-19 可靠性 Goal Windows覆盖安装与原生诊断
+
+- 准确01b5c16的core/desktop/三平台包全部success，包来源/digest/payload核验通过。隔离安装63c86c2后真实活动256MiB任务在20MiB验证处保存退出，覆盖01b5c16后身份、配对、偏好、中文草稿、历史和合法待恢复状态保持；单实例唤回通过。两安装与受管卸载退出0，原系统登记/三个快捷方式恢复回读通过，GUI/peer正常退出。
+- 准确候选Windows SaveFile保存/取消及任务到诊断设置导航通过，1565B白名单报告hash/无身份路径文件名已回读。恢复阶段内部名可见待修，完整续传、SendTo/拖放和Mac旅程仍未验。协调服务续起被自动审批拒绝，仅保留原夹具自行到期，不绕过；详细来源/哈希/证据和边界见[Windows记录](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。R1–R6必做未齐，不标Goal完成。
+
 ## 2026-10-19 可靠性 Goal R2 持久owner首批
 
 - 在现有SQLite metadata命名空间保存严格版本/用途/身份/运行代次及Ed25519签名的缓存归属，CAS+回读；实际引擎Root/Stage/File句柄来源在accept/body前登记，publishing先于原生写入，DB I/O在授权/状态锁外，实际mutation仍复核控制与CAS。无新数据库/schema/wire，损坏或未知记录保护。
