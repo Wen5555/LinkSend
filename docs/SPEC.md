@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-19 R5授权核心增量：先冻结[ShareGrant ADR0017](adr/0017-one-time-share-grant.md)，实现一次领取/两道明确确认、原公钥/清单/任务/计划及有限恢复状态，既有Control连接提供事务CAS与显式4→5备份迁移。当前Server.New不激活迁移、不提供临时分享路由或广告能力；两端完整流程仍必做。任务库schema12、V1正文及relay=false保持，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+
 2026-10-19 R3候选：任务/记录消费Go白名单原因、阶段、动作与真实尝试时间；用户主动选择位置导出有限安全JSON，不复制私有快照、凭据、路径或正文，不自动上传/重试，不覆盖已有文件。未知方法显示未知，旧记录无尝试时间不推测；文件wire/schema12与权限保持。自动化/浏览器与准确候选原生未验边界见[诊断证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
 
 2026-10-19 R2生命周期增量：当前worker在native前封存确定未发布对象的实际引擎存储清单；同profile owner活动引用、分页扫描/压力重试及启动继续deleting已接入，不再递归删除未知缓存内容。可能已发布、未封存及超出完整封存预算的对象继续保护，R2完整原生回收/键盘粘贴仍待，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。无wire/schema变化或用户缓存配置。

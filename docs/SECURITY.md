@@ -2,6 +2,8 @@
 
 # Security
 
+R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。当前服务器不激活该迁移或对外提供分享，网络签名/防重放/猜码限制与P2P范围仍须接入验证，不能把Go actor参数当网络身份认证。设计与准确边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+
 R3诊断采用字段白名单重建安全DTO/报告，不对原始TaskSnapshot、恢复或缓存owner做正则脱敏后整体导出。未知字符串不原样输出；临时任务编号不携带稳定身份、路径、URL或原始异常。安全JSON构造完成后才写入用户选择的本地位置，O_EXCL临时文件/Sync/不覆盖Link保护已有文件，取消不写stale选择；不自动上传。诊断导航不授予重试或网络权限，旧原生错误owner保持独立。schema12/wire/身份校验不变，实际验证和未验原生边界见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
 
 2026-10-19 可靠性R2增量：文件剪贴板接收/checkpoint支持借用profile owner固定的`os.Root`，目录字符串不能替换其文件系统授权；发布前复核可见路径的身份。原生写入被尝试后，错误也不能证明未发布，因此保留已验证缓存并显示不确定状态。boot变化与TTL不能单独证明粘贴结束；完整自动回收仍待可靠原生交接与读取结束证据。见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量验证](evidence/RELIABILITY-R2-CACHE-PATHS.md)。无文件wire/schema改变。

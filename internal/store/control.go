@@ -159,6 +159,11 @@ CREATE TABLE IF NOT EXISTS schema_version(version INTEGER PRIMARY KEY);`)
 			db.Close()
 			return nil, err
 		}
+	} else if len(versions) == 1 && versions[0] == 5 {
+		if err = verifyShareSchema(db); err != nil {
+			db.Close()
+			return nil, err
+		}
 	} else if len(versions) != 1 || versions[0] != 4 {
 		db.Close()
 		return nil, errors.New("unsupported control database schema version")

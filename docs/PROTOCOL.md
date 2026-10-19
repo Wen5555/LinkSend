@@ -16,6 +16,8 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+R5分阶段授权核心尚未新增线上wire或协商能力。Go状态/Control存储私有record不能当作HTTP/JS DTO；现有成员握手、普通配对与文件V1保持。完整临时分享须按[ADR0017](adr/0017-one-time-share-grant.md)先实现独立签名、限频、临时公钥作用域、grant/task/generation协调与引擎绑定，完成后才启用share_grants_v1；旧端缺能力必须明确拒绝，不回退为永久配对。当前增量范围见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+
 ## 2026-10-19 本地诊断DTO
 
 R3只扩展本地TaskSnapshot/InboxItem可选安全diagnostic与snapshot可选attempt_started_at，不是网络授权/文件wire变化；旧任务JSON无实际尝试时间时显示未知，旧端忽略可选字段，schema仍12。导出报告v1单独白名单构造，最多32条/128KiB，使用报告内task-N编号，排除私有恢复/缓存/未来分享记录；只向JS返回导出保存/取消状态和安全错误码。详情见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)，不因此升级V1或新增连接能力。

@@ -1,6 +1,6 @@
 # LinkSend 桌面体验全轮 TODO
 
-## 2026-10-19 可靠性 自动缓存与临时分享 Goal（active）
+## 2026-10-19 可靠性 自动缓存与临时分享 Goal（继续实施；平台先前blocked）
 
 用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。
 
@@ -17,10 +17,10 @@
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
 - [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现；130项前端/定向race和两模块检查通过，浏览器布局/导航已检查。准确候选原生保存/取消与任务入口旅程继续，见[诊断证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
 - [ ] R4：准确Windows候选实际覆盖安装、profile逐字节保持、身份/草稿/历史/20MiB恢复状态、单实例唤回及原系统入口恢复已验；基线活动任务取消退出/保存退出通过。候选活动完整续传、SendTo/拖放和Mac替换/活动退出仍待，见[原生证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
-- [ ] R5：ShareGrant ADR、隔离授权/协议、两端流程、安全兼容及真实 LAN/跨网临时分享待实施。
+- [ ] R5（授权核心实施）：[ADR0017](adr/0017-one-time-share-grant.md)已先冻结，状态机与Control同连接事务/CAS、显式4→5备份迁移、有限恢复和竞争回归已实现；定向普通/race各3轮、两模块workspace/off完整12命令通过，CI另核对。当前服务器不激活迁移或广告能力，签名/防重放/猜码限频、认证P2P范围、两端UI及真实LAN/跨网分享仍必做，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点：01b5c16的三组CI与三平台包全部success，准确包已核验；Windows已实际覆盖基线63c86c2，完成原生诊断保存/取消与任务导航。安装事务已Restore回读通过，原登记/三个快捷方式恢复，GUI/peer已正常退出，隔离profile与20MiB恢复数据保留。协调夹具已到期，续起同库服务被自动审批拒绝且未绕过；不反复派发。修复实机发现的恢复阶段内部名，再继续R5 ShareGrant ADR及独立实现。R2完整回收/键盘粘贴、R1跨网及R4双平台完整旅程/R6仍必做。
+当前接续点：Windows已实际覆盖63c86c2→01b5c16并完成原生诊断保存/取消与任务导航；安装事务Restore回读通过，原登记/三个快捷方式恢复，GUI/peer正常退出，隔离profile与20MiB恢复数据保留。协调夹具已到期，续起同库服务被自动审批拒绝且未绕过。恢复阶段提示修复1caddbd已推送，core/desktop CI success，三平台包继续核对；R5授权核心新增状态/同连接持久CAS与显式备份迁移，检查后推送并继续签名控制/数据面及UI。Mac只读检查job /tmp/codex-ssh/job-ls-r4-mac-inspect-20261019-01退出0，日常0.6.0/PID65291未触碰。R2完整回收/键盘粘贴、R1跨网及R4双平台完整旅程/R6仍必做；平台Goal工具当前仍显示blocked，不把源码推进或接续记录假标complete。
 
 接续时先核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG在本次记录时仍运行）。只读本地watch日志 `ci-39165099505.log`；待完成后更新准确结果，失败继续修复，不能把运行中记PASS。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 
