@@ -1,6 +1,6 @@
 # R5 本地owner、两阶段数据面与桌面候选（2026-10-26）
 
-本轮基于 `91cca8e`（专属签名协调已提交）的工作树；以下新增core、desktop/UI/workflow与文档在记录时尚待分范围提交，不能将此前CI记到本候选。唯一完成状态仍在[TODO](../DESKTOP-EXPERIENCE-TODO.md)。[ADR0017](../adr/0017-one-time-share-grant.md)先冻结授权与协议，当前实验开关仍为 `experimental_share_control=true`，`file_transfer_ready=false`，不广告正式 `share_grants_v1`。Goal工具已实际核对active，R5及R0–R6整体均未完成。
+本轮基于 `91cca8e`（专属签名协调已提交）的工作树；core已作为 `e53a806`、desktop/UI/workflow作为 `701e23b` 分别提交并推送，远端SHA已核对。不能将此前CI记到本候选；该提交的准确CI及后续测试修复见末节。唯一完成状态仍在[TODO](../DESKTOP-EXPERIENCE-TODO.md)。[ADR0017](../adr/0017-one-time-share-grant.md)先冻结授权与协议，当前实验开关仍为 `experimental_share_control=true`，`file_transfer_ready=false`，不广告正式 `share_grants_v1`。Goal工具已实际核对active，R5及R0–R6整体均未完成。
 
 ## 当前实现
 
@@ -82,3 +82,11 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 ## 未完成与后续
 
 准确新提交GitHub CI、准确包来源、Windows↔Mac与不同网络双向临时分享、原生保存/复制及最终完整旅程仍待真实证据。真实socket自动引擎、浏览器夹具、CI构建与物理跨网分别记录；不抵扣用户Windows双端公网连接现场、受限双NAT、R2完整缓存/键盘粘贴或其他R0–R6必做项。未做生产部署或宿主防火墙/路由/代理变更。
+
+## 701e23b 准确CI失败与测试工具修复
+
+`701e23b067c38747813b84fa9c93cee6d19e0901` 的[core40232117991](https://github.com/Wen5555/LinkSend/actions/runs/40232117991)及[desktop40232117989](https://github.com/Wen5555/LinkSend/actions/runs/40232117989)均completed/success；[packages40232117997](https://github.com/Wen5555/LinkSend/actions/runs/40232117997)为failure，两个Mac包job成功，Windows的native复制检查失败。证据artifact12614000098的三小日志已下载到 `.artifacts/share-ui-draft/ci-701e23b/`，summary为target_run=1/pass=0/skip=0、exit1；不能将目标运行等同通过。
+
+真实原因是测试扫描运行中的profile时尝试读取Windows独占字节锁定的零字节根 `.profile.lock`，返回ERROR_LOCK_VIOLATION。失败发生在第一轮保护码和后续正常文字QUIC断言之后，paused整轮尚未验完，不标原生PASS。修复仅在Windows测试scanner中排除精确profile根、regular且Size0的该控制文件；其他同名嵌套文件、其他锁文件、非空/非regular控制锁、伪码及任何其他读取错误继续拒绝/传播，不改变生产代码、权限或原生备份门。
+
+纯文件测试使用真实core.New持有该Windows锁，旧实现实际FAIL（`native-profile-scan-before.log`，exit1/8968ms）；修后正负例普通10轮PASS（app5.453s、命令9089ms、exit0，`native-profile-scan-after.log`）。optin显式unset的desktop workspace test/vet/build为9080/928/3924ms，off为9562/749/3772ms，六命令exit0；日志 `native-scan-desktop-{workspace|off}-{test|vet|build}.log`。这些测试未访问系统剪贴板，完整native正向仍须新提交托管CI证明。

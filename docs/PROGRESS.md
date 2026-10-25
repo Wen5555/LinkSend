@@ -1,5 +1,6 @@
 ## 2026-10-26 R5 本地owner、两阶段数据面与桌面候选
 
+- Core `e53a806` 与desktop `701e23b` 已提交推送并核对远端。701准确core40232117991/desktop40232117989成功，packages40232117997的两个Mac job成功、Windows native检查因测试误读独占零字节.profile.lock失败。仅测试scanner精确排除此根控制锁，纯文件真实持锁旧FAIL→普通10轮及desktop六矩阵PASS；其他读错/伪码仍拒绝，未改生产权限或强跑本机剪贴板，完整native仍待新准确CI。
 - 同profile现有SQLite metadata的用途签名/raw CAS owner固定原身份、origin、授权、源与接收计划；稳定控制意图保留响应丢失状态，重启只展示，恢复须明确触发。仅回收服务确认终态且首次观察满七天、无活动/待处理意图的私有metadata，不删用户文件、历史或checkpoint，不新增缓存设置。
 - 新独立driver复现目录无写入却SOURCE_CHANGED：Windows目录mtime延后可见。现完整重建源后仅同ID/路径/type目录沿用冻结时间，再比较完整摘要；真实两阶段6条落盘正例与目录增删/改名、同size/mtime换内容、文件mtime变化负例普通10轮及定向race3轮通过。普通文件检查和原wire保持；早期失败、wrapper收尾stderr拒绝与后续准确矩阵分别记录。
 - 目录修复生产源码对应新12矩阵全部exit0（core test135385/134782ms，desktop12689/11544ms）。首个workspace test启动后仅新增精确路径/type测试断言，已由最终目录普通3轮及后续core off完整测试覆盖；准确提交CI仍另核对。

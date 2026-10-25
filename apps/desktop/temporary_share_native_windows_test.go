@@ -179,27 +179,120 @@ func TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache(t *testing.T) {
 		if nativeReads.Load() <= before {
 			t.Fatal("normal native copy did not exercise the native reader")
 		}
-		if err := filepath.WalkDir(filepath.Join(root, "a"), func(path string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return nil
-			}
-			body, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			if bytes.Contains(body, []byte(created.Code)) {
-				return errors.New("plaintext code found in private profile storage")
-			}
-			return nil
-		}); err != nil {
+		if err := scanTemporaryNativeProfile(filepath.Join(root, "a"), []byte(created.Code)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	app.closeClipboardOwner()
 	t.Log("PASS: protected active/paused native generations did not read/cache/send code; subsequent native text crossed authenticated QUIC; original clipboard restoration follows")
+}
+
+var errTemporaryNativeProfileCode = errors.New("plaintext code found in private profile storage")
+
+func scanTemporaryNativeProfile(profile string, code []byte) error {
+	profile = filepath.Clean(profile)
+	controlLock := filepath.Join(profile, ".profile.lock")
+	return filepath.WalkDir(profile, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == controlLock {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			// The live profile owner byte-locks this zero-byte control file on
+			// Windows. No other path or read error is excluded from the scan.
+			if !info.Mode().IsRegular() || info.Size() != 0 {
+				return errors.New("profile control lock is not an empty regular file")
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if bytes.Contains(body, code) {
+			return errTemporaryNativeProfileCode
+		}
+		return nil
+	})
+}
+
+func TestDesktopTemporaryCodeProfileScanHandlesOwnedLock(t *testing.T) {
+	profile := t.TempDir()
+	service, err := coreapp.New(coreapp.Config{DataDir: profile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Shutdown()
+	lock := filepath.Join(profile, ".profile.lock")
+	info, err := os.Stat(lock)
+	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
+		t.Fatal("fixture did not establish an empty profile control lock", err)
+	}
+	if _, err = os.ReadFile(lock); !errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+		t.Fatal("fixture did not hold the real Windows profile lock", err)
+	}
+	if err = scanTemporaryNativeProfile(profile, []byte("synthetic-profile-scan-code")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDesktopTemporaryCodeProfileScanRejectsOtherStorage(t *testing.T) {
+	const fakeCode = "synthetic-profile-scan-code"
+	for _, relative := range []string{"state.bin", "nested/.profile.lock", "another.lock"} {
+		t.Run(relative, func(t *testing.T) {
+			profile := t.TempDir()
+			name := filepath.Join(profile, filepath.FromSlash(relative))
+			if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(name, []byte(fakeCode), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := scanTemporaryNativeProfile(profile, []byte(fakeCode)); !errors.Is(err, errTemporaryNativeProfileCode) {
+				t.Fatal("plaintext in profile storage was not rejected", err)
+			}
+		})
+	}
+	t.Run("nonempty_root_control_lock", func(t *testing.T) {
+		profile := t.TempDir()
+		if err := os.WriteFile(filepath.Join(profile, ".profile.lock"), []byte("nonempty-control-file"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := scanTemporaryNativeProfile(profile, []byte(fakeCode)); err == nil {
+			t.Fatal("nonempty root profile lock was excluded")
+		}
+	})
+	t.Run("other_locked_file", func(t *testing.T) {
+		profile := t.TempDir()
+		file, err := os.OpenFile(filepath.Join(profile, "another.lock"), os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		var overlapped windows.Overlapped
+		if err = windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &overlapped); err != nil {
+			t.Fatal(err)
+		}
+		defer windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &overlapped)
+		if err = scanTemporaryNativeProfile(profile, []byte(fakeCode)); !errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+			t.Fatal("read errors from other locked files were ignored", err)
+		}
+	})
+	t.Run("root_control_lock_is_directory", func(t *testing.T) {
+		profile := t.TempDir()
+		if err := os.Mkdir(filepath.Join(profile, ".profile.lock"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := scanTemporaryNativeProfile(profile, []byte(fakeCode)); err == nil {
+			t.Fatal("non-regular root profile lock was excluded")
+		}
+	})
 }
 
 type temporaryNativeClipboard struct {
