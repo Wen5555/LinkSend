@@ -81,7 +81,7 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 
 ## 未完成与后续
 
-准确新提交GitHub CI、准确包来源、Windows↔Mac与不同网络双向临时分享、原生保存/复制及最终完整旅程仍待真实证据。真实socket自动引擎、浏览器夹具、CI构建与物理跨网分别记录；不抵扣用户Windows双端公网连接现场、受限双NAT、R2完整缓存/键盘粘贴或其他R0–R6必做项。未做生产部署或宿主防火墙/路由/代理变更。
+不同网络Go核心双向临时分享已补充[701准确实网证据](RELIABILITY-R5-CROSS-NETWORK-20261026.md)；准确候选CI/包来源、Windows↔Mac与原生保存/复制及最终完整旅程仍待真实证据。真实socket自动引擎、浏览器夹具、CI构建与物理跨网分别记录；不抵扣用户Windows双端公网连接现场、受限双NAT、R2完整缓存/键盘粘贴或其他R0–R6必做项。未做生产部署或宿主防火墙/路由/代理变更。
 
 ## 701e23b 准确CI失败与测试工具修复
 
@@ -90,3 +90,5 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 真实原因是测试扫描运行中的profile时尝试读取Windows独占字节锁定的零字节根 `.profile.lock`，返回ERROR_LOCK_VIOLATION。失败发生在第一轮保护码和后续正常文字QUIC断言之后，paused整轮尚未验完，不标原生PASS。修复仅在Windows测试scanner中排除精确profile根、regular且Size0的该控制文件；其他同名嵌套文件、其他锁文件、非空/非regular控制锁、伪码及任何其他读取错误继续拒绝/传播，不改变生产代码、权限或原生备份门。
 
 纯文件测试使用真实core.New持有该Windows锁，旧实现实际FAIL（`native-profile-scan-before.log`，exit1/8968ms）；修后正负例普通10轮PASS（app5.453s、命令9089ms、exit0，`native-profile-scan-after.log`）。optin显式unset的desktop workspace test/vet/build为9080/928/3924ms，off为9562/749/3772ms，六命令exit0；日志 `native-scan-desktop-{workspace|off}-{test|vet|build}.log`。这些测试未访问系统剪贴板，完整native正向仍须新提交托管CI证明。
+
+`103ba61c13ba02a02a0037bd891c2a64777cec29` 的core40233307686与desktop40233307731均success，packages40233307711仍failure。Windows native目标run=1/pass=0/skip=0、exit1，报告real clipboard session did not become ready；同一等待closure用于初始和暂停恢复，本日志不能判定阶段，不能移记锁修复后的完整native通过。证据在 `.artifacts/share-ui-draft/ci-103ba61/`。Mac arm64在安装固定Wails beta.18时，sum.golang.org的IPv6无路由导致Go模块校验失败，未到产品测试；Intel包成功。保留两类失败，继续确定性回归，不以提高等待或重跑掩盖。

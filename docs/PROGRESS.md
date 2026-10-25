@@ -1,3 +1,9 @@
+## 2026-10-26 R5 准确源码实网与R2原生引用原型
+
+- `701e23b`干净源码验证器完成Windows↔公共JP Linux双向临时分享，每向3文件16,777,247B、中文/零字节/嵌套空目录1、树hash一致，双方task/local share/grant completed、TLS1.3/linksend/1、零永久授权。控制metadata经隔离SSH HTTPS/WSS，文件独立UDP/Pion/QUIC；Windows正向后台退出码不可观察，其余三actor exit0。服务与通道关闭，临时凭据精确移除，文件保留，见[准确实网证据](evidence/RELIABILITY-R5-CROSS-NETWORK-20261026.md)。不替代Win↔Win/双NAT、WinMac或准确Wails包。
+- R2同进程166条trace、真实跨进程496条、launcher退出后helper499条原型已严格构建/运行通过，持有引用一直保护源，最后引用结束才quiescent，系统剪贴板958→958、源全部保留、无残留。未接生产/系统发布，helper仍是live COM producer，签名delegation、安全inventory与持久receipt未做；详见[原型边界](evidence/RELIABILITY-R2-NATIVE-REFERENCE-PROBE.md)。
+- 103准确core40233307686/desktop40233307731成功，packages40233307711失败：Windows native真实run/no-skip但会话就绪检查失败，阶段尚不能确定；Mac arm64另为sum.golang.org IPv6无路由，Intel包成功。不重复跑以掩盖问题，正做无系统clipboard的因果回归；整体R0–R6未完成。
+
 ## 2026-10-26 R5 本地owner、两阶段数据面与桌面候选
 
 - Core `e53a806` 与desktop `701e23b` 已提交推送并核对远端。701准确core40232117991/desktop40232117989成功，packages40232117997的两个Mac job成功、Windows native检查因测试误读独占零字节.profile.lock失败。仅测试scanner精确排除此根控制锁，纯文件真实持锁旧FAIL→普通10轮及desktop六矩阵PASS；其他读错/伪码仍拒绝，未改生产权限或强跑本机剪贴板，完整native仍待新准确CI。

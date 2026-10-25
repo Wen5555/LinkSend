@@ -32,6 +32,16 @@
 
 正常回收条件为安全无引用且创建后至少7天；空间压力仅可提前到安全无引用后至少24小时。时钟回拨、未来时间和缺失时间均延后回收；时钟快进不解除 boot、引用、所有权与原生读取保护。未发布失败对象不需要该保留期。
 
+### 2026-10-26 Windows 隔离原型的实现边界
+
+已在本机独立 `.artifacts/r2-native-reader-draft` 验证三阶段：同进程真实 COM consumer 166条trace、真实 STA producer与两个MTA进程的标准COM marshalling 496条、launcher正常退出后的独立STA helper服务与退出门499条。持有的`IDataObject`、stream/clone、async operation及活动调用都参与保护；EOF或`EndOperation`不提前产生quiescent。最后所有源引用结束且源句柄关闭才产生每个publication唯一witness。严格构建、实际进程退出、哈希、保留源文件与早期编译/CRT入口失败见[原生引用原型证据](../evidence/RELIABILITY-R2-NATIVE-REFERENCE-PROBE.md)。
+
+这些原型从未调用系统剪贴板/native publication、生产adapter或回收器；本轮只读clipboard序号均958→958，没有删除任何源夹具或改动生产权限。生产仍为Windows CF_HDROP/macOS file URL，旧published/publishing/protected状态与删除门保持。原型plain JSON witness不构成生产删除许可；签名delegation、安全inventory交接、持久签名receipt及Go/SQLite owner的验证/CAS尚未实现，不能以计数或进程退出补出许可。
+
+helper实验只证明launcher exit 0后，**仍存活的COM producer/helper**可以继续服务两个真实consumer，并在全部源引用/consumer结束后有界退出；没有证明producer/helper自身退出后源stream可用。有限句柄继承/观察不是完整安全沙箱或安全交接。Explorer Ctrl+V、实际clipboard owner变化、正常退出/重启/升级时的原生可用性及macOS Finder均未通过本实验验收，R2仍未整体完成。
+
+下一步先冻结新publication的无物理路径出口合同及退出owner，完整审查格式、Stat、Shell fallback和Open/Reveal/drag/history出口；任何cache物理路径外泄都使整个对象继续path-protected，不追认旧发布。再实现同一Go owner验证的用途签名delegation、固定身份inventory和有界持久receipt；缺失、半写、签名不符、旧回调或崩溃一律protected。取得真实Explorer/Finder键盘、目录/空目录/长路径、重复/并发消费者与退出/重启/升级证据后，才可把新合同的可验证quiescent与原封存清单、活动引用、自动保留期和逐项身份删除门连接，验证真实自动回收。维持无手动清理、无容量/期限设置。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。
