@@ -16,6 +16,10 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-26 临时分享签名客户端
+
+客户端每操作经health读取当前share_control.version=1及公开epoch，完整签名绑定原URI/actor/epoch:新nonce/时间/请求体；未知或缺失控制能力拒绝。创建只发验证器，领取才发明文码，均不放URL。响应必须匹配原actor/ID/清单/task/gen/plan及合法幂等状态，拒绝重复/未知字段和超限；副作用请求不自动重试，status不等于未来数据授权。实验服务仍file_transfer_ready=false，未开放临时文件通道，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+
 ## 2026-10-26 候选地址准入
 
 ICE候选不携带网段，不能以IPv4末字节255判定定向广播。信令服务在拒绝zone后先Unmap规范化IPv4映射IPv6，再保留明确危险scope/0网段/多播及保留高地址/有限广播/非测试loopback限制。真实Pion检查、签名与原会话/代次仍是独立条件；没有文件wire字段变更。见[准入回归](evidence/CANDIDATE-ADMISSION-20261026.md)。

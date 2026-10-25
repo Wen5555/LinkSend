@@ -1,3 +1,9 @@
+## 2026-10-26 R5 签名HTTP客户端
+
+- 新增类型化ShareControlInfo/ShareControl，每次取新epoch、签新nonce；有限响应按actor/ID/清单/task/gen/计划核对，合法后续幂等状态保留。HTTPS/禁止重定向/取消延续现有client，不自动重试副作用请求；远端错误只留白名单码及固定摘要，不回显分享码或detail。
+- 真实TLS实验服务下未入组身份完成完整控制链，普通成员枚举/WSS仍拒绝；最终57项2.699s、race3轮5.658s及signaling双模式全包test/vet通过；独立审查发现并以旧实现13项FAIL证明大小写/Unicode别名可绕过去重，修后语义重复拒绝。两模块12矩阵早于最后解析修复，准确完整CI随后核对，app压力恢复竞态另行修复。见[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+- 不广告完整分享、未接入数据面或两端UI，file_transfer_ready仍false，R5及原Goal保持未完成。下一步grant专属协调与独立加密manifest预览，bound后才进入V1引擎/目标storage。
+
 ## 2026-10-26 优先跨网修复同步
 
 - 将已验证edf7cac的默认备用STUN、内置主机有界HTTPS解析和ICE失败真实证据同步到可靠性分支；原正式版最小分支Windows候选及[PR #12](https://github.com/Wen5555/LinkSend/pull/12)已交付，准确源码Windows↔公共Linux双向16MiB/中文/空目录/hash/双方Completed通过。Windows用户暂不能试用，Win↔Win准确候选、受限双NAT及其余Goal必做项仍未验。见[证据](evidence/CROSS-NETWORK-20261026.md)。

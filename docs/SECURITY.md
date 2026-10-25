@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 临时分享HTTP客户端沿用HTTPS与禁止重定向，每次签新epoch/nonce证明，不重放旧证明或自动重试副作用请求。服务响应经有限解析及原actor/任务/清单/计划绑定，错误只留稳定白名单码及固定摘要；不把远端detail、分享码或私有record带入日志/错误。此控制客户端不授予永久成员/信任/剪贴板或文件权限，数据面仍未接入，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+
 2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
 R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该增量不提供临时文件通道或广告完整分享能力，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
