@@ -2,15 +2,17 @@
 
 # Security
 
+2026-10-26 R5本地owner固定profile身份、server origin、原双方key/grant/claim/task/generation/manifest/plan、源选择与保存目录；记录在现有SQLite metadata内用设备Ed25519及固定用途域签名，raw CAS写入后回读。明文分享码不入ledger、task、错误或诊断，创建当次丢码需撤销新建。重启不联网或自动恢复，源变化持久撤销意图；普通Retry不能借永久授权继续。同步准备/hash及HTTP操作同时受调用方与profile退出取消，退出join真实工作。只有持久本机Completion可标本机完成，服务端Completed且无该凭据时保留needs_attention，不能补造verified/committed或继续传输。自动回收只删服务已确认终态且首次观察满七天、无活动/控制操作/待处理意图的本profile签名授权metadata，raw CAS防替换；未知、旧记录无时间、回拨及篡改均保护，用户文件/历史/checkpoint不删。预览完整清单仅经固定公钥QUIC，新transfer再核验原scope；无永久成员、剪贴板或普通会话复用权限。实现与回归边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
 2026-10-26 R5专属协调使用原双方固定公钥、完整grant/task/phase scope和双层原签名；独立registry及有界消息/连接/重放/期限owner。所有新准入与出队重验记录，持久终态先退役，旧回调不能复活；普通组与健康连接不受分享终态清理。清单与正文无信令字段，默认完整能力关闭，实际文件授权仍须本地owner及原V1引擎，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
 
-2026-10-26 临时分享HTTP客户端沿用HTTPS与禁止重定向，每次签新epoch/nonce证明，不重放旧证明或自动重试副作用请求。服务响应经有限解析及原actor/任务/清单/计划绑定，错误只留稳定白名单码及固定摘要；不把远端detail、分享码或私有record带入日志/错误。此控制客户端不授予永久成员/信任/剪贴板或文件权限，数据面仍未接入，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+2026-10-26 临时分享HTTP客户端沿用HTTPS与禁止重定向，每次签新epoch/nonce证明，不重放旧证明或自动重试副作用请求。服务响应经有限解析及原actor/任务/清单/计划绑定，错误只留稳定白名单码及固定摘要；不把远端detail、分享码或私有record带入日志/错误。此控制客户端不单独授予永久成员/信任/剪贴板或文件权限；该历史增量当时未接数据面，当前实现见上段及[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
 
 2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
 R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该增量不提供临时文件通道或广告完整分享能力，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 
-R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。当前服务器不激活该迁移或对外提供分享，网络签名/防重放/猜码限制与P2P范围仍须接入验证，不能把Go actor参数当网络身份认证。设计与准确边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。最初核心增量当时不激活迁移或对外分享；当前显式实验激活、签名协调与数据面范围见上段，不能把Go actor参数当网络身份认证。设计与历史边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 
 R3诊断采用字段白名单重建安全DTO/报告，不对原始TaskSnapshot、恢复或缓存owner做正则脱敏后整体导出。未知字符串不原样输出；临时任务编号不携带稳定身份、路径、URL或原始异常。安全JSON构造完成后才写入用户选择的本地位置，O_EXCL临时文件/Sync/不覆盖Link保护已有文件，取消不写stale选择；不自动上传。诊断导航不授予重试或网络权限，旧原生错误owner保持独立。schema12/wire/身份校验不变，实际验证和未验原生边界见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
 

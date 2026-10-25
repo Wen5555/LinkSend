@@ -35,6 +35,7 @@ func (s *Service) shutdownOwners() {
 	s.inbox.mu.Lock()
 	s.inbox.shutdown = true
 	s.inbox.mu.Unlock()
+	s.prepareTemporaryShareShutdown()
 	if s.workCancel != nil {
 		s.workCancel()
 	}
@@ -72,6 +73,7 @@ func (s *Service) shutdownOwners() {
 	s.directPoolWG.Wait()
 	s.clipboardWorkers.Wait()
 	s.tasks.workers.Wait()
+	s.temporaryShares.wg.Wait()
 	s.clipboardCache.wg.Wait()
 	s.content.mu.Lock()
 	if s.content.store != nil {

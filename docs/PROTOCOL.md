@@ -16,13 +16,21 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-26 临时分享预览与原任务数据面
+
+实验临时分享在approved阶段使用独立、固定双方公钥的Pion ICE/TLS QUIC预览，不复用普通成员连接池。双向流每帧为六字节ASCII `LSSP01`、四字节大端JSON长度和version=1的严格JSON。sender发 `manifest`（完整scope及真实Manifest）；receiver明确选择保存目录、生成完整ReceivePlan、持久原Bind意图并收到真实Bind成功后，回 `accepted` 及plan_digest；sender回 `confirmed` 及同摘要。拒绝为 `rejected` 和固定 `RECEIVE_REJECTED`。manifest帧最多 `transfer.MaxMetadata + 2048`（当前MaxMetadata为8MiB），其余帧最多4096字节；未知、重复、Unicode大小写别名、多文档、错误scope/task/digest和不完整选收均拒绝。计划内容及绝对目录仅留接收方本机，线上只回计划摘要；预览不创建目标storage或发送文件body。
+
+Bind使preview退役；transfer必须重新取得当前原grant授权，以新ICE SessionID、新transfer scope和新QUIC进入既有V1 `SendWithOptions`/`ReceiveWithOptions`、BLAKE3、checkpoint、安全落盘与进程文件预算。新文件流/接收计划再核验ShareAuthorize；本地owner、黑名单、取消和绝对期限持续约束原任务。源变化不得沿用旧码/摘要，绑定后不自动改名改变计划摘要。TaskSnapshot只增本机 `temporary_share_id` 以将历史TaskRecordID关联原128bit wire task ID；私有恢复记录不经信令或正文wire。重启不联网、不自动批准或恢复；服务Completed仅是授权终态，必须有持久本机Completion才可标本机文件完成。详细兼容、安全和实际验证见[ADR0017](adr/0017-one-time-share-grant.md)及[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。实验file_transfer_ready仍false，不广告正式share_grants_v1。
+
+临时任务重建源时保留同ID/路径/type目录的冻结Modified，以容纳Windows目录时间延后可见；仍完整遍历/哈希并比较原manifest摘要，文件时间/内容及目录集合变化不能通过。发送的V1清单不变，不改变普通任务或全局摘要算法。
+
 ## 2026-10-26 临时授权专属WSS
 
 实验GET /v1/shares/{id}/ws及linksend.share-signal.v1按canonical query绑定claim_id/task_id/generation/phase/manifest_digest/可选plan_digest。ShareSignalScope/Frame version1的外层签名使用原AuthBytes，覆盖完整原已签Envelope、scope、actor、epoch、新nonce和有限时间；内层ICE generation独立。只允许严格ICE/候选/空end/失败白名单，禁止清单、正文、复用和剪贴板权限。Bind/完成/撤销/到期退役对应scope，普通断线不能伪造终态；完整文件能力仍关闭，见[ADR0017](adr/0017-one-time-share-grant.md)和[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
 
 ## 2026-10-26 临时分享签名客户端
 
-客户端每操作经health读取当前share_control.version=1及公开epoch，完整签名绑定原URI/actor/epoch:新nonce/时间/请求体；未知或缺失控制能力拒绝。创建只发验证器，领取才发明文码，均不放URL。响应必须匹配原actor/ID/清单/task/gen/plan及合法幂等状态，拒绝重复/未知字段和超限；副作用请求不自动重试，status不等于未来数据授权。实验服务仍file_transfer_ready=false，未开放临时文件通道，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+客户端每操作经health读取当前share_control.version=1及公开epoch，完整签名绑定原URI/actor/epoch:新nonce/时间/请求体；未知或缺失控制能力拒绝。创建只发验证器，领取才发明文码，均不放URL。响应必须匹配原actor/ID/清单/task/gen/plan及合法幂等状态，拒绝重复/未知字段和超限；副作用请求不自动重试，status不等于数据授权。该客户端增量当时未接临时文件通道；当前两阶段数据面见上节，实验服务仍file_transfer_ready=false，见[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
 
 ## 2026-10-26 候选地址准入
 
@@ -30,7 +38,7 @@ ICE候选不携带网段，不能以IPv4末字节255判定定向广播。信令�
 
 R5实验控制增量新增独立POST /v1/shares/{operation}，需X-LinkSend-Membership:2与X-LinkSend-Share-Grants:1。公钥/DeviceID、nonce/time/signature沿用既有鉴权Header，追加X-LinkSend-Share-Epoch；AuthBytes的nonce输入为epoch:nonce，方法/RequestURI/身份/时间/JSON照旧签名。未入组actor仅在该grant内获权，不能进入普通成员接口。普通配置明确SHARE_UNSUPPORTED；实验health的share_control.version=1且file_transfer_ready=false，不广告正式share_grants_v1。请求字段、错误码与实际验证见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)及[ADR0017](adr/0017-one-time-share-grant.md)，文件wire保持V1。
 
-R5分阶段授权核心尚未新增线上wire或协商能力。Go状态/Control存储私有record不能当作HTTP/JS DTO；现有成员握手、普通配对与文件V1保持。完整临时分享须按[ADR0017](adr/0017-one-time-share-grant.md)先实现独立签名、限频、临时公钥作用域、grant/task/generation协调与引擎绑定，完成后才启用share_grants_v1；旧端缺能力必须明确拒绝，不回退为永久配对。当前增量范围见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+R5最初分阶段授权核心当时未新增线上wire或协商能力。Go状态/Control存储私有record不能当作HTTP/JS DTO；现有成员握手、普通配对与文件V1保持。完整临时分享须按[ADR0017](adr/0017-one-time-share-grant.md)完成独立签名、限频、临时公钥作用域、grant/task/generation协调与引擎绑定及验收后才启用share_grants_v1；旧端缺能力必须明确拒绝，不回退为永久配对。历史增量范围见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)，当前实现范围见本日预览/数据面节。
 
 ## 2026-10-19 本地诊断DTO
 

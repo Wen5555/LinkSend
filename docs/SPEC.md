@@ -12,11 +12,13 @@
 
 # LinkSend protocol V1 implementation specification
 
-2026-10-26 R5协调原型：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。file_transfer_ready仍false，本地数据owner/UI/实际分享另验，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+2026-10-26 R5本地owner与数据面候选：同profile既有SQLite metadata保存用途签名/CAS授权和稳定控制意图；重启只展示原任务，恢复必须明确触发。approved仅以固定公钥的真实Pion ICE/QUIC预览完整清单，接收方确认目录与计划并Bind后，使用新scope/ICE会话/QUIC复用V1文件引擎；不新增永久信任或剪贴板权限。只有持久本机Completion才记本机完成，服务端终态不足以证明本机落盘。七天回收仅针对已确认终态的私有授权metadata，不删用户文件/历史/checkpoint，不增缓存设置。桌面源码、155项前端及双模块workspace/off完整12命令通过；浏览器夹具与原生/真实跨网边界分别记录，实验file_transfer_ready仍false，R5未整体完成，见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+2026-10-26 R5协调原型（该增量范围）：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。当时尚未接本地数据owner/UI，当前实现范围见上段；file_transfer_ready仍false，实际分享另验，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
 
 2026-10-26 跨网修复：桌面默认增加备用STUN并统一有效配置；只对内置公开STUN主机提供有界安全HTTPS解析，host/LAN不等待它；ICE失败保留实际计数及阶段。服务端先Unmap后校验危险scope，不再按末字节255猜广播，签名/会话/代次仍独立验证。文件wire、身份、公钥固定与relay=false保持，详见[ADR0018](adr/0018-cross-network-stun-resolution.md)及[服务端准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
-2026-10-26 R5签名控制增量复核：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。实验health明确file_transfer_ready=false，不广告share_grants_v1，不授予普通成员或文件通道权限；客户端/P2P/UI及真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+2026-10-26 R5签名控制增量复核（该增量范围）：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。实验health明确file_transfer_ready=false，不广告share_grants_v1，不授予普通成员或文件通道权限；当时尚待客户端/P2P/UI，当前范围见本日owner段，真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 
 2026-10-19 R5授权核心增量：先冻结[ShareGrant ADR0017](adr/0017-one-time-share-grant.md)，实现一次领取/两道明确确认、原公钥/清单/任务/计划及有限恢复状态，既有Control连接提供事务CAS与显式4→5备份迁移。当前Server.New不激活迁移、不提供临时分享路由或广告能力；两端完整流程仍必做。任务库schema12、V1正文及relay=false保持，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 

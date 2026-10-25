@@ -1,8 +1,18 @@
-## 2026-10-26 R5 专属授权协调原型
+## 2026-10-26 R5 本地owner、两阶段数据面与桌面候选
+
+- 同profile现有SQLite metadata的用途签名/raw CAS owner固定原身份、origin、授权、源与接收计划；稳定控制意图保留响应丢失状态，重启只展示，恢复须明确触发。仅回收服务确认终态且首次观察满七天、无活动/待处理意图的私有metadata，不删用户文件、历史或checkpoint，不新增缓存设置。
+- 新独立driver复现目录无写入却SOURCE_CHANGED：Windows目录mtime延后可见。现完整重建源后仅同ID/路径/type目录沿用冻结时间，再比较完整摘要；真实两阶段6条落盘正例与目录增删/改名、同size/mtime换内容、文件mtime变化负例普通10轮及定向race3轮通过。普通文件检查和原wire保持；早期失败、wrapper收尾stderr拒绝与后续准确矩阵分别记录。
+- 目录修复生产源码对应新12矩阵全部exit0（core test135385/134782ms，desktop12689/11544ms）。首个workspace test启动后仅新增精确路径/type测试断言，已由最终目录普通3轮及后续core off完整测试覆盖；准确提交CI仍另核对。
+- approved经固定公钥的真实Pion ICE/QUIC交换LSSP01完整清单，明确保存/Bind后退役preview，使用新scope/ICE会话/QUIC及原V1引擎。8MiB在4MiB暂停、双端重开Service并显式恢复原grant/claim/task/generation/manifest/plan/目录闭环通过，无第二任务。同IP完整合法流程48–50请求，冗余证明导致的早期RATE_LIMITED失败保留，原全局burst60未提高。
+- 受控旧实现分别暴露同步Create/hash/HTTP阻挡退出的五场景及服务Completed冒充本机完成的三场景。现在操作context同时响应profile退出并join；只有持久本机Completion才标本机完成，否则needs_attention且禁止继续。最终20项TemporaryShare测试race3轮app89.487s、相关vet及两模块workspace/off test/vet/build共12命令全部exit0（core test133863/125610ms，desktop16532/11166ms）。
+- 桌面源码、19files/155tests、typecheck/lint/build及960×640/1100×720真实页面浏览器夹具通过；夹具Backend为假元数据，不证明RPC/native/P2P。原生复制目标因未证实可备份格式SKIP；独立WindowStation创建遭OS错误5，目标测试未运行、原用户剪贴板不变。严格限GitHub托管Windows的空夹具CI入口已准备，准确新提交CI/包结果待核对，不预记PASS。
+- 实验file_transfer_ready仍false，Windows↔Mac/不同网络临时分享与原生完整旅程未完成，R5保持未勾选；Goal当前实际active。准确来源、命令、失败与边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+## 2026-10-26 R5 专属授权协调原型（历史增量范围）
 
 - 先冻结ADR0017两阶段/完整scope，再实现独立临时WSS和双层原AuthBytes签名；preview→Bind退役→新transfer scope，原成员认证/注册表保持。资源、消息结构与绝对期限有界，终态/撤销与普通断线分类分开，不发信令清单/文件正文，不授予剪贴板或普通会话复用。
 - 真实SQLite/WSS、三处屏障、预算/重放/角色/期限/重启/关闭安全回归普通与race3轮通过；新客户端46项、race3轮及真实TLS完整协调链通过。root相关完整包/vet通过，完整候选矩阵与准确CI随后核对，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
-- 当前仍experimental_share_control=true才启用，file_transfer_ready=false；本地owner、认证P2P/原文件引擎、UI与准确实网验收分别接续，不标完整功能已可用。
+- 该协调增量当时尚未接本地owner、认证P2P/原文件引擎及UI；当前实现见本日owner节。仍experimental_share_control=true才启用、file_transfer_ready=false，准确实网未验，不标完整功能已可用。
 
 ## 2026-10-26 R2 文件新复制与续期交错修复
 
@@ -15,7 +25,7 @@
 
 - 新增类型化ShareControlInfo/ShareControl，每次取新epoch、签新nonce；有限响应按actor/ID/清单/task/gen/计划核对，合法后续幂等状态保留。HTTPS/禁止重定向/取消延续现有client，不自动重试副作用请求；远端错误只留白名单码及固定摘要，不回显分享码或detail。
 - 真实TLS实验服务下未入组身份完成完整控制链，普通成员枚举/WSS仍拒绝；最终57项2.699s、race3轮5.658s及signaling双模式全包test/vet通过；独立审查发现并以旧实现13项FAIL证明大小写/Unicode别名可绕过去重，修后语义重复拒绝。两模块12矩阵早于最后解析修复，准确完整CI随后核对，app压力恢复竞态另行修复。见[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
-- 不广告完整分享、未接入数据面或两端UI，file_transfer_ready仍false，R5及原Goal保持未完成。下一步grant专属协调与独立加密manifest预览，bound后才进入V1引擎/目标storage。
+- 该签名客户端增量当时未接数据面或两端UI；当前实现见本日owner节。仍不广告完整分享，file_transfer_ready=false，R5及原Goal保持未完成。
 
 ## 2026-10-26 优先跨网修复同步
 

@@ -42,21 +42,31 @@ HTTP最大请求体、字符串、候选数、并发、deadline 复用现有协�
 
 ## 2026-10-26 临时协调与预览设计冻结
 
-以下是下一增量的协议与授权约束，尚未实现，不改变file_transfer_ready=false或普通成员路径。采用独立GET /v1/shares/{id}/ws和linksend.share-signal.v1子协议；严格query只含原claim/task、grant generation、phase、manifest/plan摘要，所有值进入实际RequestURI的现有epoch请求签名。禁止重复/未知query、分享码、文件路径、正文或清单。临时actor不写devices/groups/trust，不注册普通s.clients/s.sessions，也不能调用普通成员WS。
+本节先于实现冻结协议与授权约束；当前专属协调、本地owner、两阶段Pion/QUIC与桌面源码已实现并有自动验证，范围见[协调证据](../evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)及[owner/数据面证据](../evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。准确包、原生与真实跨网验收仍未完成，file_transfer_ready=false，普通成员路径保持。采用独立GET /v1/shares/{id}/ws和linksend.share-signal.v1子协议；严格query只含原claim/task、grant generation、phase、manifest/plan摘要，所有值进入实际RequestURI的现有epoch请求签名。禁止重复/未知query、分享码、文件路径、正文或清单。临时actor不写devices/groups/trust，不注册普通s.clients/s.sessions，也不能调用普通成员WS。
 
 ShareSignalScope绑定grant ID、claim ID、task ID、grant generation、phase、manifest摘要及plan摘要。Envelope.Generation继续表示ICE代次，不能替换grant generation。共享Frame保留原protocol.Envelope签名，外层用既有AuthBytes/Ed25519对完整scope、原Envelope、epoch、新nonce和有限时间再签名；这是沿用既有签名算法绑定用途，不新增密码学握手。不得解包改写payload后冒充原Envelope签名仍有效。两端原公钥分别从当前grant固定，服务和客户端都重验actor/recipient及scope。
 
 preview仅为当前approved、原双方/claim/task/generation/manifest、领取期限内的独立认证QUIC元数据预览。清单与实际保存计划在这个加密P2P连接中确认，不进入信令；未bound不得进入V1文件引擎、创建目标storage或发送文件body。Bind成功立即退役preview；transfer需当前bound、原plan/task/manifest/双方公钥/恢复期限，调用原Record.Authorize，再用新的ICE SessionID和QUIC连接。禁止在preview连接上隐式升权。两阶段固定发送方发起、接收方响应，关闭session reuse/clipboard，均不进入普通连接池。
 
-元数据预览只能返回一份经原Manifest.Validate/Digest核对的清单及一份明确确认计划，计划包含最终本机路径和冲突策略；绑定后不能由引擎自动改名悄然改变digest。源变化需撤销并由用户重新确认新分享。文件操作仍走现有安全落盘/完整性/V1引擎，原本地黑名单优先；完整ShareGrant与任务恢复owner接入前不开放产品入口。
+元数据预览只能返回一份经原Manifest.Validate/Digest核对的清单及一份明确确认计划，计划包含最终本机路径和冲突策略；绑定后不能由引擎自动改名悄然改变digest。源变化需撤销并由用户重新确认新分享。文件操作仍走现有安全落盘/完整性/V1引擎，原本地黑名单优先。当前实验桌面入口已接本地ShareGrant与任务恢复owner，不因此广告正式能力或抵扣准确包实机验收。
 
 shareHub独立管理最多32个活动scope/64条WS，每身份最多8条，每scope的每actor只有一个连接；替换和cleanup比较owner token/指针，旧回调不能删新连接。单个ICE negotiation、每方向32个candidate、frame32KiB/payload16KiB、鉴权/写入5秒、读空闲65秒、每连接60frame/s；候选仍用原准入，ICE描述严格拒绝复用/剪贴板权限，end为空对象、session_error只用白名单码，不允许任意JSON正文转发。
 
 分享状态迁移、WS注册、转发准入和writer出队共享分享gate/owner token；持久撤销/完成/过期后先退役scope、丢弃未发队列并取消对应连接，不能触及普通连接注册表。网络写入不持有全局s.mu；已经开始发送的在途字节无法撤回，信令也不是文件权限。每scope按真实期限主动关闭，不能仅等一分钟reaper；所有新操作仍核验实际期限。Server.Close先禁止新注册、取消并等待分享reader/writer/timer，再关闭唯一Control数据库。
 
-控制面断线不允许新preview/transfer或恢复任务跳过新证明；新连接必须新nonce、当前epoch及原scope核验。已经建立的bound健康QUIC只承载原任务，仍受本地grant owner、原实际期限、取消/撤权和完整性约束，无关控制面重连不重开或扩大权限；明确终态/撤销通知必须取消对应任务，其他普通QUIC保持。客户端owner与该策略的因果验证属于后续数据面必做项。
+控制面断线不允许新preview/transfer或恢复任务跳过新证明；新连接必须新nonce、当前epoch及原scope核验。已经建立的bound健康QUIC只承载原任务，仍受本地grant owner、原实际期限、取消/撤权和完整性约束，无关控制面重连不重开或扩大权限；明确终态/撤销通知必须取消对应任务，其他普通QUIC保持。当前客户端owner与真实引擎回归见本轮证据；物理网络仍须独立证明。
+
+## 2026-10-26 本地owner与恢复实现
+
+同profile现有SQLite metadata使用 `temporary-share/v1/<localID>`，不新增DB owner或schema迁移。版本1记录以设备Ed25519、固定用途域 `LinkSend temporary share owner v1\0` 签名，固定profile身份、服务origin、revision/角色、原双方key及grant/claim/approval/task/generation/manifest/plan、源路径/选择、保存目录、稳定控制意图及本机引擎结果。每行最多 `2 * transfer.MaxMetadata`，总计64条，sender活动8、receiver待处理4。新origin不接管旧授权；损坏/未知/签名不符拒绝，raw CAS及回读防旧写覆盖。明文码仅创建当次返回，不入持久记录、task或诊断；响应丢失保留原intent/ID，claim未知grant时重输同码沿用原ClaimID。
+
+预览使用[PROTOCOL](../PROTOCOL.md)的严格LSSP01帧；接收方完整计划及目录只留本机，明确Bind成功后才回摘要。创建真实PrepareSelected冻结manifest，恢复PrepareSelectedForResume必须重建同摘要；源变化停止原owner并持久revoke意图。任务历史关联本地temporary_share_id，正文仍为原128bit Manifest.TransferID任务；重启只呈现原授权/任务，用户分别显式Resume后沿用原grant/claim/generation/manifest/plan/目录与checkpoint。普通Retry不得转入永久信任路径。同步Create准备/hash与公共HTTP执行/刷新context同时绑定profile退出取消，退出须join工作。
+
+服务允许任一合法bound actor Complete，因此Completed仅证明授权终态。本机必须已有持久Completion才将本机文件标完成；否则needs_attention并提示核对，禁止Start/Resume/Authorize，不以服务回复补造本机验证/落盘或双向确认。新建前最多扫描当前64行，只回收已由真实服务确认终态、首次terminal_observed_at满七天且无active/controlBusy/pending intent的签名metadata，DELETE也用raw CAS。重复读取不续期；旧v1无可选时间、未知/回拨/篡改/CAS替换保护。只删私有授权metadata，不删用户源/接收副本、任务历史或checkpoint，不新增手动清理或容量/期限设置。
 
 实现前后需用真实SQLite/签名/WS证明第三身份、跨grant/task/phase、错key、旧grant代次/ICE会话、错内外签名、epoch重启重放、正文/剪贴板字段及候选/队列/连接限额拒绝，并核对永久表零增加。屏障固定鉴权后注册前撤销、入队后写前撤销、旧cleanup晚于新连接三处竞争；Bind关闭preview、空闲到期、Close与注册竞争及普通连接不受分享终态影响分别验证。不能以这些服务原型测试抵扣两端UI、原生保存或真实跨网临时分享。
+
+临时任务重新Prepare时，Windows目录mtime可在文件关闭后延后可见。实现仅对同ID/路径/type的directory复用冻结Modified，再要求完整新manifest与原摘要一致；文件Size/Modified/Hash/Chunks和目录增删/改名仍精确拒绝。该适配仅在临时owner，不修改V1清单、全局transfer摘要或普通恢复策略；确定性正负例及原driver真实失败见owner/数据面证据。
 
 ## 验收执行
 

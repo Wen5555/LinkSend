@@ -39,6 +39,7 @@ type TaskFailureDiagnostic struct {
 }
 
 type TaskSnapshot struct {
+	TemporaryShareID         string                       `json:"temporary_share_id,omitempty"`
 	Diagnostic               *DiagnosticTask              `json:"diagnostic,omitempty"`
 	BatchID                  string                       `json:"batch_id,omitempty"`
 	ID                       string                       `json:"id"` // compatibility alias for task_id
@@ -128,6 +129,7 @@ type taskRecord struct {
 }
 
 type taskRecovery struct {
+	TemporaryShareID        string                    `json:"temporary_share_id,omitempty"`
 	BatchID                 string                    `json:"batch_id,omitempty"`
 	SourceSelection         *transfer.SourceSelection `json:"source_selection,omitempty"`
 	ContentSnapshotID       string                    `json:"content_snapshot_id,omitempty"`
@@ -453,7 +455,7 @@ func (t *taskRecord) finishAttempt(attemptID, state string, err error) {
 	t.snap.CanCancel = false
 	t.snap.CanPause = false
 	t.snap.CanResume = false
-	t.snap.CanRetry = (state == "failed" || state == "rejected") && t.snap.Direction == "send"
+	t.snap.CanRetry = (state == "failed" || state == "rejected") && t.snap.Direction == "send" && t.recovery.TemporaryShareID == ""
 	t.cancel = nil
 	t.incoming = nil
 	t.snap.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -1065,6 +1067,15 @@ func (s *Service) CancelTask(id string) error {
 	if t == nil {
 		return errors.New("TASK_NOT_FOUND")
 	}
+	if localID := t.recoverySnapshot().TemporaryShareID; localID != "" {
+		entry, err := s.temporaryEntry(localID)
+		if err != nil {
+			return err
+		}
+		if err = s.stopTemporaryShare(entry, temporaryRecordCopy(entry).Role == "sender"); err != nil {
+			return err
+		}
+	}
 	t.mu.Lock()
 	if isTerminal(t.snap.State) {
 		t.mu.Unlock()
@@ -1125,6 +1136,26 @@ func (s *Service) PauseTask(id string) error {
 }
 
 func (s *Service) ResumeTask(id string, cfg DirectConfig) (TaskSnapshot, error) {
+	s.tasks.mu.RLock()
+	shareTask := s.tasks.tasks[id]
+	s.tasks.mu.RUnlock()
+	if shareTask != nil {
+		if localID := shareTask.recoverySnapshot().TemporaryShareID; localID != "" {
+			done, workErr := s.beginProfileWork()
+			if workErr != nil {
+				return TaskSnapshot{}, workErr
+			}
+			defer done()
+			entry, err := s.temporaryEntry(localID)
+			if err != nil {
+				return TaskSnapshot{}, err
+			}
+			if temporaryRecordCopy(entry).TaskRecordID != id || shareTask.snapshot().TemporaryShareID != localID {
+				return TaskSnapshot{}, temporaryShareFailure(protocol.ShareRejected)
+			}
+			return s.ResumeTemporaryShare(context.Background(), localID, cfg)
+		}
+	}
 	if err := s.requireTaskBatchAllowed(id); err != nil {
 		return TaskSnapshot{}, err
 	}
@@ -1403,6 +1434,9 @@ func (s *Service) RetryTask(id string) (TaskSnapshot, error) {
 	s.tasks.mu.RUnlock()
 	if t == nil {
 		return TaskSnapshot{}, errors.New("TASK_NOT_FOUND")
+	}
+	if t.recoverySnapshot().TemporaryShareID != "" {
+		return TaskSnapshot{}, temporaryShareFailure(protocol.ShareRejected)
 	}
 	snap := t.snapshot()
 	if snap.State != "failed" || t.peerID == "" || len(t.paths) == 0 {

@@ -99,6 +99,7 @@ type Service struct {
 	clipboardFileReadSlots  chan struct{}
 	clipboardCacheSpace     clipboardCacheSpace
 	clipboardCache          clipboardCacheLifecycle
+	temporaryShares         temporaryShareOwner
 }
 
 type cachedNetworkSelection struct {
