@@ -1,3 +1,8 @@
+## 2026-10-26 cd95479 完整CI与原生代码复制目标通过
+
+- cd954790aebaf78b9673fce08351eece1de392e4的core40235670319、desktop40235670269、packages40235670231全部completed/success，三平台包job成功、attempt1无重试。Windows native目标真实run1/pass1/skip0/fail0/exit0，7.54s，恢复租约6934ms；active/paused码不读/缓存/转发，随后新原生text真实QUIC收取，三原始日志已留存。仅覆盖该native子目标，不代替准确Wails UI/文件键盘粘贴或Mac旅程。
+- Windows随包说明仍写0.6.0，与BUILD-INFO/PE0.6.2矛盾；已移除重复硬编码，版本/来源引用BUILD-INFO，摘要引用同资产SHA256SUMS，链接通用releases。仅文档变更，将显式打包取得正确说明的候选，复用cd完整代码CI；准确新包结果另记。
+
 ## 2026-10-26 Windows原生复制夹具就绪门
 
 - 纯Core/QUIC与copy/deliver桥接回归证明原三秒门在resume时可失败：A接收已就绪、发送等待对端既有七秒lease周期，连接保持健康。现夹具先等receiver实际注册，并按原15秒父context等待真实initial/resumed租约，不改生产、权限、周期或强迫对端续租；103旧CI仍保留调用点歧义。

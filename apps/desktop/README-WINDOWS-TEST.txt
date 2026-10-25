@@ -1,4 +1,4 @@
-LinkSend 0.6.0 Windows x64
+LinkSend Windows x64
 
 1. 将便携ZIP完整解压到可写目录后启动LinkSend.exe，或使用安装程序；需要WebView2 Runtime。
 2. 在“设置 → 文件接收”选择接收目录。在“设置 → 网络与发现”确认双方使用相同的HTTPS信令地址，例如https://linksend.oooai.de。
@@ -8,5 +8,6 @@ LinkSend 0.6.0 Windows x64
 6. 目录预设和多设备分发位于发送页；正文限速位于“设置 → 文件发送”；托盘菜单提供“快速发送文件”，使用独立草稿。
 7. 完成后核对任务状态；失败时查看阶段与错误建议。文件由认证QUIC直接传输，relay=false，UDP/NAT条件可能导致直连失败。
 
-版本、完整发布说明及SHA256校验：https://github.com/Wen5555/LinkSend/releases/tag/v0.6.0
+本包版本和准确源码来源以随包BUILD-INFO.txt为准；包文件校验以同一资产提供的SHA256SUMS.txt为准。
+版本下载与发布说明：https://github.com/Wen5555/LinkSend/releases
 Windows包尚未代码签名。物理双机、系统剪贴板和部分系统入口的未验范围见发布说明；不能把安装包构建通过当作这些范围已通过。

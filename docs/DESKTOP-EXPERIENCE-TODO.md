@@ -37,9 +37,11 @@
 
   R5准确CI：701 core/desktop成功、Windows native因测试scanner读独占空锁失败；仅测试修复103后core/desktop成功，native又在未分阶段的会话就绪检查失败，仍未记PASS。103 Mac arm64另因sum.golang.org IPv6无路由在安装工具链时失败，Intel包成功。正在补因果回归，未盲重跑或强改用户剪贴板。
 
+  R5托管原生子目标：cd95479的core/desktop/三平台包CI均success，无重试；Windows真实active/paused保护码与随后正常native文字QUIC目标7.54s、run1/pass1/skip0/fail0。初始注册/租约10ms、恢复租约6934ms；只覆盖该Go桥接/原生generation子目标，不抵扣Wails UI、文件键盘粘贴或WinMac。旧701/103失败保留，见[完整记录](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。R5 owner/两阶段数据面/桌面e53a806、701e23b及测试修复103ba61均已推送核对；701独立Go实网双向已验，继续修复准确托管Windows native就绪检查、核对CI与候选包来源，再推进双平台原生旅程。R1用户Windows双端公网现场、受限双NAT，R2完整回收/键盘粘贴、R4双平台完整旅程及R6仍必做。Mac保存别名192.168.1.243于本日05:06 SSH再次connect-timeout/255，未改宿主网络或把SSH不可达当产品NAT失败；旧审批拒绝保留原边界。
+当前接续点（2026-10-26）：Goal实际active。R5 owner/两阶段数据面/桌面及测试修复均已推送；701独立Go实网双向已验，cd95479完整三CI与Windows托管native复制子目标真实通过（run1/pass1/skip0/fail0/exit0）。随包README版本漂移已修正，接续显式打包/准确包来源核对及双平台原生旅程。R1用户Windows双端公网现场、受限双NAT，R2完整回收/键盘粘贴、R4双平台完整旅程及R6仍必做。Mac保存别名192.168.1.243于本日05:06 SSH再次connect-timeout/255，未改宿主网络或把SSH不可达当产品NAT失败；旧审批拒绝保留原边界。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

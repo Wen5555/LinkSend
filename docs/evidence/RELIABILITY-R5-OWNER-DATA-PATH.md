@@ -100,3 +100,11 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 夹具现先等真实receiver SignalingConnected/Listening，再Ensure；initial_leases与resumed_leases分阶段记录安全boolean状态，并在原15秒父context下等真实租约。没有延长父期限、强迫对端Reset、改权限、改生产周期或制造远端证明。受控HTTP屏障还证明StartInbox已经返回但注册尚未完成，放行后实际就绪。恢复实测约6.97–6.99秒，WSS连接计数未增加；分享码generation不读/不转发，随后新文字实际经认证QUIC收取。
 
 最终纯回归普通三轮app27.214s/命令31538ms、race三轮app30.249s/命令42913ms均exit0（`native-readiness-final-{test,race}.log`）；desktop workspace test/vet/build为15861/1065/3882ms，off为17465/832/3939ms，六条exit0（`readiness-desktop-{workspace|off}-{test|vet|build}.log`）。只修改两份Windows测试文件，optin显式unset、未调用本机系统clipboard API；准确新提交的托管native目标仍须实际run/pass/no-skip证据，不用本纯回归移记通过。
+
+## cd95479 托管原生目标与完整CI通过
+
+`cd954790aebaf78b9673fce08351eece1de392e4` 的[core40235670319](https://github.com/Wen5555/LinkSend/actions/runs/40235670319)、[desktop40235670269](https://github.com/Wen5555/LinkSend/actions/runs/40235670269)和[packages40235670231](https://github.com/Wen5555/LinkSend/actions/runs/40235670231)均completed/success；包Windows/两Mac均成功，attempt=1，未重跑。
+
+Windows native artifact12615096503的三份原始日志在 `.artifacts/share-ui-draft/ci-cd95479/`。严格summary为target_run=1/pass=1/skip=0/fail=0、exit0；GitHub托管Windows双guard与empty fixture均实际成立。目标7.54s，receiver_registration10ms、initial_leases10ms、resumed_leases6934ms；active/paused两轮保护码不读/不缓存/不发送，随后新原生文字均经认证QUIC收取，原夹具恢复完成。原701/103失败保留。此目标以真实Windows clipboard和测试Win32 setter覆盖copy owner/实际generation/Go桥接，不替代Wails UI公开入口、系统文件键盘粘贴或双平台旅程。
+
+打包源说明仍有0.6.0硬编码的交付漂移已单独修正：Windows随包README改引用BUILD-INFO.txt和同资产SHA256SUMS.txt、通用releases链接。该修改只有说明和证据，不改应用或测试源码；随后显式运行打包workflow取得准确修正说明的包，沿用上述完整代码CI，不预记新包通过。
