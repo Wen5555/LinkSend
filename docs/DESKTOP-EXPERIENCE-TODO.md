@@ -17,10 +17,10 @@
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
 - [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现；130项前端/定向race和两模块检查通过，浏览器布局/导航已检查。准确候选原生保存/取消与任务入口旅程继续，见[诊断证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
 - [ ] R4：准确Windows候选实际覆盖安装、profile逐字节保持、身份/草稿/历史/20MiB恢复状态、单实例唤回及原系统入口恢复已验；基线活动任务取消退出/保存退出通过。候选活动完整续传、SendTo/拖放和Mac替换/活动退出仍待，见[原生证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
-- [ ] R5（授权核心实施）：[ADR0017](adr/0017-one-time-share-grant.md)已先冻结，状态机与Control同连接事务/CAS、显式4→5备份迁移、有限恢复和竞争回归已实现；定向普通/race各3轮、两模块workspace/off完整12命令通过，CI另核对。当前服务器不激活迁移或广告能力，签名/防重放/猜码限频、认证P2P范围、两端UI及真实LAN/跨网分享仍必做，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+- [ ] R5（授权核心与签名控制实施）：[ADR0017](adr/0017-one-time-share-grant.md)已先冻结，状态机、Control同连接事务/CAS、显式4→5备份迁移和有限恢复已实现；独立HTTP的真实Ed25519/epoch/nonce、领取真实IP/身份限频、响应白名单及成员隔离已验证，普通配置关闭、实验health的file_transfer_ready=false，不广告完整分享。原定向普通/race各3轮及两模块workspace/off完整12命令通过，2026-10-26补定向race退出0。旧25f10a2 desktop/packages成功、core因Pion候选/超时失败保留；新准确CI另核对。客户端、认证P2P范围、两端UI及真实LAN/跨网分享仍必做，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)及[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点：Windows已实际覆盖63c86c2→01b5c16并完成原生诊断保存/取消与任务导航；安装事务Restore回读通过，原登记/三个快捷方式恢复，GUI/peer正常退出，隔离profile与20MiB恢复数据保留。协调夹具已到期，续起同库服务被自动审批拒绝且未绕过。恢复阶段提示修复1caddbd已推送，core/desktop CI success，三平台包继续核对；R5授权核心新增状态/同连接持久CAS与显式备份迁移，检查后推送并继续签名控制/数据面及UI。Mac只读检查job /tmp/codex-ssh/job-ls-r4-mac-inspect-20261019-01退出0，日常0.6.0/PID65291未触碰。R2完整回收/键盘粘贴、R1跨网及R4双平台完整旅程/R6仍必做；平台Goal工具当前仍显示blocked，不把源码推进或接续记录假标complete。
+当前接续点：Windows已实际覆盖63c86c2→01b5c16并完成原生诊断保存/取消与任务导航；安装事务Restore回读通过，原登记/三个快捷方式恢复，GUI/peer正常退出，隔离profile与20MiB恢复数据保留。协调夹具已到期，续起同库服务被自动审批拒绝且未绕过。恢复阶段提示修复1caddbd已推送，core/desktop及三平台包均success；R5授权持久核心25f10a2及签名控制已实现验证，继续客户端/数据面及UI，并修复准确CI暴露的真实候选路径问题。Mac只读检查job /tmp/codex-ssh/job-ls-r4-mac-inspect-20261019-01退出0，日常0.6.0/PID65291未触碰。R2完整回收/键盘粘贴、R1跨网及R4双平台完整旅程/R6仍必做；平台Goal工具当前仍显示blocked，不把源码推进或接续记录假标complete。
 
 接续时先核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG在本次记录时仍运行）。只读本地watch日志 `ci-39165099505.log`；待完成后更新准确结果，失败继续修复，不能把运行中记PASS。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

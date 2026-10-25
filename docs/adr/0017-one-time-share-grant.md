@@ -14,7 +14,7 @@
 
 服务借用既有 Control SQLite 连接和事务，新增版本化 share_grants 表及必要索引；不增第二数据库 owner。迁移在真实 SQLite 一致性备份后事务提交，回读版本和 quick_check；不覆盖既有备份。旧服务拒绝新 schema。回退程序与数据回退分开：原备份不能覆盖升级后的成员与业务写入。新库初始化无旧数据可备份；未来/损坏版本拒绝。
 
-分阶段落地：存储核心提供显式EnableShareGrants以测试4→5迁移，当前Server.New及路由不调用它，普通启动继续schema4且不广告临时分享。新代码可安全读回已经显式迁移的schema5；缺表/错误版本拒绝。完整链路接入时再激活默认迁移和能力，并重新验证准确包。任务库schema12不受该控制库版本影响。
+分阶段落地：存储核心先提供显式EnableShareGrants以测试4→5迁移；后续签名控制增量仅在服务配置experimental_share_control=true时激活，并在health标注file_transfer_ready=false。普通启动继续schema4且不广告完整临时分享。新代码可安全读回已经显式迁移的schema5；缺表/错误版本拒绝。完整链路接入时再激活默认迁移和正式能力，并重新验证准确包。任务库schema12不受该控制库版本影响。
 
 记录绑定分享 ID、发送身份/公钥、既有V1清单 BLAKE3 摘要、授权 generation、revision、领取期限；领取后增加接收身份/公钥、claim ID、绑定 task ID、V1计划摘要和恢复期限。清单与计划摘要直接复用现有引擎的Digest结果，不另创不兼容的散列序列；分享码验证器独立使用SHA256。清单摘要必须来自实际冻结的引擎 manifest，不能把远端显示大小当授权内容。磁盘大小、哈希和源变化仍由原文件引擎核验。
 
@@ -32,7 +32,11 @@ sender approve 必须明确匹配当前 claim ID、接收身份/公钥、原 man
 
 能力协商使用新增显式 share_grants_v1；请求走独立 `/v1/shares` 路由及用途域，方法、路径、分享/claim/task、generation、内容摘要、nonce 和期限进入既有请求签名。服务验证实际签名、设备 ID 与公钥匹配、短期 nonce 防重放，不以 bearer code 代替设备认证。领取人可来自其他组或未加入组，临时公钥只在该 grant 范围有效；不借普通成员 websocket / devices 接口认证临时 actor。
 
+签名控制增量复用既有AuthBytes长度前缀签名输入和Ed25519验证；health提供32字符公开随机运行代次epoch，实际签名nonce字段为epoch+冒号+32字符请求nonce。方法、RequestURI、设备ID、时间及完整有界JSON都进入既有签名函数，不新增密码学算法。X-LinkSend-Share-Epoch必须等于当前运行，重启前证明全部拒绝；原grant仍持久，合法原身份取新epoch并签新nonce后可恢复原任务，不滑动延长期限。新epoch是公开challenge，不是bearer凭据，不授予成员权限。
+
 领取前做IP与身份双维度有界限频，失败码不泄露其他接收人、组或存在性。每身份最多8个未终态分享、最多4个待确认领取；服务总记录4096，nonce/限频表各有上界。pending 到期自动释放占位，猜码不能刷新占位。终态保留至少7天供幂等核对，超总预算拒绝新创建而不删活动授权；定时分页最多64条过期处理。代理IP仅在显式可信代理配置下使用，不能信任任意 X-Forwarded-For。
+
+当前实验控制限频：领取IP突发20、已签名身份突发10，均每6秒补1次，使用实际RemoteAddr且忽略X-Forwarded-For；合计最多2048个bucket，5分钟空闲可淘汰，满表拒绝新key，不淘汰未空闲项以绕过限制。nonce复用既有65536上界ReplayWindow，签名验证通过后才占位，2分钟保留；服务重启换epoch阻止旧证明复用。限频不阻止所有受限网络或拒绝服务，不宣称能代替网络防护。
 
 HTTP最大请求体、字符串、候选数、并发、deadline 复用现有协议上界。临时协调消息只能去 grant 的两端，必须带 grant ID/generation/task；每次新 ICE/QUIC 和文件操作重新核验。不能让一个临时授权访问对端其他任务或内容，也不能复用已撤销的普通授权来绕过临时绑定。失败返回稳定码、安全下一步；本地导出只显示白名单原因，不含码/摘要/公钥。
 

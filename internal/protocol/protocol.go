@@ -75,6 +75,13 @@ const (
 	ContentUnsupported          Code = "CONTENT_UNSUPPORTED"
 	ContentInvalid              Code = "INVALID_CONTENT_DESCRIPTOR"
 	ContentMismatch             Code = "CONTENT_MISMATCH"
+	ShareInvalid                Code = "SHARE_INVALID"
+	ShareRejected               Code = "SHARE_REJECTED"
+	ShareExpired                Code = "SHARE_EXPIRED"
+	ShareConflict               Code = "SHARE_CONFLICT"
+	ShareTerminal               Code = "SHARE_TERMINAL"
+	ShareUnsupported            Code = "SHARE_UNSUPPORTED"
+	ShareUnavailable            Code = "SHARE_UNAVAILABLE"
 )
 
 type Error struct {

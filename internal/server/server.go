@@ -38,6 +38,9 @@ type Config struct {
 	TLSCert                 string `toml:"tls_cert"`
 	TLSKey                  string `toml:"tls_key"`
 	BootstrapToken          string `toml:"-"`
+	// Explicit isolated development opt-in. The complete desktop/file feature
+	// is not advertised until its data-plane integration has been verified.
+	ExperimentalShareControl bool `toml:"experimental_share_control"`
 	// TestPairingCode is an explicitly provisioned, repeatable pairing entry.
 	// The generic example config leaves it empty; the authorized Hong Kong
 	// deployment may set the fixed value "orion123" for compatibility testing.
@@ -188,6 +191,8 @@ type Server struct {
 	sessions          map[string]*negotiation
 	closed            bool
 	buckets           map[string]bucket
+	shareBuckets      map[string]bucket
+	shareEpoch        string
 	replays           *protocol.ReplayWindow
 	slots             chan struct{}
 	wg                sync.WaitGroup
@@ -207,6 +212,15 @@ func New(cfg Config) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{cfg: cfg, store: db, ctx: ctx, cancel: cancel, clients: map[string]*peer{}, sessions: map[string]*negotiation{}, buckets: map[string]bucket{}, replays: protocol.NewReplayWindow(65536), slots: make(chan struct{}, 128)}
+	if cfg.ExperimentalShareControl {
+		if _, err = db.EnableShareGrants(ctx); err != nil {
+			cancel()
+			db.Close()
+			return nil, err
+		}
+		s.shareEpoch = protocol.RandomID()
+		s.shareBuckets = map[string]bucket{}
+	}
 	s.wg.Add(1)
 	go s.reapExpired()
 	return s, nil
@@ -252,7 +266,17 @@ func (s *Server) reapExpired() {
 					delete(s.buckets, host)
 				}
 			}
+			for key, b := range s.shareBuckets {
+				if now.Sub(b.at) > 5*time.Minute {
+					delete(s.shareBuckets, key)
+				}
+			}
 			s.mu.Unlock()
+			if s.cfg.ExperimentalShareControl {
+				ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
+				_, _ = s.store.ReconcileShareGrants(ctx, now, 64)
+				cancel()
+			}
 		}
 	}
 }
@@ -262,7 +286,11 @@ func (s *Server) Counters() Counters {
 func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, 200, map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()})
+		body := map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()}
+		if s.cfg.ExperimentalShareControl {
+			body["share_control"] = map[string]any{"version": 1, "epoch": s.shareEpoch, "file_transfer_ready": false}
+		}
+		respond(w, 200, body)
 	})
 	m.HandleFunc("POST /v1/bootstrap", s.bootstrap)
 	m.HandleFunc("POST /v1/membership/init", s.initialize)
@@ -272,6 +300,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /v1/devices", s.devices)
 	m.HandleFunc("DELETE /v1/devices/{id}", s.revoke)
 	m.HandleFunc("GET /v1/ws", s.websocket)
+	m.HandleFunc("POST /v1/shares/{operation}", s.shareControl)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		ip, _ := netip.ParseAddr(host)

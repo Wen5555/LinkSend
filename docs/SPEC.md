@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R5签名控制增量复核：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。实验health明确file_transfer_ready=false，不广告share_grants_v1，不授予普通成员或文件通道权限；客户端/P2P/UI及真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+
 2026-10-19 R5授权核心增量：先冻结[ShareGrant ADR0017](adr/0017-one-time-share-grant.md)，实现一次领取/两道明确确认、原公钥/清单/任务/计划及有限恢复状态，既有Control连接提供事务CAS与显式4→5备份迁移。当前Server.New不激活迁移、不提供临时分享路由或广告能力；两端完整流程仍必做。任务库schema12、V1正文及relay=false保持，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 
 2026-10-19 R3候选：任务/记录消费Go白名单原因、阶段、动作与真实尝试时间；用户主动选择位置导出有限安全JSON，不复制私有快照、凭据、路径或正文，不自动上传/重试，不覆盖已有文件。未知方法显示未知，旧记录无尝试时间不推测；文件wire/schema12与权限保持。自动化/浏览器与准确候选原生未验边界见[诊断证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。

@@ -323,6 +323,19 @@ func (s *Control) AuthorizeShare(ctx context.Context, id string, actor sharegran
 	return r, nil
 }
 
+// ReadShare returns private storage only to one of this grant's exact actors.
+// Network callers must project a safe DTO, never serialize this record.
+func (s *Control) ReadShare(ctx context.Context, id string, actor sharegrant.Key) (sharegrant.Record, error) {
+	r, err := scanShare(s.db.QueryRowContext(ctx, shareSelect+"WHERE id=?", id))
+	if err != nil {
+		return sharegrant.Record{}, sharegrant.ErrRejected
+	}
+	if actor != r.Sender && (actor == (sharegrant.Key{}) || actor != r.Receiver) {
+		return sharegrant.Record{}, sharegrant.ErrRejected
+	}
+	return r, nil
+}
+
 // ReconcileShareGrants has no independent worker. The existing server owner
 // will call it when the feature is enabled. It never deletes a live grant.
 func (s *Control) ReconcileShareGrants(ctx context.Context, now time.Time, limit int) (int, error) {

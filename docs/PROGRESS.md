@@ -1,3 +1,9 @@
+## 2026-10-26 可靠性 Goal R5 签名控制增量复核
+
+- 复核既有签名HTTP控制：显式实验配置才激活ShareGrant迁移，运行epoch绑定原AuthBytes/Ed25519，重启旧证明、篡改、重放、真实IP/身份双限频及普通成员隔离回归通过。实验health仍file_transfer_ready=false，不广告完整分享，客户端/P2P/两端UI及真实分享未完成，见[证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+- 复用该增量源码最后修改之后的2026-10-19双模块workspace/off完整test/vet/build日志；2026-10-26补跑GOWORK=off的server/store/sharegrant定向race退出0（4.299s/3.058s/1.351s）。只读独立复核未发现阻止该增量提交的问题；没有前端或文件wire改动。
+- 准确核对旧25f10a2：desktop39180492313及packages39180492292成功，但core39180492297因多个app真实Pion用例broadcast/reserved candidate address及检查超时失败。保留日志与失败，不能用本地通过覆盖；本次准确提交CI推送后另查，不预记成功或R5完成。
+
 ## 2026-10-19 可靠性 Goal R5 授权与持久核心
 
 - 先冻结ADR0017，再实现160bit随机码/用途摘要、双重确认、原身份/清单/task/计划绑定、有限恢复、撤销/完成终态；Control同连接事务CAS、显式4→5一致性备份迁移及有界配额/对账。普通服务不激活迁移、不提供临时分享路由或能力，签名控制/P2P/UI及真实分享仍必做，详见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
