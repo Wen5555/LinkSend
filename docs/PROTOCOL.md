@@ -10,6 +10,10 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-26 候选地址准入
+
+ICE候选不携带网段，不能以IPv4末字节255判定定向广播。信令服务在拒绝zone后先Unmap规范化IPv4映射IPv6，再保留明确危险scope/0网段/多播及保留高地址/有限广播/非测试loopback限制。真实Pion检查、签名与原会话/代次仍是独立条件；没有文件wire字段变更。见[准入回归](evidence/CANDIDATE-ADMISSION-20261026.md)。
+
 ## 2026-10-18 托盘快速发送
 
 任务库11与wire保持。quick为现有send_drafts的独立本地行；Go命令按精确revision与等待选择读取草稿，稳定请求收据在清空/重启后可核对，不能借主草稿或新授权重发。typed quick-send:open及BackgroundStatus revision只传面板唤起元数据，不传正文。边界见[ADR0012](adr/0012-tray-quick-send.md)。
