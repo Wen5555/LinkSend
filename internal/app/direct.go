@@ -423,6 +423,8 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	path, err := connectWithTrickle(ctx, signalSession, endpoint, s.identity, peer, sessionID, firstGeneration, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
 	timings.ICEMS = durationMS(stageStarted)
 	if err != nil {
+		timings.TotalConnectMS = durationMS(connectStarted)
+		cfg.evidence(makeDirectEvidence(peer.ID, sessionID, endpoint.Observation(), timings, endpoint.Stats(), signalSession.Stats(), 0, ""))
 		return nil, err
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, false)
@@ -623,6 +625,7 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 	path, err := connectWithTrickle(ctx, signalSession, endpoint, s.identity, peer, request.SessionID, request.Generation, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, false)
 	timings := DirectTimings{ICEMS: durationMS(stageStarted)}
 	if err != nil {
+		cfg.evidence(makeDirectEvidence(peer.ID, request.SessionID, endpoint.Observation(), timings, endpoint.Stats(), relativeSignalingStats(signalSession.Stats(), signalBase), 0, ""))
 		return connectivity.Path{}, nil, err
 	}
 	cfg.phase("quic_handshake")
@@ -632,9 +635,7 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 	stopQUIC()
 	timings.QUICHandshakeMS = durationMS(stageStarted)
 	if err != nil {
-		signalStats := signalSession.Stats()
-		signalStats.BytesSent -= min(signalStats.BytesSent, signalBase.BytesSent)
-		signalStats.BytesReceived -= min(signalStats.BytesReceived, signalBase.BytesReceived)
+		signalStats := relativeSignalingStats(signalSession.Stats(), signalBase)
 		cfg.evidence(makeDirectEvidence(peer.ID, request.SessionID, path, timings, endpoint.Stats(), signalStats, 0, ""))
 		return connectivity.Path{}, nil, err
 	}

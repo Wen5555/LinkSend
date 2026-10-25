@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
+
 R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该增量不提供临时文件通道或广告完整分享能力，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 
 R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。当前服务器不激活该迁移或对外提供分享，网络签名/防重放/猜码限制与P2P范围仍须接入验证，不能把Go actor参数当网络身份认证。设计与准确边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。

@@ -1,5 +1,11 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-26 优先：Windows跨网连接
+
+最新版Windows双端公网在线但连接未验证优先修复。正式版main最小分支的edf7cac已交付Windows候选和[PR #12](https://github.com/Wen5555/LinkSend/pull/12)，默认备用STUN、内置主机安全解析及ICE失败统计已验证；准确干净源码验证器Windows↔公共JP Linux双向16MiB/中文/空目录、6/6落盘条目/hash、双方Completed通过，约3.3秒建链。准确Windows包来源/摘要/版本核验通过，但用户暂时无法试用，两台Windows现场和受限双NAT不因此打勾；吞吐仍偏低，原R0–R6未完成。见[跨网证据](evidence/CROSS-NETWORK-20261026.md)。
+
+另行修复服务端把所有IPv4末尾255当广播的准入缺陷，并先Unmap防止映射地址绕过危险scope限制；真实签名WSS/forward回归通过，详见[准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。这是服务端代码，未替换生产或改宿主网络，不能通过只更新Windows候选生效。代码同步进入本可靠性分支；临时测试进程已结束、隔离peer已撤销。Mac SSH本次仍超时，台湾NAT别名不可用；不能把SSH失败当产品NAT失败。
+
 ## 2026-10-19 可靠性 自动缓存与临时分享 Goal（继续实施；平台先前blocked）
 
 用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。

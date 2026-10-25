@@ -16,6 +16,10 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-26 候选地址准入
+
+ICE候选不携带网段，不能以IPv4末字节255判定定向广播。信令服务在拒绝zone后先Unmap规范化IPv4映射IPv6，再保留明确危险scope/0网段/多播及保留高地址/有限广播/非测试loopback限制。真实Pion检查、签名与原会话/代次仍是独立条件；没有文件wire字段变更。见[准入回归](evidence/CANDIDATE-ADMISSION-20261026.md)。
+
 R5实验控制增量新增独立POST /v1/shares/{operation}，需X-LinkSend-Membership:2与X-LinkSend-Share-Grants:1。公钥/DeviceID、nonce/time/signature沿用既有鉴权Header，追加X-LinkSend-Share-Epoch；AuthBytes的nonce输入为epoch:nonce，方法/RequestURI/身份/时间/JSON照旧签名。未入组actor仅在该grant内获权，不能进入普通成员接口。普通配置明确SHARE_UNSUPPORTED；实验health的share_control.version=1且file_transfer_ready=false，不广告正式share_grants_v1。请求字段、错误码与实际验证见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)及[ADR0017](adr/0017-one-time-share-grant.md)，文件wire保持V1。
 
 R5分阶段授权核心尚未新增线上wire或协商能力。Go状态/Control存储私有record不能当作HTTP/JS DTO；现有成员握手、普通配对与文件V1保持。完整临时分享须按[ADR0017](adr/0017-one-time-share-grant.md)先实现独立签名、限频、临时公钥作用域、grant/task/generation协调与引擎绑定，完成后才启用share_grants_v1；旧端缺能力必须明确拒绝，不回退为永久配对。当前增量范围见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。

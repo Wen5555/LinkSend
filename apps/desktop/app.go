@@ -411,13 +411,7 @@ func (a *App) directConfig() linksendapp.DirectConfig {
 			}
 		}
 	}
-	stun := make([]string, 0)
-	rawSTUN := firstNonEmpty(os.Getenv("LINKSEND_STUN"), strings.Join(prefs.STUNURLs, ","), "stun:stun.oooai.de:3478")
-	for _, value := range strings.Split(rawSTUN, ",") {
-		if value = strings.TrimSpace(value); value != "" {
-			stun = append(stun, value)
-		}
-	}
+	stun, _ := desktopSTUNConfig(os.Getenv("LINKSEND_STUN"), prefs.STUNURLs)
 	allow, _ := strconv.ParseBool(os.Getenv("LINKSEND_ALLOW_INSECURE_LOOPBACK"))
 	bind, _ := resolvedDesktopBind(os.Getenv("LINKSEND_BIND"), prefs.BindAddress)
 	return linksendapp.DirectConfig{BindAddress: bind, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, AllowLoopback: allow, CheckTimeout: 30 * time.Second, WaitTimeout: 10 * time.Minute, ReceiveConflictPolicy: conflictPolicy, DeviceConflictPolicies: devicePolicies}
@@ -553,20 +547,7 @@ func (a *App) EffectiveConfig() EffectiveConfig {
 		server, serverSource = "https://linksend.oooai.de", "默认值"
 	}
 	bind, bindSource := resolvedDesktopBind(envBind, prefs.BindAddress)
-	stun := append([]string(nil), prefs.STUNURLs...)
-	stunSource := "已保存偏好"
-	if strings.TrimSpace(envSTUN) != "" {
-		stun = make([]string, 0, 4)
-		for _, value := range strings.Split(envSTUN, ",") {
-			if value = strings.TrimSpace(value); value != "" {
-				stun = append(stun, value)
-			}
-		}
-		stunSource = "环境变量 LINKSEND_STUN"
-	}
-	if len(stun) == 0 {
-		stun, stunSource = []string{"stun:stun.oooai.de:3478"}, "默认值"
-	}
+	stun, stunSource := desktopSTUNConfig(envSTUN, prefs.STUNURLs)
 	return EffectiveConfig{ServerURL: server, ServerSource: serverSource, BindAddress: bind, BindSource: bindSource, InterfacePriority: prefs.InterfacePriority, ExcludedInterfaces: prefs.ExcludedInterfaces, STUNURLs: stun, STUNSource: stunSource, NeedsRestart: true, Preferences: status.State}
 }
 

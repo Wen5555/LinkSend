@@ -1,4 +1,12 @@
+## 2026-10-26 优先跨网修复同步
+
+- 将已验证edf7cac的默认备用STUN、内置主机有界HTTPS解析和ICE失败真实证据同步到可靠性分支；原正式版最小分支Windows候选及[PR #12](https://github.com/Wen5555/LinkSend/pull/12)已交付，准确源码Windows↔公共Linux双向16MiB/中文/空目录/hash/双方Completed通过。Windows用户暂不能试用，Win↔Win准确候选、受限双NAT及其余Goal必做项仍未验。见[证据](evidence/CROSS-NETWORK-20261026.md)。
+- 服务端准入独立修复末尾255单播误拒绝和映射地址危险scope绕过，普通/race及真实认证forward安全回归通过；最小分支99a6c0e已推送，未部署生产，旧CI无实际候选IP，不将其当用户现场已证根因。见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
+- 当前可靠性工作树两模块workspace/off完整test/vet/build共12命令全部exit0，core test118813/111465ms、desktop9088/8267ms，日志reliability-network-share-client-*.log含退出码和耗时。工作树同时包含接续签名HTTP客户端，分别暂存成可审阅增量，准确提交CI随后核对。无前端源码或文件wire改动。
+
 ## 2026-10-26 可靠性 Goal R5 签名控制增量复核
+
+- 后续准确ff6a3274a756cb8c7d08fc87a0dbfd9684dc4745已推送核对：core40216320379、desktop40216320542、packages40216320548均completed/success。旧25f core失败仍保留，不倒记通过。
 
 - 复核既有签名HTTP控制：显式实验配置才激活ShareGrant迁移，运行epoch绑定原AuthBytes/Ed25519，重启旧证明、篡改、重放、真实IP/身份双限频及普通成员隔离回归通过。实验health仍file_transfer_ready=false，不广告完整分享，客户端/P2P/两端UI及真实分享未完成，见[证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 - 复用该增量源码最后修改之后的2026-10-19双模块workspace/off完整test/vet/build日志；2026-10-26补跑GOWORK=off的server/store/sharegrant定向race退出0（4.299s/3.058s/1.351s）。只读独立复核未发现阻止该增量提交的问题；没有前端或文件wire改动。
