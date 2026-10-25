@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,7 +21,197 @@ import (
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/signaling"
 	"github.com/Wen5555/LinkSend/internal/transfer"
+	"github.com/pion/stun/v4"
 )
+
+// This fixture answers actual Binding requests on a local UDP socket. The
+// nominated remote ICE socket is a separate bound sink which never answers.
+// A STUN response is deliberately not sufficient to establish a connection.
+func diagnosticSTUNServer(t *testing.T) string {
+	t.Helper()
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buffer := make([]byte, 2048)
+		for {
+			n, from, err := conn.ReadFromUDP(buffer)
+			if err != nil {
+				return
+			}
+			request := &stun.Message{Raw: append([]byte(nil), buffer[:n]...)}
+			if request.Decode() != nil || request.Type != stun.BindingRequest {
+				continue
+			}
+			response, err := stun.Build(stun.NewTransactionIDSetter(request.TransactionID), stun.BindingSuccess,
+				&stun.XORMappedAddress{IP: net.IPv4(203, 0, 113, 20), Port: from.Port}, stun.Fingerprint)
+			if err != nil {
+				return
+			}
+			_, _ = conn.WriteToUDP(response.Raw, from)
+		}
+	}()
+	t.Cleanup(func() { _ = conn.Close(); <-done })
+	return "stun:" + conn.LocalAddr().String()
+}
+
+func sendUnreachableDiagnosticCandidates(ctx context.Context, session *signaling.Session, local, remote, sessionID, address string) error {
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil {
+		return err
+	}
+	candidate, err := protocol.NewEnvelope("candidate", local, remote, sessionID, firstGeneration,
+		protocol.Candidate{Candidate: "1 1 udp 2130706431 127.0.0.1 " + strconv.Itoa(portNumber) + " typ host"})
+	if err != nil {
+		return err
+	}
+	if err = session.SendEnvelope(ctx, candidate); err != nil {
+		return err
+	}
+	end, err := protocol.NewEnvelope("end_of_candidates", local, remote, sessionID, firstGeneration, map[string]any{})
+	if err != nil {
+		return err
+	}
+	return session.SendEnvelope(ctx, end)
+}
+
+func TestICEFailureRetainsActualSTUNAndSignalingEvidence(t *testing.T) {
+	for _, role := range []string{"initiator", "responder"} {
+		t.Run(role, func(t *testing.T) {
+			f := newDirectFixtureServices(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
+			defer cancel()
+			stunURL := diagnosticSTUNServer(t)
+			blackhole, err := net.ListenPacket("udp4", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer blackhole.Close()
+			cfg, finish := observeDirectFailure(DirectConfig{BindAddress: "127.0.0.1:0", AllowLoopback: true,
+				STUNURLs: []string{stunURL}, CheckTimeout: 2 * time.Second})
+			remoteID, localID := f.bID, f.aID
+			remoteService, localService := f.b, f.a
+			if role == "responder" {
+				remoteID, localID = f.aID, f.bID
+				remoteService, localService = f.a, f.b
+			}
+			remoteClient, err := remoteService.client()
+			if err != nil {
+				t.Fatal(err)
+			}
+			remoteSignal, err := remoteClient.Connect(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer remoteSignal.Close()
+			remoteWork := make(chan error, 1)
+			var connectionErr error
+			if role == "initiator" {
+				go func() {
+					wire, err := readSignalMessage(ctx, remoteSignal)
+					if err != nil {
+						remoteWork <- err
+						return
+					}
+					if wire.Message == nil || wire.Message.Type != "connect_request" {
+						remoteWork <- errors.New("expected signed connection request")
+						return
+					}
+					response, err := protocol.NewEnvelope("connect_response", remoteID.ID(), localID.ID(), wire.Message.SessionID,
+						firstGeneration, iceDescription{Ufrag: "diagnostic_remote", Password: "01234567890123456789012345678901"})
+					if err == nil {
+						err = remoteSignal.SendEnvelope(ctx, response)
+					}
+					if err == nil {
+						err = sendUnreachableDiagnosticCandidates(ctx, remoteSignal, remoteID.ID(), localID.ID(), wire.Message.SessionID, blackhole.LocalAddr().String())
+					}
+					remoteWork <- err
+				}()
+				peer, err := localService.ConnectDirect(ctx, remoteID.ID(), cfg)
+				connectionErr = err
+				if peer != nil {
+					_ = peer.Close()
+					t.Fatal("unresponsive ICE sink unexpectedly connected")
+				}
+			} else {
+				localClient, err := localService.client()
+				if err != nil {
+					t.Fatal(err)
+				}
+				localSignal, err := localClient.Connect(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer localSignal.Close()
+				request, err := protocol.NewEnvelope("connect_request", remoteID.ID(), localID.ID(), protocol.RandomID(), firstGeneration,
+					iceDescription{Ufrag: "diagnostic_remote", Password: "01234567890123456789012345678901"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = remoteSignal.SendEnvelope(ctx, request); err != nil {
+					t.Fatal(err)
+				}
+				wire, err := readSignalMessage(ctx, localSignal)
+				if err != nil || wire.Message == nil || wire.Message.Type != "connect_request" {
+					t.Fatalf("missing signed request: %v", err)
+				}
+				endpoint, err := localService.newEndpoint(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer endpoint.Close()
+				if err = endpoint.Gather(); err != nil {
+					t.Fatal(err)
+				}
+				cfg.session(wire.Message.SessionID, remoteID.ID())
+				go func() {
+					response, err := readSignalMessage(ctx, remoteSignal)
+					if err == nil && (response.Message == nil || response.Message.Type != "connect_response") {
+						err = errors.New("expected signed connection response")
+					}
+					if err == nil {
+						err = sendUnreachableDiagnosticCandidates(ctx, remoteSignal, remoteID.ID(), localID.ID(), wire.Message.SessionID, blackhole.LocalAddr().String())
+					}
+					remoteWork <- err
+				}()
+				_, data, err := localService.establishResponder(ctx, localSignal, endpoint,
+					signaling.Device{ID: remoteID.ID(), PublicKey: remoteID.PublicKey()}, *wire.Message, cfg.CheckTimeout, cfg)
+				connectionErr = err
+				if data != nil {
+					_ = data.Close()
+					t.Fatal("unresponsive ICE sink unexpectedly authenticated")
+				}
+			}
+			select {
+			case err = <-remoteWork:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			var result DirectTransferResult
+			finish(&result, connectionErr)
+			if connectionErr == nil || protocol.ErrorCode(connectionErr) != protocol.CheckTimeout || result.FailurePhase != "ice_checking" {
+				t.Fatalf("expected actual ICE timeout, phase=%q err=%v", result.FailurePhase, connectionErr)
+			}
+			evidence := result.Evidence
+			if evidence.STUNRequestsSent == 0 || evidence.STUNResponsesReceived == 0 || evidence.SignalingBytesSent == 0 || evidence.SignalingBytesReceived == 0 || evidence.BaseSocket == "" || evidence.Interface == "" || evidence.AddressFamily != "ipv4" || evidence.Timings.ICEMS <= 0 {
+				t.Fatalf("ICE failure lost real observations: %+v", evidence)
+			}
+			if evidence.TLSVersion != 0 || evidence.ALPN != "" || evidence.Relay || evidence.ConnectionMethod != "" || evidence.LocalCandidate != "" || evidence.RemoteCandidate != "" || evidence.RemoteAddress != "" || result.Transfer.Bytes != 0 {
+				t.Fatalf("failed ICE fabricated a nominated path, TLS or file transfer: %+v", evidence)
+			}
+		})
+	}
+}
 
 func TestDetailedDirectFailureRetainsObservedPhase(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -162,6 +162,31 @@ func TestEffectiveConfigReportsTrimmedSources(t *testing.T) {
 	}
 }
 
+func TestDesktopSTUNDefaultsRemainUsableWhenPrimaryIsUnavailable(t *testing.T) {
+	for _, test := range []struct {
+		name, env   string
+		saved, want []string
+	}{
+		{name: "automatic", want: []string{"stun:stun.oooai.de:3478", "stun:stun.cloudflare.com:3478"}},
+		{name: "previously saved built-in", saved: []string{"stun:stun.oooai.de:3478"}, want: []string{"stun:stun.oooai.de:3478", "stun:stun.cloudflare.com:3478"}},
+		{name: "explicit custom", saved: []string{"stun:custom.example:3478"}, want: []string{"stun:custom.example:3478"}},
+		{name: "explicit environment", env: "stun:stun.oooai.de:3478", want: []string{"stun:stun.oooai.de:3478"}},
+		{name: "empty environment list", env: " , , ", want: []string{"stun:stun.oooai.de:3478", "stun:stun.cloudflare.com:3478"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("LINKSEND_STUN", test.env)
+			a := &App{prefs: DesktopPreferences{STUNURLs: append([]string(nil), test.saved...)}}
+			actual, shown := a.directConfig().STUNURLs, a.EffectiveConfig().STUNURLs
+			if strings.Join(actual, "|") != strings.Join(test.want, "|") || strings.Join(shown, "|") != strings.Join(actual, "|") {
+				t.Fatalf("actual=%v shown=%v want=%v", actual, shown, test.want)
+			}
+			if strings.Join(a.Preferences().STUNURLs, "|") != strings.Join(test.saved, "|") {
+				t.Fatal("reading effective defaults rewrote saved preference")
+			}
+		})
+	}
+}
+
 func TestLoadPreferencesDetailedPreservesRecoveryState(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "desktop-preferences.json")

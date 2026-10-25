@@ -70,3 +70,9 @@ func makeDirectEvidence(peerID, sessionID string, path connectivity.Path, timing
 		ICEStateTimeline:       append([]connectivity.ICEStateEvent(nil), path.ICEStateTimeline...),
 		TLSVersion:             tlsVersion, ALPN: alpn, Timings: timings}
 }
+
+func relativeSignalingStats(current, baseline signaling.SessionStats) signaling.SessionStats {
+	current.BytesSent -= min(current.BytesSent, baseline.BytesSent)
+	current.BytesReceived -= min(current.BytesReceived, baseline.BytesReceived)
+	return current
+}

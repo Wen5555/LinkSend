@@ -1,5 +1,11 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-26 优先：Windows跨网连接
+
+补充：服务端候选准入不再用IPv4末字节255猜测广播，并修复映射地址绕过危险scope校验；真实forward回归通过，未替换生产服务。该项不能通过只更新Windows包生效。用户暂时无法试用，Windows双端结果仍待验；见[独立证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
+
+用户反馈最新版Windows→Windows互联网在线但连接未验证。正式版main20d8751上的最小修复edf7cac已推送并创建[PR #12](https://github.com/Wen5555/LinkSend/pull/12)：补默认备用STUN、内置公共主机Fake-IP安全解析与ICE失败实际统计。两模块workspace/off的test/vet/build及定向race、push core/desktop CI通过。准确源码验证器Windows↔JP Linux两方向16MiB/中文/空目录、6/6落盘条目/hash和双方Completed通过，约3.3秒建链；吞吐偏低，不宣称性能改善。准确Windows候选已从CI下载核验并交付于.artifacts/crossnet-20261026/candidate-edf7cac，桌面包未运行/安装，仍显示0.6.2且以BUILD-INFO的edf7cac区分。测试进程已结束、隔离peer已撤销；Win↔Win准确候选与双NAT仍待现场复测，原R0–R6其余必做项保持未完成。见[证据与包摘要](evidence/CROSS-NETWORK-20261026.md)。未改变宿主网络、合并main或发布Release/tag。
+
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 
 本地候选已完成Windows↔Mac同LAN系统文字、独立像素图片和文件条目双向验证；64MiB复制、两端原生居中进度、取消及未完成缓存删除通过。最终两端备份恢复，测试进程停止。新文件同步须独立开启，≥32MiB才弹进度窗。最终文件完成状态绑定FileID的自动回归通过；物理结果仍绑定修复前状态展示候选包。用户已明确要求GitHub版本更新推送，已通过PR #11合并并正式发布[0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)，准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc、三平台run 39157767929与六资产digest均通过；下方为历史状态，不代表仍在等待本轮实机。Explorer/Finder键盘粘贴、完整双NAT及其余A–E边界保持，见[本轮记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。

@@ -45,6 +45,7 @@ type Config struct {
 	AllowLoopback      bool
 	Generation         uint64
 	CheckTimeout       time.Duration
+	stunResolver       *stunResolverOptions
 }
 
 type Credentials struct {
@@ -107,6 +108,7 @@ type Endpoint struct {
 	monitorWG                      sync.WaitGroup
 	presenceProbe                  func(string, net.IP) bool
 	monitorInterval                time.Duration
+	resolverCancel                 context.CancelFunc
 }
 
 func New(cfg Config) (*Endpoint, error) {
@@ -198,6 +200,14 @@ func New(cfg Config) (*Endpoint, error) {
 	}
 	opts := []ice.AgentOption{ice.WithUrls(urls), ice.WithNetworkTypes([]ice.NetworkType{nt}), ice.WithCandidateTypes(types), ice.WithMulticastDNSMode(ice.MulticastDNSModeDisabled), ice.WithUDPMux(e.mux), ice.WithRemoteIPFilter(func(ip net.IP) bool { return safeIP(ip, cfg.AllowLoopback) }), ice.WithHostAcceptanceMinWait(0), ice.WithSrflxAcceptanceMinWait(500 * time.Millisecond), ice.WithMaxBindingRequests(7), ice.WithCheckInterval(100 * time.Millisecond), ice.WithSTUNGatherTimeout(3 * time.Second)}
 	if len(urls) > 0 {
+		resolverCtx, resolverCancel := context.WithCancel(context.Background())
+		e.resolverCancel = resolverCancel
+		iceNet, resolverErr := newSTUNResolverNet(resolverCtx, cfg.AllowLoopback, cfg.stunResolver)
+		if resolverErr != nil {
+			_ = e.Close()
+			return nil, resolverErr
+		}
+		opts = append(opts, ice.WithNet(iceNet))
 		opts = append(opts, ice.WithUDPMuxSrflx(e.mux.(ice.UniversalUDPMux)))
 	}
 	if cfg.AllowLoopback {
@@ -299,6 +309,19 @@ func (e *Endpoint) Done() <-chan struct{} { return e.done }
 func (e *Endpoint) BaseAddress() string   { return e.udp.LocalAddr().String() }
 func (e *Endpoint) Stats() Stats {
 	return Stats{STUNBytesSent: e.packets.sent.Load(), STUNBytesReceived: e.packets.received.Load(), STUNRequestsSent: e.packets.requestsSent.Load(), STUNResponsesReceived: e.packets.responsesReceived.Load(), RejectedPackets: e.packets.rejected.Load()}
+}
+
+// Observation reports only the local endpoint and ICE states actually seen.
+// Empty pair/method/transport fields deliberately do not claim nomination or
+// an authenticated connection when gathering or checks have failed.
+func (e *Endpoint) Observation() Path {
+	if e == nil {
+		return Path{}
+	}
+	e.mu.Lock()
+	timeline := append([]ICEStateEvent(nil), e.iceTimeline...)
+	e.mu.Unlock()
+	return Path{Generation: e.cfg.Generation, BaseSocket: e.BaseAddress(), Interface: e.interfaceName, AddressFamily: e.addressFamily, ICEStateTimeline: timeline}
 }
 
 func (e *Endpoint) monitorLocalAddress() {
@@ -440,6 +463,9 @@ func (e *Endpoint) Close() error {
 	var result error
 	e.once.Do(func() {
 		close(e.done)
+		if e.resolverCancel != nil {
+			e.resolverCancel()
+		}
 		if e.packets != nil {
 			_ = e.packets.Close()
 		}

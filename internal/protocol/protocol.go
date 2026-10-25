@@ -214,7 +214,11 @@ func ValidateCandidate(candidate string, allowLoopback bool) error {
 		return Fail(RelayNotImplemented, "only direct ICE candidates are supported")
 	}
 	a, err := netip.ParseAddr(parts[4])
-	if err != nil || a.Zone() != "" || a.IsUnspecified() || a.IsMulticast() || a.IsLinkLocalUnicast() {
+	if err != nil || a.Zone() != "" {
+		return Fail(InvalidMessage, "invalid candidate address or scope")
+	}
+	a = a.Unmap()
+	if a.IsUnspecified() || a.IsMulticast() || a.IsLinkLocalUnicast() {
 		return Fail(InvalidMessage, "invalid candidate address or scope")
 	}
 	if a.IsLoopback() && !allowLoopback {
@@ -222,7 +226,11 @@ func ValidateCandidate(candidate string, allowLoopback bool) error {
 	}
 	if a.Is4() {
 		v := a.As4()
-		if v[0] == 0 || v[0] >= 224 || v[3] == 255 {
+		// ICE carries no subnet mask. A final octet of 255 can be an ordinary
+		// unicast host (for example 10.0.0.255/23) or public NAT mapping, so it
+		// cannot establish directed broadcast. The limited broadcast address
+		// remains excluded with multicast and the reserved high IPv4 range.
+		if v[0] == 0 || v[0] >= 224 {
 			return Fail(InvalidMessage, "broadcast/reserved candidate address")
 		}
 	}
