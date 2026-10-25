@@ -203,24 +203,30 @@ func (a *App) startClipboardDelivery() {
 				a.refreshClipboardFileWindow()
 
 			case change := <-a.clipboardChanges:
-				kinds := make([]clipboardsync.Kind, 0, 3)
-				if change.Files {
-					_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: []clipboardsync.Kind{clipboardsync.Files}})
-					continue
-				}
-				if change.Link || change.Text {
-					kinds = append(kinds, clipboardsync.Link)
-				}
-				if change.Image {
-					kinds = append(kinds, clipboardsync.Image)
-				}
-				if change.Text {
-					kinds = append(kinds, clipboardsync.Text)
-				}
-				_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: kinds})
+				a.deliverClipboardChange(change)
 			}
 		}
 	}()
+}
+
+func (a *App) deliverClipboardChange(change nativeclipboard.Change) {
+	a.clipboardOwnerMu.Lock()
+	defer a.clipboardOwnerMu.Unlock()
+	kinds := make([]clipboardsync.Kind, 0, 3)
+	if change.Files {
+		_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: []clipboardsync.Kind{clipboardsync.Files}})
+		return
+	}
+	if change.Link || change.Text {
+		kinds = append(kinds, clipboardsync.Link)
+	}
+	if change.Image {
+		kinds = append(kinds, clipboardsync.Image)
+	}
+	if change.Text {
+		kinds = append(kinds, clipboardsync.Text)
+	}
+	_ = a.core.ClipboardChanged(a.ctx, coreapp.ClipboardChange{Generation: change.Sequence, Kinds: kinds})
 }
 
 func (a *App) stopClipboardWatch() {

@@ -51,6 +51,8 @@ export function taskPhaseLabel(phase: string): string {
     waiting_peer: '等待对方重新上线',
     connected: '已建立直连',
     awaiting_acceptance: '等待接收确认',
+    temporary_share_save_confirmation: '等待确认临时分享的保存位置',
+    saving_before_exit: '正在保存后退出',
     transferring: '传输中',
     verifying: '校验文件',
     no_content: '全部跳过，未接收内容',

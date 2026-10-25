@@ -51,6 +51,8 @@ export type {
     TaskFailureDiagnostic,
     TaskPhaseEvent,
     TaskSnapshot,
+    TemporaryShareCreation,
+    TemporaryShareSnapshot,
     WorkspaceChange,
     WorkspaceSnapshot
 } from "./models.js";

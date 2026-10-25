@@ -1,0 +1,24 @@
+.temporary-share-body { display: grid; gap: 16px; padding-top: 8px; }
+.temporary-share-body h3 { margin: 0 0 8px; font-size: 14px; }
+.temporary-share-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.temporary-share-forms > div, .temporary-share-forms > form { min-width: 0; }
+.temporary-share-forms input { width: 100%; box-sizing: border-box; }
+.temporary-share-forms button { margin-top: 10px; }
+.temporary-share-secret, .temporary-share-approval { display: grid; gap: 10px; padding: 16px; background: #f0f6fb; border: 1px solid #cbdde9; border-radius: 12px; min-width: 0; }
+.temporary-share-secret > code { font-size: 17px; letter-spacing: .08em; overflow-wrap: anywhere; user-select: all; }
+.temporary-share-secret small { color: #526577; }
+.temporary-share-toolbar, .temporary-share-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.temporary-share-list { display: grid; gap: 12px; }
+.temporary-share-row { border-top: 1px solid #e1e7ed; padding-top: 14px; min-width: 0; }
+.temporary-share-peer { display: grid; gap: 4px; font-size: 12px; color: #526577; }
+.temporary-share-peer code, .temporary-share-approval > code { font-size: 12px; overflow-wrap: anywhere; user-select: all; }
+.temporary-share-progress { margin: 10px 0; font-size: 12px; color: #526577; }
+.temporary-share-save { display: grid; gap: 9px; margin: 12px 0; max-width: 560px; }
+.temporary-share-save span { overflow-wrap: anywhere; font-size: 13px; }
+.temporary-share-manifest { margin: 10px 0; font-size: 12px; }
+.temporary-share-manifest ul { list-style: none; padding: 0; margin: 8px 0; }
+.temporary-share-manifest li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.temporary-share-manifest li span { min-width: 0; overflow-wrap: anywhere; }
+.temporary-share-manifest li small { white-space: nowrap; color: #526577; }
+.temporary-share .inline-actions { flex-wrap: wrap; }
+@media (max-width: 900px) { .temporary-share-forms { grid-template-columns: 1fr; gap: 20px; } }
