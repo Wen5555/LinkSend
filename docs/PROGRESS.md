@@ -1,3 +1,9 @@
+## 2026-10-26 准确包原生入口与失败证据
+
+- 3d20ccb准确三平台包已下载核对Actions digest、内外BUILD-INFO、四资产SHA及Windows PE/README；52f9bf2的core40240526707、desktop40240526725、packages40240526706再次查询均attempt1/completed/success，未重跑。52增量不倒记进3d包。
+- 准确Windows GUI已实际领取且由sender精确批准，但本轮receiver参与晚于sender实际35秒连接期限，两端最终failed/signaling_connect/DIRECT_FAILED，sender verified/committed=0，Windows无preview或本机Completion；不记传输通过，不推断用户现场根因。两轮私有GUI正常退出exit0；首个WebView隔离拒绝/强制退出和未备份全局缓存边界保留。
+- 同包实际SaveFile导出安全报告通过，也暴露DIRECT_FAILED及实际signaling_connect仍显示generic/unknown的诊断缺口；未将导出成功当错误说明完善。Mac07:14 SSH仍timeout255。详见[原生入口与保留失败](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)，下一轮仅加夹具批准就绪屏障，产品期限保持，R0–R6整体未完成。
+
 ## 2026-10-26 R2 私有原生回执基础与删除状态认证
 
 - ADR0016先冻结receipt-only范围；同schema12/cache metadata可选Native签名记录、实际inventory封存、原publication跨main重启单次CAS/回读已实现，原save的run限制保留。launch/boot接口无生产构造或调用，签名不证明native refs语义；任何Native在老化/压力/boot改变后仍保护，未接WriteFiles或发布回收。

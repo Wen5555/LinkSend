@@ -35,4 +35,4 @@ PowerShell7，锁定工具链。原始根 `.artifacts/r2-native-reader-draft/`�
 | desktop workspace | 31437 | 1224 | 4238 |
 | desktop off | 19993 | 866 | 4162 |
 
-没有前端/dist、正文 wire、权限默认值或缓存用户设置变化。准确提交 CI 推送后另核对；准确3d20候选包含此前 R5 产品源码，不能将本增量倒记到该包。生产 native/helper、已发布缓存安全回收与双平台键盘粘贴仍为必做缺项。
+没有前端/dist、正文 wire、权限默认值或缓存用户设置变化。准确提交 `52f9bf20c3fb2ac71bffa0ee71521e9af40048dc` 的 core40240526707、desktop40240526725、packages40240526706 已再次查询均 attempt1/completed/success，无重试，回执 `.artifacts/share-native-ui-draft/current-exact-ci-status.json`。准确3d20候选包含此前 R5 产品源码，不能将本增量倒记到该包。生产 native/helper、已发布缓存安全回收与双平台键盘粘贴仍为必做缺项。

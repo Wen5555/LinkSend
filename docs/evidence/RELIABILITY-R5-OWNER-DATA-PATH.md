@@ -81,6 +81,8 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 
 ## 未完成与后续
 
+2026-10-26后续：准确3d20包及52提交CI已核对；Windows真实Wails领取/批准与本机安全诊断保存已执行，但GUI参与晚于sender实际35秒连接期限，两端失败，sender verified/committed=0、Windows无预览/Completion，不能记完整临时分享通过。两次正常GUI退出与首次隔离拒绝分别保留，详见[原生入口与保留失败](RELIABILITY-R5-NATIVE-GUI-20261026.md)。下段的“准确候选CI/包来源待”是该阶段原记录；当前剩余为完整原生/跨平台旅程及已观察的诊断缺口。
+
 不同网络Go核心双向临时分享已补充[701准确实网证据](RELIABILITY-R5-CROSS-NETWORK-20261026.md)；准确候选CI/包来源、Windows↔Mac与原生保存/复制及最终完整旅程仍待真实证据。真实socket自动引擎、浏览器夹具、CI构建与物理跨网分别记录；不抵扣用户Windows双端公网连接现场、受限双NAT、R2完整缓存/键盘粘贴或其他R0–R6必做项。未做生产部署或宿主防火墙/路由/代理变更。
 
 ## 701e23b 准确CI失败与测试工具修复
