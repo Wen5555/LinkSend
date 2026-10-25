@@ -38,6 +38,41 @@ Windows侧STUN观察到公网出口映射；JP为公共地址。现场既有路�
 
 证据：win-to-jp-verification-corrected.json、jp-to-win-verification-01.json、wan-local-01/{source-hashes,send-result,receive-result}.json、wan-{receive,send}-jp-01.json。远端/tmp/linksend-crossnet-20261026-01；job-ls-crossnet-jp-{receive,send}-20261026-01。源、接收副本及恢复checkpoint保留，未按临时目录名递归删除。
 
+## 准确热修复提交与第二轮实网复验
+
+修复已提交并推送为`edf7cac14d7d17d1491260e918e98be8944f710b`，分支`codex/fix-cross-network-20261026`，供审阅的[PR #12](https://github.com/Wen5555/LinkSend/pull/12)。没有合并main或发布Release/tag。
+
+在该干净工作树中运行`GOWORK=off go build -o <新输出> ./.artifacts/wanprobe`，分别构建Windows及`GOOS=linux GOARCH=amd64 CGO_ENABLED=0`验证器。`go list`确认connectivity来自本工作树，两个`go version -m`均为上述vcs.revision、vcs.modified=false；driver SHA256为cbdcb59dbb17f90f818e1c1d6527fd891c038079980c992fe7a5b8bfcca29fae。Windows验证器SHA256为7afd0ba4b15c89ba733646150b583313f024a99ddcb98702012f8b8c39dd9a0f，Linux为297bfca743ede699eb8aea8c83dcaf21a527469dcca0cc10558fbe286bef1c26。
+
+复用首轮两个自有隔离身份与已核对的源hash，使用`-attempt 02 -reuse-source`保存独立结果/接收目录，不覆盖首轮。两方向均使用正常正式HTTPS/WSS、默认两STUN地址与原固定公钥认证，未改宿主网络或生产服务。
+
+| 方向 | 完整性与终态 | 建链 | 发送/接收流程耗时 |
+|---|---|---|---|
+| Windows→JP Linux | 3文件16,777,310B，含16MiB、中文路径、空目录；6/6正式落盘条目、逐路径SHA256及目录一致，双方Completed | 3375.9946ms，srflx→host | 183517/189375ms |
+| JP Linux→Windows | 同格式独立源；6/6条目、SHA256/目录、清单digest与task一致，双方Completed | 3266.22693ms，host→srflx | 43927/44533ms |
+
+两端均TLS1.3（772）、ALPN linksend/1、relay=false，ConnectionMethod仍为direct_unknown。吞吐仍偏低且方向不同，不从此样本推断性能改善。第二轮结果绑定准确核心源码；验证器不是Wails桌面包，不能将此结果当作Windows双端候选GUI验收。两远端作业finished/exit0，Windows发送与接收进程正常退出，随后专用Windows profile执行`-mode revoke`退出0并输出ISOLATED_TEST_PEER_REVOKED。自有源/接收副本和checkpoint作为证据保留；未删除用户文件或改日常profile。
+
+两端在完成后的关闭阶段仍各有Pion日志`Failed to read UDP packet: use of closed network connection`；实际双边Completed/hash/退出0作为传输结论，保留该日志，不抹成全程零错误日志。
+
+原始证据：hotfix-wanprobe-{windows,linux}-build.txt、hotfix-wanprobe-hashes.json、win-to-jp-verification-hotfix-02.json、jp-to-win-verification-hotfix-02.json、wan-local-01/{send,receive}-result-02.json、wan-{receive,send}-jp-hotfix-02.json及wan-revoke-hotfix-02.log。远端job-ls-hotfix-jp-{receive,send}-20261026-02。
+
+## Windows可交付候选
+
+[程序包构建](https://github.com/Wen5555/LinkSend/actions/runs/40214493558)的Windows job成功，artifact 12607365954；原始Actions ZIP的SHA256为133ad1aaa04e3215cadebd65dd6a9474fc64ae8c59650f4eccd57bc21932cd19，与GitHub API digest一致。内外BUILD-INFO一致，COMMITTED/clean/准确edf7cac，内部SHA256SUMS与PE版本0.6.2均通过。
+
+候选根：D:/apps/Osend/.artifacts/crossnet-20261026/candidate-edf7cac。交付文件为GitHub资产原样副本，只改本地外层文件名：
+
+| 文件 | 字节 | SHA256 |
+|---|---:|---|
+| LinkSend-crossnet-fix-edf7cac-windows-amd64.zip | 10,024,687 | 3b86d6f95c4ab2690b600536c74c2cbf5fc72a21e80256c47dcd6335ea843aab |
+| LinkSend-crossnet-fix-edf7cac-windows-amd64-installer.exe | 75,295,391 | a57d8e9f3604ea38b019d6d1df7ad4e8cf53130b4a08dcfcd1944d016e3c73d5 |
+| 解压后LinkSend.exe | 24,473,600 | c2e58406f79e5ca3e5ac8bc59299b548c54788640c1f3e6f330ebf507b742702 |
+
+同目录package-verification.json保存来源与检查回执，修复候选说明.txt及双端试用步骤.txt说明操作。ZIP根部为LinkSend.exe，无bin子目录；便携运行默认仍沿用%APPDATA%/LinkSend（显式LINKSEND_DATA_DIR优先），不是自动隔离profile。两端先从托盘完全退出旧程序，再使用同候选，以免单实例唤回旧进程。自定义STUN及显式环境配置保持；空值/旧单内置默认会补备用。程序仍显示0.6.2，以BUILD-INFO的edf7cac区分；包内旧README的0.6.0为既有文案漂移，不代表载荷来源。安装器本轮未执行，桌面候选未启动，不倒记其他包的原生证据。
+
+准确源码push CI [core](https://github.com/Wen5555/LinkSend/actions/runs/40214493502)与[desktop](https://github.com/Wen5555/LinkSend/actions/runs/40214493466)均success；上述packages的Windows amd64、Mac arm64、Mac amd64三job全部success，PR触发的[core](https://github.com/Wen5555/LinkSend/actions/runs/40215068288)及[desktop](https://github.com/Wen5555/LinkSend/actions/runs/40215068365)也均success。三平台构建不替代Mac原生旅程。
+
 ## 仍未证明
 
 用户两台Windows使用准确修复包的现场闭环、双端受限NAT普遍成功、物理LAN/睡眠恢复及原R0–R6其余必做项仍分别验收。STUN可用不保证所有NAT或UDP受限网络可直连；不通过中继/关闭身份验证填补缺口。未合并main、发布Release或替换生产服务。
