@@ -10,6 +10,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 跨网修复候选：自动默认STUN增加独立备用，实际配置与只读显示统一；只对两个内置公开STUN域名的Fake-IP/解析失败做应用内有界HTTPS解析，保留host/LAN并行、原UDP mux与TLS验证。ICE失败保留实际观察计数而不声称认证成功。用户偏好/任务schema/文件wire与relay=false保持，准确来源、真实跨网和Win↔Win待验边界见[证据](evidence/CROSS-NETWORK-20261026.md)与[ADR0018](adr/0018-cross-network-stun-resolution.md)。
+
 2026-10-18 用户新增授权：桌面增加手动触发的 GitHub 正式版检查、按平台下载、SHA256校验及原生安装包入口；安装由Windows向导或Mac DMG完成。此增量不改文件协议、配对或正文路径，详见[ADR0014](adr/0014-desktop-github-updates.md)。
 
 2026-10-18 N4目标边界增量：快速发送排除本机；身份尚未读取时等待，保存为本机的草稿保留但不可发送。最终Go授权、文件wire与schema保持；准确包原生结果另列。

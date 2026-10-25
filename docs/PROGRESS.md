@@ -1,3 +1,8 @@
+## 2026-10-26 跨网连接修复候选
+
+- 用户优先反馈最新版Win→Win在线但直连未验证。现场复现默认STUN无srflx，系统Fake-IP与原真实服务无UDP响应分别确认；桌面补备用并统一配置，Pion仅对内置公开STUN适配安全有界HTTPS解析，不改系统网络，host/LAN并行，原认证文件引擎/relay=false保持。
+- 新回归保留旧默认/两角色ICE证据FAIL；修后定向普通/race与可靠性工作树双模块12检查通过，正式版main最小分支独立12命令及两项定向race也全部通过。首轮Windows↔JP Linux不同网络、双向3文件/16MiB/中文/空目录SHA256及双方Completed通过；这不是用户Windows双端或双NAT实测，吞吐仍偏低。准确包及该源码的现场复验继续，见[完整证据](evidence/CROSS-NETWORK-20261026.md)。不标原Goal完成或发布成功。
+
 ## 2026-10-19 v0.6.2已发布
 
 - PR #11正常合并main，准确程序包源码`63c86c2c5ce183e1400d27ca0571610d50a42bdc`；[v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)已公开并设Latest，tag一致。main core/desktop及[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/39157767929)全部success，四个程序包加两份元数据共六项资产digest核验通过。
