@@ -92,3 +92,11 @@ workflow已准备在Windows、GitHub Actions且runner context及环境均为gith
 纯文件测试使用真实core.New持有该Windows锁，旧实现实际FAIL（`native-profile-scan-before.log`，exit1/8968ms）；修后正负例普通10轮PASS（app5.453s、命令9089ms、exit0，`native-profile-scan-after.log`）。optin显式unset的desktop workspace test/vet/build为9080/928/3924ms，off为9562/749/3772ms，六命令exit0；日志 `native-scan-desktop-{workspace|off}-{test|vet|build}.log`。这些测试未访问系统剪贴板，完整native正向仍须新提交托管CI证明。
 
 `103ba61c13ba02a02a0037bd891c2a64777cec29` 的core40233307686与desktop40233307731均success，packages40233307711仍failure。Windows native目标run=1/pass=0/skip=0、exit1，报告real clipboard session did not become ready；同一等待closure用于初始和暂停恢复，本日志不能判定阶段，不能移记锁修复后的完整native通过。证据在 `.artifacts/share-ui-draft/ci-103ba61/`。Mac arm64在安装固定Wails beta.18时，sum.golang.org的IPv6无路由导致Go模块校验失败，未到产品测试；Intel包成功。保留两类失败，继续确定性回归，不以提高等待或重跑掩盖。
+
+## 原生夹具就绪门的因果修复
+
+新纯内存adapter、真实Core/Pion/QUIC和桌面copy/deliver桥接回归在原三秒门下真实FAIL：initial_leases为10ms就绪，紧接本机pause、保护码copy和resume，3005ms时A SendReady=false/ReceiveReady=true、B双向ready、无waiting/error且receiver仍online/listening（`native-readiness-before.log`，exit1/12708ms）。Reset清本机双向lease，本机wake只重发自己签发的receive lease；健康Ensure不重拨，对端仍按既有七秒周期发送原对端授权。这证明夹具的三秒双向门不足，不证明103未分阶段的那次CI一定发生于resume。
+
+夹具现先等真实receiver SignalingConnected/Listening，再Ensure；initial_leases与resumed_leases分阶段记录安全boolean状态，并在原15秒父context下等真实租约。没有延长父期限、强迫对端Reset、改权限、改生产周期或制造远端证明。受控HTTP屏障还证明StartInbox已经返回但注册尚未完成，放行后实际就绪。恢复实测约6.97–6.99秒，WSS连接计数未增加；分享码generation不读/不转发，随后新文字实际经认证QUIC收取。
+
+最终纯回归普通三轮app27.214s/命令31538ms、race三轮app30.249s/命令42913ms均exit0（`native-readiness-final-{test,race}.log`）；desktop workspace test/vet/build为15861/1065/3882ms，off为17465/832/3939ms，六条exit0（`readiness-desktop-{workspace|off}-{test|vet|build}.log`）。只修改两份Windows测试文件，optin显式unset、未调用本机系统clipboard API；准确新提交的托管native目标仍须实际run/pass/no-skip证据，不用本纯回归移记通过。

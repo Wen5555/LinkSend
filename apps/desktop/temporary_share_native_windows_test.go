@@ -103,28 +103,11 @@ func TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache(t *testing.T) {
 	if err := b.StartInbox(filepath.Join(root, "received"), cfg); err != nil {
 		t.Fatal(err)
 	}
+	waitTemporaryClipboardFixtureInbox(t, ctx, b)
 	if err := a.EnsureClipboardSessions(ctx, cfg); err != nil {
 		t.Fatal(err)
 	}
-	waitReady := func() {
-		deadline := time.Now().Add(3 * time.Second)
-		for {
-			ready := false
-			for _, status := range a.ClipboardPeerStatuses() {
-				if status.PeerID == bID.ID() && status.SendReady && status.ReceiveReady {
-					ready = true
-				}
-			}
-			if ready {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("real clipboard session did not become ready")
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-	waitReady()
+	waitTemporaryClipboardFixtureReady(t, ctx, "initial_leases", a, b, aID.ID(), bID.ID())
 	source := filepath.Join(root, "fixture.txt")
 	if err := os.WriteFile(source, []byte("native secret-copy fixture"), 0600); err != nil {
 		t.Fatal(err)
@@ -149,7 +132,7 @@ func TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache(t *testing.T) {
 		if paused {
 			app.SetClipboardPaused(false) // Existing reset reads the actual current native generation.
 			app.deliverClipboardChange(nativeclipboard.Change{Sequence: secretGeneration, Text: true})
-			waitReady()
+			waitTemporaryClipboardFixtureReady(t, ctx, "resumed_leases", a, b, aID.ID(), bID.ID())
 		}
 		if nativeReads.Load() != beforeSecret {
 			t.Fatal("secret generation reached the native payload reader")

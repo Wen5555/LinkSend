@@ -1,3 +1,8 @@
+## 2026-10-26 Windows原生复制夹具就绪门
+
+- 纯Core/QUIC与copy/deliver桥接回归证明原三秒门在resume时可失败：A接收已就绪、发送等待对端既有七秒lease周期，连接保持健康。现夹具先等receiver实际注册，并按原15秒父context等待真实initial/resumed租约，不改生产、权限、周期或强迫对端续租；103旧CI仍保留调用点歧义。
+- 最终普通三轮/race三轮与desktop双模式六检查全exit0，恢复实际约6.98秒、无额外WSS、保护码不读/不发而新文字实传。本机native optin未跑；新提交托管native及准确包继续核对，详见[证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
 ## 2026-10-26 R5 准确源码实网与R2原生引用原型
 
 - `701e23b`干净源码验证器完成Windows↔公共JP Linux双向临时分享，每向3文件16,777,247B、中文/零字节/嵌套空目录1、树hash一致，双方task/local share/grant completed、TLS1.3/linksend/1、零永久授权。控制metadata经隔离SSH HTTPS/WSS，文件独立UDP/Pion/QUIC；Windows正向后台退出码不可观察，其余三actor exit0。服务与通道关闭，临时凭据精确移除，文件保留，见[准确实网证据](evidence/RELIABILITY-R5-CROSS-NETWORK-20261026.md)。不替代Win↔Win/双NAT、WinMac或准确Wails包。
