@@ -1,3 +1,8 @@
+## 2026-10-26 R2 文件新复制与续期交错修复
+
+- 准确eccb903/a22f691 core CI的磁盘压力后新复制恢复失败被保留；真实QUIC+原生读取屏障证明同权限续期在Observe后安装，会让最新lease的baseline吞掉新复制，旧实现0.29s稳定FAIL，无第二job。不是空间预留泄漏或DATA RACE告警。
+- 按仍当前的本机观察选择有效重叠lease，文件读取前/后均使用，最终BindScoped/权限/期限/新复制/撤权门保持；无有效旧lease不能借续期补发。新回归/原失败/负例普通10轮、相关race3轮和最终双模块workspace/off完整12命令均exit0（core106644/108627ms、desktop7759/7721ms），覆盖最终签名客户端语义去重；缓存删除/容量/用户文件规则不变，准确CI继续核对，见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。
+
 ## 2026-10-26 R5 签名HTTP客户端
 
 - 新增类型化ShareControlInfo/ShareControl，每次取新epoch、签新nonce；有限响应按actor/ID/清单/task/gen/计划核对，合法后续幂等状态保留。HTTPS/禁止重定向/取消延续现有client，不自动重试副作用请求；远端错误只留白名单码及固定摘要，不回显分享码或detail。

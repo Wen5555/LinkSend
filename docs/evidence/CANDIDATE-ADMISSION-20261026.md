@@ -16,3 +16,11 @@
 - 最小正式版分支另行移植三文件，定向TestCandidate在该基线通过；两模块workspace/off完整test -count=1 ./...、vet ./...、build ./...共12命令全部exit0。core test107506/102556ms，desktop13436/7537ms；逐命令日志server-admission-hotfix-{core,desktop}-{workspace,off}-{test,vet,build}.log在D:/apps/Osend/.artifacts/crossnet-20261026，包含退出码和实际耗时。无前端源码变化。
 
 没有修改生产服务、服务器防火墙、路由、代理或DNS。edf7cac Windows包和双向实网验证保持原准确来源；本次服务端候选修复不倒记到该包，也不抵扣用户暂时无法试用的Windows双端现场证据。服务部署不在本轮默认授权内。
+
+## 准确提交与服务候选
+
+最小正式版分支已推送99a6c0ee09c1e62074d39abbdf8c5081978bd629，仍在[PR #12](https://github.com/Wen5555/LinkSend/pull/12)供审阅。push core40217679160、desktop40217679157、packages40217679062（三平台），PR core40217682895、desktop40217682925均completed/success。精确状态/完整jobs保存于crossnet证据根ci-99a6c0e-verified.json，不将可靠性开发分支的独立失败抹成通过。
+
+干净99a6c0e源码以GOWORK=off、GOOS=linux/GOARCH=amd64/CGO_ENABLED=0、go build -trimpath ./cmd/rendezvous构建Linux候选；go version -m为原revision、modified=false。D:/apps/Osend/.artifacts/crossnet-20261026/server-candidate-99a6c0e/rendezvous-linux-amd64为17,943,022B，SHA256为8a869f163341ae34c5ecb3c5dc7d9d668f54fed32fcc493de6a8f9a9a78d38a4；同目录BUILD-INFO.json、GO-BUILD-INFO.txt和SHA256SUMS保存来源。
+
+经SSH上传到JP专用测试根后先核对摘要，使用新建隔离库与127.0.0.1临时端口运行该准确二进制。原生-version为0.6.2，HTTP health200/status=ok/protocol1/quic/relay=false，SIGTERM正常exit0；关闭后SQLite只读核对schema4、devices=0。作业/tmp/codex-ssh/job-ls-server-99a6c0e-smoke finished/exit0，同目录native-verification.json为回执。没有连接真实设备、触碰生产配置/数据库、注册systemd或对外监听。该原生启动检查不替代生产部署或真实末尾255拓扑连接。

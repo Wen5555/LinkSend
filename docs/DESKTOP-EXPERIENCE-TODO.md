@@ -16,6 +16,8 @@
 
   R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
 
+  2026-10-26补充：真实CI发现磁盘压力后的新复制被同权限lease续期吞掉；屏障稳定复现旧实现FAIL，现只为当前本机观察选择仍有效重叠lease，普通10轮/race3轮通过，缓存回收/容量/期限/用户文件保护不变。准确新CI继续核对，旧eccb903/a22f691失败保留；见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。
+
   R2持久owner首批：同一SQLite连接保存带用途/身份/运行代次的签名记录，实际stage/file句柄来源在body前登记，publishing在原生写入前登记；损坏/冲突/旧运行不能重获发送或未发布删除权限。见[持久记录证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。活动引用、启动对账/自动回收与原生完成证明继续。
 
   R2生命周期增量：活动引用持续到接收器及目的目录句柄关闭；关闭前观察实际存储，当前worker在native前封存确定未发布清单，启动/退出/剪贴板/周期/压力接入有界分页回收、删除意图与退避。未知/用户改动/可能已发布对象仍保护，超出完整封存预算不拒收正常文件。见[生命周期证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。大对象增量封存、未封存崩溃残留、原生读取结束许可与真实键盘粘贴仍必做。

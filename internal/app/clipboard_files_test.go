@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -84,6 +85,81 @@ func (f clipboardFilesFixture) copy(t *testing.T, generation uint64) {
 	f.aGen.Store(generation)
 	if err := f.a.ClipboardChanged(f.ctx, ClipboardChange{Generation: generation, Kinds: []clipboardsync.Kind{clipboardsync.Files}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClipboardFilesRenewalDuringNativeReadKeepsFreshCopy(t *testing.T) {
+	f := newClipboardFilesFixture(t)
+	f.b.directPoolMu.Lock()
+	var receiver *PeerSession
+	for _, pooled := range f.b.directPool {
+		receiver = pooled.peer
+	}
+	f.b.directPoolMu.Unlock()
+	f.a.directPoolMu.Lock()
+	var sender *PeerSession
+	for _, pooled := range f.a.directPool {
+		sender = pooled.peer
+	}
+	f.a.directPoolMu.Unlock()
+	if sender == nil || receiver == nil {
+		t.Fatal("fixture has no authenticated clipboard peers")
+	}
+	previous, ok := f.a.clipboardSync.Outbound(sender.PeerID, sender.SessionID, sender.RemoteAuthorizationGeneration, clipboardsync.Files)
+	if !ok {
+		t.Fatal("fixture has no initial file lease")
+	}
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	f.a.clipboardAdapterMu.Lock()
+	read := f.a.clipboardAdapter.ReadFiles
+	f.a.clipboardAdapter.ReadFiles = func(ctx context.Context, generation uint64) ([]string, uint64, error) {
+		close(entered)
+		select {
+		case <-release:
+			return read(ctx, generation)
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		}
+	}
+	f.a.clipboardAdapterMu.Unlock()
+	f.aGen.Store(2)
+	finished := make(chan error, 1)
+	go func() {
+		finished <- f.a.ClipboardChanged(f.ctx, ClipboardChange{Generation: 2, Kinds: []clipboardsync.Kind{clipboardsync.Files}})
+	}()
+	select {
+	case <-entered:
+	case <-f.ctx.Done():
+		t.Fatal("native metadata read was not reached")
+	}
+	// Force a real renewal to arrive after the local observation but before
+	// binding. Its local baseline is already this copy's generation, whereas
+	// the still-valid overlapping lease predates it.
+	f.b.sendClipboardLease(f.ctx, receiver)
+	waitFor(t, time.Second, func() bool {
+		latest, ok := f.a.clipboardSync.Outbound(sender.PeerID, sender.SessionID, sender.RemoteAuthorizationGeneration, clipboardsync.Files)
+		return ok && latest.ID != previous.ID
+	}, "renewal did not arrive while the native read was blocked")
+	unblock()
+	if err := <-finished; err != nil {
+		t.Fatal("fresh copy failed after a same-policy renewal", err)
+	}
+	if len(f.a.ClipboardFileProgresses()) != 1 {
+		t.Fatal("renewal silently discarded the already-observed fresh copy")
+	}
+	select {
+	case paths := <-f.written:
+		if len(paths) != 1 {
+			t.Fatal("fresh copy did not publish exactly one file")
+		}
+		if data, err := os.ReadFile(paths[0]); err != nil || string(data) != "clipboard file bytes" {
+			t.Fatal("fresh copy contents changed across renewal", err)
+		}
+	case <-f.ctx.Done():
+		t.Fatal("fresh copy did not complete across renewal", f.a.ClipboardFileProgresses(), f.b.ClipboardFileProgresses())
 	}
 }
 

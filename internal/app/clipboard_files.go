@@ -314,7 +314,7 @@ func (s *Service) clipboardFilesChanged(ctx context.Context, observation clipboa
 			s.setClipboardPeerError(peer.PeerID, "files_unsupported")
 			continue
 		}
-		_, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files)
+		_, leased := s.clipboardSync.OutboundForObservation(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files, observation)
 		if permitted && leased {
 			eligible = append(eligible, peer)
 		}
@@ -346,7 +346,7 @@ func (s *Service) clipboardFilesChanged(ctx context.Context, observation clipboa
 		return err
 	}
 	for _, peer := range eligible {
-		lease, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files)
+		lease, leased := s.clipboardSync.OutboundForObservation(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files, base)
 		grant, permitted := s.clipboardGrant(peer.PeerID, "send", clipboardsync.Files, peer.AuthorizationGeneration)
 		if !leased || !permitted {
 			continue
