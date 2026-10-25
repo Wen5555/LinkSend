@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/subtle"
 	"encoding/base64"
@@ -167,6 +168,13 @@ func (s *Server) shareControl(w http.ResponseWriter, r *http.Request) {
 		reject(w, http.StatusUpgradeRequired, protocol.ShareUnsupported, "temporary share control not enabled")
 		return
 	}
+	if !s.beginShareWork() {
+		reject(w, http.StatusServiceUnavailable, protocol.ShareUnavailable, "share control unavailable")
+		return
+	}
+	defer s.wg.Done()
+	stopBody := context.AfterFunc(s.ctx, func() { _ = r.Body.Close() })
+	defer stopBody()
 	now := time.Now()
 	operation := r.PathValue("operation")
 	if operation == "claim" {
@@ -204,7 +212,17 @@ func (s *Server) shareControl(w http.ResponseWriter, r *http.Request) {
 		shareFailure(w, sharegrant.ErrInvalid, false)
 		return
 	}
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	stopContext := context.AfterFunc(s.ctx, cancel)
+	defer cancel()
+	defer stopContext()
+	s.shareSignals.gate.Lock()
+	if s.shareSignals.closed {
+		s.shareSignals.gate.Unlock()
+		reject(w, http.StatusServiceUnavailable, protocol.ShareUnavailable, "share control unavailable")
+		return
+	}
+	now = time.Now()
 	var record sharegrant.Record
 	switch operation {
 	case "create":
@@ -268,9 +286,14 @@ func (s *Server) shareControl(w http.ResponseWriter, r *http.Request) {
 	case "revoke":
 		record, err = s.store.RevokeShare(ctx, request.ID, actor, now)
 	default:
+		s.shareSignals.gate.Unlock()
 		shareFailure(w, sharegrant.ErrInvalid, false)
 		return
 	}
+	if err == nil {
+		s.refreshShareSignalsLocked(record, now)
+	}
+	s.shareSignals.gate.Unlock()
 	if err != nil {
 		shareFailure(w, err, operation == "claim")
 		return

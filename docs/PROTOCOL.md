@@ -16,6 +16,10 @@ files event 仍通过 LSCB01 单向流：payload 为 `{id,count,bytes}`，id 为
 
 # Protocol
 
+## 2026-10-26 临时授权专属WSS
+
+实验GET /v1/shares/{id}/ws及linksend.share-signal.v1按canonical query绑定claim_id/task_id/generation/phase/manifest_digest/可选plan_digest。ShareSignalScope/Frame version1的外层签名使用原AuthBytes，覆盖完整原已签Envelope、scope、actor、epoch、新nonce和有限时间；内层ICE generation独立。只允许严格ICE/候选/空end/失败白名单，禁止清单、正文、复用和剪贴板权限。Bind/完成/撤销/到期退役对应scope，普通断线不能伪造终态；完整文件能力仍关闭，见[ADR0017](adr/0017-one-time-share-grant.md)和[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+
 ## 2026-10-26 临时分享签名客户端
 
 客户端每操作经health读取当前share_control.version=1及公开epoch，完整签名绑定原URI/actor/epoch:新nonce/时间/请求体；未知或缺失控制能力拒绝。创建只发验证器，领取才发明文码，均不放URL。响应必须匹配原actor/ID/清单/task/gen/plan及合法幂等状态，拒绝重复/未知字段和超限；副作用请求不自动重试，status不等于未来数据授权。实验服务仍file_transfer_ready=false，未开放临时文件通道，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。

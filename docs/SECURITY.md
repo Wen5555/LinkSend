@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 R5专属协调使用原双方固定公钥、完整grant/task/phase scope和双层原签名；独立registry及有界消息/连接/重放/期限owner。所有新准入与出队重验记录，持久终态先退役，旧回调不能复活；普通组与健康连接不受分享终态清理。清单与正文无信令字段，默认完整能力关闭，实际文件授权仍须本地owner及原V1引擎，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+
 2026-10-26 临时分享HTTP客户端沿用HTTPS与禁止重定向，每次签新epoch/nonce证明，不重放旧证明或自动重试副作用请求。服务响应经有限解析及原actor/任务/清单/计划绑定，错误只留稳定白名单码及固定摘要；不把远端detail、分享码或私有record带入日志/错误。此控制客户端不授予永久成员/信任/剪贴板或文件权限，数据面仍未接入，见[证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
 
 2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。

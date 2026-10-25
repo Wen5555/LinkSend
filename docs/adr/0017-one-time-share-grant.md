@@ -40,7 +40,25 @@ sender approve 必须明确匹配当前 claim ID、接收身份/公钥、原 man
 
 HTTP最大请求体、字符串、候选数、并发、deadline 复用现有协议上界。临时协调消息只能去 grant 的两端，必须带 grant ID/generation/task；每次新 ICE/QUIC 和文件操作重新核验。不能让一个临时授权访问对端其他任务或内容，也不能复用已撤销的普通授权来绕过临时绑定。失败返回稳定码、安全下一步；本地导出只显示白名单原因，不含码/摘要/公钥。
 
-## 验收
+## 2026-10-26 临时协调与预览设计冻结
+
+以下是下一增量的协议与授权约束，尚未实现，不改变file_transfer_ready=false或普通成员路径。采用独立GET /v1/shares/{id}/ws和linksend.share-signal.v1子协议；严格query只含原claim/task、grant generation、phase、manifest/plan摘要，所有值进入实际RequestURI的现有epoch请求签名。禁止重复/未知query、分享码、文件路径、正文或清单。临时actor不写devices/groups/trust，不注册普通s.clients/s.sessions，也不能调用普通成员WS。
+
+ShareSignalScope绑定grant ID、claim ID、task ID、grant generation、phase、manifest摘要及plan摘要。Envelope.Generation继续表示ICE代次，不能替换grant generation。共享Frame保留原protocol.Envelope签名，外层用既有AuthBytes/Ed25519对完整scope、原Envelope、epoch、新nonce和有限时间再签名；这是沿用既有签名算法绑定用途，不新增密码学握手。不得解包改写payload后冒充原Envelope签名仍有效。两端原公钥分别从当前grant固定，服务和客户端都重验actor/recipient及scope。
+
+preview仅为当前approved、原双方/claim/task/generation/manifest、领取期限内的独立认证QUIC元数据预览。清单与实际保存计划在这个加密P2P连接中确认，不进入信令；未bound不得进入V1文件引擎、创建目标storage或发送文件body。Bind成功立即退役preview；transfer需当前bound、原plan/task/manifest/双方公钥/恢复期限，调用原Record.Authorize，再用新的ICE SessionID和QUIC连接。禁止在preview连接上隐式升权。两阶段固定发送方发起、接收方响应，关闭session reuse/clipboard，均不进入普通连接池。
+
+元数据预览只能返回一份经原Manifest.Validate/Digest核对的清单及一份明确确认计划，计划包含最终本机路径和冲突策略；绑定后不能由引擎自动改名悄然改变digest。源变化需撤销并由用户重新确认新分享。文件操作仍走现有安全落盘/完整性/V1引擎，原本地黑名单优先；完整ShareGrant与任务恢复owner接入前不开放产品入口。
+
+shareHub独立管理最多32个活动scope/64条WS，每身份最多8条，每scope的每actor只有一个连接；替换和cleanup比较owner token/指针，旧回调不能删新连接。单个ICE negotiation、每方向32个candidate、frame32KiB/payload16KiB、鉴权/写入5秒、读空闲65秒、每连接60frame/s；候选仍用原准入，ICE描述严格拒绝复用/剪贴板权限，end为空对象、session_error只用白名单码，不允许任意JSON正文转发。
+
+分享状态迁移、WS注册、转发准入和writer出队共享分享gate/owner token；持久撤销/完成/过期后先退役scope、丢弃未发队列并取消对应连接，不能触及普通连接注册表。网络写入不持有全局s.mu；已经开始发送的在途字节无法撤回，信令也不是文件权限。每scope按真实期限主动关闭，不能仅等一分钟reaper；所有新操作仍核验实际期限。Server.Close先禁止新注册、取消并等待分享reader/writer/timer，再关闭唯一Control数据库。
+
+控制面断线不允许新preview/transfer或恢复任务跳过新证明；新连接必须新nonce、当前epoch及原scope核验。已经建立的bound健康QUIC只承载原任务，仍受本地grant owner、原实际期限、取消/撤权和完整性约束，无关控制面重连不重开或扩大权限；明确终态/撤销通知必须取消对应任务，其他普通QUIC保持。客户端owner与该策略的因果验证属于后续数据面必做项。
+
+实现前后需用真实SQLite/签名/WS证明第三身份、跨grant/task/phase、错key、旧grant代次/ICE会话、错内外签名、epoch重启重放、正文/剪贴板字段及候选/队列/连接限额拒绝，并核对永久表零增加。屏障固定鉴权后注册前撤销、入队后写前撤销、旧cleanup晚于新连接三处竞争；Bind关闭preview、空闲到期、Close与注册竞争及普通连接不受分享终态影响分别验证。不能以这些服务原型测试抵扣两端UI、原生保存或真实跨网临时分享。
+
+## 验收执行
 
 先用假时钟和真实 SQLite/签名测试猜码/格式/限额、过期、重放、并发领取、明确批准/拒绝、撤销/完成竞争、错误公钥、跨组/未入组隔离、源摘要/任务替换、服务重启、原接收人有限恢复和旧端拒绝。拒绝后回读确认记录和永久信任未变；只断言返回错误不足以证明安全。
 

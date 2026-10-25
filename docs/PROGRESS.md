@@ -1,4 +1,12 @@
+## 2026-10-26 R5 专属授权协调原型
+
+- 先冻结ADR0017两阶段/完整scope，再实现独立临时WSS和双层原AuthBytes签名；preview→Bind退役→新transfer scope，原成员认证/注册表保持。资源、消息结构与绝对期限有界，终态/撤销与普通断线分类分开，不发信令清单/文件正文，不授予剪贴板或普通会话复用。
+- 真实SQLite/WSS、三处屏障、预算/重放/角色/期限/重启/关闭安全回归普通与race3轮通过；新客户端46项、race3轮及真实TLS完整协调链通过。root相关完整包/vet通过，完整候选矩阵与准确CI随后核对，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+- 当前仍experimental_share_control=true才启用，file_transfer_ready=false；本地owner、认证P2P/原文件引擎、UI与准确实网验收分别接续，不标完整功能已可用。
+
 ## 2026-10-26 R2 文件新复制与续期交错修复
+
+- 后续准确4f562b3969d0dc646e88f92142a566e1c9d07404的core40219427913、desktop40219427884与三平台包40219427841均completed/success；旧eccb903/a22f691真实core失败保留，不重标。
 
 - 准确eccb903/a22f691 core CI的磁盘压力后新复制恢复失败被保留；真实QUIC+原生读取屏障证明同权限续期在Observe后安装，会让最新lease的baseline吞掉新复制，旧实现0.29s稳定FAIL，无第二job。不是空间预留泄漏或DATA RACE告警。
 - 按仍当前的本机观察选择有效重叠lease，文件读取前/后均使用，最终BindScoped/权限/期限/新复制/撤权门保持；无有效旧lease不能借续期补发。新回归/原失败/负例普通10轮、相关race3轮和最终双模块workspace/off完整12命令均exit0（core106644/108627ms、desktop7759/7721ms），覆盖最终签名客户端语义去重；缓存删除/容量/用户文件规则不变，准确CI继续核对，见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。

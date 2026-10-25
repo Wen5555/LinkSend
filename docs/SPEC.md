@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R5协调原型：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。file_transfer_ready仍false，本地数据owner/UI/实际分享另验，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+
 2026-10-26 跨网修复：桌面默认增加备用STUN并统一有效配置；只对内置公开STUN主机提供有界安全HTTPS解析，host/LAN不等待它；ICE失败保留实际计数及阶段。服务端先Unmap后校验危险scope，不再按末字节255猜广播，签名/会话/代次仍独立验证。文件wire、身份、公钥固定与relay=false保持，详见[ADR0018](adr/0018-cross-network-stun-resolution.md)及[服务端准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
 2026-10-26 R5签名控制增量复核：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。实验health明确file_transfer_ready=false，不广告share_grants_v1，不授予普通成员或文件通道权限；客户端/P2P/UI及真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。

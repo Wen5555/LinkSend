@@ -193,6 +193,7 @@ type Server struct {
 	buckets           map[string]bucket
 	shareBuckets      map[string]bucket
 	shareEpoch        string
+	shareSignals      *shareSignalHub
 	replays           *protocol.ReplayWindow
 	slots             chan struct{}
 	wg                sync.WaitGroup
@@ -220,6 +221,7 @@ func New(cfg Config) (*Server, error) {
 		}
 		s.shareEpoch = protocol.RandomID()
 		s.shareBuckets = map[string]bucket{}
+		s.shareSignals = newShareSignalHub()
 	}
 	s.wg.Add(1)
 	go s.reapExpired()
@@ -238,6 +240,7 @@ func (s *Server) Close() error {
 		peers = append(peers, p)
 	}
 	s.mu.Unlock()
+	s.closeShareSignals()
 	for _, p := range peers {
 		p.cancel()
 		_ = p.conn.CloseNow()
@@ -274,7 +277,10 @@ func (s *Server) reapExpired() {
 			s.mu.Unlock()
 			if s.cfg.ExperimentalShareControl {
 				ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
+				s.shareSignals.gate.Lock()
 				_, _ = s.store.ReconcileShareGrants(ctx, now, 64)
+				s.reconcileShareSignalsLocked(ctx, now)
+				s.shareSignals.gate.Unlock()
 				cancel()
 			}
 		}
@@ -301,6 +307,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("DELETE /v1/devices/{id}", s.revoke)
 	m.HandleFunc("GET /v1/ws", s.websocket)
 	m.HandleFunc("POST /v1/shares/{operation}", s.shareControl)
+	m.HandleFunc("GET /v1/shares/{id}/ws", s.shareWebsocket)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		ip, _ := netip.ParseAddr(host)
