@@ -1,3 +1,8 @@
+## 2026-10-26 R2 私有原生回执基础与删除状态认证
+
+- ADR0016先冻结receipt-only范围；同schema12/cache metadata可选Native签名记录、实际inventory封存、原publication跨main重启单次CAS/回读已实现，原save的run限制保留。launch/boot接口无生产构造或调用，签名不证明native refs语义；任何Native在老化/压力/boot改变后仍保护，未接WriteFiles或发布回收。
+- 新自有负例证明collector若信另传的副本，可将真实DB Native剥掉而误删；现重新认证实际row并只依该row判断删除态，源/hash保护。普通/race各三轮及两Go模块workspace/off完整12命令exit0，前端未改；详见[证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。准确新CI另核对，R2整体未完成。
+
 ## 2026-10-26 cd95479 完整CI与原生代码复制目标通过
 
 - cd954790aebaf78b9673fce08351eece1de392e4的core40235670319、desktop40235670269、packages40235670231全部completed/success，三平台包job成功、attempt1无重试。Windows native目标真实run1/pass1/skip0/fail0/exit0，7.54s，恢复租约6934ms；active/paused码不读/缓存/转发，随后新原生text真实QUIC收取，三原始日志已留存。仅覆盖该native子目标，不代替准确Wails UI/文件键盘粘贴或Mac旅程。

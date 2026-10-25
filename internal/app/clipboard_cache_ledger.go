@@ -42,6 +42,7 @@ type clipboardCacheRecord struct {
 	Signature  []byte                        `json:"signature"`
 	Sealed     bool                          `json:"sealed,omitempty"`
 	Cleanup    map[string]clipboardCacheNode `json:"cleanup,omitempty"`
+	Native     *cacheNativeAuthorization     `json:"native,omitempty"`
 }
 
 type clipboardCacheReceipt struct {
@@ -76,6 +77,9 @@ func (s *Service) encodeCacheRecord(record clipboardCacheRecord) (string, error)
 	if err := validateClipboardCacheInventory(record); err != nil {
 		return "", err
 	}
+	if err := s.validateCacheNativeAuthorization(record); err != nil {
+		return "", err
+	}
 	message, err := cacheRecordMessage(record)
 	if err != nil {
 		return "", err
@@ -104,6 +108,13 @@ func (s *Service) decodeCacheRecord(id, raw string) (clipboardCacheRecord, error
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return record, errClipboardCacheOwnership
 	}
+	// Existing writers already emit this canonical typed representation. This
+	// also rejects duplicate/case-aliased fields instead of silently accepting
+	// encoding/json's last value. Noncanonical evidence is kept, never repaired.
+	canonical, err := json.Marshal(record)
+	if err != nil || !bytes.Equal(canonical, []byte(raw)) {
+		return record, errClipboardCacheOwnership
+	}
 	if record.Version != 1 || record.Purpose != "clipboard-files" || record.Owner != s.identity.ID() || record.ID != id ||
 		!validClipboardFileID(id, 16) || !validClipboardFileID(record.Run, 16) || record.CacheRoot == "" || record.Directory == "" || !validClipboardFileID(record.Peer, 32) || record.Created <= 0 || record.Revision == 0 {
 		return record, errClipboardCacheOwnership
@@ -128,6 +139,9 @@ func (s *Service) decodeCacheRecord(id, raw string) (clipboardCacheRecord, error
 		return record, errClipboardCacheOwnership
 	}
 	if err := validateClipboardCacheInventory(record); err != nil {
+		return record, err
+	}
+	if err := s.validateCacheNativeAuthorization(record); err != nil {
 		return record, err
 	}
 	for name, identity := range record.Parts {
@@ -210,6 +224,9 @@ func (r *clipboardCacheReceipt) readback(expected string) error {
 
 func (r *clipboardCacheReceipt) save(next clipboardCacheRecord) error {
 	if r.record.Run != r.service.epoch || next.Run != r.record.Run || r.record.Revision == math.MaxUint64 || next.Revision == 0 || next.Revision != r.record.Revision+1 {
+		return errClipboardCacheOwnership
+	}
+	if !unchangedCacheNativeAuthorization(r.raw, next.Native) {
 		return errClipboardCacheOwnership
 	}
 	raw, err := r.service.encodeCacheRecord(next)
@@ -304,7 +321,7 @@ func (r *clipboardCacheReceipt) advance(state string) error {
 }
 
 func (r *clipboardCacheReceipt) beginNative() error {
-	if r.record.Run != r.service.epoch || r.record.State != "publishing" || r.nativeStarted {
+	if r.record.Run != r.service.epoch || r.record.State != "publishing" || r.nativeStarted || r.record.Native != nil {
 		return errClipboardCacheOwnership
 	}
 	r.nativeStarted = true
@@ -314,7 +331,7 @@ func (r *clipboardCacheReceipt) beginNative() error {
 // Forget only a proven, already removed unpublished object. Never erase a
 // publishing intent just because native completion could not be confirmed.
 func (r *clipboardCacheReceipt) forgetRemoved() error {
-	if r.record.Run != r.service.epoch || r.nativeStarted || (r.record.State != "receiving" && r.record.State != "verified" && r.record.State != "abandoned" && r.record.State != "publishing" && r.record.State != "reclaimable" && r.record.State != "deleting") {
+	if r.record.Run != r.service.epoch || r.nativeStarted || r.record.Native != nil || (r.record.State != "receiving" && r.record.State != "verified" && r.record.State != "abandoned" && r.record.State != "publishing" && r.record.State != "reclaimable" && r.record.State != "deleting") {
 		return errClipboardCacheOwnership
 	}
 	if _, err := r.destination.cache.Lstat(r.record.ID); !errors.Is(err, os.ErrNotExist) {

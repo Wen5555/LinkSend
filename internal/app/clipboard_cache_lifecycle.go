@@ -150,7 +150,7 @@ func (s *Service) collectClipboardCache(ctx context.Context, pressure bool, now 
 		c.cursor = item.key
 		id := strings.TrimPrefix(item.key, clipboardCacheKeyPrefix)
 		record, decodeErr := s.decodeCacheRecord(id, item.raw)
-		if decodeErr != nil || !record.Sealed || (record.State != "reclaimable" && record.State != "deleting") {
+		if decodeErr != nil || record.Native != nil || !record.Sealed || (record.State != "reclaimable" && record.State != "deleting") {
 			continue
 		}
 		c.mu.Lock()
@@ -191,6 +191,11 @@ func (s *Service) collectClipboardCache(ctx context.Context, pressure bool, now 
 }
 
 func (s *Service) collectClipboardCacheObject(ctx context.Context, record clipboardCacheRecord, raw string) error {
+	// Receipt-only proves bindings, not native source lifetime. Even a valid
+	// signed close claim must not reach the unpublished deletion engine.
+	if record.Native != nil {
+		return errClipboardCacheOwnership
+	}
 	var current string
 	if err := s.store.db.QueryRowContext(ctx, `SELECT value FROM metadata WHERE key=?`, clipboardCacheKeyPrefix+record.ID).Scan(&current); err != nil {
 		return err
@@ -198,6 +203,14 @@ func (s *Service) collectClipboardCacheObject(ctx context.Context, record clipbo
 	if current != raw {
 		return errClipboardCacheOwnership
 	}
+	// The row, not a potentially incomplete caller-side struct, owns the
+	// deletion authority. In particular dropping Native from a copy must not
+	// turn a durable receipt-only publication into an unpublished object.
+	authenticated, err := s.decodeCacheRecord(record.ID, current)
+	if err != nil || authenticated.Native != nil || !authenticated.Sealed || (authenticated.State != "reclaimable" && authenticated.State != "deleting") {
+		return errors.Join(errClipboardCacheOwnership, err)
+	}
+	record = authenticated
 	d, err := openRecordedClipboardCache(s.cfg.DataDir, record)
 	if err != nil {
 		return err

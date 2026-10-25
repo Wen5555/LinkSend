@@ -324,7 +324,7 @@ func openCacheParent(root *os.Root, name string, nodes map[string]clipboardCache
 }
 
 func (r *clipboardCacheReceipt) discardUnpublished(ctx context.Context) error {
-	if r.nativeStarted || r.record.Run != r.service.epoch {
+	if r.nativeStarted || r.record.Native != nil || r.record.Run != r.service.epoch {
 		return errClipboardCacheOwnership
 	}
 	switch r.record.State {

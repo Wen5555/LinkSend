@@ -42,6 +42,18 @@ helper实验只证明launcher exit 0后，**仍存活的COM producer/helper**可
 
 下一步先冻结新publication的无物理路径出口合同及退出owner，完整审查格式、Stat、Shell fallback和Open/Reveal/drag/history出口；任何cache物理路径外泄都使整个对象继续path-protected，不追认旧发布。再实现同一Go owner验证的用途签名delegation、固定身份inventory和有界持久receipt；缺失、半写、签名不符、旧回调或崩溃一律protected。取得真实Explorer/Finder键盘、目录/空目录/长路径、重复/并发消费者与退出/重启/升级证据后，才可把新合同的可验证quiescent与原封存清单、活动引用、自动保留期和逐项身份删除门连接，验证真实自动回收。维持无手动清理、无容量/期限设置。
 
+## 2026-10-26 Go receipt-only 私有授权增量
+
+本增量只提供私有 delegation/receipt 的签名、绑定核验与同 SQLite 单次 CAS，不接系统剪贴板或 `WriteFiles`，不启用 published 回收。沿用 schema12、原 profile Ed25519 身份、同一 metadata 连接及 owner；v1 私有记录新增可选 `native` 字段，nil 时原序列与签名须由 golden 实证保持。未知、重复、非规范序列与篡改记录拒读并保留，不重签认领旧资料。
+
+delegation 固定用途域，绑定原 OwnerRun/BootID、cache/profile/root/object/stage 文件身份、完整 inventory/manifest/plan 摘要、随机 publication/nonce 与代次、helper image SHA256 和 child ephemeral 公钥。原 receiver 完全关闭后才能签名封存其实际 inventory。当前没有实际 launcher、稳定 child/image 句柄及 challenge 核验实现；私有入口只接受未来强类型验证凭据，当前生产没有该凭据的实现或构造路径，不能靠调用方自报 hash/布尔值建立可信授权。child 私钥只允许未来 Go helper 内部使用标准 Ed25519，不交给 COM、IPC 或主 owner。
+
+receipt-only 的 Go 验签只证明签名出处与原绑定相符，不证明 native 引用语义。未来可信 helper 必须在唯一内部路径永久关闭新准入、全部真实 provider/marshal/stream/clone/async/活动调用结束且源句柄实际关闭成功后，才签发一次 quiescent receipt；valid-child-key 加虚报关闭、plain trace、EOF、EndOperation 或进程退出都不取得删除许可。实际 helper/image/challenge、平台 BootID provider、持久 spool 和无物理路径出口合同尚未实现。
+
+新 main 可在同 profile 锁下消费匹配原签名 row/delegation 的旧 OwnerRun 原 publication 回执；独立 consume 不放宽现 `receipt.save` 的当前 run 限制，也不重新签发旧授权或认领新 publication。原 raw CAS、同一事务回读与提交后回读绑定单次消费摘要/首次观察时间；活动引用、根或条目身份变化、冲突、错签/重放、半写或失败均保护。boot 改变本身不授权；没有可验证的原 receipt 时始终保护。
+
+`native` 非 nil 的 receipt-only 对象在扫描和逐对象 collector 两层都保持保护，即使已 sealed、老化、压力触发或模拟 boot 变化也不得进入现删除通道。原 CF_HDROP/file URL、legacy、unknown 不调用或追认新入口。未来须以新的受支持 native contract、新 publication 及真实系统消费者/正常退出实验证据，另行审查后才能接原引用、保留期及逐项删除门；本阶段测试中的 child 关闭声明不是生产回收权。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。
