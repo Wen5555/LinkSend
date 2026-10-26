@@ -16,3 +16,17 @@ Windows用GetFinalPathNameByHandle检查实际打开对象；其他平台核对�
 - `.artifacts/r2-cache-export-gates/`保存app-first.log、preview-final.log、core-compile.log、core-vet.log、desktop-compile.log及20代码文件逐项SHA冻结清单freeze.json。独立只读审阅未发现阻断本拒绝门增量的问题；结论限此范围。
 
 最终准确提交CI单独核对；后续C++ Shell primitives工作不包含在本次冻结代码清单中，不把源码编译或拒绝门测试冒充完整R2完成。
+
+实际命令（加载既有`.tools/use-desktop-toolchain.ps1`，以下均`GOWORK=off`；对应日志与退出码见上文）：
+
+```text
+# D:/apps/Osend
+go test ./internal/app -run '^$' -count=1
+go vet ./internal/app ./internal/transfer
+go test ./internal/app -run '^TestClipboardCacheExports' -count=1 -timeout 60s -v
+go test ./internal/app -run '^TestClipboardCacheExportsOldHistoryAndPreviewMetadata$' -count=1 -timeout 60s -v
+# D:/apps/Osend/apps/desktop, CGO_ENABLED=0
+go test . -run '^$' -count=1
+```
+
+transfer子代理另报告实际选择`^Test(SourceAccess|SourceSelectionPreviewPrepareAndResumeAgree)`、package `./internal/transfer`、count1/timeout60s/-v，4项通过3.207s；该命令的shell原句未在root日志中，来源明确为子代理报告，不重新运行来伪造原记录。

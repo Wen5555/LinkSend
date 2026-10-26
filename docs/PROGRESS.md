@@ -11,6 +11,7 @@
 
 ## 2026-10-26 R5显式能力与入口门
 
+- 850准确push/PR core/desktop均首次success，Windows包被单一未同步的生成TS字段触发source-clean gate拒绝，原失败保留；486283f只补可选能力字段，准确850生成器复现/前端build通过且dist不变，随R2guard 5ee9a40已推送，新准确CI待核。04:54:45Z仅只读SSH刷新生产仍原PID/0.5.0/schema4/分享关闭，无备份/配置/迁移/重启，见[绑定修复](evidence/RELIABILITY-R5-GENERATED-CAPABILITY-BINDING.md)与[事务草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
 - 准确708 Linux候选在本机WSL一次合成非空库完成4→5、唯一0600备份、原成员签名认证、新临时分享及准确36关闭分享读同schema5回退；永久表/新增分享均保留，三服务exit0退场。测试only850准确clean重建且产品输入完全相同，复用旅程不重跑；准确850 CI待，未访问生产。见[兼容回退证据](evidence/RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。
 - 7084685首次core CI 40270372762真实失败于旧取消测试把能力GET计作任意HTTP；仅修测试精确要求1次GET /healthz、零其他请求，原取消/worker/caller断言保持。708 clean归档加两测试文件的Preparation/HTTP一次定向exit0/5.158s，无产品改动、无重跑旧CI；新准确CI待核，详见下方能力证据。
 - 复用701e23b实网核心双向及准确36 Wails接收/保存/Completion/hash证据，显式开关开启且初始化成功的实例现在声明share_grants_v1/ready=true；默认仍关闭。客户端每操作检查规范能力、ready和当前epoch，旧控制/旧端在传码/开WS前明确unsupported，Create/Claim零prepare/零intent前置拒绝；原签名/永久隔离/双确认/取消与终态恢复保持。

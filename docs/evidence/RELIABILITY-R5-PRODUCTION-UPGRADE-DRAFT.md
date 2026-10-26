@@ -6,6 +6,10 @@
 
 既有只读调查为 `.artifacts/crossnet-20261026/server-candidate-99a6c0e/DEPLOYMENT-REVIEW.md`（UTC 2026-10-25 21:26–21:29），后续公网 health 回执 `.artifacts/hosted-windows-peer-draft/production-health-root.json`（UTC 2026-10-26 00:42）。它们是历史基线，执行前必须重新核实，不能当作此刻 live 状态。
 
+2026-10-26T04:54:45Z 已通过保存的 `jp-linksend` 别名只读刷新一次：原 unit active/running、PID283864、相同 current/live 镜像与下表SHA，标准IP SAN/TLS验证的本机health仍为0.5.0/relay=false/无分享，原schema4/quick_check=ok。配置SHA256 `2873dec4e49d7fcd1f38225dd5ce88508fd2492e31a8de85ba0df1092e0a19b0`、分享开关缺省false；未备份/上传/改配置/迁移或stop/start。脚本和退出0收据见 `.artifacts/r5-server-7084685/production-readonly-refresh.sh`、`PRODUCTION-READONLY-REFRESH.json`；远程证据 `/tmp/codex-ssh/job-r5-prod-readonly-refresh-20261026-01`。该观测供准确事务审阅，获批执行前仍须重核漂移。
+
+850准确push/PR的core与desktop均首次成功；Windows包因缺失一个生成绑定字段而被source-clean gate拒绝，原失败保留。486283f仅同步该字段并通过一次前端构建，已随R2guard 5ee9a40推送；新准确5ee CI/Windows包待核。这里的850 standalone Linux候选来源及708合成库旅程不倒改为5ee实测，也不将Windows包失败记成server测试失败，详见[派生绑定证据](RELIABILITY-R5-GENERATED-CAPABILITY-BINDING.md)。
+
 | 目标 | 既有记录 / 事务范围 |
 | --- | --- |
 | SSH alias / public origin | `jp-linksend` / `https://linksend.oooai.de` |
@@ -15,7 +19,7 @@
 | config / DB | `/etc/linksend/server.toml` / `/var/lib/linksend/control.db`，既有 schema4、WAL、quick_check=ok |
 | backend listener | TLS `127.0.0.1:8787`，原公证书 IP SAN 校验；公网仍走原代理 |
 | 最终准确构建候选，CI仍待 | `850b9d115ac2a2e460a0678039a1642cd2c1de9b`；独立 clean checkout、Go1.27.1/linux-amd64/CGO0/trimpath，真实 `vcs.modified=false`；18,188,312B、SHA256 `6efa08b5919113281d1fcc8c81f7b63316fc0492df33de9dfe930c273252a784`；850只修测试/文档，全部其余tracked输入与实测708相同，准确CI仍待，不冒充部署可用 |
-| 新 release / 私有事务备份 | `/opt/linksend/releases/<最终完整commit>` / `/var/backups/linksend/<实际UTC>-r5-<commit短名>`，均不得覆盖已有目录 |
+| 新 release / 私有事务备份 | `/opt/linksend/releases/850b9d115ac2a2e460a0678039a1642cd2c1de9b` / `/var/backups/linksend/<实际UTC>-r5-850b9d1`，均不得覆盖已有目录 |
 | 唯一计划配置变化 | 将既有键 `experimental_share_control` 明确设为 true；其余配置、TLS、unit、环境、代理/DNS/防火墙/路由保持原值 |
 
 最终850本机二进制位于 `C:/Users/Wen/.codex/supervision/r5-server-7084685-20261026-01/rendezvous-linux-amd64-850b9d1`；独立源目录 `source/` 构建前后 tracked/untracked 均 clean，buildinfo 真实绑定完整850 revision。以既有 Go1.27.1、`GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath` 准确重建，收据 `.artifacts/r5-server-7084685/BUILD-RECEIPT-850b9d1.json`；Linux 实际 `-version` exit0 为 `LinkSend rendezvous 0.6.2`。排除docs/与`*_test.go`后，708/850的完整tracked mode/path/blob列表完全相同，规范树摘要 `d6890c344e21f3ef984f409f77264f8f7e69944fa3e8016f361055dd5063edfd`，因此复用708一次合成库旅程，无850服务场景重跑。旧708二进制 `rendezvous-linux-amd64` 与原构建收据保留；它的SHA256为 `4ec005a23c5da98ae77367924e1b1c41efbec34f58ddec396b86835bc09c4de6`，不能把708实际服务PID/结果改称850实测。准确850 CI门仍需核对；dirty工作区或仅目录名不构成准确来源。
