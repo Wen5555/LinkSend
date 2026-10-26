@@ -99,7 +99,7 @@ func bindShareHTTP(t *testing.T, s *Server, sender, receiver *identity.Identity)
 	return bound, code
 }
 
-func TestShareHTTPRequiresExplicitActivationAndStillDoesNotAdvertiseFileSupport(t *testing.T) {
+func TestShareHTTPAdvertisesFileSupportOnlyAfterExplicitActivation(t *testing.T) {
 	s := shareServer(t, filepath.Join(t.TempDir(), "control.sqlite"), false)
 	sender := shareIdentity(t)
 	_, status, body := runShare(t, s, signedShare(t, s, sender, "create", ShareRequest{}))
@@ -113,8 +113,8 @@ func TestShareHTTPRequiresExplicitActivationAndStillDoesNotAdvertiseFileSupport(
 	if w.Code != 200 {
 		t.Fatalf("ordinary health status=%d", w.Code)
 	}
-	if strings.Contains(w.Body.String(), "share_control") {
-		t.Fatal("ordinary service advertised experimental API")
+	if strings.Contains(w.Body.String(), "share_control") || strings.Contains(w.Body.String(), "share_grants_v1") {
+		t.Fatal("ordinary service advertised temporary sharing")
 	}
 	enabled := shareServer(t, filepath.Join(t.TempDir(), "enabled.sqlite"), true)
 	w = httptest.NewRecorder()
@@ -135,8 +135,8 @@ func TestShareHTTPRequiresExplicitActivationAndStillDoesNotAdvertiseFileSupport(
 	if err := json.Unmarshal(w.Body.Bytes(), &health); err != nil {
 		t.Fatal(err)
 	}
-	if health.Control.Version != 1 || health.Control.Epoch != enabled.shareEpoch || health.Control.Ready || health.Capabilities.Relay {
-		t.Fatal("experimental control advertised complete file transfer")
+	if health.Control.Version != 1 || health.Control.Epoch != enabled.shareEpoch || !health.Control.Ready || !health.Capabilities.ShareGrantsV1 || health.Capabilities.Relay {
+		t.Fatal("explicit share service did not advertise its supported data path")
 	}
 }
 

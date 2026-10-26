@@ -2,11 +2,19 @@
 
 日期：2026-10-19。状态：设计冻结，分增量实施；不可把本设计视为已有完整功能。实际范围只在唯一 TODO 与 evidence 维护。
 
+## 2026-10-26 显式可用性与兼容边界
+
+现有701e23b Windows↔公共Linux核心双向分享、准确36 Wails实收/保存/Completion/hash证据支持开放已实现的能力，范围见[能力增量](../evidence/RELIABILITY-R5-CAPABILITY-READY.md)。仅沿用experimental_share_control=true的显式实例声明share_grants_v1=true与file_transfer_ready=true；缺省仍false，不新增默认迁移/权限。此能力表示服务可协调该P2P功能，不保证任意NAT可达，也不代表R5所有平台和原Windows双端验收完成。
+
+每个分享操作取新health并要求规范bit、ready=true、版本与当前epoch；缺bit/旧实验ready=false明确SHARE_UNSUPPORTED，不传码、不发状态/副作用、不打开scoped WS，不回退永久配对。Create/Claim在prepare、生成码或本地intent前检查；原grant、双确认、身份/黑名单、终态/恢复与签名权威门不放松。旧客户端看见新增可选能力仍沿原成员路径；新客户端不能使用旧控制原型，需升级已显式开启的服务。
+
+生产未变更。启用造成Control4→5后，回退须用兼容schema5的程序并保留当前业务库；旧schema4-only程序或旧备份不能默认回退。目标/一致性副本/最终备份/兼容fallback的未授权计划见[事务草案](../evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
 ## 边界
 
 临时分享不写永久 devices/groups/trust，不授予成员枚举、邀请、自动接收、剪贴板或普通任务权限。采用现有 Ed25519 设备身份、标准 crypto/rand 与 SHA256，复用现有请求签名和认证 Pion ICE/QUIC、公钥固定及 V1 文件引擎；不创建新的密码学握手。正文、文件路径和文件清单不进入服务，`relay=false`。用户仍分别确认接收身份和保存位置。
 
-完整链路实现前不广告 share_grants_v1，不给旧端默认能力。核心源码增量可以先合入工作分支，但不能因此宣称可创建或领取分享。未来 HTTP/WS 入口必须先完成下列签名、限频、原子持久化与成员接口隔离测试，再开放能力。
+完整链路实现前不广告 share_grants_v1，不给旧端默认能力。最初核心源码增量不宣称可创建或领取分享；当前签名控制、两阶段数据面与本地owner已实现，701e23b双向实网核心及准确36 Wails实收另有证据，只有显式启用实例开放能力，见本页最新增量。HTTP/WS仍须保持下列签名、限频、原子持久化与成员接口隔离。
 
 ## 代码与持久 owner
 
@@ -14,7 +22,7 @@
 
 服务借用既有 Control SQLite 连接和事务，新增版本化 share_grants 表及必要索引；不增第二数据库 owner。迁移在真实 SQLite 一致性备份后事务提交，回读版本和 quick_check；不覆盖既有备份。旧服务拒绝新 schema。回退程序与数据回退分开：原备份不能覆盖升级后的成员与业务写入。新库初始化无旧数据可备份；未来/损坏版本拒绝。
 
-分阶段落地：存储核心先提供显式EnableShareGrants以测试4→5迁移；后续签名控制增量仅在服务配置experimental_share_control=true时激活，并在health标注file_transfer_ready=false。普通启动继续schema4且不广告完整临时分享。新代码可安全读回已经显式迁移的schema5；缺表/错误版本拒绝。完整链路接入时再激活默认迁移和正式能力，并重新验证准确包。任务库schema12不受该控制库版本影响。
+分阶段落地：存储核心先提供显式EnableShareGrants以测试4→5迁移；后续签名控制增量仅在服务配置experimental_share_control=true时激活，当时health标注file_transfer_ready=false；当前该既有显式开关为true且初始化成功的服务声明share_grants_v1与ready=true。普通启动继续schema4且不广告完整临时分享，不激活默认迁移。新代码可安全读回已经显式迁移的schema5；缺表/错误版本拒绝。准确36数据面/原生证据和最终能力增量的准确CI分别记录，不以旧证据冒充新包实测。任务库schema12不受该控制库版本影响。
 
 记录绑定分享 ID、发送身份/公钥、既有V1清单 BLAKE3 摘要、授权 generation、revision、领取期限；领取后增加接收身份/公钥、claim ID、绑定 task ID、V1计划摘要和恢复期限。清单与计划摘要直接复用现有引擎的Digest结果，不另创不兼容的散列序列；分享码验证器独立使用SHA256。清单摘要必须来自实际冻结的引擎 manifest，不能把远端显示大小当授权内容。磁盘大小、哈希和源变化仍由原文件引擎核验。
 
@@ -42,13 +50,13 @@ HTTP最大请求体、字符串、候选数、并发、deadline 复用现有协�
 
 ## 2026-10-26 临时协调与预览设计冻结
 
-本节先于实现冻结协议与授权约束；当前专属协调、本地owner、两阶段Pion/QUIC与桌面源码已实现并有自动验证，范围见[协调证据](../evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)及[owner/数据面证据](../evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。准确包、原生与真实跨网验收仍未完成，file_transfer_ready=false，普通成员路径保持。采用独立GET /v1/shares/{id}/ws和linksend.share-signal.v1子协议；严格query只含原claim/task、grant generation、phase、manifest/plan摘要，所有值进入实际RequestURI的现有epoch请求签名。禁止重复/未知query、分享码、文件路径、正文或清单。临时actor不写devices/groups/trust，不注册普通s.clients/s.sessions，也不能调用普通成员WS。
+本节先于实现冻结协议与授权约束；当前专属协调、本地owner、两阶段Pion/QUIC与桌面源码已实现并有自动验证，范围见[协调证据](../evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)及[owner/数据面证据](../evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。当时准确包、原生与真实跨网验收尚未完成且file_transfer_ready=false；现有701e23b双向实网核心和准确36 Wails实收证据支持显式能力开放，剩余范围仍见唯一TODO，普通成员路径保持。采用独立GET /v1/shares/{id}/ws和linksend.share-signal.v1子协议；严格query只含原claim/task、grant generation、phase、manifest/plan摘要，所有值进入实际RequestURI的现有epoch请求签名。禁止重复/未知query、分享码、文件路径、正文或清单。临时actor不写devices/groups/trust，不注册普通s.clients/s.sessions，也不能调用普通成员WS。
 
 ShareSignalScope绑定grant ID、claim ID、task ID、grant generation、phase、manifest摘要及plan摘要。Envelope.Generation继续表示ICE代次，不能替换grant generation。共享Frame保留原protocol.Envelope签名，外层用既有AuthBytes/Ed25519对完整scope、原Envelope、epoch、新nonce和有限时间再签名；这是沿用既有签名算法绑定用途，不新增密码学握手。不得解包改写payload后冒充原Envelope签名仍有效。两端原公钥分别从当前grant固定，服务和客户端都重验actor/recipient及scope。
 
 preview仅为当前approved、原双方/claim/task/generation/manifest、领取期限内的独立认证QUIC元数据预览。清单与实际保存计划在这个加密P2P连接中确认，不进入信令；未bound不得进入V1文件引擎、创建目标storage或发送文件body。Bind成功立即退役preview；transfer需当前bound、原plan/task/manifest/双方公钥/恢复期限，调用原Record.Authorize，再用新的ICE SessionID和QUIC连接。禁止在preview连接上隐式升权。两阶段固定发送方发起、接收方响应，关闭session reuse/clipboard，均不进入普通连接池。
 
-元数据预览只能返回一份经原Manifest.Validate/Digest核对的清单及一份明确确认计划，计划包含最终本机路径和冲突策略；绑定后不能由引擎自动改名悄然改变digest。源变化需撤销并由用户重新确认新分享。文件操作仍走现有安全落盘/完整性/V1引擎，原本地黑名单优先。当前实验桌面入口已接本地ShareGrant与任务恢复owner，不因此广告正式能力或抵扣准确包实机验收。
+元数据预览只能返回一份经原Manifest.Validate/Digest核对的清单及一份明确确认计划，计划包含最终本机路径和冲突策略；绑定后不能由引擎自动改名悄然改变digest。源变化需撤销并由用户重新确认新分享。文件操作仍走现有安全落盘/完整性/V1引擎，原本地黑名单优先。当前桌面入口已接本地ShareGrant与任务恢复owner；能力开放依据另列真实实网/原生结果，单靠UI或自动测试不抵扣实机验收。
 
 shareHub独立管理最多32个活动scope/64条WS，每身份最多8条，每scope的每actor只有一个连接；替换和cleanup比较owner token/指针，旧回调不能删新连接。单个ICE negotiation、每方向32个candidate、frame32KiB/payload16KiB、鉴权/写入5秒、读空闲65秒、每连接60frame/s；候选仍用原准入，ICE描述严格拒绝复用/剪贴板权限，end为空对象、session_error只用白名单码，不允许任意JSON正文转发。
 

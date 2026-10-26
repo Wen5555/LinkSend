@@ -136,6 +136,9 @@ func (s *Service) CreateTemporaryShare(ctx context.Context, paths []string, sele
 	if err != nil {
 		return TemporaryShareCreation{}, temporaryShareFailure(protocol.SignalingUnreachable)
 	}
+	if _, err = c.ShareControlInfo(ctx); err != nil {
+		return TemporaryShareCreation{}, err
+	}
 	selection, err = transfer.NormalizeSourceSelection(selection)
 	if err != nil {
 		return TemporaryShareCreation{}, temporaryShareFailure(protocol.ShareInvalid)
@@ -178,6 +181,8 @@ func (s *Service) ClaimTemporaryShare(ctx context.Context, code string) (Tempora
 		return TemporaryShareSnapshot{}, err
 	}
 	defer done()
+	ctx, release := s.temporaryOperationContext(ctx)
+	defer release()
 	digest, err := sharegrant.CodeDigest(code)
 	if err != nil {
 		return TemporaryShareSnapshot{}, temporaryShareFailure(protocol.ShareInvalid)
@@ -185,6 +190,9 @@ func (s *Service) ClaimTemporaryShare(ctx context.Context, code string) (Tempora
 	c, err := s.client()
 	if err != nil {
 		return TemporaryShareSnapshot{}, temporaryShareFailure(protocol.SignalingUnreachable)
+	}
+	if _, err = c.ShareControlInfo(ctx); err != nil {
+		return TemporaryShareSnapshot{}, err
 	}
 	r := temporaryShareRecord{Version: 1, Purpose: "temporary-share", Owner: s.identity.ID(), Origin: c.ServerURL(), ID: protocol.RandomID(), Role: "receiver", Revision: 1, Created: time.Now().Unix(), State: "claiming", CodeDigest: hex.EncodeToString(digest[:]), ClaimID: protocol.RandomID()}
 	r.Intent = temporaryIntent(signaling.ShareClaim, signaling.ShareRequest{ClaimID: r.ClaimID})

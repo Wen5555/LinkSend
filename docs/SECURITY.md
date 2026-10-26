@@ -1,6 +1,10 @@
+2026-10-26 R5显式能力门：只有既有experimental_share_control明确为true且初始化成功的服务声明share_grants_v1与ready=true，默认不变。客户端将规范能力bit、ready、版本/epoch一起作为分享入口前置条件；旧端/控制原型在传码或开scoped WS前拒绝，不借能力取得任何永久成员/剪贴板权限。Create/Claim在源准备、码生成或intent持久化前检查，实际操作仍重新核验新epoch与权威签名响应，取消/幂等/双确认保持。Control4→5需一致性备份及schema5兼容回退；不能切旧程序后用旧库覆盖新写入。范围见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)及[未部署草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
 2026-10-19 文件剪贴板候选：文件权限独立默认关闭，必须协商新能力且绑定原有身份/会话/双向permission revision/代次/顺序/OS generation。10秒内获准的预约最长24h，不能授权普通旧事件；取消或新复制使预约失效。文件仍由V1引擎检查路径和完整性，接收只写profile内任务专属缓存，并在CAS复查后发布本机路径。未知预约/能力或畸形流被拒绝；失败清理未发布缓存，成功缓存暂保留供粘贴。原生路径元数据有128根/64KiB上限，不传播剪切删除；新包实机验证另列。
 
 # Security
+
+2026-10-26 R2 publisher owner政策：控制写之前在已回读的真实durable授权digest上不可逆登记export_possible；写失败、ack丢失、main取消或退出不再强杀可能活跃的私有helper。Shell政策的deadline只约束准入，export后没有硬TTL；该政策尚未接实际系统publisher，当前受控helper仍保留自身测试期限。它不认证原生refs、不签静止证明、不赋删除权。路径出口、实际OLE与完整大目录/长路径仍须先闭合，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
 
 2026-10-26 R2构建信任锚：可信来源是同次构建后编入桌面的版本/平台/实际helper SHA/源提交/输入摘要/真实clean状态；BUILD-INFO与sidecar只作审计，不作为运行信任根。私有resolver严格拒绝空/未知/重复/非规范字段及错误PE/路径reparse，只从自身EXE固定摘要目录取镜像；未来启动仍需core稳定image/child句柄复核。ZIP先验精确条目和摘要再解压，NSIS仅本次文件及空目录，不增加系统发布或删除授权。dirty本地构建和symlink权限SKIP边界见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
 
@@ -16,7 +20,7 @@
 
 2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
-R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该增量不提供临时文件通道或广告完整分享能力，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该历史控制增量当时不提供临时文件通道或广告完整分享能力，当前显式就绪与客户端门见能力增量，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 
 R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。最初核心增量当时不激活迁移或对外分享；当前显式实验激活、签名协调与数据面范围见上段，不能把Go actor参数当网络身份认证。设计与历史边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 

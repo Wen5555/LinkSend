@@ -1,3 +1,14 @@
+## 2026-10-26 R2 publisher owner与commit未知窗
+
+- ADR0016先冻结新的pathless publisher职责：准入期限不作源寿命、commit可能发出即不可强杀、真实Shell引用终静止、无物理路径出口、watcher/完成竞争、目录与大文件尚未接通限制和最后GC连接条件。当前不调用系统publisher、clipboard或GUI，不放开Native删除。
+- 新PublicationLifetime保存实际durable授权digest后的不可逆export_possible；现私有launcher在首个控制写之前进入该状态，close不再因缺Held ack而TerminateProcess。未来Shell政策在export后无硬deadline；当前受控helper的自身30秒仍是旧受控范围，不能称已完成生产Shell保活。
+- 两个必要安全状态用例一次GOWORK=off通过1.366s，core/app和desktop/helper仅编译及core vet退出0，没有新native场景或完整矩阵。实际范围、源码与未接出口见[证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。R2未完成，继续统一路径出口与实际OLE provider。
+
+## 2026-10-26 R5显式能力与入口门
+
+- 复用701e23b实网核心双向及准确36 Wails接收/保存/Completion/hash证据，显式开关开启且初始化成功的实例现在声明share_grants_v1/ready=true；默认仍关闭。客户端每操作检查规范能力、ready和当前epoch，旧控制/旧端在传码/开WS前明确unsupported，Create/Claim零prepare/零intent前置拒绝；原签名/永久隔离/双确认/取消与终态恢复保持。
+- 单次GOWORK=off server/signaling/app定向15项及桌面保存草稿入口1项通过，未重复数据面/全矩阵/race/GUI。准确最终CI仍待；R5整体未勾选。生产升级仅以历史只读记录准备目标/一致性备份/schema5兼容回退草案，未SSH/部署/开关/DB操作。见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)及[未授权事务草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
 ## 2026-10-26 R2同次helper构建与私有镜像锚
 
 - Windows 原生构建先生成静态 CGO1 helper，以实际 SHA/PE/Go metadata 和提交/输入摘要/真实 dirty 状态编入 CGO0 桌面；私有 resolver 只认自身目录的固定摘要文件，严格解析与实际 PE/hash 校验，不读用户路径/hash、sidecar 或 helper 自报。没有默认 publisher/新 Wails API。

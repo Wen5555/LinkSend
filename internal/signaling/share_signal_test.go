@@ -636,8 +636,8 @@ func TestShareSignalClientRealUnjoinedPreviewAndBoundUseSeparateConnections(t *t
 			}
 			t.Fatal("scoped websocket enabled ordinary member signaling")
 		}
-		if info, err := client.ShareControlInfo(ctx); err != nil || info.FileTransferReady {
-			t.Fatal("control prototype advertised a complete data plane")
+		if info, err := client.ShareControlInfo(ctx); err != nil || !info.FileTransferReady {
+			t.Fatal("explicit share capability disappeared after terminal cleanup")
 		}
 	}
 }

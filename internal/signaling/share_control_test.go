@@ -81,7 +81,7 @@ func TestShareControlClientRealSignedLifecycleWithoutMembership(t *testing.T) {
 	sender, receiver, outsider := shareClientIdentity(t), shareClientIdentity(t), shareClientIdentity(t)
 	sc, rc, oc := newShareClient(t, h, sender, nil), newShareClient(t, h, receiver, nil), newShareClient(t, h, outsider, nil)
 	info, err := sc.ShareControlInfo(t.Context())
-	if err != nil || info.Version != 1 || len(info.Epoch) != 32 || info.FileTransferReady {
+	if err != nil || info.Version != 1 || len(info.Epoch) != 32 || !info.FileTransferReady {
 		t.Fatalf("control info=%+v err=%v", info, err)
 	}
 	creation, offered, code := createClientShare(t, sc)
@@ -179,9 +179,56 @@ func TestShareControlClientDenyRevokeAndConcurrentFreshProofs(t *testing.T) {
 
 func controlHealth(w http.ResponseWriter, epoch string, control any) {
 	if control == nil {
-		control = signaling.ShareControlInfo{Version: 1, Epoch: epoch, FileTransferReady: false}
+		control = signaling.ShareControlInfo{Version: 1, Epoch: epoch, FileTransferReady: true}
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "capabilities": protocol.Supported(), "share_control": control})
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "capabilities": readyShareCapabilities(), "share_control": control})
+}
+
+func readyShareCapabilities() protocol.Capabilities {
+	caps := protocol.Supported()
+	caps.ShareGrantsV1 = true
+	return caps
+}
+
+func TestShareCapabilityGateRejectsControlOnlyOrOldServerBeforeSecretOrWS(t *testing.T) {
+	ready, _ := json.Marshal(readyShareCapabilities())
+	old, _ := json.Marshal(protocol.Supported())
+	for name, tc := range map[string]struct {
+		caps, control string
+	}{
+		"ordinary service":      {string(old), "null"},
+		"old control prototype": {string(old), `{"version":1,"epoch":"` + strings.Repeat("4", 32) + `","file_transfer_ready":false}`},
+		"missing capability":    {string(old), `{"version":1,"epoch":"` + strings.Repeat("4", 32) + `","file_transfer_ready":true}`},
+		"not ready":             {string(ready), `{"version":1,"epoch":"` + strings.Repeat("4", 32) + `","file_transfer_ready":false}`},
+		"aliased capability":    {strings.Replace(string(ready), "share_grants_v1", "Share_Grants_V1", 1), `{"version":1,"epoch":"` + strings.Repeat("4", 32) + `","file_transfer_ready":true}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var actions atomic.Int32
+			h := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/healthz" {
+					actions.Add(1)
+				}
+				_, _ = io.WriteString(w, `{"status":"ok","capabilities":`+tc.caps+`,"share_control":`+tc.control+`}`)
+			}))
+			defer h.Close()
+			local, peer := shareClientIdentity(t), shareClientIdentity(t)
+			c := newShareClient(t, h, local, nil)
+			if _, err := c.ShareControl(t.Context(), signaling.ShareClaim, signaling.ShareRequest{Code: strings.Repeat("A", 32), ClaimID: protocol.RandomID()}); protocol.ErrorCode(err) != protocol.ShareUnsupported {
+				t.Fatalf("old/control-only service accepted a secret: %v", err)
+			}
+			pinned := boundClientStatus(peer, local)
+			scope := sharegrant.SignalScope{GrantID: pinned.ID, ClaimID: pinned.ClaimID, TaskID: pinned.TaskID, GrantGeneration: pinned.Generation, Manifest: pinned.Manifest, Plan: pinned.Plan, Phase: sharegrant.SignalTransfer}
+			if session, err := c.ConnectShare(t.Context(), scope, pinned, signaling.ShareSignalOptions{}); protocol.ErrorCode(err) != protocol.ShareUnsupported || session != nil {
+				if session != nil {
+					session.Close()
+				}
+				t.Fatalf("old/control-only service opened a scoped connection: %v", err)
+			}
+			if actions.Load() != 0 {
+				t.Fatal("capability failure sent a mutation/status or opened a websocket")
+			}
+		})
+	}
 }
 
 func TestShareControlClientRejectsOldOrMalformedHealthBeforeSendingCode(t *testing.T) {
@@ -213,8 +260,8 @@ func TestShareControlClientRejectsOldOrMalformedHealthBeforeSendingCode(t *testi
 }
 
 func TestShareControlClientRejectsAmbiguousHealth(t *testing.T) {
-	caps, _ := json.Marshal(protocol.Supported())
-	control, _ := json.Marshal(signaling.ShareControlInfo{Version: 1, Epoch: protocol.RandomID()})
+	caps, _ := json.Marshal(readyShareCapabilities())
+	control, _ := json.Marshal(signaling.ShareControlInfo{Version: 1, Epoch: protocol.RandomID(), FileTransferReady: true})
 	base := `"status":"ok","capabilities":` + string(caps) + `,"share_control":` + string(control)
 	for _, duplicate := range []string{
 		`"status":"ok"`, `"Status":"ok"`, `"ſtatus":"ok"`,
@@ -246,8 +293,8 @@ func TestShareControlClientRejectsAmbiguousHealth(t *testing.T) {
 }
 
 func TestShareControlClientRejectsAmbiguousCapabilities(t *testing.T) {
-	caps, _ := json.Marshal(protocol.Supported())
-	control, _ := json.Marshal(signaling.ShareControlInfo{Version: 1, Epoch: protocol.RandomID()})
+	caps, _ := json.Marshal(readyShareCapabilities())
+	control, _ := json.Marshal(signaling.ShareControlInfo{Version: 1, Epoch: protocol.RandomID(), FileTransferReady: true})
 	for name, duplicate := range map[string]string{
 		"relay case":      `"Relay":false`,
 		"protocol long s": `"protocol_verſion":1`,

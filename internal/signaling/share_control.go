@@ -197,9 +197,10 @@ func shareTransportFailure(ctx context.Context) error {
 	return protocol.Fail(protocol.SignalingUnreachable, "temporary share service unreachable")
 }
 
-// ShareControlInfo fetches the current public boot challenge over the same
-// verified HTTPS client. It does not turn experimental control into a data-plane
-// capability. Epochs are not cached across operations or server restarts.
+// ShareControlInfo requires the explicit file-sharing capability and current
+// public boot challenge over the same verified HTTPS client. A control-only or
+// old server cannot receive a code or open a scoped connection. Epochs are not
+// cached across operations or server restarts.
 func (c *Client) ShareControlInfo(ctx context.Context) (ShareControlInfo, error) {
 	endpoint, err := c.endpoint("/healthz")
 	if err != nil {
@@ -242,6 +243,10 @@ func (c *Client) ShareControlInfo(ctx context.Context) (ShareControlInfo, error)
 	if json.Unmarshal(health.Capabilities, &capabilities) != nil || !supported(capabilities) {
 		return ShareControlInfo{}, protocol.Fail(protocol.VersionIncompatible, "temporary share service incompatible")
 	}
+	var capabilityFields map[string]json.RawMessage
+	if json.Unmarshal(health.Capabilities, &capabilityFields) != nil {
+		return ShareControlInfo{}, shareBadResponse()
+	}
 	if len(health.Control) == 0 || bytes.Equal(health.Control, []byte("null")) {
 		return ShareControlInfo{}, protocol.Fail(protocol.ShareUnsupported, "temporary share control unavailable")
 	}
@@ -253,8 +258,17 @@ func (c *Client) ShareControlInfo(ctx context.Context) (ShareControlInfo, error)
 	if decodeShareJSON(health.Control, &control) != nil || !shareHex(control.Epoch, 32) || control.Ready == nil {
 		return ShareControlInfo{}, shareBadResponse()
 	}
+	var controlFields map[string]json.RawMessage
+	if json.Unmarshal(health.Control, &controlFields) != nil || len(controlFields) != 3 || controlFields["version"] == nil || controlFields["epoch"] == nil || controlFields["file_transfer_ready"] == nil {
+		return ShareControlInfo{}, shareBadResponse()
+	}
 	if control.Version != 1 {
 		return ShareControlInfo{}, protocol.Fail(protocol.ShareUnsupported, "temporary share control version unsupported")
+	}
+	// Do not accept case-folded aliases, null, a missing bit, or a prototype's
+	// ready=false as an explicit grant to send a secret or begin file sharing.
+	if !capabilities.ShareGrantsV1 || !bytes.Equal(bytes.TrimSpace(capabilityFields["share_grants_v1"]), []byte("true")) || !*control.Ready {
+		return ShareControlInfo{}, protocol.Fail(protocol.ShareUnsupported, "temporary share file transfer unavailable")
 	}
 	return ShareControlInfo{Version: control.Version, Epoch: control.Epoch, FileTransferReady: *control.Ready}, nil
 }

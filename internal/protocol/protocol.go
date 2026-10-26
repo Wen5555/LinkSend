@@ -108,6 +108,7 @@ type Capabilities struct {
 	RestartRecoverySupported bool   `json:"restart_recovery_supported"`
 	ByteResumeSupported      bool   `json:"byte_resume_supported"`
 	MembershipVersion        int    `json:"membership_version"`
+	ShareGrantsV1            bool   `json:"share_grants_v1,omitempty"`
 }
 
 func Supported() Capabilities {

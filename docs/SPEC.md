@@ -1,3 +1,5 @@
+2026-10-26 R5显式可用性：已有两阶段Pion/QUIC、原V1引擎与701e23b实网核心双向及准确36 Wails实收证据后，仅experimental_share_control=true且启动初始化成功的实例声明share_grants_v1=true与file_transfer_ready=true。客户端每次要求规范能力、ready和当前epoch；旧控制/旧端明确SHARE_UNSUPPORTED，Create/Claim在prepare、码与本地intent前拒绝。默认关闭、永久组/双确认/relay=false保持；新准确提交CI及生产升级仍待，见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)与[生产草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
 2026-10-19 可靠性R2持久owner：在既有SQLite metadata命名空间保存版本1的私有签名缓存记录，固定目录与实际stage/file句柄来源在body前登记，发布意图先落盘，实际mutation仍重验控制/CAS；不确定发布缓存保护，旧运行记录不重放。文件wire、clipboard_files_v1及任务库schema12保持。完整活动引用/自动回收和双平台键盘粘贴仍待，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)与[持久记录验证](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。
 
 2026-10-19 文件剪贴板：双方协商 clipboard_files_v1 并分别开启 files 收发权限后，原生文件列表经10秒内预约进入现有认证文件引擎，正文不经JS/信令。预约最长24h但新复制/暂停/撤权/取消优先；完成校验后写本机路径，失败不发布部分文件。大于等于32MiB显示居中“正在复制”，准备不确定进度、传输按 verified 字节；小文字/图片不弹窗。任务库11→12备份迁移，成功缓存暂保留，重启不补发。本地候选的物理双向文字、图片和文件条目、原生进度及取消已验证；准确发行包与其余验收边界单列，见ADR0015和实施记录。
@@ -12,19 +14,21 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R2 publisher owner首段：先冻结ADR0016系统publisher合同，新增准入deadline/原生寿命分离与不可逆export-possible政策，并实际接入私有launcher的commit/close，修正commit可能到达但Held未确认时的强杀窗。Shell无硬TTL目前是尚未接线的owner政策，现helper仍为受控合同，WriteFiles/系统clipboard/出口统一保护/最终GC尚待，不据此标R2完成。必要状态负例和双模块GOWORK=off编译/vet见[证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
+
 2026-10-26 R2同次构建锚：Windows native build先static CGO1 helper后CGO0桌面，把实际镜像SHA/平台/源提交/输入摘要/真实clean状态编入主程序；私有resolver固定自身目录的摘要路径并验实际PE/hash，不信sidecar/用户配置/helper自报。ZIP/NSIS只携本次helper，来源为dirty的本地唯一build与静态包校验通过，最终准确提交CI另核；没有默认publisher/系统clipboard/删除或安装旅程通过，见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
 
 2026-10-26 R2真实进程寿命增量：私有launch v2把完整prepare和原绝对期限绑定到child challenge；成功detach仅在真实COM consumer/stream已持有后确认，helper等待原稳定launcher句柄实际exit0才继续读取，真实关闭源后签原v1 receipt。一个实际launcher→helper→新main正例与非零退出保护负例通过，原profile/同SQLite原run仅消费一次且源保留。该证据限自有受控COM，30秒硬期限和未确认Held失败窗的终止策略不可直接用于未来系统publisher；系统clipboard/Explorer、自动删除与R2完整验收仍未完成，见[证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
 
 2026-10-26 R2 Windows私有broker增量：新增固定可信镜像摘要、实际image/child句柄与签名challenge、真实内核BootIdentifier、sealed inventory只读句柄交接、独立Go/C++受控STA↔MTA消费者及同profile spool/SQLite receipt-only消费。七个真实持有/关闭门、helper退出0、新Service身份重载后单次消费与必要负例通过；默认publisher/打包信任锚、系统clipboard/注册格式、Explorer、launcher进程退出时仍活跃consumer、已发布自动删除均未接或未验，不标R2完成。详见[证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
 
-2026-10-26 R5本地owner与数据面候选：同profile既有SQLite metadata保存用途签名/CAS授权和稳定控制意图；重启只展示原任务，恢复必须明确触发。approved仅以固定公钥的真实Pion ICE/QUIC预览完整清单，接收方确认目录与计划并Bind后，使用新scope/ICE会话/QUIC复用V1文件引擎；不新增永久信任或剪贴板权限。只有持久本机Completion才记本机完成，服务端终态不足以证明本机落盘。七天回收仅针对已确认终态的私有授权metadata，不删用户文件/历史/checkpoint，不增缓存设置。桌面源码、155项前端及双模块workspace/off完整12命令通过；浏览器夹具与原生/真实跨网边界分别记录，实验file_transfer_ready仍false，R5未整体完成，见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+2026-10-26 R5本地owner与数据面候选：同profile既有SQLite metadata保存用途签名/CAS授权和稳定控制意图；重启只展示原任务，恢复必须明确触发。approved仅以固定公钥的真实Pion ICE/QUIC预览完整清单，接收方确认目录与计划并Bind后，使用新scope/ICE会话/QUIC复用V1文件引擎；不新增永久信任或剪贴板权限。只有持久本机Completion才记本机完成，服务端终态不足以证明本机落盘。七天回收仅针对已确认终态的私有授权metadata，不删用户文件/历史/checkpoint，不增缓存设置。桌面源码、155项前端及双模块workspace/off完整12命令通过；浏览器夹具与原生/真实跨网边界分别记录，该历史候选的file_transfer_ready为false；当前显式能力与客户端门见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)，R5未整体完成，见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
 
-2026-10-26 R5协调原型（该增量范围）：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。当时尚未接本地数据owner/UI，当前实现范围见上段；file_transfer_ready仍false，实际分享另验，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+2026-10-26 R5协调原型（该增量范围）：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。当时尚未接本地数据owner/UI，当前实现及实网/原生范围见能力证据；当时file_transfer_ready为false，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
 
 2026-10-26 跨网修复：桌面默认增加备用STUN并统一有效配置；只对内置公开STUN主机提供有界安全HTTPS解析，host/LAN不等待它；ICE失败保留实际计数及阶段。服务端先Unmap后校验危险scope，不再按末字节255猜广播，签名/会话/代次仍独立验证。文件wire、身份、公钥固定与relay=false保持，详见[ADR0018](adr/0018-cross-network-stun-resolution.md)及[服务端准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
 
-2026-10-26 R5签名控制增量复核（该增量范围）：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。实验health明确file_transfer_ready=false，不广告share_grants_v1，不授予普通成员或文件通道权限；当时尚待客户端/P2P/UI，当前范围见本日owner段，真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+2026-10-26 R5签名控制增量复核（该增量范围）：仅显式experimental_share_control=true启用同连接ShareGrant迁移及独立签名HTTP控制；方法/RequestURI/身份/时间/完整JSON与运行epoch、nonce绑定，领取按真实IP和已验证身份限频。该历史控制增量的health为file_transfer_ready=false，当时不广告share_grants_v1，不授予普通成员或文件通道权限；当时尚待客户端/P2P/UI，当前范围见本日owner段，真实分享仍必做，见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
 
 2026-10-19 R5授权核心增量：先冻结[ShareGrant ADR0017](adr/0017-one-time-share-grant.md)，实现一次领取/两道明确确认、原公钥/清单/任务/计划及有限恢复状态，既有Control连接提供事务CAS与显式4→5备份迁移。当前Server.New不激活迁移、不提供临时分享路由或广告能力；两端完整流程仍必做。任务库schema12、V1正文及relay=false保持，见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
 

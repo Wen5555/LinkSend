@@ -21,8 +21,8 @@ const shareSchemaSQL = `CREATE TABLE share_grants_v1(
  CREATE INDEX share_grants_receiver ON share_grants_v1(receiver_id,state,claim_until);
  CREATE INDEX share_grants_expiry ON share_grants_v1(state,expires_at,claim_until,resume_until,finished_at);`
 
-// EnableShareGrants is an explicit staged activation. No current server route
-// calls it or advertises the capability. It borrows the existing connection.
+// EnableShareGrants is called only by explicitly enabled server startup. It
+// borrows the existing connection and verifies a unique backup before migration.
 // A v4 service refuses schema5; rolling a program back must not roll data back.
 func (s *Control) EnableShareGrants(ctx context.Context) (string, error) {
 	var version int

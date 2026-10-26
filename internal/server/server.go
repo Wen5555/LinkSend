@@ -38,8 +38,8 @@ type Config struct {
 	TLSCert                 string `toml:"tls_cert"`
 	TLSKey                  string `toml:"tls_key"`
 	BootstrapToken          string `toml:"-"`
-	// Explicit isolated development opt-in. The complete desktop/file feature
-	// is not advertised until its data-plane integration has been verified.
+	// Explicit temporary-share opt-in; ordinary configurations stay disabled.
+	// The historical configuration name is retained for existing deployments.
 	ExperimentalShareControl bool `toml:"experimental_share_control"`
 	// TestPairingCode is an explicitly provisioned, repeatable pairing entry.
 	// The generic example config leaves it empty; the authorized Hong Kong
@@ -289,12 +289,19 @@ func (s *Server) reapExpired() {
 func (s *Server) Counters() Counters {
 	return Counters{s.receivedMessages.Load(), s.forwardedMessages.Load(), s.receivedBytes.Load(), s.forwardedBytes.Load()}
 }
+
+func (s *Server) capabilities() protocol.Capabilities {
+	caps := protocol.Supported()
+	caps.ShareGrantsV1 = s.cfg.ExperimentalShareControl
+	return caps
+}
+
 func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		body := map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()}
+		body := map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": s.capabilities()}
 		if s.cfg.ExperimentalShareControl {
-			body["share_control"] = map[string]any{"version": 1, "epoch": s.shareEpoch, "file_transfer_ready": false}
+			body["share_control"] = map[string]any{"version": 1, "epoch": s.shareEpoch, "file_transfer_ready": true}
 		}
 		respond(w, 200, body)
 	})
@@ -607,7 +614,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	authCtx, authCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer authCancel()
 	nonce := protocol.RandomID() + protocol.RandomID()
-	caps := protocol.Supported()
+	caps := s.capabilities()
 	if err = wsjson.Write(authCtx, c, Wire{Type: "hello", Nonce: nonce, Capabilities: &caps}); err != nil {
 		return
 	}
