@@ -1,6 +1,6 @@
 # R5 生产升级事务草案
 
-日期：2026-10-26。状态：**DRAFT / NOT_AUTHORIZED / NOT_DEPLOYED**。本文件仅以现有记录准备审阅目标、备份、验证与回退；未执行生产备份、上传、配置修改、DB 迁移、服务 stop/start 或 release 切换。候选尚需 root 提交后从最终 clean commit 生成准确二进制及校验收据；未满足前不请求部署批准。
+日期：2026-10-26。状态：**DRAFT / NOT_AUTHORIZED / NOT_DEPLOYED**。本文件准备审阅目标、备份、验证与回退；未执行生产备份、上传、配置修改、DB 迁移、服务 stop/start 或 release 切换。准确 `7084685` Linux 候选与自有非空合成库的迁移/兼容回退已完成最小验证；测试/文档修正后的 `850b9d1` 已从准确clean来源重建，全部非测试/非docs tracked输入与708相同，复用该旅程而未重跑，见[证据](RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。708整体CI的真实失败保留；850准确CI仍待，未满足前不请求部署批准。
 
 ## 目标与来源门
 
@@ -14,11 +14,13 @@
 | 原 live/disk SHA256 | `688702887cf7b87351d81384e941a352e13c3cd4701e437757f0922241e83d45`，产品 0.5.0 |
 | config / DB | `/etc/linksend/server.toml` / `/var/lib/linksend/control.db`，既有 schema4、WAL、quick_check=ok |
 | backend listener | TLS `127.0.0.1:8787`，原公证书 IP SAN 校验；公网仍走原代理 |
-| 本轮候选 | **未构建**：必须填写最终完整 source commit、clean 来源证明、Go build info、实际 SHA256/size 与 CI；不可复用旧 99a6c0e 二进制来声称含 R5 |
+| 最终准确构建候选，CI仍待 | `850b9d115ac2a2e460a0678039a1642cd2c1de9b`；独立 clean checkout、Go1.27.1/linux-amd64/CGO0/trimpath，真实 `vcs.modified=false`；18,188,312B、SHA256 `6efa08b5919113281d1fcc8c81f7b63316fc0492df33de9dfe930c273252a784`；850只修测试/文档，全部其余tracked输入与实测708相同，准确CI仍待，不冒充部署可用 |
 | 新 release / 私有事务备份 | `/opt/linksend/releases/<最终完整commit>` / `/var/backups/linksend/<实际UTC>-r5-<commit短名>`，均不得覆盖已有目录 |
 | 唯一计划配置变化 | 将既有键 `experimental_share_control` 明确设为 true；其余配置、TLS、unit、环境、代理/DNS/防火墙/路由保持原值 |
 
-最终提交确定后，在干净独立 checkout 或 Git 外准确归档中以既有 Go1.27.1、`GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0` 构建 `./cmd/rendezvous`，回读真实 revision/modified 状态、产品版本与 hash。先完成该源的必要 CI/包证据，再补齐本文候选表；dirty 工作区或仅目录名不构成准确来源。
+最终850本机二进制位于 `C:/Users/Wen/.codex/supervision/r5-server-7084685-20261026-01/rendezvous-linux-amd64-850b9d1`；独立源目录 `source/` 构建前后 tracked/untracked 均 clean，buildinfo 真实绑定完整850 revision。以既有 Go1.27.1、`GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath` 准确重建，收据 `.artifacts/r5-server-7084685/BUILD-RECEIPT-850b9d1.json`；Linux 实际 `-version` exit0 为 `LinkSend rendezvous 0.6.2`。排除docs/与`*_test.go`后，708/850的完整tracked mode/path/blob列表完全相同，规范树摘要 `d6890c344e21f3ef984f409f77264f8f7e69944fa3e8016f361055dd5063edfd`，因此复用708一次合成库旅程，无850服务场景重跑。旧708二进制 `rendezvous-linux-amd64` 与原构建收据保留；它的SHA256为 `4ec005a23c5da98ae77367924e1b1c41efbec34f58ddec396b86835bc09c4de6`，不能把708实际服务PID/结果改称850实测。准确850 CI门仍需核对；dirty工作区或仅目录名不构成准确来源。
+
+本次仅在已有 WSL Ubuntu 上运行 127.0.0.1 自有服务与 `/tmp/linksend-r5-migration-7084685-20261026-01` 合成数据，没有 SSH、公网请求或生产访问。合成库原有 groups/devices/invitations/membership_requests 为 1/2/1/1 条，准确708迁移后原表摘要不变，唯一0600自动备份完整保留schema4；原成员签名请求仍成功，新未入组身份只创建一条分享。准确36随后在关闭分享的同一schema5工作库上启动，原成员仍可认证，分享426/SHARE_UNSUPPORTED，全部原表与新增分享行不变。三个server均SIGTERM exit0、listener关闭。该验证不代替下述授权后生产一致性副本及真实TLS/公网后验。
 
 ## 授权后拟执行的事务
 
@@ -35,7 +37,7 @@ SQLite 自动迁移备份与显式 final backup 都须留存，不清理旧 rele
 
 启用分享后控制库为 schema5，原 0.5.0 和旧 99a6c0e 的 schema4-only 二进制不能直接打开；**不能仅把 current 指回旧版本**。第一回退是当前 schema5-compatible 候选关闭明确分享开关并保留现 DB；若候选本身不可用，使用预先验证的 schema5-compatible fallback，恢复原 config 的关闭状态后保留所有新数据。
 
-现有准确 fallback 来源候选是 `36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 的 standalone rendezvous：本机文件 `C:/Users/Wen/.codex/supervision/ordinary36-20261026-01/rendezvous-linux`，18,221,930B、SHA256 `c1d0db7f90bae90e299d6be40983891823e4001b73c14667d9b48dfb298ac20a`；保存的 build info 为 Go1.27.1/linux-amd64/CGO0、该 revision、modified=false。只读源码确认其 OpenControl 支持 schema5，已有普通实网证据；**尚未在生产升级副本上实测其回退行为**，因此必须完成上面的副本验证才能选为实际 fallback。它不广告新能力，当前客户端会明确 unsupported。
+现有准确 fallback 来源候选是 `36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 的 standalone rendezvous：本机文件 `C:/Users/Wen/.codex/supervision/ordinary36-20261026-01/rendezvous-linux`，18,221,930B、SHA256 `c1d0db7f90bae90e299d6be40983891823e4001b73c14667d9b48dfb298ac20a`；保存的 build info 为 Go1.27.1/linux-amd64/CGO0、该 revision、modified=false。本次已实际验证其在708升级后的自有非空合成schema5工作库上关闭分享启动、普通签名成员请求、明确unsupported及新增分享行保留，见[兼容回退证据](RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。**尚未访问或验证生产升级副本**，因此仍须完成授权后的上述副本门，才能选为生产事务的实际 fallback。关闭时它不广告新能力，当前客户端会明确 unsupported。
 
 回退前只操作已核对的 unit/current；若外部修改，停止自动动作。保留失败 DB/备份与两个 release，在已确认无进程持有时原子切到已验 fallback，再验 schema5/永久表、真实 image/hash、TLS/listener 与普通 health。关闭能力不等于撤回已建立 P2P 的在途字节或对任意活跃 grant 即时撤权，须记录实际受影响任务，不伪记全局取消完成。
 

@@ -45,6 +45,8 @@
 
   7084685首次core CI 40270372762在旧准备取消测试失败，原日志保留；仅修测试区分1次只读能力GET与零其他请求，准确归档加两测试文件的Preparation/HTTP一次定向通过5.158s，新提交CI待核。见[能力证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)。
 
+  准确708 Linux自有合成schema4→5及准确36兼容回退一次通过，原永久表和新增分享行保留、三服务exit0退场；850测试only准确clean重建且产品输入相同，复用旅程。850准确CI待核，生产未访问/部署，见[候选与回退](evidence/RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。
+
   当前同profile签名/CAS owner、明确重启恢复、七天终态metadata回收、固定公钥Pion/QUIC两阶段预览及原V1引擎已接入。8MiB任务在4MiB暂停、双端重开Service后显式恢复原任务通过；同步Create/hash/HTTP退出取消及服务Completed不能替代本机Completion的受控失败均已修复，最终20项TemporaryShare测试race3轮通过。双模块workspace/off的test/vet/build共12命令全部exit0，前端19files/155tests及typecheck/lint/build通过。
 
   桌面临时分享源码与真实页面浏览器夹具已验证明确确认、长目录/指纹/分页及无自动派发；夹具不代表Wails RPC、原生picker/剪贴板或P2P实机。当前原生复制目标因未证实可备份格式SKIP；独立WindowStation尝试遭CreateWindowStationW错误5，native未运行且用户剪贴板未改。仅GitHub托管Windows可创建空夹具的严格CI入口已准备，准确新提交CI与包结果另验。用户允许Linux替代Mac后，准确36 Linux→Windows原生保存已完成；反向原生发送及其余最终旅程仍待，Mac专属项目单列未验；不同网络Go核心双向证据见下段，不抵扣Windows双端现场；见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)，不标R5完成。
