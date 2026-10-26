@@ -434,10 +434,14 @@ func (s *Service) confirmTemporaryPlan(ctx context.Context, e *temporaryShareEnt
 }
 
 func prepareTemporaryShareSource(ctx context.Context, r temporaryShareRecord) (*transfer.Prepared, error) {
+	return prepareTemporaryShareSourceWithAccess(ctx, r, nil)
+}
+
+func prepareTemporaryShareSourceWithAccess(ctx context.Context, r temporaryShareRecord, access transfer.SourceAccessHook) (*transfer.Prepared, error) {
 	if r.Manifest == nil {
 		return nil, temporaryShareFailure(protocol.ShareInvalid)
 	}
-	prepared, err := transfer.PrepareSelectedForResume(ctx, r.Paths, r.Manifest.ChunkSize, r.Manifest.TransferID, r.Selection)
+	prepared, err := transfer.PrepareSelectedForResumeWithAccess(ctx, r.Paths, r.Manifest.ChunkSize, r.Manifest.TransferID, r.Selection, access)
 	if err != nil {
 		return prepared, err
 	}
@@ -466,7 +470,7 @@ func (s *Service) runTemporaryShare(ctx context.Context, e *temporaryShareEntry,
 	var prepared *transfer.Prepared
 	var err error
 	if r.Role == "sender" {
-		prepared, err = prepareTemporaryShareSource(ctx, r)
+		prepared, err = prepareTemporaryShareSourceWithAccess(ctx, r, s.clipboardSourceAccess)
 		if prepared != nil {
 			defer prepared.Close()
 		}

@@ -1009,6 +1009,9 @@ func (a *App) OpenTaskDirectory(taskID string) error {
 	if err != nil {
 		return err
 	}
+	if err = a.core.ValidateExternalFilePath(context.Background(), dir); err != nil {
+		return err
+	}
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return errors.New("INVALID_DIRECTORY: 目录不存在")

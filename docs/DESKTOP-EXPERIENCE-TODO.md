@@ -36,6 +36,8 @@
 
   R2 publisher owner首段：系统publisher合同先写ADR；现launcher纠正commit已可能发出/Held未确认就强杀的窗，Shell独立无硬TTL政策与固定generation完成点仅建模待接。必要状态测试及双模块独立编译通过，未运行新native/clipboard。普通发送/重发/Open/Reveal等出口、watcher竞争、生产大目录/大文件与真正OLE provider仍须后续完成，Native删除继续关闭。见[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
 
+  R2普通源/OS出口增量：统一实际FD源准备/hash/ReadChunk及所有app发送/恢复/重发入口，Open/Reveal/任务目录与preview元数据同门；父目录排除私有树仍可用。必要transfer/app/junction及小目录用例、core compile/vet和desktop独立仅编译通过。校验后OS按path重开窗仍在，Native删除不启用；系统publisher、读取结束与完整GC继续，见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
+
   R2同次构建锚后续：实际helper SHA/PE/平台与源提交/输入摘要/真实dirty编入CGO0桌面，私有固定路径resolver及ZIP/NSIS当前helper载荷已接。唯一dirty build、同包/installer提取hash、必要解析与ZIP负例通过；symlink权限负例SKIP、准确clean提交CI待核。没有默认publisher、系统clipboard/Explorer、原生安装或Native删除通过，见[打包证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍不勾选。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
@@ -61,7 +63,7 @@
 
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。scene05准确36 Wails已完成Linux实网接收，3文件262175B/空目录/逐文件hash、双方本机完成及零永久授权有证据，GUI正常退出0且本轮资源收尾。准确36普通双向/原Task受控恢复及收尾已通过（见[普通证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)）；继续Windows安装退出，按用户要求只做最小功能和必要安全验证。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
+当前接续点（2026-10-26）：Goal实际active。022f034/7084685/850b9d1及迁移证据309cde7已推送，草稿[PR #13](https://github.com/Wen5555/LinkSend/pull/13)可审阅。850准确push/PR的core与desktop均首次success，Windows包因一个派生绑定未同步而失败；486283f已最窄修复，新准确CI及一次静态验包待；708旧取消断言失败保留，测试only修正不放松零授权写入。准确850 Linux clean候选与708产品输入相同，复用一次合成schema4→5/36兼容回退证据；2026-10-26T04:54:45Z只读核对生产仍0.5.0/schema4/分享关闭，未部署。当前完成R2实际FD源读取和OS路径出口拒绝增量，继续真正Shell publisher、watcher竞争、完整inventory及自动回收，Native删除保持关闭。已有36普通双向/原Task恢复和36 Wails从Linux实收证据继续有效，不抵扣原Windows双端、双NAT、最终候选LAN/睡眠/安装退出或Explorer键盘粘贴。用户允许Linux替代Mac，不等待Mac；只做最小功能与必要安全验证并及时push。被Escape停止的R4现场已精确还原，不重试GUI；scene04被审批拒绝的旧凭据删除不绕过，测试数据/备份和三个用户未跟踪目录保留。其余状态见本页R1–R6各项与对应evidence。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

@@ -1308,7 +1308,7 @@ func taskAttemptConfig(t *taskRecord, attemptID string, cfg DirectConfig) Direct
 func (s *Service) runResumeSend(ctx context.Context, t *taskRecord, attemptID string, recovery taskRecovery, cfg DirectConfig) {
 	defer s.tasks.workers.Done()
 	defer s.ensureInbox()
-	prepared, err := transfer.PrepareSelectedForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
+	prepared, err := s.prepareUserSourcesForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
 	if prepared != nil {
 		defer prepared.Close()
 	}

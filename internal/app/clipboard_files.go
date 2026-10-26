@@ -480,7 +480,7 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 		return clipboardsync.ErrStale
 	}
 	s.updateClipboardFile(job, "preparing", transfer.Progress{})
-	prepared, err := transfer.PrepareForResume(job.ctx, job.paths, transfer.DefaultChunkSize, job.progress.ID)
+	prepared, err := s.prepareUserSourcesForResume(job.ctx, job.paths, transfer.DefaultChunkSize, job.progress.ID, nil)
 	if err != nil {
 		return err
 	}

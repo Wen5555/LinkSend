@@ -794,6 +794,9 @@ func (s *Service) sendPreparedOverPeerAttempt(ctx context.Context, peer *PeerSes
 	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "authorization"}, err
 	}
+	if err := prepared.RestrictSourceAccess(ctx, s.clipboardSourceAccess); err != nil {
+		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
+	}
 	options, err := s.sendContentOptions(ctx, prepared, cfg, hooks)
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
@@ -846,12 +849,16 @@ type peerResult struct {
 // Neither side sees file bytes or a manifest until both independent phases
 // succeed, and cancellation closes whichever phase finished first.
 func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []string, cfg DirectConfig) (*transfer.Prepared, *PeerSession, error) {
+	// Keep local denial ahead of any newly introduced filesystem admission.
+	if err := s.checkPeerAllowed(peerID); err != nil {
+		return nil, nil, err
+	}
 	parallelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	preparedCh := make(chan prepareResult, 1)
 	peerCh := make(chan peerResult, 1)
 	go func() {
-		prepared, err := transfer.PrepareSelected(parallelCtx, paths, 0, cfg.sourceSelection)
+		prepared, err := s.prepareUserSources(parallelCtx, paths, 0, cfg.sourceSelection)
 		preparedCh <- prepareResult{prepared: prepared, err: err}
 	}()
 	go func() {

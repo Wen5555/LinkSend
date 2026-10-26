@@ -68,7 +68,7 @@ func (s *Service) ResendInbox(ctx context.Context, request ResendInboxRequest) (
 	if recovery.ContentMode != "" || recovery.ContentSnapshotID != "" {
 		return QueueItem{}, errors.New("CONTENT_SNAPSHOT_UNAVAILABLE")
 	}
-	prepared, err := transfer.PrepareSelectedForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
+	prepared, err := s.prepareUserSourcesForResume(ctx, recovery.SourcePaths, recovery.ChunkSize, recovery.TransferID, recovery.SourceSelection)
 	if err != nil {
 		return QueueItem{}, classifyTaskError(err)
 	}

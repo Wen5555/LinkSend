@@ -1,3 +1,8 @@
+## 2026-10-26 R2普通源和OS出口拒绝
+
+- 20代码文件接通实际FD源约束及所有app准备/ReadChunk入口，关闭成功才释放；Open/Reveal/任务目录和excluded preview同门。普通父目录排除私有子树、外部用户名字保持，Native删除不启用，OS按path重开窗明确保留。
+- transfer定向3.207s、app三项7.188s和仅补public entry断言的preview单项4.754s均exit0；core compile/vet及desktop GOWORK=off CGO0仅编译exit0，无完整矩阵/GUI/clipboard重跑。独立只读审阅限此拒绝门通过，冻结、日志与边界见[证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)，R2未勾选。
+
 ## 2026-10-26 R2 publisher owner与commit未知窗
 
 - ADR0016先冻结新的pathless publisher职责：准入期限不作源寿命、commit可能发出即不可强杀、真实Shell引用终静止、无物理路径出口、watcher/完成竞争、目录与大文件尚未接通限制和最后GC连接条件。当前不调用系统publisher、clipboard或GUI，不放开Native删除。

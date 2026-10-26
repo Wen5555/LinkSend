@@ -4,6 +4,8 @@
 
 # Security
 
+2026-10-26 R2私有缓存出口拒绝：普通源准备/hash及每次ReadChunk核对实际借用FD，约束在FD成功Close后释放；app发送、恢复/重发及Open/Reveal/preview统一拒绝当前profile私有缓存树和实际别名。它不认领外部用户硬链接，也不把校验后OS重开路径当作无读取者证明；Native自动删除继续关闭。范围与未闭窗口见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
+
 2026-10-26 R2 publisher owner政策：控制写之前在已回读的真实durable授权digest上不可逆登记export_possible；写失败、ack丢失、main取消或退出不再强杀可能活跃的私有helper。Shell政策的deadline只约束准入，export后没有硬TTL；该政策尚未接实际系统publisher，当前受控helper仍保留自身测试期限。它不认证原生refs、不签静止证明、不赋删除权。路径出口、实际OLE与完整大目录/长路径仍须先闭合，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
 
 2026-10-26 R2构建信任锚：可信来源是同次构建后编入桌面的版本/平台/实际helper SHA/源提交/输入摘要/真实clean状态；BUILD-INFO与sidecar只作审计，不作为运行信任根。私有resolver严格拒绝空/未知/重复/非规范字段及错误PE/路径reparse，只从自身EXE固定摘要目录取镜像；未来启动仍需core稳定image/child句柄复核。ZIP先验精确条目和摘要再解压，NSIS仅本次文件及空目录，不增加系统发布或删除授权。dirty本地构建和symlink权限SKIP边界见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。

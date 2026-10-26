@@ -14,6 +14,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -168,6 +169,9 @@ type Prepared struct {
 	SourceSelection *SourceSelection
 	sources         map[uint32]source
 	roots           []*os.Root
+	accessMu        sync.RWMutex
+	sourceAccess    []SourceAccessHook
+	accessNodes     []source
 }
 
 func (p *Prepared) Close() error {
@@ -188,6 +192,12 @@ func PrepareSelected(ctx context.Context, paths []string, chunkSize int, selecti
 	return prepare(ctx, paths, chunkSize, "", selection)
 }
 
+// PrepareSelectedWithAccess admits each actual selected source before hashing.
+// Nil access preserves PrepareSelected's existing behavior.
+func PrepareSelectedWithAccess(ctx context.Context, paths []string, chunkSize int, selection *SourceSelection, access SourceAccessHook) (*Prepared, error) {
+	return prepareWithAccess(ctx, paths, chunkSize, "", selection, access)
+}
+
 // PrepareForResume rebuilds a manifest for an existing logical transfer. The
 // caller must compare the resulting digest with its persisted recovery record
 // before opening a new network session.
@@ -205,7 +215,18 @@ func PrepareSelectedForResume(ctx context.Context, paths []string, chunkSize int
 	return prepare(ctx, paths, chunkSize, transferID, selection)
 }
 
+func PrepareSelectedForResumeWithAccess(ctx context.Context, paths []string, chunkSize int, transferID string, selection *SourceSelection, access SourceAccessHook) (*Prepared, error) {
+	if !validHex(transferID, 16) {
+		return nil, errors.New("INVALID_TRANSFER_ID")
+	}
+	return prepareWithAccess(ctx, paths, chunkSize, transferID, selection, access)
+}
+
 func prepare(ctx context.Context, paths []string, chunkSize int, transferID string, selection *SourceSelection) (_ *Prepared, err error) {
+	return prepareWithAccess(ctx, paths, chunkSize, transferID, selection, nil)
+}
+
+func prepareWithAccess(ctx context.Context, paths []string, chunkSize int, transferID string, selection *SourceSelection, access SourceAccessHook) (_ *Prepared, err error) {
 	selection, err = NormalizeSourceSelection(selection)
 	if err != nil {
 		return nil, err
@@ -224,6 +245,9 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 		transferID = hex.EncodeToString(id)
 	}
 	p := &Prepared{Manifest: Manifest{Version: 1, TransferID: transferID, ChunkSize: chunkSize}, SourceSelection: selection, sources: make(map[uint32]source)}
+	if access != nil {
+		p.sourceAccess = []SourceAccessHook{access}
+	}
 	defer func() {
 		if err != nil {
 			_ = p.Close()
@@ -234,7 +258,7 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 		src   source
 	}
 	var entries []found
-	p.roots, err = walkSelectedSources(ctx, paths, selection, false, func(root *os.Root, rel string, stat fs.FileInfo, _ bool) error {
+	p.roots, err = walkSelectedSourcesWithAccess(ctx, paths, selection, false, access, func(root *os.Root, rel string, stat fs.FileInfo, _ bool, actual *os.File) error {
 		entry := FileEntry{Path: rel, Type: "directory", Modified: stat.ModTime().UnixNano()}
 		if !stat.IsDir() {
 			if !stat.Mode().IsRegular() {
@@ -242,13 +266,20 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 			}
 			entry.Type = "file"
 			entry.Size = stat.Size()
-			f, e := root.Open(rel)
-			if e != nil {
-				return e
+			f := actual
+			var e error
+			if f == nil {
+				f, e = root.Open(rel)
+				if e != nil {
+					return e
+				}
 			}
 			entry.Hash, entry.Chunks, e = hashFile(ctx, f, chunkSize)
 			after, statErr := f.Stat()
-			closeErr := f.Close()
+			var closeErr error
+			if actual == nil {
+				closeErr = f.Close()
+			}
 			if e != nil {
 				return e
 			}
@@ -273,6 +304,7 @@ func prepare(ctx context.Context, paths []string, chunkSize int, transferID stri
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].entry.Path < entries[j].entry.Path })
 	for i, item := range entries {
+		p.accessNodes = append(p.accessNodes, item.src)
 		item.entry.ID = uint32(i)
 		p.Manifest.Files = append(p.Manifest.Files, item.entry)
 		if item.entry.Type == "file" {
@@ -311,7 +343,7 @@ func hashFile(ctx context.Context, r io.Reader, size int) (string, []string, err
 	return hex.EncodeToString(h.Sum(nil)), chunks, nil
 }
 
-func (p *Prepared) ReadChunk(ctx context.Context, file uint32, index int, buf []byte) ([]byte, error) {
+func (p *Prepared) ReadChunk(ctx context.Context, file uint32, index int, buf []byte) (_ []byte, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -326,11 +358,21 @@ func (p *Prepared) ReadChunk(ctx context.Context, file uint32, index int, buf []
 	if !ok {
 		return nil, ErrChanged
 	}
-	f, err := s.root.Open(s.relative)
-	if err != nil {
-		return nil, err
+	var f *os.File
+	if hooks := p.sourceAccessSnapshot(); len(hooks) != 0 {
+		var closeSource func() error
+		f, closeSource, err = openSourceWithAccess(ctx, s.root, s.relative, s.info, hooks)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { err = errors.Join(err, closeSource()) }()
+	} else {
+		f, err = s.root.Open(s.relative)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
 	}
-	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
 		return nil, err

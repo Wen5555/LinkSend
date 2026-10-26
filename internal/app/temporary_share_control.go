@@ -154,7 +154,7 @@ func (s *Service) CreateTemporaryShare(ctx context.Context, paths []string, sele
 	if hook := s.temporaryShares.beforePrepare; hook != nil {
 		hook(ctx)
 	}
-	prepared, err := transfer.PrepareSelected(ctx, paths, transfer.DefaultChunkSize, selection)
+	prepared, err := s.prepareUserSources(ctx, paths, transfer.DefaultChunkSize, selection)
 	if err != nil {
 		return TemporaryShareCreation{}, classifyTaskError(err)
 	}

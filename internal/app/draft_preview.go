@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/transfer"
@@ -39,15 +41,53 @@ func (s *Service) PreviewDraft() (DraftPreview, error) {
 	}
 	ctx, cancel := context.WithTimeout(s.workCtx, 2*time.Second)
 	defer cancel()
-	return previewDraftPaths(ctx, draft), nil
+	result := previewDraftPathsWithAccess(ctx, draft, s.clipboardSourceAccess)
+	// Excluded entries are metadata too: a relative cache filename combined
+	// with a user-selected parent can expose the physical cache namespace.
+	entries := result.Entries[:0]
+	for _, entry := range result.Entries {
+		keep, matched := true, false
+		for _, input := range draft.Paths {
+			absolute, e := filepath.Abs(input)
+			if e != nil {
+				continue
+			}
+			base := filepath.ToSlash(filepath.Base(absolute))
+			name := entry.Path
+			candidate := ""
+			if name == base {
+				candidate = absolute
+			} else if strings.HasPrefix(name, base+"/") {
+				candidate = filepath.Join(absolute, filepath.FromSlash(strings.TrimPrefix(name, base+"/")))
+			}
+			if candidate != "" {
+				matched = true
+				if s.ValidateExternalFilePath(ctx, candidate) != nil {
+					keep = false
+					break
+				}
+			}
+		}
+		if matched && keep {
+			entries = append(entries, entry)
+		} else {
+			result.EntriesTruncated = true
+		}
+	}
+	result.Entries = entries
+	return result, nil
 }
 
 func previewDraftPaths(ctx context.Context, draft SendDraft) DraftPreview {
+	return previewDraftPathsWithAccess(ctx, draft, nil)
+}
+
+func previewDraftPathsWithAccess(ctx context.Context, draft SendDraft, access transfer.SourceAccessHook) DraftPreview {
 	result := DraftPreview{Revision: draft.Revision, Complete: true}
 	if len(draft.Paths) == 0 {
 		return result
 	}
-	preview, err := transfer.PreviewSources(ctx, draft.Paths, draft.SourceSelection)
+	preview, err := transfer.PreviewSourcesWithAccess(ctx, draft.Paths, draft.SourceSelection, access)
 	result.Files, result.Directories, result.Bytes = preview.Files, preview.Directories, preview.Bytes
 	result.ExcludedFiles, result.ExcludedDirectories, result.ExcludedBytes = preview.ExcludedFiles, preview.ExcludedDirectories, preview.ExcludedBytes
 	result.Entries, result.EntriesTruncated = preview.Entries, preview.EntriesTruncated

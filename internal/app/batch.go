@@ -246,7 +246,7 @@ func (s *Service) EnqueueBatch(request EnqueueBatchRequest) (BatchSnapshot, erro
 			return BatchSnapshot{}, ErrMetadataInvalid
 		}
 	}
-	prepared, err := transfer.PrepareSelected(s.workCtx, paths, 0, draft.SourceSelection)
+	prepared, err := s.prepareUserSources(s.workCtx, paths, 0, draft.SourceSelection)
 	if err != nil {
 		return BatchSnapshot{}, classifyTaskError(err)
 	}

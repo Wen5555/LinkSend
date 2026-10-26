@@ -14,6 +14,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R2普通出口拒绝：所有app源准备/hash/ReadChunk追加实际FD约束，统一队列/恢复/重发/剪贴板与临时分享源入口，拒绝当前profile私有缓存树及实际目录别名；父目录排除私有子树仍可用。Open/Reveal/任务目录和preview条目同门。该门不证明OS按path重开后的读取结束，不启用Native删除或系统publisher；nil transfer hook保持原API，wire/schema/用户缓存选项不变，见[最小验证](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
+
 2026-10-26 R2 publisher owner首段：先冻结ADR0016系统publisher合同，新增准入deadline/原生寿命分离与不可逆export-possible政策，并实际接入私有launcher的commit/close，修正commit可能到达但Held未确认时的强杀窗。Shell无硬TTL目前是尚未接线的owner政策，现helper仍为受控合同，WriteFiles/系统clipboard/出口统一保护/最终GC尚待，不据此标R2完成。必要状态负例和双模块GOWORK=off编译/vet见[证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
 
 2026-10-26 R2同次构建锚：Windows native build先static CGO1 helper后CGO0桌面，把实际镜像SHA/平台/源提交/输入摘要/真实clean状态编入主程序；私有resolver固定自身目录的摘要路径并验实际PE/hash，不信sidecar/用户配置/helper自报。ZIP/NSIS只携本次helper，来源为dirty的本地唯一build与静态包校验通过，最终准确提交CI另核；没有默认publisher/系统clipboard/删除或安装旅程通过，见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
