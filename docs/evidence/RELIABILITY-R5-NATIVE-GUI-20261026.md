@@ -88,3 +88,5 @@ Windows准确36 Wails候选与JP Linux准确36干净源码driver完成一次真�
 - observer与sender实际exit0；Windows经原生关闭确认→“退出应用”正常exit0、forced_by_timeout=false、649077ms。sender stderr的关闭UDP读取错误保留，不抹日志；它没有改变已核验Completion或exit0。coordinator经精确受管SIGINT退出0，身份、profile、源/目标与失败历史保留。
 
 实际GUI启动命令 `python .artifacts/share-native-ui-draft/scene05/launch-owned-gui.py`；完整来源、actor requestId/jobPath/游标、双方回执、UIA完成快照、各退出收据在同scene目录及既有RUN-RECOVERY。此次按用户要求只做直接相关的最小功能核验，不重跑已通过完整矩阵。准确Wails接收旅程现有证据；反向原生发送、普通双向/恢复、R2完整回收和Explorer键盘粘贴、Windows完整安装退出及R6仍继续，R5/Goal不因单次成功整体打勾。
+
+精确收尾见 `scene05/COMPLETION-SUMMARY.json`：GUI/observer/forward及本轮WebView均已退出，TCP18445无listener；远端sender/coordinator均exit0。本轮本地runtime与远端runtime已精确移除，offer在清理到达时已不存在（原Remove-Item缺失退出1如实保留）；身份、profile、DB、源/目标、checkpoint与事件均保留。scene04被拒删的两个旧文件未触碰。

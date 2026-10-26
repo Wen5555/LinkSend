@@ -49,7 +49,7 @@
 
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。新scene05使用独立私有根及与桌面一致的10分钟人机等待（产品授权期限不改），接续准确Wails Windows↔Linux实网分享。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
+当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。scene05准确36 Wails已完成Linux实网接收，3文件262175B/空目录/逐文件hash、双方本机完成及零永久授权有证据，GUI正常退出0且本轮资源收尾。继续同候选普通双向/恢复及Windows安装退出，按用户要求只做最小功能和必要安全验证。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 
