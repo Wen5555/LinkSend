@@ -301,6 +301,7 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	bGeneration.Store(1)
 	var sendLargeImage atomic.Bool
 	var failNextWrite atomic.Bool
+	var reverseReads atomic.Int32
 	written := make(chan []byte, 64)
 	reverseWritten := make(chan []byte, 1)
 	f.a.ConfigureClipboard(ClipboardAdapter{Generation: aGeneration.Load, Read: func(_ context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
@@ -321,6 +322,7 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 		return next, nil
 	}})
 	f.b.ConfigureClipboard(ClipboardAdapter{Generation: bGeneration.Load, Read: func(_ context.Context, kind clipboardsync.Kind, expected uint64) ([]byte, uint64, error) {
+		reverseReads.Add(1)
 		return []byte("reverse clipboard text"), bGeneration.Load(), nil
 	}, Write: func(kind clipboardsync.Kind, payload []byte, expected uint64, _ time.Time) (uint64, error) {
 		if failNextWrite.CompareAndSwap(true, false) {
@@ -433,13 +435,33 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 		}
 		return false
 	}, "successful clipboard transfer did not clear peer error")
-	if _, err := f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "receive", Kind: "text", Enabled: true}); err != nil {
-		t.Fatal(err)
+	// Keep both same-policy leases valid while the second arrives after the
+	// native copy. Readiness alone cannot prove a lease predates that copy.
+	lateReverseLease, releaseReverseLease := make(chan struct{}), make(chan struct{})
+	var reverseLeaseWrites atomic.Int32
+	var releaseReverseLeaseOnce sync.Once
+	unblockReverseLease := func() { releaseReverseLeaseOnce.Do(func() { close(releaseReverseLease) }) }
+	f.a.clipboardGrantMu.Lock()
+	f.a.clipboardLeaseBeforeWrite = func() {
+		if reverseLeaseWrites.Add(1) == 2 {
+			close(lateReverseLease)
+			<-releaseReverseLease
+		}
 	}
+	f.a.clipboardGrantMu.Unlock()
+	defer func() {
+		unblockReverseLease()
+		f.a.clipboardGrantMu.Lock()
+		f.a.clipboardLeaseBeforeWrite = nil
+		f.a.clipboardGrantMu.Unlock()
+	}()
+	// Install the send permission before the first real lease can arrive.
 	if _, err := f.b.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.aID.ID(), Direction: "send", Kind: "text", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	f.a.sendClipboardLease(t.Context(), peer)
+	if _, err := f.a.SetClipboardGrant(t.Context(), ClipboardGrantPatch{PeerID: f.bID.ID(), Direction: "receive", Kind: "text", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
 	var reversePeer *PeerSession
 	f.b.directPoolMu.Lock()
 	for _, pooled := range f.b.directPool {
@@ -449,11 +471,39 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 	if reversePeer == nil || reversePeer.SessionID != peer.SessionID {
 		t.Fatal("reverse clipboard lost authenticated session")
 	}
+	var firstReverseLease clipboardsync.Lease
 	waitFor(t, 3*time.Second, func() bool {
-		_, ok := f.b.clipboardSync.Outbound(f.aID.ID(), reversePeer.SessionID, reversePeer.RemoteAuthorizationGeneration, clipboardsync.Text)
+		var ok bool
+		firstReverseLease, ok = f.b.clipboardSync.Outbound(f.aID.ID(), reversePeer.SessionID, reversePeer.RemoteAuthorizationGeneration, clipboardsync.Text)
 		return ok
 	}, "reverse lease did not arrive")
+	lateReverseLeaseDone := make(chan struct{})
+	go func() {
+		f.a.sendClipboardLease(t.Context(), peer)
+		close(lateReverseLeaseDone)
+	}()
+	select {
+	case <-lateReverseLease:
+	case <-time.After(3 * time.Second):
+		t.Fatal("second reverse lease did not reach before-write gate")
+	}
+	if bGeneration.Load() != 2 {
+		t.Fatal("first forward commit did not establish native generation 2")
+	}
 	bGeneration.Store(3)
+	unblockReverseLease()
+	select {
+	case <-lateReverseLeaseDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("second reverse lease did not finish after release")
+	}
+	var renewedReverseLease clipboardsync.Lease
+	waitFor(t, 3*time.Second, func() bool {
+		var ok bool
+		renewedReverseLease, ok = f.b.clipboardSync.Outbound(f.aID.ID(), reversePeer.SessionID, reversePeer.RemoteAuthorizationGeneration, clipboardsync.Text)
+		return ok && renewedReverseLease.ID != firstReverseLease.ID
+	}, "late same-policy reverse lease was not installed at native generation 3")
+	t.Logf("reverse lease gate: two writes=%d, old=%s, late=%s, native=%d", reverseLeaseWrites.Load(), firstReverseLease.ID, renewedReverseLease.ID, bGeneration.Load())
 	if err = f.b.ClipboardChanged(t.Context(), ClipboardChange{Generation: 3, Kinds: []clipboardsync.Kind{clipboardsync.Text}}); err != nil {
 		t.Fatal(err)
 	}
@@ -463,8 +513,11 @@ func TestClipboardBootstrapsAuthenticatedSessionWithoutFileAndCoexists(t *testin
 			t.Fatalf("reverse payload=%q", got)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatalf("reverse clipboard did not commit: sender=%+v receiver=%+v", f.b.ClipboardPeerStatuses(), f.a.ClipboardPeerStatuses())
+		t.Fatalf("reverse clipboard did not commit: reads=%d sender=%+v receiver=%+v", reverseReads.Load(), f.b.ClipboardPeerStatuses(), f.a.ClipboardPeerStatuses())
 	}
+	f.a.clipboardGrantMu.Lock()
+	f.a.clipboardLeaseBeforeWrite = nil
+	f.a.clipboardGrantMu.Unlock()
 	chunkSent, releaseChunk := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	var releaseOnce sync.Once

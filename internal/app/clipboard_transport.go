@@ -314,7 +314,7 @@ func (s *Service) ClipboardChanged(ctx context.Context, change ClipboardChange) 
 				continue
 			}
 			grant, allowed := s.clipboardGrant(peer.PeerID, "send", kind, peer.AuthorizationGeneration)
-			lease, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, kind)
+			lease, leased := s.clipboardSync.OutboundForObservation(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, kind, observation)
 			if allowed && !leased {
 				s.setClipboardPeerWaiting(peer.PeerID, "waiting_lease")
 			}

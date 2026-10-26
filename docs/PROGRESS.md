@@ -1,3 +1,8 @@
+## 2026-10-26 同策略续租晚到的真实剪贴板修复
+
+- 366 Windows core步骤真实失败已固定复现：两张同策略lease中后者在native generation3才安装，文字路径误选最新baseline3，丢弃刚复制事件且两侧仍ready/error空。原代码+确定屏障exit1/13.881s；只把该处选择改为已有OutboundForObservation，同一用例exit0/11.728s，原3秒断言不变、无系统clipboard或整矩阵。
+- 固定当前observation及原peer/session/授权/kind/期限约束，选择仍有效且早于该复制的重叠lease；暂停/撤权/重放门不改。原366失败及5ee静态候选来源保留，新准确CI由本次push确认，见[因果证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
 ## 2026-10-26 单次hosted OLE锁组合探测入口
 
 - 只复用既有GitHub-hosted Windows空板native测试入口，末尾恢复fixture后在同STA进行一次公共OLE组合探测；public数据缓存只含固定合成文字，竞争线程只试Open/Close，HRESULT负结果也记录，不卸锁重试/回滚/启用publisher。one-shot flag同时控制调用与summary强制记录，观测后即撤。

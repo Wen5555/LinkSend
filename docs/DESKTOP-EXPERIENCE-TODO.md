@@ -18,6 +18,8 @@
 - [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；真实LAN TLS/Pion/QUIC回归、双向剪贴板及同会话文件复用/清理通过，见[源码证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)。准确36 headless core Windows↔JP普通双向16MiB及原Task/TransferID受控Pause/Resume、双方Completion/hash与退场已通过，见[本轮证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)；Wails普通恢复、准确候选双向LAN、睡眠/网络变化、原Windows双端现场与受限双NAT仍分别待验。
 - [ ] R2（实施中）：[缓存ADR0016](adr/0016-automatic-clipboard-file-cache.md)已先冻结；落实真实manifest自动空间预留、并发容量保护、拒绝后残留清理及稳定空间原因/新复制恢复。自动所有权/回收、跨启动保护及 Finder/Explorer 真实键盘粘贴仍待；现有文件条目读回不抵扣。见[容量增量证据](evidence/RELIABILITY-R2-CAPACITY.md)。
 
+  R1剪贴板续租后续：366 Windows真实失败已用固定第二lease晚到屏障重现；非文件路径仅一行复用当前observation选有效旧lease，旧FAIL13.881s/修复PASS11.728s，原3秒断言与权限/过期/重放门不改，无系统clipboard/整矩阵。新准确CI待，见[因果证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
   R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
 
   2026-10-26补充：真实CI发现磁盘压力后的新复制被同权限lease续期吞掉；屏障稳定复现旧实现FAIL，现只为当前本机观察选择仍有效重叠lease，普通10轮/race3轮通过，缓存回收/容量/期限/用户文件保护不变。准确新CI继续核对，旧eccb903/a22f691失败保留；见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。

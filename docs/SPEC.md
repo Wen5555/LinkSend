@@ -14,6 +14,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 文本/链接/图片剪贴板同策略续租：每次本机观察从仍有效且早于该copy的lease中选择，不以刚安装的新baseline吞掉已发生的复制。复用文件路径已有OutboundForObservation，当前observation、原身份/会话/授权代次/kind/期限门全部保留；无wire/schema/权限改变。真实旧实现FAIL及同屏障一行修复PASS见[证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
 2026-10-26 Shell私有v3 codec：独立首帧和分页元数据、固定总数/摘要、strict canonical JSON及版本/用途绑定已候选实现，兼容旧v2且不互认。合成10k/20003条目和必要拒绝用例通过，未读取实际源或调用helper，不赋系统发布/删除权，不改网络wire/schema；generation门与完整持久inventory仍待，见[证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
 
 2026-10-26 Shell原语候选：独立C++虚拟文件provider使用只读FD副本与真实引用/Close门，可能export后无TTL/强杀；生产Go仍旧controlled v2，新的Shell合同未接线/执行，Native删除关闭。一次严格构建和旧COM回归通过；全局剪贴板代次CAS缺口、平台名边界及v3分页后续见[候选证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)，不声明新线上能力或系统粘贴完成。

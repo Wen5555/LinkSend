@@ -1,3 +1,7 @@
+## 2026-10-26 剪贴板观测与晚到续租
+
+非文件正文路径与文件路径一样按当前本机observation选择有效的重叠lease，要求原peer/session/授权代次/kind及observation revision/OS generation/origin/boot/seq一致，且copy严格晚于lease安装baseline。新同策略lease晚到不应吞掉已有旧lease覆盖的新复制；策略变更/暂停/撤权仍淘汰旧lease，旧复制/过期/重放不得借此续期。LSCB01与现有lease wire未变，实际因果负例及一行修复见[证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
 ## 2026-10-26 私有Shell v3分页元数据候选
 
 新Go-only `ShellPrepare`/catalog/page固定version3与windows-virtual-files-v1，不替换旧controlled v2。首帧绑定总bytes/pages/entries/sources及完整catalog/manifest/inventory摘要；每页最多64KiB原始元数据，在原256KiB有界帧内严格校验版本/顺序/长度/摘要，最终canonical JSON和完整清单一致性检查后才返回。元数据总量64MiB、10,000清单条目/20,003源，不能当文件正文限制。旧新用途域沿用既有签名算法但版本/contract/launch摘要分别核验，兼容负例拒绝互认。后续控制阶段仍必须拒绝多余/错序帧。该私有codec尚无launcher/helper main调用、不发布系统clipboard、不赋GC权限，真实FD与当前原子发布门仍独立待办；详见[codec证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)，网络V1与relay=false保持。

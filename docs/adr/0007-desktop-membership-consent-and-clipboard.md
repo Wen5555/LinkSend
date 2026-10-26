@@ -3,6 +3,8 @@
 日期：2026-09-13。状态：**语义已由总控复审接受**（11c44df，E0-safeio-close-v1）。具体API/schema/wire和实现、兼容测试仍待E1/E4；当前产品仍为 M5/V1，不代表E0整体完成。
 关联：U2/U3/U4、E1–E4；不得以本文代替协议/安全兼容测试或原生验收。
 
+2026-10-26续租观测增量：文字/链接/图片与文件同样选当前observation覆盖的有效重叠lease，避免晚安装的同策略新baseline吞掉已发生copy。已有peer/session/授权/kind、revision/OS代次及deadline门保持，不让策略变更/暂停/撤权或旧复制借重叠窗口重新获权。确定屏障旧FAIL与一行复用修复PASS见[因果证据](../evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)，不改线上wire/schema。
+
 ## 当前缺口
 
 `Control.Join` 的 `joinedDevice` 拒绝 revoked 身份，现有新邀请码不能重配被删设备。
