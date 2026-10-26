@@ -10,6 +10,7 @@ export interface Capabilities {
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
     "membership_version": number;
+    "share_grants_v1"?: boolean;
 }
 
 export enum Code {
