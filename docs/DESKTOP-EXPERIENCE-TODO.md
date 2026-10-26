@@ -34,7 +34,7 @@
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
 - [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；已用真实TLS/WSS因果门修复typed原因降级，legacy仅精确signaling phase获得安全指导，补固定P2P/限频提示。普通/race各3轮、前端171项与完整Go12矩阵通过；准确新CI/候选旅程与Mac仍待。见[诊断增量](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)及[原生观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
-- [ ] R4：准确Windows候选实际覆盖安装、profile逐字节保持、身份/草稿/历史/20MiB恢复状态、单实例唤回及原系统入口恢复已验；基线活动任务取消退出/保存退出通过。候选活动完整续传、SendTo/拖放和Mac替换/活动退出仍待，见[原生证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
+- [ ] R4：旧01b5c16 Windows候选的覆盖安装、状态保持、单实例及原系统入口恢复已有证据；当前36最小旅程只到63基线安装，用户Escape停止GUI后不重试，原wrapper超时exit1。已在原实例结束后精确Restore并核对登记/三快捷方式，数据与备份保留；36候选覆盖/原生活动完整续传、SendTo/拖放仍待，Mac专属未验保留。见[原生及恢复证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
 - [ ] R5（owner/数据面/桌面候选，整体待验）：[ADR0017](adr/0017-one-time-share-grant.md)先冻结的授权核心、显式备份迁移、签名HTTP及独立scope WSS已实现并验证；普通配置关闭，实验health的file_transfer_ready=false，不广告正式share_grants_v1。历史增量及旧失败保留在[核心](evidence/RELIABILITY-R5-GRANT-CORE.md)、[控制](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)、[客户端](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)与[协调](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)证据中，不将旧包或CI移记本候选。
 
   当前同profile签名/CAS owner、明确重启恢复、七天终态metadata回收、固定公钥Pion/QUIC两阶段预览及原V1引擎已接入。8MiB任务在4MiB暂停、双端重开Service后显式恢复原任务通过；同步Create/hash/HTTP退出取消及服务Completed不能替代本机Completion的受控失败均已修复，最终20项TemporaryShare测试race3轮通过。双模块workspace/off的test/vet/build共12命令全部exit0，前端19files/155tests及typecheck/lint/build通过。

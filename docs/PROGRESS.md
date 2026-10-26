@@ -1,3 +1,8 @@
+## 2026-10-26 Windows测试现场已精确还原
+
+- 用户physical Escape停止Computer Use后，未重试GUI。新R4仅到63基线安装；候选36/activepeer未启动。原GUI由既有30分钟wrapper结束，exit1/forced=true/1800059ms，不能记正常退出或R4通过。
+- 原实例全退出、18449无listener后，同一Restore事务exit0/RESTORED_VERIFIED；原登记和三个快捷方式回读一致，隔离EXE不存在，profile/数据/备份保留。详见[恢复证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。Goal继续非GUI工作，不重启该场景。
+
 ## 2026-10-26 R1准确36普通跨网与原任务恢复
 
 - 准确clean `36cfce3` core验证器及原rendezvous，独立私有HTTPS/WSS协调入口18447、只在driver进程信任CA，Windows↔JP公共Linux各一次16MiB+中文/zero/空目录：4文件7条目、16,777,310B，两端Completed/exit0及逐路径hash、TransferID/manifest一致，TLS1.3/ALPN linksend/1/relay=false。

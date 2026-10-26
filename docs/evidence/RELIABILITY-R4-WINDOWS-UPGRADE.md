@@ -33,3 +33,13 @@
 最终 `windows-install-transaction.ps1 -Action Restore` 退出0，输出 `RESTORED_VERIFIED`，事务 stage=restored：测试 EXE 已由受管卸载器移除，原卸载登记及三个快捷方式逐项与测试前快照一致。隔离 profile、源文件、恢复数据及证据保留，不递归清理；不影响日常安装/profile/剪贴板或宿主网络。
 
 覆盖安装、状态保持、基线活动保存退出、候选原生诊断旅程通过；候选活动传输退出后完整续传、SendTo/拖放实际发送、Mac 替换和活动退出仍 NOT_RUN / BLOCKED_BY_EXTERNAL_ENV。R1 物理双机、睡眠与跨网、R2 系统键盘粘贴及完整自动回收、R5 临时分享与 R6 收尾均仍必做，不能由本记录抵扣。
+
+## 2026-10-26 最小候选旅程被停止与原事务还原
+
+新私有 `r4-windows-36-20261026-01` 事务先备份原Registry64卸载登记及桌面/开始菜单/SendTo三个精确快捷方式，核对owner-only ACL；准确36干净源码fixture只监听独立18449并准备自有配对、中文草稿和小文件完成历史。准确63基线安装器退出0，EXE摘要匹配本页既有来源表。候选36安装和活动peer均尚未启动。
+
+root启动隔离63 GUI并核对真实WebView user-data-dir在本次APPDATA后，Computer Use明确返回用户physical Escape停止；没有再进行GUI操作、重启或终止原实例。原fixture自然结束；原GUI由已存在的30分钟wrapper结束，实际exit1、forced_by_timeout=true、1800059ms，root原exec session77172回读一致。这不是正常退出、保存或候选恢复PASS。
+
+2026-10-26 UTC02:58:15.7705174，原GUI/fixture/专属WebView均不在、18449无listener、事务无in-flight后，执行同一已审 `windows-install-transaction.ps1 -Action Restore`，exit0且输出RESTORED_VERIFIED。原Registry64逐值一致、三个link SHA256均与备份相等，隔离EXE已不存在；只卸载本轮隔离安装，profile/身份/草稿/历史/源/目标/数据库及备份保留，scene04被拒删的凭据未触碰。fixture最终数值退出码不可观察，保留null，不以进程消失补造0。
+
+原始收据在 `.artifacts/r4-win36-preparation/{RESTORE-PREFLIGHT,RESTORE-RECEIPT,CURRENT-RECOVERY}.json`、`restore-command.log` 和 `RESTORE-AFTER-GUI-EXIT.md`；最后入口已标restored，不能重跑旧场景或重复Restore。本轮只证明已安全还原，准确36覆盖和原生活动退出/恢复仍未运行；GUI不在未获用户恢复指示时自动重试，其他已授权工作继续。
