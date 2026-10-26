@@ -54,6 +54,14 @@ receipt-only 的 Go 验签只证明签名出处与原绑定相符，不证明 na
 
 `native` 非 nil 的 receipt-only 对象在扫描和逐对象 collector 两层都保持保护，即使已 sealed、老化、压力触发或模拟 boot 变化也不得进入现删除通道。原 CF_HDROP/file URL、legacy、unknown 不调用或追认新入口。未来须以新的受支持 native contract、新 publication 及真实系统消费者/正常退出实验证据，另行审查后才能接原引用、保留期及逐项删除门；本阶段测试中的 child 关闭声明不是生产回收权。
 
+## 2026-10-26 Windows私有受控broker首增量
+
+上述receipt-only授权基础当时无launcher/boot实现；本次新增私有源码实现与独立helper，仍无默认publisher调用或发行包trusted-image锚。launcher持只读且拒写删的image句柄，按明确的可信预期SHA256验证；用CreateProcess返回的稳定hProcess挂起启动，核对实际process image对应同一文件后才恢复。私有本机first-instance管道两端由owner先建，只继承精确管道/源/回执/launcher寿命句柄；child签随机challenge、公钥、实际BootIdentifier与inventory摘要，自报hash/PID不构成授权。
+
+owner按receiver已关闭后的完整sealed inventory重验实际身份/类型/size/mtime，文件只读pin拒新写删并核对manifest内容；只给helper最小只读源句柄、相对描述符和一个已创建的spool写句柄，不传profile key、DB或profile目录。helper重验继承句柄及内容，产生原生对象前必须收到与原inventory/manifest/child绑定且profile签名有效的delegation；launcher仅在原SQLite完整row/CAS回读仍匹配后commit。错序、半写或失败保持保护。源清单最多65句柄/64MiB及相对描述符小于260个UTF-16单元是这个私有受控broker的预算，不缩减原文件协议，也未自动改走CF_HDROP。
+
+Go child签名路径仅在本进程C++ opaque witness门真正消费成功后签固定receipt；C++ COM方法使用HRESULT/noexcept及失败保护，全部provider/marshal/stream/clone/async/活动调用结束、逐源CloseHandle成功才quiescent。受控标准STA↔MTA消费者关闭后，回执经预先打开的私有spool句柄写入、Sync/关闭，再由现有profile/SQLite owner核验消费。没有系统clipboard/注册格式、物理路径发布出口、Native删除或手动缓存设置；实际GUI/launcher进程退出仍有活跃consumer、Explorer互操作、升级与最终自动回收须后续独立证据。准确范围和一次最小验证见[证据](../evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。

@@ -4,7 +4,7 @@
 
 用户最新指示允许 Linux 服务器替代 Mac。当前按 Windows↔Linux 完成连接、恢复、普通双向传输及临时分享的实网验收，不再等待/反复探测 Mac；Windows Explorer 实际键盘粘贴、自动缓存、安装退出继续，Finder/DMG 专属结果保留未验证。此调整不证明原两台 Windows 现场或受限双NAT通过。
 
-同日最新执行要求：减少测试，以每个增量的最小功能验证和必要安全检查推进，已有有效结果不重复完整矩阵；可审阅增量验证后及时commit/push。scene05准确36 Windows原生接收已完成Linux实网临时分享，三文件262175B/空目录/逐文件hash、双方本机终态及零永久授权均通过，正常GUI退出0；见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。普通双向/恢复、R2完整回收/键盘粘贴和Windows完整安装退出继续。
+同日最新执行要求：减少测试，以每个增量的最小功能验证和必要安全检查推进，已有有效结果不重复完整矩阵；可审阅增量验证后及时commit/push。scene05准确36 Windows原生接收已完成Linux实网临时分享，三文件262175B/空目录/逐文件hash、双方本机终态及零永久授权均通过，正常GUI退出0；见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。准确36普通Win↔JP各一次16MiB/中文/zero/空目录、7/7 hash与原Task受控Pause/Resume已通过且资源收尾，见[普通跨网证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)；R1剩余物理旅程、R2完整回收/键盘粘贴及Windows完整安装退出继续。
 
 最新版Windows双端公网在线但连接未验证优先修复。正式版main最小分支的edf7cac已交付Windows候选和[PR #12](https://github.com/Wen5555/LinkSend/pull/12)，默认备用STUN、内置主机安全解析及ICE失败统计已验证；准确干净源码验证器Windows↔公共JP Linux双向16MiB/中文/空目录、6/6落盘条目/hash、双方Completed通过，约3.3秒建链。准确Windows包来源/摘要/版本核验通过，但用户暂时无法试用，两台Windows现场和受限双NAT不因此打勾；吞吐仍偏低，原R0–R6未完成。见[跨网证据](evidence/CROSS-NETWORK-20261026.md)。
 
@@ -15,7 +15,7 @@
 用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。
 
 - [x] R0：核对 `f8358ce`、干净 tracked 工作区及三个既有未跟踪目录；复用本地 Go1.27.1/Node24.21.0/pnpm12.4.1；Mac arm64/macOS26.5 和日本自托管信令/STUN 主机 SSH 可用；修正 README 过期版本。见[基线证据](evidence/RELIABILITY-R0-BASELINE.md)。
-- [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；新增真实LAN TLS/Pion/QUIC回归，通知后双向剪贴板及同会话文件复用/关闭清理通过。见[源码增量证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)；准确候选双向 LAN、中断恢复、睡眠/网络变化与真实不同网络传输仍待。
+- [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；真实LAN TLS/Pion/QUIC回归、双向剪贴板及同会话文件复用/清理通过，见[源码证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)。准确36 headless core Windows↔JP普通双向16MiB及原Task/TransferID受控Pause/Resume、双方Completion/hash与退场已通过，见[本轮证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)；Wails普通恢复、准确候选双向LAN、睡眠/网络变化、原Windows双端现场与受限双NAT仍分别待验。
 - [ ] R2（实施中）：[缓存ADR0016](adr/0016-automatic-clipboard-file-cache.md)已先冻结；落实真实manifest自动空间预留、并发容量保护、拒绝后残留清理及稳定空间原因/新复制恢复。自动所有权/回收、跨启动保护及 Finder/Explorer 真实键盘粘贴仍待；现有文件条目读回不抵扣。见[容量增量证据](evidence/RELIABILITY-R2-CAPACITY.md)。
 
   R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
@@ -29,6 +29,8 @@
   R2原生引用隔离原型：同进程、两个真实COM消费者与launcher退出后helper寿命三阶段通过，最后stream/clone释放前仍保护，源文件保留、系统剪贴板未改。helper本身仍是存活的COM producer；未接生产发布/回收，缺签名交接与安全inventory/持久receipt，不能把原始trace当删除许可或抵扣键盘粘贴。见[原型证据](evidence/RELIABILITY-R2-NATIVE-REFERENCE-PROBE.md)。
 
   R2后续私有基础：52f9bf2已实现receipt-only用途签名/实际inventory/跨main单次CAS，并修复collector信任剥离Native副本的误删入口；任何Native仍保护，未接生产helper或已发布回收。准确core/desktop/三平台包CI均attempt1/success；见[签名基础证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。不能将签名或CI当真实native读取结束证明。
+
+  R2 Windows私有broker首增量：固定可信image/child句柄与challenge、实际BootID、sealed inventory只读句柄、独立Go/C++受控COM消费者、持久spool与原SQLite单次消费已接成一次真实闭环；七门/5句柄及wrong-image/child/行变化/伪回执/重放拒绝有证据。默认publisher/打包trust anchor、系统clipboard/注册格式、Explorer键盘、launcher进程退出时活跃consumer和已发布删除仍待；任何Native继续保护，不勾R2。见[本轮证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
 - [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；已用真实TLS/WSS因果门修复typed原因降级，legacy仅精确signaling phase获得安全指导，补固定P2P/限频提示。普通/race各3轮、前端171项与完整Go12矩阵通过；准确新CI/候选旅程与Mac仍待。见[诊断增量](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)及[原生观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
@@ -49,7 +51,7 @@
 
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。scene05准确36 Wails已完成Linux实网接收，3文件262175B/空目录/逐文件hash、双方本机完成及零永久授权有证据，GUI正常退出0且本轮资源收尾。继续同候选普通双向/恢复及Windows安装退出，按用户要求只做最小功能和必要安全验证。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
+当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。scene05准确36 Wails已完成Linux实网接收，3文件262175B/空目录/逐文件hash、双方本机完成及零永久授权有证据，GUI正常退出0且本轮资源收尾。准确36普通双向/原Task受控恢复及收尾已通过（见[普通证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)）；继续Windows安装退出，按用户要求只做最小功能和必要安全验证。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

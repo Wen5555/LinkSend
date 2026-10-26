@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R2 Windows私有broker增量：新增固定可信镜像摘要、实际image/child句柄与签名challenge、真实内核BootIdentifier、sealed inventory只读句柄交接、独立Go/C++受控STA↔MTA消费者及同profile spool/SQLite receipt-only消费。七个真实持有/关闭门、helper退出0、新Service身份重载后单次消费与必要负例通过；默认publisher/打包信任锚、系统clipboard/注册格式、Explorer、launcher进程退出时仍活跃consumer、已发布自动删除均未接或未验，不标R2完成。详见[证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
 2026-10-26 R5本地owner与数据面候选：同profile既有SQLite metadata保存用途签名/CAS授权和稳定控制意图；重启只展示原任务，恢复必须明确触发。approved仅以固定公钥的真实Pion ICE/QUIC预览完整清单，接收方确认目录与计划并Bind后，使用新scope/ICE会话/QUIC复用V1文件引擎；不新增永久信任或剪贴板权限。只有持久本机Completion才记本机完成，服务端终态不足以证明本机落盘。七天回收仅针对已确认终态的私有授权metadata，不删用户文件/历史/checkpoint，不增缓存设置。桌面源码、155项前端及双模块workspace/off完整12命令通过；浏览器夹具与原生/真实跨网边界分别记录，实验file_transfer_ready仍false，R5未整体完成，见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
 
 2026-10-26 R5协调原型（该增量范围）：实验专属WSS复用AuthBytes/Ed25519绑定原grant/claim/task/generation/phase/清单与计划摘要，不借永久成员认证。approved只协调独立加密元数据预览，bound必须新scope/QUIC；控制面严格不含文件清单/正文。当时尚未接本地数据owner/UI，当前实现范围见上段；file_transfer_ready仍false，实际分享另验，见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。

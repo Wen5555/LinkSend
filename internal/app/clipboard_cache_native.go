@@ -21,11 +21,10 @@ const maxCacheNativeMessage = 4 << 10
 
 var errCacheNativeConsumed = errors.New("CLIPBOARD_CACHE_NATIVE_RECEIPT_ALREADY_CONSUMED")
 
-// There is deliberately NO production implementation of these interfaces in
-// this increment. A future platform launcher must own stable image/process
-// handles and verify the challenge; an IPC hash or boolean is not a proof.
-// Tests implement them only in _test.go. None of the current path publishers
-// call the private authorization entry points.
+// The Windows private controlled broker owns stable image/process handles and
+// verifies the child challenge. It has no default/publisher caller or packaged
+// trust anchor yet. An IPC hash or boolean is not a proof. None of the current
+// OS path publishers call these private receipt-only entry points.
 type cacheNativeVerifiedLaunch interface {
 	verifyCacheNativeLaunch(context.Context, cacheNativeBinding) (cacheNativeLaunchIdentity, error)
 }
@@ -228,9 +227,9 @@ func randomCacheNativeHex(size int) (string, error) {
 	return hex.EncodeToString(value), nil
 }
 
-// sealNativeDelegation is unreachable from current production publishers. Its
-// opaque launcher proof has no production implementation yet. The current run
-// may only seal its receiver's actual, fully closed storage inventory.
+// sealNativeDelegation is unreachable from current OS path publishers. The
+// private Windows controlled broker supplies the opaque launch proof. The
+// current run may only seal its receiver's fully closed storage inventory.
 func (r *clipboardCacheReceipt) sealNativeDelegation(ctx context.Context, launch cacheNativeVerifiedLaunch) (cacheNativeDelegation, error) {
 	var empty cacheNativeDelegation
 	if launch == nil || r.service == nil || r.destination == nil || r.destination.profile == nil || r.destination.object == nil {
@@ -389,7 +388,7 @@ func (s *Service) consumeCacheNativeReceipt(ctx context.Context, id, expectedRaw
 	}
 	// A boot change alone provides no authority. A receipt still has to match
 	// its original signed BootID, inventory and exact publication. There is no
-	// platform boot implementation or deletion capability in this increment.
+	// deletion capability in this receipt-only contract.
 	next := record
 	native := *record.Native
 	native.Phase, native.ConsumedReceiptDigest = "quiescent", cacheNativeSHA(body)

@@ -1,3 +1,15 @@
+## 2026-10-26 R1准确36普通跨网与原任务恢复
+
+- 准确clean `36cfce3` core验证器及原rendezvous，独立私有HTTPS/WSS协调入口18447、只在driver进程信任CA，Windows↔JP公共Linux各一次16MiB+中文/zero/空目录：4文件7条目、16,777,310B，两端Completed/exit0及逐路径hash、TransferID/manifest一致，TLS1.3/ALPN linksend/1/relay=false。
+- 唯一恢复在实际verified4,194,398B显式Pause，再一次Resume原TaskID/TransferID/manifest、新attempt完成，verified/committed16,777,310、bilateral=true、7/7 hash一致；低层接收首段受控DIRECT_FAILED保留。它不替代GUI恢复/双NAT/网络切换/睡眠。
+- 隔离peer已撤，server/job正常exit0；owned forward按image/开始时间核验停止、18447无监听、自有进程0，临时邀请/CA私钥移除，profile/源/副本/checkpoint留证。未改产品源码、生产组或宿主网络，未操作GUI；按最小验证要求未扩矩阵。详见[本轮证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)，R1其余及Goal仍未完成。
+
+## 2026-10-26 R2 Windows私有受控broker首增量
+
+- 固定预期可信image摘要、挂起CreateProcess返回的稳定hProcess、实际image身份核验后才恢复，并以私有本机继承管道验证child签名challenge。sealed inventory的实际只读源句柄交接给独立Go/C++ helper；真实内核BootIdentifier，无profile key/DB传入helper。当前无默认调用/发行包trust anchor，不接系统clipboard/注册或删除。
+- 一次真实STA↔MTA标准COM闭环通过：七个provider/marshal/stream/clone/async/关闭保护门、实际5个源句柄成功Close后签原delegation回执。helper真实exit0后，原Service关闭并重开、身份重载，原spool/同SQLite仅消费一次；wrong-image/child/行变化/伪回执/重放拒绝，压力collector保留源。它不证明GUI或launcher进程退出时仍有活跃consumer。
+- C++严格静态构建、GOWORK=off定向测试app8.080s与core/helper vet均exit0；第一次C++缩进-Werror失败、动态winpthread首版握手前退出真实FAIL保留，未改宿主DLL/PATH。按用户最小验证要求未追加完整矩阵/race多轮；具体命令、源码与边界见[证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。R2及Goal保持未完成；root提交后核对准确CI，不以本次受控回执代替系统粘贴与回收。
+
 ## 2026-10-26 准确Windows包跨网临时分享完成
 
 - scene05准确36 Wails Windows从JP Linux实际领取、身份确认、加密清单预览、原生选目录并明确保存，三文件262175B与嵌套空目录全部落地；独立逐文件hash与双方本机/share/grant completed一致，双方确认、QUIC/TLS1.3/relay=false、零永久trust/clipboard grants、普通成员接口拒绝均有回执。GUI正常退出0、forced=false；详见[实机证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。

@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 R2 Windows私有broker只接受预先固定的可信镜像摘要，持稳定image/child句柄并在挂起启动后核对实际image；本机继承管道绑定随机challenge、child临时公钥、BootIdentifier及原sealed inventory。helper只持最小只读源句柄和预建spool写句柄，不持profile私钥/SQLite；原owner回读实际签名授权后才commit，原生引用结束且真实源句柄关闭后才签固定回执。这个receipt-only实现没有系统clipboard发布、默认调用或发行包信任锚，任何Native对象仍受collector保护；原Service重开的一次消费不证明主进程退出时活跃粘贴可继续。见[实现及最小验证](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
 2026-10-26 R5本地owner固定profile身份、server origin、原双方key/grant/claim/task/generation/manifest/plan、源选择与保存目录；记录在现有SQLite metadata内用设备Ed25519及固定用途域签名，raw CAS写入后回读。明文分享码不入ledger、task、错误或诊断，创建当次丢码需撤销新建。重启不联网或自动恢复，源变化持久撤销意图；普通Retry不能借永久授权继续。同步准备/hash及HTTP操作同时受调用方与profile退出取消，退出join真实工作。只有持久本机Completion可标本机完成，服务端Completed且无该凭据时保留needs_attention，不能补造verified/committed或继续传输。自动回收只删服务已确认终态且首次观察满七天、无活动/控制操作/待处理意图的本profile签名授权metadata，raw CAS防替换；未知、旧记录无时间、回拨及篡改均保护，用户文件/历史/checkpoint不删。预览完整清单仅经固定公钥QUIC，新transfer再核验原scope；无永久成员、剪贴板或普通会话复用权限。实现与回归边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
 
 2026-10-26 R5专属协调使用原双方固定公钥、完整grant/task/phase scope和双层原签名；独立registry及有界消息/连接/重放/期限owner。所有新准入与出队重验记录，持久终态先退役，旧回调不能复活；普通组与健康连接不受分享终态清理。清单与正文无信令字段，默认完整能力关闭，实际文件授权仍须本地owner及原V1引擎，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。

@@ -1,5 +1,7 @@
 ## 2026-10-19 可靠性R2私有存储边界
 
+2026-10-26 Windows私有broker新增独立本机继承管道合同：4字节小端长度加canonical JSON，单帧最多256KiB；固定用途域的delegation/receipt消息另限4KiB。prepare→签名child challenge→原SQLite授权回读后的commit→固定关闭回执，绑定原profile身份/运行、publication/nonce、BootIdentifier与完整inventory/manifest/plan。helper只获得经重验的最小只读源句柄与预建spool句柄；不接受任意路径或签名载荷。该合同仅供受控receipt-only闭环，不进入网络V1、能力协商或JS，不增加schema、默认publisher或删除权限。来源、兼容与安全边界见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[最小验证](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
 缓存签名记录`clipboard-cache/v1/<id>`只在当前profile既有SQLite metadata中保存，不进入信令、QUIC文件帧或JS DTO。Go-only Root/StorageReady提供实际存储句柄来源，错误复用已有RECEIVE_PLAN_PERSIST_FAILED；没有新增协商能力或升级文件V1。记录版本与任务库schema分开，当前仍schema12；严格未知版本/签名/运行代次检查及兼容/回退说明见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)。不确定原生写入保留可能已发布文件，不把错误当作未发布证明。自动回收仍待原生读取结束许可。
 
 Go-only StorageClosing追加接收器关闭前的实际目录/checkpoint句柄观察，服务在关闭后封存确定未发布对象的回收清单；既有metadata记录v1扩展可选sealed/cleanup和reclaimable/deleting，旧端严格拒读该扩展时仍保留目录。无新wire或schema。已发布对象的自动回收仍待原生读取结束许可；局部扫描/退避及边界见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)。
