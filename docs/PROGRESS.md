@@ -1,3 +1,8 @@
+## 2026-10-26 单次hosted OLE锁组合探测入口
+
+- 只复用既有GitHub-hosted Windows空板native测试入口，末尾恢复fixture后在同STA进行一次公共OLE组合探测；public数据缓存只含固定合成文字，竞争线程只试Open/Close，HRESULT负结果也记录，不卸锁重试/回滚/启用publisher。one-shot flag同时控制调用与summary强制记录，观测后即撤。
+- 本机仅一次CGO0 go test -c编译测试二进制exit0及workflow PowerShell AST解析0，未运行binary/init/clipboard；真实hosted结果当前NOT_RUN。scope、实际命令和后续撤flag要求见[探测证据](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)，不增加矩阵、不因采样成功声称全局CAS。
+
 ## 2026-10-26 独立v3分页codec增量
 
 - 首帧/固定页/总摘要、strict canonical与原签名用途version3合同独立实施，旧controlled v2未改；10,000清单/20,003源、声明65MiB文件仅合成metadata，实际FD/helper/Shell/GC均未运行。

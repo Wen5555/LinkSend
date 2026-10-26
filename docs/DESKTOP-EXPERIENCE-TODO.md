@@ -42,6 +42,8 @@
 
   R2独立v3 codec已候选实现并定向验证10k/20003合成metadata及必要拒绝，旧v2不变且双方不能互认；合法!note/零mtime修正同批复验通过。未接真实FD/launcher/helper、未升级原1024-node持久inventory或解除发布代次门，Native删除仍关闭，见[codec证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
 
+  R2 OLE锁组合最窄探测入口已准备：仅现有hosted Windows空板场景one-shot调用一次，公共合成IDataObject/竞争线程不读写用户正文；本机compile-only/AST通过，实际HRESULT与运行仍NOT_RUN，观测一次后撤flag，见[探测证据](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)。
+
   R2同次构建锚后续：实际helper SHA/PE/平台与源提交/输入摘要/真实dirty编入CGO0桌面，私有固定路径resolver及ZIP/NSIS当前helper载荷已接。唯一dirty build、同包/installer提取hash、必要解析与ZIP负例通过；symlink权限负例SKIP、准确clean提交CI待核。没有默认publisher、系统clipboard/Explorer、原生安装或Native删除通过，见[打包证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍不勾选。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。

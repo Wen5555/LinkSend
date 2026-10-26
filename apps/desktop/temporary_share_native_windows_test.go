@@ -34,6 +34,13 @@ func TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	board := newTemporaryNativeClipboard(t)
+	// Defers run in reverse: restore the known empty hosted fixture first,
+	// then perform the optional one-shot probe on this same locked STA.
+	defer func() {
+		if !t.Failed() && !t.Skipped() {
+			runHostedShellGenerationProbe(t)
+		}
+	}()
 	defer board.close(t)
 	root := t.TempDir()
 	backend, err := server.New(server.Config{Listen: "127.0.0.1:0", Database: filepath.Join(root, "server.sqlite"), BootstrapToken: "native-share-code-fixture-token-0123456789", AllowInsecureLoopback: true, AllowLoopbackCandidates: true, ExperimentalShareControl: true})

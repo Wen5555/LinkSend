@@ -76,6 +76,8 @@ jobs:
         env:
           GOWORK: 'off'
           LINKSEND_TEMP_SHARE_NATIVE_CLIPBOARD: '1'
+          # One-shot source probe. Remove after collecting the reviewed result.
+          LINKSEND_SHELL_GENERATION_PROBE: '1'
           LINKSEND_RUNNER_ENVIRONMENT: ${{ runner.environment }}
           LINKSEND_RUNNER_OS: ${{ runner.os }}
         run: |
@@ -174,6 +176,22 @@ jobs:
           $summary.target_pass = @($events | Where-Object { $_.Test -ceq $testName -and $_.Action -ceq 'pass' }).Count
           $summary.skip = @($events | Where-Object { $_.Action -ceq 'skip' }).Count
           $summary.fail = @($events | Where-Object { $_.Action -ceq 'fail' }).Count
+          if ($env:LINKSEND_SHELL_GENERATION_PROBE -ceq '1') {
+            $probePrefix = 'R2_SHELL_GENERATION_PROBE '
+            $probeEvents = @($events | Where-Object { $_.Test -ceq $testName -and $_.Action -ceq 'output' -and $_.Output.Contains($probePrefix) })
+            if ($probeEvents.Count -ne 1) {
+              Stop-NativeCopyCheck 'FAILED' 'ONE_SHELL_GENERATION_PROBE_RESULT_REQUIRED'
+            }
+            try {
+              $probeLine = [string]$probeEvents[0].Output
+              $summary['shell_generation_probe'] = $probeLine.Substring($probeLine.IndexOf($probePrefix) + $probePrefix.Length).Trim() | ConvertFrom-Json -ErrorAction Stop
+            } catch {
+              Stop-NativeCopyCheck 'FAILED' 'SHELL_GENERATION_PROBE_JSON_INVALID'
+            }
+            if ($summary.shell_generation_probe.version -ne 1 -or $summary.shell_generation_probe.mutation_attempts -ne 1) {
+              Stop-NativeCopyCheck 'FAILED' 'ONE_SHELL_GENERATION_MUTATION_ATTEMPT_REQUIRED'
+            }
+          }
           if ($null -eq $summary.exit_code -or $summary.exit_code -ne 0 -or $summary.target_run -ne 1 -or
             $summary.target_pass -ne 1 -or $summary.skip -ne 0 -or $summary.fail -ne 0) {
             Stop-NativeCopyCheck 'FAILED' 'NATIVE_TEST_MUST_RUN_AND_PASS_WITHOUT_SKIP'
