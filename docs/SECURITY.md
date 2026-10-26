@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 R2真实进程寿命后续：私有launch v2对完整prepare/原绝对期限签child challenge；真实native consumer/stream已持有后才签Held，成功detach不强杀helper。helper读取门只信原稳定launcher HANDLE实际exit0，非零/到期/未知保持Native保护且不签。driver接收直接复制的helper内核句柄，独立新main重载原profile与原run单次消费，已有一次正例与非零退出保护证据。30秒硬期限及commit已发/Held未确认失败窗可终止helper只属当前受控合同，不能用于未来系统Shell消费者；不宣称取消失败窗保活，也没有系统clipboard/删除权限。见[进程证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
+
 2026-10-26 R2 Windows私有broker只接受预先固定的可信镜像摘要，持稳定image/child句柄并在挂起启动后核对实际image；本机继承管道绑定随机challenge、child临时公钥、BootIdentifier及原sealed inventory。helper只持最小只读源句柄和预建spool写句柄，不持profile私钥/SQLite；原owner回读实际签名授权后才commit，原生引用结束且真实源句柄关闭后才签固定回执。这个receipt-only实现没有系统clipboard发布、默认调用或发行包信任锚，任何Native对象仍受collector保护；原Service重开的一次消费不证明主进程退出时活跃粘贴可继续。见[实现及最小验证](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
 
 2026-10-26 R5本地owner固定profile身份、server origin、原双方key/grant/claim/task/generation/manifest/plan、源选择与保存目录；记录在现有SQLite metadata内用设备Ed25519及固定用途域签名，raw CAS写入后回读。明文分享码不入ledger、task、错误或诊断，创建当次丢码需撤销新建。重启不联网或自动恢复，源变化持久撤销意图；普通Retry不能借永久授权继续。同步准备/hash及HTTP操作同时受调用方与profile退出取消，退出join真实工作。只有持久本机Completion可标本机完成，服务端Completed且无该凭据时保留needs_attention，不能补造verified/committed或继续传输。自动回收只删服务已确认终态且首次观察满七天、无活动/控制操作/待处理意图的本profile签名授权metadata，raw CAS防替换；未知、旧记录无时间、回拨及篡改均保护，用户文件/历史/checkpoint不删。预览完整清单仅经固定公钥QUIC，新transfer再核验原scope；无永久成员、剪贴板或普通会话复用权限。实现与回归边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。

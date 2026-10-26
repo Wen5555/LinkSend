@@ -81,9 +81,19 @@ func run() error {
 	}
 	var inv nc.Inventory
 	challenge, err := hex.DecodeString(p.Challenge)
-	if err != nil || len(challenge) != 32 || p.Version != 1 || len(p.OwnerPublic) != ed25519.PublicKeySize || len(p.Sources) == 0 || len(p.Sources) > nc.MaxSources || p.Manifest.Validate() != nil || nc.Decode(p.Inventory, &inv) != nil || inv.Version != 1 || inv.CacheID != p.Manifest.TransferID || inv.Manifest != p.Manifest.Digest() || len(p.Sources) != len(inv.Nodes)+1 {
+	if err != nil || len(challenge) != 32 || p.Version != 2 || len(p.OwnerPublic) != ed25519.PublicKeySize || len(p.Sources) == 0 || len(p.Sources) > nc.MaxSources || p.Manifest.Validate() != nil || nc.Decode(p.Inventory, &inv) != nil || inv.Version != 1 || inv.CacheID != p.Manifest.TransferID || inv.Manifest != p.Manifest.Digest() || len(p.Sources) != len(inv.Nodes)+1 {
 		return nc.ErrContract
 	}
+	deadlineObservedAt := time.Now()
+	remaining := time.Unix(0, p.DeadlineUnixNano).Sub(deadlineObservedAt)
+	if remaining <= 0 || remaining > 30*time.Second {
+		return nc.ErrContract
+	}
+	// Convert the transmitted absolute deadline once to a local monotonic
+	// deadline. No phase, process exit, or later main renews this budget.
+	ctx, deadlineCancel := context.WithDeadline(ctx, deadlineObservedAt.Add(remaining))
+	defer deadlineCancel()
+	pipe.Context = ctx
 	used := map[uint64]bool{rawHandle: true}
 	for _, h := range []uint64{p.LauncherHandle, p.SpoolHandle} {
 		if h == 0 || used[h] {
@@ -226,7 +236,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	hello := nc.Hello{Version: 1, Challenge: p.Challenge, BootID: boot, ChildPublic: public, InventoryDigest: nc.InventoryDigest(p.Inventory)}
+	launchRaw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	hello := nc.Hello{Version: 2, Challenge: p.Challenge, BootID: boot, ChildPublic: public, InventoryDigest: nc.InventoryDigest(p.Inventory), LaunchDigest: nc.SHA(launchRaw)}
 	message, err := nc.HelloMessage(hello)
 	if err != nil {
 		return err
@@ -266,15 +280,69 @@ func run() error {
 	}
 	defer C.broker_destroy(session)
 	var result C.BrokerResult
-	runtime.LockOSThread()
-	status := C.broker_run(session, &result)
-	runtime.UnlockOSThread()
+	deadline, _ := ctx.Deadline()
+	milliseconds := time.Until(deadline).Milliseconds()
+	if milliseconds <= 0 || milliseconds > 30000 {
+		return nc.ErrContract
+	}
+	finished := make(chan C.int, 1)
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		waitExit := C.int(0)
+		if p.WaitForLauncherExit {
+			waitExit = 1
+		}
+		finished <- C.broker_run(session, C.uintptr_t(p.LauncherHandle), C.uint32_t(milliseconds), waitExit, &result)
+	}()
+	// Never destroy a session while its C++ call is active. At the original
+	// hard deadline this private process exits without signing, and the OS
+	// closes its own handles. No receipt grants deletion authority.
+	join := func() C.int {
+		select {
+		case status := <-finished:
+			return status
+		case <-ctx.Done():
+			os.Exit(1)
+			return 0
+		}
+	}
+	if p.WaitForLauncherExit {
+		ticker := time.NewTicker(2 * time.Millisecond)
+		defer ticker.Stop()
+		for C.broker_consumer_held(session) != 1 {
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				os.Exit(1)
+			case <-finished:
+				return nc.ErrContract
+			}
+		}
+		held := nc.Held{Version: 1, DelegationDigest: nc.SHA(draw), LaunchDigest: hello.LaunchDigest, DeadlineUnixNano: p.DeadlineUnixNano}
+		message, e := nc.HeldMessage(held)
+		if e != nil {
+			C.broker_abort(session)
+			_ = join()
+			return e
+		}
+		held.Signature = ed25519.Sign(private, message)
+		if e = nc.Write(pipe, held); e != nil {
+			C.broker_abort(session)
+			_ = join()
+			return e
+		}
+	}
+	status := join()
 	if status != 1 {
 		return nc.ErrContract
 	}
 	witness := C.broker_take(session, (*C.uchar)(contextBytes), 32)
 	if witness == nil {
 		return nc.ErrContract
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	wrong := C.CBytes(bytes.Repeat([]byte{0x55}, 32))
 	defer C.free(wrong)
@@ -304,6 +372,9 @@ func run() error {
 	}
 	if err = spool.Close(); err != nil {
 		return err
+	}
+	if p.WaitForLauncherExit {
+		return nil
 	}
 	return nc.Write(pipe, nc.Result{Version: 1, Receipt: body, ProtectedChecks: uint32(result.protected_checks), SourcesClosed: uint32(result.sources_closed)})
 }

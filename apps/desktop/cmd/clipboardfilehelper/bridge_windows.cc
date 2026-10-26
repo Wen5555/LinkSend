@@ -186,7 +186,12 @@ struct Consumer {
     std::atomic<unsigned> phase{0};std::atomic<bool> failed{false},done{false};
     std::shared_ptr<Owner> owner;
     std::vector<unsigned char> packet;
-    bool stage(unsigned next) noexcept{phase=next;if(!SetEvent(ready)||WaitForSingleObject(advance,15000)!=WAIT_OBJECT_0){failed=true;return false;}return !owner->failed;}
+    ULONGLONG deadline=0;
+    bool stage(unsigned next) noexcept{
+        phase=next;const auto now=GetTickCount64();
+        if(now>=deadline||!SetEvent(ready)||WaitForSingleObject(advance,static_cast<DWORD>(deadline-now))!=WAIT_OBJECT_0){failed=true;return false;}
+        return !owner->failed;
+    }
     void run() noexcept{
         IDataObject* object=nullptr;IDataObjectAsyncCapability* async=nullptr;IStream* transport=nullptr;bool initialized=false;
         std::vector<IStream*> streams,clones;
@@ -232,7 +237,7 @@ struct Consumer {
     }
 };
 bool pumpUntil(Consumer& c,unsigned phase) noexcept {
-    const auto deadline=GetTickCount64()+15000;
+    const auto deadline=c.deadline;
     for(;;){MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){if(message.message==WM_QUIT)return false;TranslateMessage(&message);DispatchMessageW(&message);}
         if(c.failed||c.owner->failed)return false;
         if(c.done)return phase==5;
@@ -249,6 +254,8 @@ struct BrokerSession{
     std::array<unsigned char,32> binding{};
     BrokerWitness witness;
     bool started=false,taken=false,consumed=false;
+    std::atomic<bool> consumerHeld{false};
+    ULONGLONG deadline=0;
 };
 static std::atomic<BrokerSession*> current{nullptr};
 static std::atomic<bool> made{false};
@@ -268,12 +275,13 @@ extern "C" BrokerSession* broker_create(const BrokerEntry* entries,size_t count,
     }catch(...){return nullptr;}
 }
 
-extern "C" int broker_run(BrokerSession* session,BrokerResult* out){
-    if(!session||current!=session||!out||session->started)return 0;
+extern "C" int broker_run(BrokerSession* session,uintptr_t launcherRaw,uint32_t remainingMilliseconds,int waitExit,BrokerResult* out){
+    if(!session||current!=session||!out||session->started||remainingMilliseconds==0||remainingMilliseconds>30000)return 0;
     session->started=true;*out={};
+    session->deadline=GetTickCount64()+remainingMilliseconds;
     IDataObject* object=nullptr;IStream* marshal=nullptr;bool initialized=false;Consumer consumer;std::thread worker;
     try{
-        auto owner=session->owner;consumer.owner=owner;
+        auto owner=session->owner;consumer.owner=owner;consumer.deadline=session->deadline;
         if(FAILED(OleInitialize(nullptr)))return 0;
         initialized=true;
         object=new(std::nothrow) Data(owner);if(!object||owner->failed)goto cleanup;
@@ -288,6 +296,22 @@ extern "C" int broker_run(BrokerSession* session,BrokerResult* out){
         worker=std::thread([&consumer](){consumer.run();});
         if(!pumpUntil(consumer,1)||!owner->protect(2))goto cleanup;
         {LARGE_INTEGER zero{};if(FAILED(marshal->Seek(zero,STREAM_SEEK_SET,nullptr))||FAILED(CoReleaseMarshalData(marshal)))goto cleanup;marshal->Release();marshal=nullptr;}
+        if(waitExit){
+            // Existing real consumer/provider/streams remain usable. The
+            // only release gate is the original stable launcher HANDLE's
+            // actual successful process exit, within the original deadline.
+            HANDLE launcher=reinterpret_cast<HANDLE>(launcherRaw);
+            if(!launcher||GetProcessId(launcher)==0||GetProcessId(launcher)==GetCurrentProcessId())goto cleanup;
+            session->consumerHeld=true;
+            for(;;){
+                if(GetTickCount64()>=session->deadline||consumer.failed||owner->failed)goto cleanup;
+                const auto state=WaitForSingleObject(launcher,0);
+                if(state==WAIT_OBJECT_0){DWORD exit=STILL_ACTIVE;if(!GetExitCodeProcess(launcher,&exit)||exit!=0)goto cleanup;break;}
+                if(state!=WAIT_TIMEOUT)goto cleanup;
+                MSG message{};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){if(message.message==WM_QUIT)goto cleanup;TranslateMessage(&message);DispatchMessageW(&message);}
+                if(MsgWaitForMultipleObjects(1,&launcher,FALSE,10,QS_ALLINPUT)==WAIT_FAILED)goto cleanup;
+            }
+        }
         if(!SetEvent(consumer.advance)||!pumpUntil(consumer,2)||!owner->protect(3))goto cleanup;
         if(!SetEvent(consumer.advance)||!pumpUntil(consumer,3)||!owner->protect(4))goto cleanup;
         if(!SetEvent(consumer.advance)||!pumpUntil(consumer,4)||!owner->protect(5))goto cleanup;
@@ -313,12 +337,16 @@ cleanup:
 }
 extern "C" BrokerWitness* broker_take(BrokerSession* session,const unsigned char* binding,size_t size){
     if(!session||current!=session||!binding||size!=32)return nullptr;
-    if(!std::equal(session->binding.begin(),session->binding.end(),binding)||session->taken||session->consumed||!session->owner->eligible())return nullptr;
+    if(GetTickCount64()>=session->deadline||!std::equal(session->binding.begin(),session->binding.end(),binding)||session->taken||session->consumed||!session->owner->eligible())return nullptr;
     session->taken=true;return &session->witness;
 }
 extern "C" int broker_consume(BrokerSession* session,BrokerWitness* witness,const unsigned char* binding,size_t size){
     if(!session||current!=session||!binding||size!=32)return 0;
-    if(witness!=&session->witness||!session->taken||session->consumed||!std::equal(session->binding.begin(),session->binding.end(),binding)||!session->owner->eligible())return 0;
+    if(GetTickCount64()>=session->deadline||witness!=&session->witness||!session->taken||session->consumed||!std::equal(session->binding.begin(),session->binding.end(),binding)||!session->owner->eligible())return 0;
     session->consumed=true;return 1;
 }
 extern "C" void broker_destroy(BrokerSession* session){if(session&&current==session){current=nullptr;delete session;}}
+extern "C" int broker_consumer_held(BrokerSession* session){
+    return session&&current==session&&session->consumerHeld&&!session->owner->failed&&!session->owner->eligible()?1:0;
+}
+extern "C" void broker_abort(BrokerSession* session){if(session&&current==session)session->owner->failed=true;}

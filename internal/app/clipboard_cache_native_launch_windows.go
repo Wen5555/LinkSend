@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -36,6 +37,8 @@ type cacheNativeWindowsLaunch struct {
 	hello                       nc.Hello
 	partial                     cacheNativeBinding
 	verified, committed, closed bool
+	detached                    bool
+	held                        nc.Held
 }
 
 func cacheNativeFinalPath(handle windows.Handle) (string, error) {
@@ -89,6 +92,10 @@ func cacheNativeDuplicate(handle windows.Handle, access uint32) (windows.Handle,
 }
 
 func (r *clipboardCacheReceipt) prepareCacheNativeWindows(ctx context.Context, imagePath, expectedHash string) (launch *cacheNativeWindowsLaunch, err error) {
+	return r.prepareCacheNativeWindowsLifetime(ctx, imagePath, expectedHash, false)
+}
+
+func (r *clipboardCacheReceipt) prepareCacheNativeWindowsLifetime(ctx context.Context, imagePath, expectedHash string, waitExit bool) (launch *cacheNativeWindowsLaunch, err error) {
 	if r == nil || r.service == nil || r.destination == nil || r.destination.object == nil || r.record.Manifest == nil || r.record.State != "verified" || r.record.Native != nil || r.record.Run != r.service.epoch || len(r.finalInventory) == 0 ||
 		!filepath.IsAbs(imagePath) || !validClipboardFileID(expectedHash, 32) {
 		return nil, errClipboardCacheOwnership
@@ -146,7 +153,14 @@ func (r *clipboardCacheReceipt) prepareCacheNativeWindows(ctx context.Context, i
 	if e != nil {
 		return launch, e
 	}
-	launch.prepare = nc.Prepare{Version: 1, Challenge: challenge, OwnerPublic: r.service.identity.PublicKey(), ObjectID: sealed.Directory, Inventory: invRaw, Manifest: *sealed.Manifest}
+	deadline := time.Now().Add(30 * time.Second)
+	if requested, ok := ctx.Deadline(); ok && requested.Before(deadline) {
+		deadline = requested
+	}
+	if !time.Now().Before(deadline) {
+		return launch, context.DeadlineExceeded
+	}
+	launch.prepare = nc.Prepare{Version: 2, Challenge: challenge, OwnerPublic: r.service.identity.PublicKey(), ObjectID: sealed.Directory, Inventory: invRaw, Manifest: *sealed.Manifest, DeadlineUnixNano: deadline.UnixNano(), WaitForLauncherExit: waitExit}
 	var inherited []windows.Handle
 	defer func() {
 		for _, h := range inherited {
@@ -334,9 +348,10 @@ func (r *clipboardCacheReceipt) prepareCacheNativeWindows(ctx context.Context, i
 		return launch, err
 	}
 	hello := launch.hello
+	launchRaw, _ := json.Marshal(launch.prepare)
 	message, e := nc.HelloMessage(hello)
 	boot, e2 := cacheNativeWindowsBoot{}.cacheNativeBootID()
-	if e != nil || e2 != nil || hello.Version != 1 || hello.Challenge != challenge || hello.BootID != boot || hello.InventoryDigest != digest || len(hello.ChildPublic) != ed25519.PublicKeySize || !ed25519.Verify(hello.ChildPublic, message, hello.Signature) {
+	if e != nil || e2 != nil || hello.Version != 2 || hello.LaunchDigest != nc.SHA(launchRaw) || hello.Challenge != challenge || hello.BootID != boot || hello.InventoryDigest != digest || len(hello.ChildPublic) != ed25519.PublicKeySize || !ed25519.Verify(hello.ChildPublic, message, hello.Signature) {
 		return launch, errClipboardCacheOwnership
 	}
 	if state, e := windows.WaitForSingleObject(launch.process, 0); e != nil || state != uint32(windows.WAIT_TIMEOUT) {
@@ -370,8 +385,20 @@ func (p *cacheNativeWindowsLaunch) verifyCacheNativeLaunch(ctx context.Context, 
 }
 
 func (p *cacheNativeWindowsLaunch) commit(ctx context.Context, d cacheNativeDelegation) (nc.Result, error) {
+	return p.commitMode(ctx, d, false)
+}
+
+func (p *cacheNativeWindowsLaunch) detach(ctx context.Context, d cacheNativeDelegation) (nc.Held, error) {
+	_, err := p.commitMode(ctx, d, true)
+	if err != nil {
+		return nc.Held{}, err
+	}
+	return p.held, nil
+}
+
+func (p *cacheNativeWindowsLaunch) commitMode(ctx context.Context, d cacheNativeDelegation, detach bool) (nc.Result, error) {
 	var result nc.Result
-	if p == nil || p.closed || p.committed || !p.verified || ctx.Err() != nil {
+	if p == nil || p.closed || p.committed || !p.verified || ctx.Err() != nil || p.prepare.WaitForLauncherExit != detach {
 		return result, errClipboardCacheOwnership
 	}
 	done, workErr := p.r.service.beginProfileWork()
@@ -379,7 +406,7 @@ func (p *cacheNativeWindowsLaunch) commit(ctx context.Context, d cacheNativeDele
 		return result, workErr
 	}
 	defer done()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithDeadline(ctx, time.Unix(0, p.prepare.DeadlineUnixNano))
 	defer cancel()
 	stop := context.AfterFunc(p.r.service.workCtx, cancel)
 	defer stop()
@@ -425,6 +452,24 @@ func (p *cacheNativeWindowsLaunch) commit(ctx context.Context, d cacheNativeDele
 	if err = nc.Write(p.pipe, d); err != nil {
 		return result, err
 	}
+	if detach {
+		var held nc.Held
+		if err = nc.Read(p.pipe, &held); err != nil {
+			return result, err
+		}
+		message, e := nc.HeldMessage(held)
+		if e != nil || held.Version != 1 || held.DeadlineUnixNano != p.prepare.DeadlineUnixNano || held.DelegationDigest != nc.SHA(raw) || held.LaunchDigest != p.hello.LaunchDigest || !ed25519.Verify(p.hello.ChildPublic, message, held.Signature) {
+			return result, errClipboardCacheOwnership
+		}
+		if state, e := windows.WaitForSingleObject(p.process, 0); e != nil || state != uint32(windows.WAIT_TIMEOUT) {
+			return result, errClipboardCacheOwnership
+		}
+		p.held = held
+		p.detached = true
+		err = p.pipe.Close()
+		p.pipe = nil
+		return result, err
+	}
 	if err = nc.Read(p.pipe, &result); err != nil {
 		return result, err
 	}
@@ -464,7 +509,7 @@ func (p *cacheNativeWindowsLaunch) close() error {
 	}
 	if p.process != 0 {
 		state, e := windows.WaitForSingleObject(p.process, 0)
-		if e == nil && state == uint32(windows.WAIT_TIMEOUT) {
+		if !p.detached && e == nil && state == uint32(windows.WAIT_TIMEOUT) {
 			_ = windows.TerminateProcess(p.process, 1)
 			_, _ = windows.WaitForSingleObject(p.process, 3000)
 		}

@@ -1,3 +1,9 @@
+## 2026-10-26 R2真实launcher退出与新main消费
+
+- 私有launch v2固定完整prepare摘要/原绝对期限；helper在真实STA↔MTA consumer、stream/clone/async持有时签Held，随后仅凭原稳定launcher HANDLE实际exit0继续读完、关闭源和签一次原receipt。成功detach后owner清理不再强杀helper；原profile/v1 receipt/schema12/Native保护保持。
+- 一次正例：launcher64872实际exit0→helper29500实际exit0→独立新main62292重载原profile身份并消费原run一次/重放拒绝。必要负例：launcher64288实际exit9→helper63112实际exit1/空spool→新main11436拒绝消费；两例源/hash保护、原绝对期限保持。driver直接接收复制的helper内核句柄，不按自报PID重开。app8.380s/生命周期3.23s，准确日志及范围见[证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
+- 新helper严格static build、core/helper vet及一次正常commit兼容app4.774s均exit0；未重复矩阵/race。30秒与未确认Held失败窗只属当前受控合同，不代表未来系统消费者的退出策略；无clipboard/注册/GUI/Native删除，R2整体不勾选。等待root审阅提交推送。
+
 ## 2026-10-26 Windows测试现场已精确还原
 
 - 用户physical Escape停止Computer Use后，未重试GUI。新R4仅到63基线安装；候选36/activepeer未启动。原GUI由既有30分钟wrapper结束，exit1/forced=true/1800059ms，不能记正常退出或R4通过。

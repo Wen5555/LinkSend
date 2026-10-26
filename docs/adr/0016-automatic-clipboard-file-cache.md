@@ -62,6 +62,14 @@ owner按receiver已关闭后的完整sealed inventory重验实际身份/类型/s
 
 Go child签名路径仅在本进程C++ opaque witness门真正消费成功后签固定receipt；C++ COM方法使用HRESULT/noexcept及失败保护，全部provider/marshal/stream/clone/async/活动调用结束、逐源CloseHandle成功才quiescent。受控标准STA↔MTA消费者关闭后，回执经预先打开的私有spool句柄写入、Sync/关闭，再由现有profile/SQLite owner核验消费。没有系统clipboard/注册格式、物理路径发布出口、Native删除或手动缓存设置；实际GUI/launcher进程退出仍有活跃consumer、Explorer互操作、升级与最终自动回收须后续独立证据。准确范围和一次最小验证见[证据](../evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
 
+## 2026-10-26 真实launcher进程退出与新main消费
+
+私有本机launch合同升级到v2：prepare固定原绝对deadline与是否等待原launcher成功退出；child challenge签入整个canonical prepare摘要，Held再绑定同一launch/delegation摘要和期限。旧launch v1与v2混用严格拒绝，仍须匹配准确可信helper镜像；profile delegation/receipt保持v1、schema12与现有签名字节不变，不重新认领旧publication。
+
+helper在原delegate持久并核验后创建真实STA↔MTA consumer，实际持有provider、stream/clone和async；native只读Held门不接收refs、trace或任意签名payload。launcher收到并验签Held且helper仍存活后才能detach；已detach的close只释放owner本地句柄，不强杀helper。helper随后等待原稳定launcher进程句柄实际exit0，期限未延长才允许consumer继续真实读完；非零退出、原deadline、关闭失败均不签，source与Native记录继续保护。成功回执写原spool后helper正常exit0，新的实际main进程重新加载原profile身份、同SQLite和旧OwnerRun回执进行单次消费。
+
+这里的30秒硬deadline、同helper内受控MTA consumer，以及commit已发送但Held尚未确认的失败窗可终止helper，均是当前受控合同边界。没有宣称取消失败期间活跃consumer保活；不得把该超时/终止策略直接用于未来系统Shell publisher。系统clipboard/正式格式/Explorer、升级与已发布自动删除仍需另行实现和真实证据。最小一次正例/必要非零退出负例与独立只读审查见[进程证据](../evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。

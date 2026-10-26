@@ -87,15 +87,17 @@ type Source struct {
 }
 
 type Prepare struct {
-	Version        int               `json:"version"`
-	Challenge      string            `json:"challenge"`
-	OwnerPublic    []byte            `json:"owner_public"`
-	LauncherHandle uint64            `json:"launcher_handle"`
-	SpoolHandle    uint64            `json:"spool_handle"`
-	ObjectID       string            `json:"object_id"`
-	Inventory      []byte            `json:"inventory"`
-	Manifest       transfer.Manifest `json:"manifest"`
-	Sources        []Source          `json:"sources"`
+	Version             int               `json:"version"`
+	Challenge           string            `json:"challenge"`
+	OwnerPublic         []byte            `json:"owner_public"`
+	LauncherHandle      uint64            `json:"launcher_handle"`
+	SpoolHandle         uint64            `json:"spool_handle"`
+	ObjectID            string            `json:"object_id"`
+	Inventory           []byte            `json:"inventory"`
+	Manifest            transfer.Manifest `json:"manifest"`
+	Sources             []Source          `json:"sources"`
+	DeadlineUnixNano    int64             `json:"deadline_unix_nano"`
+	WaitForLauncherExit bool              `json:"wait_for_launcher_exit,omitempty"`
 }
 
 type Hello struct {
@@ -104,6 +106,7 @@ type Hello struct {
 	BootID          string `json:"boot_id"`
 	ChildPublic     []byte `json:"child_public"`
 	InventoryDigest string `json:"inventory_digest"`
+	LaunchDigest    string `json:"launch_digest"`
 	Signature       []byte `json:"signature"`
 }
 
@@ -112,6 +115,17 @@ type Result struct {
 	Receipt         []byte `json:"receipt"`
 	ProtectedChecks uint32 `json:"protected_checks"`
 	SourcesClosed   uint32 `json:"sources_closed"`
+}
+
+// Held is emitted only after the native STA/MTA pair actually retains the
+// provider, streams, clones and async operation. It cannot request a signature
+// or override native counters. The original fixed deadline is never renewed.
+type Held struct {
+	Version          int    `json:"version"`
+	DelegationDigest string `json:"delegation_digest"`
+	LaunchDigest     string `json:"launch_digest"`
+	DeadlineUnixNano int64  `json:"deadline_unix_nano"`
+	Signature        []byte `json:"signature"`
 }
 
 func SHA(value []byte) string { h := sha256.Sum256(value); return hex.EncodeToString(h[:]) }
@@ -132,7 +146,11 @@ func ReceiptMessage(r Receipt) ([]byte, error) {
 }
 func HelloMessage(h Hello) ([]byte, error) {
 	h.Signature = nil
-	return Message("LinkSend clipboard cache native launch challenge v1", h)
+	return Message("LinkSend clipboard cache native launch challenge v2", h)
+}
+func HeldMessage(h Held) ([]byte, error) {
+	h.Signature = nil
+	return Message("LinkSend clipboard cache native consumer held v1", h)
 }
 func InventoryDigest(raw []byte) string {
 	return SHA(append([]byte("LinkSend clipboard cache inventory v1\x00"), raw...))
@@ -200,6 +218,10 @@ func VerifyDelegation(raw []byte, p Prepare, h Hello) (Delegation, error) {
 		return d, ErrContract
 	}
 	b := d.Binding
+	launchRaw, err := json.Marshal(p)
+	if err != nil || p.Version != 2 || h.Version != 2 || h.LaunchDigest != SHA(launchRaw) || p.DeadlineUnixNano <= 0 {
+		return d, ErrContract
+	}
 	if len(p.OwnerPublic) != ed25519.PublicKeySize || b.Owner != SHA(p.OwnerPublic) || b.NativeContract != "receipt-only-v1" || b.PublicationGeneration != 1 ||
 		b.BootID != h.BootID || !bytes.Equal(b.ChildEphemeralPublicKey, h.ChildPublic) || b.InventoryDigest != InventoryDigest(p.Inventory) || b.ObjectID != p.ObjectID ||
 		b.CacheID != inv.CacheID || b.ManifestDigest != p.Manifest.Digest() || inv.Manifest != b.ManifestDigest || b.PlanDigest != inv.Plan || b.StageID != inv.Stage {
