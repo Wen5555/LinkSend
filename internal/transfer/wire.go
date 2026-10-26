@@ -699,7 +699,7 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 	plan := FullReceivePlan(m)
 	var requested *ReceivePlan
 	if options.Plan != nil {
-		resumePlan, loadErr := LoadReceivePlan(ctx, options.Directory, options.Peer, m)
+		resumePlan, loadErr := loadReceivePlanRoot(ctx, options.Directory, options.Peer, m, options.Root)
 		if loadErr != nil {
 			writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(loadErr)})
 			return Result{}, loadErr
@@ -735,12 +735,19 @@ func ReceiveWithOptions(ctx context.Context, rw io.ReadWriteCloser, options Rece
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(ErrPlanUnsupported)})
 		return Result{}, ErrPlanUnsupported
 	}
-	r, err := openReceiverContent(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged, descriptor)
+	r, err := openReceiverContentRoot(ctx, options.Directory, options.Peer, m, requested, options.PlanChanged, descriptor, options.Root, options.StorageReady)
 	if err != nil {
 		writeTerminal(ctx, rw, control{Op: opError, Error: peerErrorCode(err)})
 		return Result{}, err
 	}
 	defer r.Close()
+	if options.StorageClosing != nil {
+		defer func() {
+			if observeErr := r.observeClosingStorage(options.StorageClosing); observeErr != nil {
+				err = errors.Join(err, observeErr)
+			}
+		}()
+	}
 	plan = r.Plan()
 	summary := r.Summary()
 	var selection *Selection

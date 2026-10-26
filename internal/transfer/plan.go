@@ -83,14 +83,40 @@ type Offer struct {
 
 type ReceiveOptions struct {
 	Directory string
-	Peer      string
-	Accept    func(Manifest) bool
+	// Root is a Go-only pinned destination supplied by a local storage owner.
+	// When set, all checkpoint and receiver I/O uses a child handle of this
+	// root; Directory is presentation metadata, never a replacement authority.
+	Root   *os.Root `json:"-"`
+	Peer   string
+	Accept func(Manifest) bool
 	// Explicitly opt in only after the caller handles Offer.Content and provides
 	// safe post-receive actions. A pre-content Plan callback alone is insufficient.
 	AcceptNativeContent bool
 	Plan                func(context.Context, Offer) (ReceivePlan, error)
 	PlanChanged         func(ReceivePlan) error
-	Progress            func(Progress)
+	// StorageReady observes engine-owned handles after the plan checkpoint and
+	// before accepting body bytes. Borrowers must not write or close them.
+	StorageReady func(ReceiveStorage) error
+	// StorageClosing observes the final live storage before the receiver closes
+	// its handles, including failure/cancellation. It must not mutate or close
+	// borrowed handles. Errors prevent local post-receive publication.
+	StorageClosing func(ReceiveStorage) error
+	Progress       func(Progress)
+}
+
+// ReceiveStorage is Go-only provenance for a local storage owner, never wire
+// metadata or a frontend DTO. Files refer to the receiver's actual open inodes.
+type ReceiveStorage struct {
+	Root, Stage *os.Root            `json:"-"`
+	Files       map[uint32]*os.File `json:"-"`
+	Manifest    Manifest            `json:"-"`
+	Plan        ReceivePlan         `json:"-"`
+	Peer        string              `json:"-"`
+	Directories map[string]*os.File `json:"-"`
+	Checkpoint  *os.File            `json:"-"`
+	// DirectoryLimit means the optional closing inventory exceeded its handle
+	// budget. No directories/checkpoint are supplied as reclamation authority.
+	DirectoryLimit bool `json:"-"`
 }
 
 type PlanSummary struct {
@@ -403,6 +429,10 @@ func BuildReceivePlan(ctx context.Context, directory string, m Manifest, request
 // transfer has no checkpoint here. An empty peer is for preview only; opening
 // the receiver always performs the authenticated peer comparison again.
 func LoadReceivePlan(ctx context.Context, directory, peer string, m Manifest) (*ReceivePlan, error) {
+	return loadReceivePlanRoot(ctx, directory, peer, m, nil)
+}
+
+func loadReceivePlanRoot(ctx context.Context, directory, peer string, m Manifest, provided *os.Root) (*ReceivePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -413,7 +443,12 @@ func LoadReceivePlan(ctx context.Context, directory, peer string, m Manifest) (*
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(directory)
+	var root *os.Root
+	if provided != nil {
+		root, err = provided.OpenRoot(".")
+	} else {
+		root, err = os.OpenRoot(directory)
+	}
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

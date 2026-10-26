@@ -54,9 +54,11 @@ type Receiver struct {
 	verifiedBytes         int64
 	chunksSinceCheckpoint int
 	lastCheckpoint        time.Time
+	checkpointData        []byte
 	plan                  ReceivePlan
 	selected              map[uint32]PlannedEntry
 	planChanged           func(ReceivePlan) error
+	storageReady          func(ReceiveStorage) error
 	resumedCommit         bool
 	inventory             *portableInventory
 }
@@ -74,6 +76,10 @@ func openReceiver(ctx context.Context, directory, peer string, m Manifest, reque
 }
 
 func openReceiverContent(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error, descriptor *ContentDescriptor) (_ *Receiver, err error) {
+	return openReceiverContentRoot(ctx, directory, peer, m, requested, planChanged, descriptor, nil, nil)
+}
+
+func openReceiverContentRoot(ctx context.Context, directory, peer string, m Manifest, requested *ReceivePlan, planChanged func(ReceivePlan) error, descriptor *ContentDescriptor, provided *os.Root, storageReady func(ReceiveStorage) error) (_ *Receiver, err error) {
 	if err = m.Validate(); err != nil {
 		return nil, err
 	}
@@ -99,16 +105,22 @@ func openReceiverContent(ctx context.Context, directory, peer string, m Manifest
 		}
 	}
 	plan.Directory = directory
-	if requested == nil {
+	if requested == nil && provided == nil {
 		if err = os.MkdirAll(directory, 0700); err != nil {
 			return nil, err
 		}
 	}
-	root, err := os.OpenRoot(directory)
+	var root *os.Root
+	if provided != nil {
+		root, err = provided.OpenRoot(".")
+	} else {
+		root, err = os.OpenRoot(directory)
+	}
 	if err != nil {
 		return nil, err
 	}
 	r := &Receiver{root: root, files: make(map[uint32]*os.File), plan: plan, planChanged: planChanged, State: ResumeState{Peer: peer, Manifest: m, Digest: m.Digest(), State: "Recovering", Verified: make(map[uint32][]bool), Committed: make(map[uint32]CommitRecord), Intents: make(map[uint32]CommitRecord), Directories: make(map[uint32]DirectoryRecord), DirectoryIntents: make(map[uint32]string)}}
+	r.storageReady = storageReady
 	r.State.ContentDigest = contentDigest
 	if requested != nil {
 		savedPlan := clonePlan(plan)
@@ -313,10 +325,8 @@ func openReceiverContent(ctx context.Context, directory, peer string, m Manifest
 	if err = r.checkpoint(); err != nil {
 		return nil, err
 	}
-	if r.planChanged != nil {
-		if err = r.planChanged(clonePlan(r.plan)); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrPlanPersistence, err)
-		}
+	if err = r.notifyPlanReady(); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
@@ -368,6 +378,7 @@ func (r *Receiver) checkpoint() error {
 		return err
 	}
 	committed = true
+	r.checkpointData = b
 	r.State.PlanDigest = snapshot.PlanDigest
 	r.chunksSinceCheckpoint = 0
 	r.lastCheckpoint = time.Now()

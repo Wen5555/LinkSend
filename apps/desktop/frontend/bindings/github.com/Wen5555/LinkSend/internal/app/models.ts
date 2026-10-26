@@ -12,6 +12,12 @@ import * as content$0 from "../content/models.js";
 import * as protocol$0 from "../protocol/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as sharegrant$0 from "../sharegrant/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as signaling$0 from "../signaling/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as transfer$0 from "../transfer/models.js";
 
 export interface AcceptIncomingDefaultResult {
@@ -156,12 +162,36 @@ export interface DeviceProfile {
 }
 
 /**
+ * Export is an allowlist projection, never a scrubbed serialization of private
+ * service/task/recovery/cache records. Unknown strings become fixed literals.
+ */
+export interface DiagnosticGuidance {
+    "code": string;
+    "stage": string;
+    "reason": string;
+    "next_step": string;
+    "action": string;
+}
+
+/**
  * DiagnosticIdentity intentionally omits local filesystem locations. Identity()
  * is an explicit local profile view; diagnostics are safe to export by default.
  */
 export interface DiagnosticIdentity {
     "id": string;
     "public_key_hex": string;
+}
+
+export interface DiagnosticTask {
+    "product_version": string;
+    "label": string;
+    "direction": string;
+    "state": string;
+    "method": string;
+    "last_attempt"?: string;
+    "can_retry": boolean;
+    "can_resume": boolean;
+    "guidance": DiagnosticGuidance;
 }
 
 export interface Diagnostics {
@@ -271,6 +301,7 @@ export interface InboxFilesPage {
  * of absolute filesystem locations and private connection diagnostics.
  */
 export interface InboxItem {
+    "diagnostic"?: DiagnosticTask | null;
     "task_id": string;
     "peer_id": string;
     "direction": string;
@@ -479,6 +510,8 @@ export interface TaskPhaseEvent {
 }
 
 export interface TaskSnapshot {
+    "temporary_share_id"?: string;
+    "diagnostic"?: DiagnosticTask | null;
     "batch_id"?: string;
 
     /**
@@ -487,6 +520,7 @@ export interface TaskSnapshot {
     "id": string;
     "task_id": string;
     "attempt_id": string;
+    "attempt_started_at"?: string;
     "direction": string;
     "peer_id"?: string;
     "source_summary"?: string;
@@ -552,6 +586,36 @@ export interface TaskSnapshot {
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
     "authorization_generation"?: number;
+}
+
+export interface TemporaryShareCreation {
+    "share": TemporaryShareSnapshot;
+
+    /**
+     * Only returned by an explicit local create action.
+     */
+    "code": string;
+}
+
+export interface TemporaryShareSnapshot {
+    "id": string;
+    "grant_id"?: string;
+    "role": string;
+    "state": string;
+    "grant_state"?: sharegrant$0.State;
+    "peer_id"?: string;
+    "receiver_public_key"?: string;
+    "claim_id"?: string;
+    "generation"?: number;
+    "task_id"?: string;
+    "task_record_id"?: string;
+    "manifest"?: transfer$0.Manifest | null;
+    "target_directory"?: string;
+    "expires_at"?: number;
+    "resume_until"?: number;
+    "pending_action"?: signaling$0.ShareOperation;
+    "error_code"?: protocol$0.Code;
+    "revision": number;
 }
 
 export interface WorkspaceChange {

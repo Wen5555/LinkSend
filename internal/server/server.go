@@ -38,6 +38,9 @@ type Config struct {
 	TLSCert                 string `toml:"tls_cert"`
 	TLSKey                  string `toml:"tls_key"`
 	BootstrapToken          string `toml:"-"`
+	// Explicit temporary-share opt-in; ordinary configurations stay disabled.
+	// The historical configuration name is retained for existing deployments.
+	ExperimentalShareControl bool `toml:"experimental_share_control"`
 	// TestPairingCode is an explicitly provisioned, repeatable pairing entry.
 	// The generic example config leaves it empty; the authorized Hong Kong
 	// deployment may set the fixed value "orion123" for compatibility testing.
@@ -188,6 +191,9 @@ type Server struct {
 	sessions          map[string]*negotiation
 	closed            bool
 	buckets           map[string]bucket
+	shareBuckets      map[string]bucket
+	shareEpoch        string
+	shareSignals      *shareSignalHub
 	replays           *protocol.ReplayWindow
 	slots             chan struct{}
 	wg                sync.WaitGroup
@@ -207,6 +213,16 @@ func New(cfg Config) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{cfg: cfg, store: db, ctx: ctx, cancel: cancel, clients: map[string]*peer{}, sessions: map[string]*negotiation{}, buckets: map[string]bucket{}, replays: protocol.NewReplayWindow(65536), slots: make(chan struct{}, 128)}
+	if cfg.ExperimentalShareControl {
+		if _, err = db.EnableShareGrants(ctx); err != nil {
+			cancel()
+			db.Close()
+			return nil, err
+		}
+		s.shareEpoch = protocol.RandomID()
+		s.shareBuckets = map[string]bucket{}
+		s.shareSignals = newShareSignalHub()
+	}
 	s.wg.Add(1)
 	go s.reapExpired()
 	return s, nil
@@ -224,6 +240,7 @@ func (s *Server) Close() error {
 		peers = append(peers, p)
 	}
 	s.mu.Unlock()
+	s.closeShareSignals()
 	for _, p := range peers {
 		p.cancel()
 		_ = p.conn.CloseNow()
@@ -252,17 +269,41 @@ func (s *Server) reapExpired() {
 					delete(s.buckets, host)
 				}
 			}
+			for key, b := range s.shareBuckets {
+				if now.Sub(b.at) > 5*time.Minute {
+					delete(s.shareBuckets, key)
+				}
+			}
 			s.mu.Unlock()
+			if s.cfg.ExperimentalShareControl {
+				ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
+				s.shareSignals.gate.Lock()
+				_, _ = s.store.ReconcileShareGrants(ctx, now, 64)
+				s.reconcileShareSignalsLocked(ctx, now)
+				s.shareSignals.gate.Unlock()
+				cancel()
+			}
 		}
 	}
 }
 func (s *Server) Counters() Counters {
 	return Counters{s.receivedMessages.Load(), s.forwardedMessages.Load(), s.receivedBytes.Load(), s.forwardedBytes.Load()}
 }
+
+func (s *Server) capabilities() protocol.Capabilities {
+	caps := protocol.Supported()
+	caps.ShareGrantsV1 = s.cfg.ExperimentalShareControl
+	return caps
+}
+
 func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, 200, map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": protocol.Supported()})
+		body := map[string]any{"status": "ok", "version": protocol.ProductVersion, "capabilities": s.capabilities()}
+		if s.cfg.ExperimentalShareControl {
+			body["share_control"] = map[string]any{"version": 1, "epoch": s.shareEpoch, "file_transfer_ready": true}
+		}
+		respond(w, 200, body)
 	})
 	m.HandleFunc("POST /v1/bootstrap", s.bootstrap)
 	m.HandleFunc("POST /v1/membership/init", s.initialize)
@@ -272,6 +313,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /v1/devices", s.devices)
 	m.HandleFunc("DELETE /v1/devices/{id}", s.revoke)
 	m.HandleFunc("GET /v1/ws", s.websocket)
+	m.HandleFunc("POST /v1/shares/{operation}", s.shareControl)
+	m.HandleFunc("GET /v1/shares/{id}/ws", s.shareWebsocket)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		ip, _ := netip.ParseAddr(host)
@@ -571,7 +614,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	authCtx, authCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer authCancel()
 	nonce := protocol.RandomID() + protocol.RandomID()
-	caps := protocol.Supported()
+	caps := s.capabilities()
 	if err = wsjson.Write(authCtx, c, Wire{Type: "hello", Nonce: nonce, Capabilities: &caps}); err != nil {
 		return
 	}

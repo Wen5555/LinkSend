@@ -34,7 +34,7 @@ type DirectConfig struct {
 	STUNURLs                        []string
 	AllowLoopback                   bool
 	CheckTimeout                    time.Duration
-	WaitTimeout                     time.Duration // receiver only: time allowed for an incoming request
+	WaitTimeout                     time.Duration // ordinary receiver request or authenticated temporary-share peer-presence wait
 	ReceiveConflictPolicy           transfer.ConflictPolicy
 	DeviceConflictPolicies          map[string]transfer.ConflictPolicy
 	onPhase                         func(string) // local application observation; never serialized
@@ -423,6 +423,8 @@ func (s *Service) ConnectDirect(ctx context.Context, peerID string, cfg DirectCo
 	path, err := connectWithTrickle(ctx, signalSession, endpoint, s.identity, peer, sessionID, firstGeneration, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
 	timings.ICEMS = durationMS(stageStarted)
 	if err != nil {
+		timings.TotalConnectMS = durationMS(connectStarted)
+		cfg.evidence(makeDirectEvidence(peer.ID, sessionID, endpoint.Observation(), timings, endpoint.Stats(), signalSession.Stats(), 0, ""))
 		return nil, err
 	}
 	tlsConfig, err := s.identity.TLSConfig(peer.PublicKey, false)
@@ -623,6 +625,7 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 	path, err := connectWithTrickle(ctx, signalSession, endpoint, s.identity, peer, request.SessionID, request.Generation, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, false)
 	timings := DirectTimings{ICEMS: durationMS(stageStarted)}
 	if err != nil {
+		cfg.evidence(makeDirectEvidence(peer.ID, request.SessionID, endpoint.Observation(), timings, endpoint.Stats(), relativeSignalingStats(signalSession.Stats(), signalBase), 0, ""))
 		return connectivity.Path{}, nil, err
 	}
 	cfg.phase("quic_handshake")
@@ -632,9 +635,7 @@ func (s *Service) establishResponder(ctx context.Context, signalSession directSi
 	stopQUIC()
 	timings.QUICHandshakeMS = durationMS(stageStarted)
 	if err != nil {
-		signalStats := signalSession.Stats()
-		signalStats.BytesSent -= min(signalStats.BytesSent, signalBase.BytesSent)
-		signalStats.BytesReceived -= min(signalStats.BytesReceived, signalBase.BytesReceived)
+		signalStats := relativeSignalingStats(signalSession.Stats(), signalBase)
 		cfg.evidence(makeDirectEvidence(peer.ID, request.SessionID, path, timings, endpoint.Stats(), signalStats, 0, ""))
 		return connectivity.Path{}, nil, err
 	}
@@ -793,6 +794,9 @@ func (s *Service) sendPreparedOverPeerAttempt(ctx context.Context, peer *PeerSes
 	if err := s.checkAuthorizationGeneration(peer.PeerID, peer.AuthorizationGeneration); err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "authorization"}, err
 	}
+	if err := prepared.RestrictSourceAccess(ctx, s.clipboardSourceAccess); err != nil {
+		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
+	}
 	options, err := s.sendContentOptions(ctx, prepared, cfg, hooks)
 	if err != nil {
 		return DirectTransferResult{Evidence: peer.Evidence(), FailurePhase: "preparing"}, err
@@ -845,12 +849,16 @@ type peerResult struct {
 // Neither side sees file bytes or a manifest until both independent phases
 // succeed, and cancellation closes whichever phase finished first.
 func (s *Service) prepareAndConnect(ctx context.Context, peerID string, paths []string, cfg DirectConfig) (*transfer.Prepared, *PeerSession, error) {
+	// Keep local denial ahead of any newly introduced filesystem admission.
+	if err := s.checkPeerAllowed(peerID); err != nil {
+		return nil, nil, err
+	}
 	parallelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	preparedCh := make(chan prepareResult, 1)
 	peerCh := make(chan peerResult, 1)
 	go func() {
-		prepared, err := transfer.PrepareSelected(parallelCtx, paths, 0, cfg.sourceSelection)
+		prepared, err := s.prepareUserSources(parallelCtx, paths, 0, cfg.sourceSelection)
 		preparedCh <- prepareResult{prepared: prepared, err: err}
 	}()
 	go func() {
@@ -1232,13 +1240,17 @@ type pathResult struct {
 // checks. It still waits for both exchange directions to close cleanly before
 // handing the signaling session to the established peer.
 func connectWithTrickle(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, sender *identity.Identity, peer signaling.Device, sessionID string, generation uint64, remote connectivity.Credentials, controlling bool) (connectivity.Path, error) {
+	return connectWithCandidateStream(ctx, session, endpoint, endpoint.Candidates(), sender, peer, sessionID, generation, remote, controlling)
+}
+
+func connectWithCandidateStream(ctx context.Context, session candidateSession, endpoint *connectivity.Endpoint, local <-chan connectivity.Candidate, sender *identity.Identity, peer signaling.Device, sessionID string, generation uint64, remote connectivity.Credentials, controlling bool) (connectivity.Path, error) {
 	phaseCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	exchangeCh := make(chan error, 1)
 	connectCh := make(chan pathResult, 1)
 	stopGathering := make(chan struct{})
 	go func() {
-		exchangeCh <- exchangeCandidateStreamWithBudget(phaseCtx, session, endpoint, endpoint.Candidates(), sender, peer, sessionID, generation, stopGathering, candidateExchangeBudget)
+		exchangeCh <- exchangeCandidateStreamWithBudget(phaseCtx, session, endpoint, local, sender, peer, sessionID, generation, stopGathering, candidateExchangeBudget)
 	}()
 	go func() {
 		path, err := endpoint.ConnectProvisional(phaseCtx, remote, controlling)

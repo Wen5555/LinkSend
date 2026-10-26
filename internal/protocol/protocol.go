@@ -21,7 +21,7 @@ import (
 
 const (
 	Version        = 1
-	ProductVersion = "0.6.2"
+	ProductVersion = "0.7.0"
 )
 const MaxMessageBytes = 32 * 1024
 const MaxPayloadBytes = 16 * 1024
@@ -75,6 +75,13 @@ const (
 	ContentUnsupported          Code = "CONTENT_UNSUPPORTED"
 	ContentInvalid              Code = "INVALID_CONTENT_DESCRIPTOR"
 	ContentMismatch             Code = "CONTENT_MISMATCH"
+	ShareInvalid                Code = "SHARE_INVALID"
+	ShareRejected               Code = "SHARE_REJECTED"
+	ShareExpired                Code = "SHARE_EXPIRED"
+	ShareConflict               Code = "SHARE_CONFLICT"
+	ShareTerminal               Code = "SHARE_TERMINAL"
+	ShareUnsupported            Code = "SHARE_UNSUPPORTED"
+	ShareUnavailable            Code = "SHARE_UNAVAILABLE"
 )
 
 type Error struct {
@@ -101,6 +108,7 @@ type Capabilities struct {
 	RestartRecoverySupported bool   `json:"restart_recovery_supported"`
 	ByteResumeSupported      bool   `json:"byte_resume_supported"`
 	MembershipVersion        int    `json:"membership_version"`
+	ShareGrantsV1            bool   `json:"share_grants_v1,omitempty"`
 }
 
 func Supported() Capabilities {
@@ -214,7 +222,11 @@ func ValidateCandidate(candidate string, allowLoopback bool) error {
 		return Fail(RelayNotImplemented, "only direct ICE candidates are supported")
 	}
 	a, err := netip.ParseAddr(parts[4])
-	if err != nil || a.Zone() != "" || a.IsUnspecified() || a.IsMulticast() || a.IsLinkLocalUnicast() {
+	if err != nil || a.Zone() != "" {
+		return Fail(InvalidMessage, "invalid candidate address or scope")
+	}
+	a = a.Unmap()
+	if a.IsUnspecified() || a.IsMulticast() || a.IsLinkLocalUnicast() {
 		return Fail(InvalidMessage, "invalid candidate address or scope")
 	}
 	if a.IsLoopback() && !allowLoopback {
@@ -222,7 +234,11 @@ func ValidateCandidate(candidate string, allowLoopback bool) error {
 	}
 	if a.Is4() {
 		v := a.As4()
-		if v[0] == 0 || v[0] >= 224 || v[3] == 255 {
+		// ICE carries no subnet mask. A final octet of 255 can be an ordinary
+		// unicast host (for example 10.0.0.255/23) or public NAT mapping, so it
+		// cannot establish directed broadcast. The limited broadcast address
+		// remains excluded with multicast and the reserved high IPv4 range.
+		if v[0] == 0 || v[0] >= 224 {
 			return Fail(InvalidMessage, "broadcast/reserved candidate address")
 		}
 	}

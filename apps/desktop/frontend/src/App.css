@@ -205,6 +205,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .settings-diagnostics div { display: flex; justify-content: space-between; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .settings-diagnostics dt { color: var(--muted); }
 .settings-diagnostics dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+.task-diagnostics { margin-top: 10px; }
+.task-diagnostics > .field-help { margin: 0 0 8px; font-size: 12px; line-height: 1.6; }
+.task-diagnostics summary { cursor: pointer; font-size: 12px; font-weight: 600; padding: 4px 0; }
+.task-diagnostics .settings-diagnostics { margin-top: 6px; }
+.task-diagnostics .settings-diagnostics div { padding: 8px 0; }
+.task-diagnostics .settings-diagnostics dd { max-width: 70%; }
+.diagnostic-export > .field-help { margin: 12px 0; font-size: 12px; line-height: 1.6; }
 .device-directory { max-height: calc(100vh - 225px); overflow-y: auto; }
 .nearby-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
 .nearby-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }

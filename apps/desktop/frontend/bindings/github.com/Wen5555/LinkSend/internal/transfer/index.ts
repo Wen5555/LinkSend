@@ -7,6 +7,8 @@ export {
 
 export type {
     ContentDescriptor,
+    FileEntry,
+    Manifest,
     PlanSummary,
     SourcePreviewEntry,
     SourceSelection

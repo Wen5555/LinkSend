@@ -1,7 +1,7 @@
 name: wails3-packages
 
 env:
-  PRODUCT_VERSION: 0.6.2
+  PRODUCT_VERSION: 0.7.0
 
 on:
   push:
@@ -69,6 +69,145 @@ jobs:
         run: |
           dotnet run -c Release --project apps/desktop/native-share/windows -- --self-test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify Windows temporary code native clipboard
+        if: matrix.os == 'windows'
+        working-directory: apps/desktop
+        shell: pwsh
+        env:
+          GOWORK: 'off'
+          LINKSEND_TEMP_SHARE_NATIVE_CLIPBOARD: '1'
+          LINKSEND_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          LINKSEND_RUNNER_OS: ${{ runner.os }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $testName = 'TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache'
+          if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { throw 'Runner evidence directory is unavailable; native clipboard test was not run.' }
+          $evidenceDir = Join-Path $env:RUNNER_TEMP 'linksend-native-copy'
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+          $jsonLog = Join-Path $evidenceDir 'native-copy.jsonl'
+          $stderrLog = Join-Path $evidenceDir 'native-copy.stderr.log'
+          $summaryLog = Join-Path $evidenceDir 'native-copy-summary.json'
+          '' | Set-Content -LiteralPath $jsonLog -Encoding utf8
+          '' | Set-Content -LiteralPath $stderrLog -Encoding utf8
+          $summary = [ordered]@{
+            test_name = $testName
+            runner_context_environment = $env:LINKSEND_RUNNER_ENVIRONMENT
+            runner_environment = $env:RUNNER_ENVIRONMENT
+            runner_context_os = $env:LINKSEND_RUNNER_OS
+            runner_os = $env:RUNNER_OS
+            github_actions = $env:GITHUB_ACTIONS
+            outcome = 'NOT_RUN'
+            reason = 'RUNNER_GUARD_PENDING'
+            fixture = 'untouched'
+            exit_code = $null
+            target_run = 0
+            target_pass = 0
+            skip = 0
+            fail = 0
+          }
+          function Save-NativeCopySummary {
+            $summary | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $summaryLog -Encoding utf8
+          }
+          function Stop-NativeCopyCheck([string]$outcome, [string]$reason) {
+            $summary.outcome = $outcome
+            $summary.reason = $reason
+            Save-NativeCopySummary
+            throw "Native clipboard verification stopped: $reason"
+          }
+          Save-NativeCopySummary
+          if ($env:LINKSEND_RUNNER_ENVIRONMENT -ceq 'self-hosted' -or $env:RUNNER_ENVIRONMENT -ceq 'self-hosted') {
+            Stop-NativeCopyCheck 'NOT_RUN_SELF_HOSTED' 'SELF_HOSTED_CLIPBOARD_IS_PROTECTED'
+          }
+          if (-not ($IsWindows -and $env:LINKSEND_RUNNER_ENVIRONMENT -ceq 'github-hosted' -and
+            $env:RUNNER_ENVIRONMENT -ceq 'github-hosted' -and $env:LINKSEND_RUNNER_OS -ceq 'Windows' -and
+            $env:RUNNER_OS -ceq 'Windows' -and $env:GITHUB_ACTIONS -ceq 'true')) {
+            Stop-NativeCopyCheck 'NOT_RUN_UNVERIFIED_RUNNER' 'GITHUB_HOSTED_WINDOWS_CONTEXT_REQUIRED'
+          }
+          # Only this disposable GitHub-hosted runner may replace its clipboard fixture.
+          try {
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class LinkSendNativeClipboardFixture {
+            [DllImport("user32.dll", SetLastError = true)]
+            [return: MarshalAs(UnmanagedType.Bool)]
+            public static extern bool OpenClipboard(IntPtr owner);
+            [DllImport("user32.dll", SetLastError = true)]
+            [return: MarshalAs(UnmanagedType.Bool)]
+            public static extern bool EmptyClipboard();
+            [DllImport("user32.dll", SetLastError = true)]
+            [return: MarshalAs(UnmanagedType.Bool)]
+            public static extern bool CloseClipboard();
+          }
+          '@
+            $opened = $false
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+              if ([LinkSendNativeClipboardFixture]::OpenClipboard([IntPtr]::Zero)) { $opened = $true; break }
+              Start-Sleep -Milliseconds 50
+            }
+            if (-not $opened) { throw 'Clipboard fixture could not be opened.' }
+            $cleared = $false
+            $closed = $false
+            try { $cleared = [LinkSendNativeClipboardFixture]::EmptyClipboard() }
+            finally { $closed = [LinkSendNativeClipboardFixture]::CloseClipboard() }
+            if (-not ($cleared -and $closed)) { throw 'Clipboard fixture could not be established.' }
+          } catch {
+            Stop-NativeCopyCheck 'FAILED' 'EMPTY_CLIPBOARD_FIXTURE_FAILED'
+          }
+          $summary.fixture = 'empty_clipboard_created'
+          $summary.outcome = 'RUNNING'
+          $summary.reason = 'NATIVE_TEST_PENDING'
+          Save-NativeCopySummary
+          try {
+            go test -json -count=1 -run '^TestDesktopTemporaryCodeNativeClipboardDoesNotSyncOrCache$' -timeout 45s . 1> $jsonLog 2> $stderrLog
+            $summary.exit_code = $LASTEXITCODE
+          } catch {
+            Stop-NativeCopyCheck 'FAILED' 'NATIVE_TEST_COMMAND_FAILED'
+          }
+          try {
+            $events = @(Get-Content -LiteralPath $jsonLog | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_ | ConvertFrom-Json -ErrorAction Stop })
+          } catch {
+            Stop-NativeCopyCheck 'FAILED' 'NATIVE_TEST_JSON_INVALID'
+          }
+          $summary.target_run = @($events | Where-Object { $_.Test -ceq $testName -and $_.Action -ceq 'run' }).Count
+          $summary.target_pass = @($events | Where-Object { $_.Test -ceq $testName -and $_.Action -ceq 'pass' }).Count
+          $summary.skip = @($events | Where-Object { $_.Action -ceq 'skip' }).Count
+          $summary.fail = @($events | Where-Object { $_.Action -ceq 'fail' }).Count
+          if ($env:LINKSEND_SHELL_GENERATION_PROBE -ceq '1') {
+            $probePrefix = 'R2_SHELL_GENERATION_PROBE '
+            $probeEvents = @($events | Where-Object { $_.Test -ceq $testName -and $_.Action -ceq 'output' -and $_.Output.Contains($probePrefix) })
+            if ($probeEvents.Count -ne 1) {
+              Stop-NativeCopyCheck 'FAILED' 'ONE_SHELL_GENERATION_PROBE_RESULT_REQUIRED'
+            }
+            try {
+              $probeLine = [string]$probeEvents[0].Output
+              $summary['shell_generation_probe'] = $probeLine.Substring($probeLine.IndexOf($probePrefix) + $probePrefix.Length).Trim() | ConvertFrom-Json -ErrorAction Stop
+            } catch {
+              Stop-NativeCopyCheck 'FAILED' 'SHELL_GENERATION_PROBE_JSON_INVALID'
+            }
+            if ($summary.shell_generation_probe.version -ne 1 -or $summary.shell_generation_probe.mutation_attempts -ne 1) {
+              Stop-NativeCopyCheck 'FAILED' 'ONE_SHELL_GENERATION_MUTATION_ATTEMPT_REQUIRED'
+            }
+          }
+          if ($null -eq $summary.exit_code -or $summary.exit_code -ne 0 -or $summary.target_run -ne 1 -or
+            $summary.target_pass -ne 1 -or $summary.skip -ne 0 -or $summary.fail -ne 0) {
+            Stop-NativeCopyCheck 'FAILED' 'NATIVE_TEST_MUST_RUN_AND_PASS_WITHOUT_SKIP'
+          }
+          $summary.outcome = 'PASS'
+          $summary.reason = 'NATIVE_CODE_COPY_AND_SUBSEQUENT_SYNC_VERIFIED'
+          Save-NativeCopySummary
+      - name: Upload Windows native clipboard evidence
+        if: always() && matrix.os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-code-clipboard-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/linksend-native-copy/native-copy.jsonl
+            ${{ runner.temp }}/linksend-native-copy/native-copy.stderr.log
+            ${{ runner.temp }}/linksend-native-copy/native-copy-summary.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Verify macOS share handoff
         if: matrix.os == 'macos'
         shell: bash
@@ -90,6 +229,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force -Path "bin/release" | Out-Null
           Copy-Item "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -Destination "bin/release"
+          $helper = Get-Content -LiteralPath 'bin/clipboard-helper-build.json' -Raw | ConvertFrom-Json
+          if ($helper.source_commit -ne '${{ github.sha }}' -or !$helper.source_clean -or $helper.target_os -ne 'windows' -or $helper.target_arch -ne '${{ matrix.arch }}') { throw 'Clipboard helper source/platform mismatch' }
+          if ($helper.helper_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $helper.source_digest -cnotmatch '^[0-9a-f]{64}$' -or $helper.helper_relative_path -cne "native-clipboard/$($helper.helper_sha256)/LinkSendClipboardFileHelper.exe") { throw 'Invalid clipboard helper manifest' }
+          if ((Get-FileHash -LiteralPath "bin/$($helper.helper_relative_path)" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $helper.helper_sha256 -or (Get-FileHash -LiteralPath 'bin/LinkSend.exe' -Algorithm SHA256).Hash.ToLowerInvariant() -ne $helper.desktop_sha256) { throw 'Same-candidate build output changed' }
+          $helperDestination = Join-Path 'bin/release' $helper.helper_relative_path
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $helperDestination) | Out-Null
+          Copy-Item -LiteralPath "bin/$($helper.helper_relative_path)" -Destination $helperDestination
           $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $goVersion = (go version).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -112,6 +258,11 @@ jobs:
             "build_time_utc=$buildTime"
             "target_os=windows"
             "target_arch=amd64"
+            "clipboard_helper_sha256=$($helper.helper_sha256)"
+            "clipboard_helper_path=$($helper.helper_relative_path)"
+            "clipboard_helper_source_commit=$($helper.source_commit)"
+            "clipboard_helper_source_digest=$($helper.source_digest)"
+            "clipboard_helper_source_clean=$($helper.source_clean.ToString().ToLowerInvariant())"
             "tool_go=$goVersion"
             "tool_node=$nodeVersion"
             "tool_pnpm=$pnpmVersion"

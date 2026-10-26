@@ -162,11 +162,15 @@ func NormalizeSourcePaths(inputs []string) ([]string, error) {
 	return paths, nil
 }
 
-type sourceVisitor func(*os.Root, string, fs.FileInfo, bool) error
+type sourceVisitor func(*os.Root, string, fs.FileInfo, bool, *os.File) error
 
 // os.Root and WalkDir preserve confinement and never follow symbolic links.
 // Preview may count excluded descendants; prepare prunes them before any hash.
 func walkSelectedSources(ctx context.Context, inputs []string, selection *SourceSelection, countExcluded bool, visit sourceVisitor) (_ []*os.Root, err error) {
+	return walkSelectedSourcesWithAccess(ctx, inputs, selection, countExcluded, nil, visit)
+}
+
+func walkSelectedSourcesWithAccess(ctx context.Context, inputs []string, selection *SourceSelection, countExcluded bool, access SourceAccessHook, visit sourceVisitor) (_ []*os.Root, err error) {
 	selection, err = NormalizeSourceSelection(selection)
 	if err != nil {
 		return nil, err
@@ -194,6 +198,13 @@ func walkSelectedSources(ctx context.Context, inputs []string, selection *Source
 		}
 		roots = append(roots, root)
 		base := filepath.ToSlash(filepath.Base(absolute))
+		if access != nil {
+			err = walkOpenedSource(ctx, root, base, base, selection, countExcluded, access, visit, &visited)
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
 		err = fs.WalkDir(root.FS(), base, func(relative string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -223,13 +234,74 @@ func walkSelectedSources(ctx context.Context, inputs []string, selection *Source
 			if !excluded && (ValidatePath(relative) != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() && !info.Mode().IsRegular()) {
 				return ErrPath
 			}
-			return visit(root, relative, info, excluded)
+			return visit(root, relative, info, excluded, nil)
 		})
 		if err != nil {
 			return nil, err
 		}
 	}
 	return roots, nil
+}
+
+// The admission path owns the actual directory FD used by ReadDir, rather than
+// authorizing a temporary FD and letting fs.WalkDir reopen it after release.
+// Ancestors are not rejected merely because an excluded private tree exists.
+func walkOpenedSource(ctx context.Context, root *os.Root, base, relative string, selection *SourceSelection, countExcluded bool, access SourceAccessHook, visit sourceVisitor, visited *int) (err error) {
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	*visited = *visited + 1
+	if *visited > 100000 {
+		return errors.New("RESOURCE_LIMIT: source scan")
+	}
+	info, err := root.Lstat(relative)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimPrefix(relative, base+"/")
+	if relative == base && info.IsDir() {
+		name = ""
+	}
+	excluded := sourceExcluded(selection, name, info.IsDir())
+	if excluded && !countExcluded {
+		return nil
+	}
+	if !excluded && (ValidatePath(relative) != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() && !info.Mode().IsRegular()) {
+		return ErrPath
+	}
+	if excluded {
+		if err = visit(root, relative, info, true, nil); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return err
+		}
+	}
+	var hooks []SourceAccessHook
+	if !excluded {
+		hooks = []SourceAccessHook{access}
+	}
+	file, closeSource, err := openSourceWithAccess(ctx, root, relative, info, hooks)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, closeSource()) }()
+	if !excluded {
+		if err = visit(root, relative, info, false, file); err != nil {
+			return err
+		}
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	entries, err := file.ReadDir(-1)
+	if err != nil {
+		return err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	for _, child := range entries {
+		if err = walkOpenedSource(ctx, root, base, relative+"/"+child.Name(), selection, countExcluded, access, visit, visited); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type SourcePreviewEntry struct {
@@ -251,8 +323,12 @@ type SourcePreview struct {
 }
 
 func PreviewSources(ctx context.Context, inputs []string, selection *SourceSelection) (SourcePreview, error) {
+	return PreviewSourcesWithAccess(ctx, inputs, selection, nil)
+}
+
+func PreviewSourcesWithAccess(ctx context.Context, inputs []string, selection *SourceSelection, access SourceAccessHook) (SourcePreview, error) {
 	result := SourcePreview{Entries: []SourcePreviewEntry{}}
-	roots, err := walkSelectedSources(ctx, inputs, selection, true, func(_ *os.Root, relative string, info fs.FileInfo, excluded bool) error {
+	roots, err := walkSelectedSourcesWithAccess(ctx, inputs, selection, true, access, func(_ *os.Root, relative string, info fs.FileInfo, excluded bool, _ *os.File) error {
 		size := int64(0)
 		if info.Mode().IsRegular() {
 			size = info.Size()

@@ -1,6 +1,42 @@
+2026-10-26 R5显式能力门：只有既有experimental_share_control明确为true且初始化成功的服务声明share_grants_v1与ready=true，默认不变。客户端将规范能力bit、ready、版本/epoch一起作为分享入口前置条件；旧端/控制原型在传码或开scoped WS前拒绝，不借能力取得任何永久成员/剪贴板权限。Create/Claim在源准备、码生成或intent持久化前检查，实际操作仍重新核验新epoch与权威签名响应，取消/幂等/双确认保持。Control4→5需一致性备份及schema5兼容回退；不能切旧程序后用旧库覆盖新写入。范围见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)及[未部署草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
 2026-10-19 文件剪贴板候选：文件权限独立默认关闭，必须协商新能力且绑定原有身份/会话/双向permission revision/代次/顺序/OS generation。10秒内获准的预约最长24h，不能授权普通旧事件；取消或新复制使预约失效。文件仍由V1引擎检查路径和完整性，接收只写profile内任务专属缓存，并在CAS复查后发布本机路径。未知预约/能力或畸形流被拒绝；失败清理未发布缓存，成功缓存暂保留供粘贴。原生路径元数据有128根/64KiB上限，不传播剪切删除；新包实机验证另列。
 
 # Security
+
+2026-10-26 未接线Shell v3 codec：64KiB固定页和64MiB仅metadata预算先核总数再分配，完整canonical/总摘要及version3/contract/原签名用途绑定后才返回整份catalog；旧v2不能降级互认。声明的文件大小、合成身份/hash和借用句柄值不证明真实文件或native寿命，当前无launcher/helper/GC调用，见[验证与边界](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
+
+2026-10-26 尚未激活的Shell原语：新C++模式与原controlled合同互斥，原句柄仍归调用方，native仅持只读副本；相对descriptor/Stat不提供路径fallback，失败抑制witness但继续核减和关闭真实引用。export可能发生后不以main退出/cancel/TTL强杀；代次检查到OleSetClipboard的CAS缺口尚未解决，新模式无生产调用、不启用Native删除。范围见[证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
+
+2026-10-26 R2私有缓存出口拒绝：普通源准备/hash及每次ReadChunk核对实际借用FD，约束在FD成功Close后释放；app发送、恢复/重发及Open/Reveal/preview统一拒绝当前profile私有缓存树和实际别名。它不认领外部用户硬链接，也不把校验后OS重开路径当作无读取者证明；Native自动删除继续关闭。范围与未闭窗口见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
+
+2026-10-26 R2 publisher owner政策：控制写之前在已回读的真实durable授权digest上不可逆登记export_possible；写失败、ack丢失、main取消或退出不再强杀可能活跃的私有helper。Shell政策的deadline只约束准入，export后没有硬TTL；该政策尚未接实际系统publisher，当前受控helper仍保留自身测试期限。它不认证原生refs、不签静止证明、不赋删除权。路径出口、实际OLE与完整大目录/长路径仍须先闭合，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
+
+2026-10-26 R2构建信任锚：可信来源是同次构建后编入桌面的版本/平台/实际helper SHA/源提交/输入摘要/真实clean状态；BUILD-INFO与sidecar只作审计，不作为运行信任根。私有resolver严格拒绝空/未知/重复/非规范字段及错误PE/路径reparse，只从自身EXE固定摘要目录取镜像；未来启动仍需core稳定image/child句柄复核。ZIP先验精确条目和摘要再解压，NSIS仅本次文件及空目录，不增加系统发布或删除授权。dirty本地构建和symlink权限SKIP边界见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
+
+2026-10-26 R2真实进程寿命后续：私有launch v2对完整prepare/原绝对期限签child challenge；真实native consumer/stream已持有后才签Held，成功detach不强杀helper。helper读取门只信原稳定launcher HANDLE实际exit0，非零/到期/未知保持Native保护且不签。driver接收直接复制的helper内核句柄，独立新main重载原profile与原run单次消费，已有一次正例与非零退出保护证据。30秒硬期限及commit已发/Held未确认失败窗可终止helper只属当前受控合同，不能用于未来系统Shell消费者；不宣称取消失败窗保活，也没有系统clipboard/删除权限。见[进程证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
+
+2026-10-26 R2 Windows私有broker只接受预先固定的可信镜像摘要，持稳定image/child句柄并在挂起启动后核对实际image；本机继承管道绑定随机challenge、child临时公钥、BootIdentifier及原sealed inventory。helper只持最小只读源句柄和预建spool写句柄，不持profile私钥/SQLite；原owner回读实际签名授权后才commit，原生引用结束且真实源句柄关闭后才签固定回执。这个receipt-only实现没有系统clipboard发布、默认调用或发行包信任锚，任何Native对象仍受collector保护；原Service重开的一次消费不证明主进程退出时活跃粘贴可继续。见[实现及最小验证](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
+2026-10-26 R5本地owner固定profile身份、server origin、原双方key/grant/claim/task/generation/manifest/plan、源选择与保存目录；记录在现有SQLite metadata内用设备Ed25519及固定用途域签名，raw CAS写入后回读。明文分享码不入ledger、task、错误或诊断，创建当次丢码需撤销新建。重启不联网或自动恢复，源变化持久撤销意图；普通Retry不能借永久授权继续。同步准备/hash及HTTP操作同时受调用方与profile退出取消，退出join真实工作。只有持久本机Completion可标本机完成，服务端Completed且无该凭据时保留needs_attention，不能补造verified/committed或继续传输。自动回收只删服务已确认终态且首次观察满七天、无活动/控制操作/待处理意图的本profile签名授权metadata，raw CAS防替换；未知、旧记录无时间、回拨及篡改均保护，用户文件/历史/checkpoint不删。预览完整清单仅经固定公钥QUIC，新transfer再核验原scope；无永久成员、剪贴板或普通会话复用权限。实现与回归边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+2026-10-26 R5专属协调使用原双方固定公钥、完整grant/task/phase scope和双层原签名；独立registry及有界消息/连接/重放/期限owner。所有新准入与出队重验记录，持久终态先退役，旧回调不能复活；普通组与健康连接不受分享终态清理。清单与正文无信令字段，默认完整能力关闭，实际文件授权仍须本地owner及原V1引擎，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+
+2026-10-26 临时分享HTTP客户端沿用HTTPS与禁止重定向，每次签新epoch/nonce证明，不重放旧证明或自动重试副作用请求。服务响应经有限解析及原actor/任务/清单/计划绑定，错误只留稳定白名单码及固定摘要；不把远端detail、分享码或私有record带入日志/错误。此控制客户端不单独授予永久成员/信任/剪贴板或文件权限；该历史增量当时未接数据面，当前实现见上段及[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+
+2026-10-26 候选准入在拒绝zone后先规范化IPv4映射IPv6，防止绕过0/8、240/4和有限广播限制；移除无网段依据的末字节255单播误拒绝。签名、同组、原session/generation和明确危险地址拒绝均通过真实forward回归。候选准入成功不表示ICE或身份验证成功，生产服务未因此自动替换，见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
+
+R5实验HTTP控制要求现有Ed25519签名、DeviceID/公钥一致和本次随机epoch；重启换epoch，不以丢失内存nonce记录重新接受旧证明。领取对真实IP与已验证身份双限频，忽略任意X-Forwarded-For；严格大小/字段与白名单响应，无凭据/组/文件正文泄露。experimental_share_control默认关闭；该历史控制增量当时不提供临时文件通道或广告完整分享能力，当前显式就绪与客户端门见能力增量，详见[签名控制证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+
+R5授权核心私有record只保存分享码用途域SHA256验证器及固定公钥/摘要/任务/代次，不写成员表，不授予组枚举、邀请或剪贴板。真实SQLite事务/CAS处理竞争，终态不重新授予文件操作，原任务恢复不延长期限；未知记录/索引不一致保护。显式Control4→5迁移先一致性备份并核验，旧程序不兼容升级库时必须拒绝，不能用旧备份覆盖新业务写入。最初核心增量当时不激活迁移或对外分享；当前显式实验激活、签名协调与数据面范围见上段，不能把Go actor参数当网络身份认证。设计与历史边界见[ADR0017](adr/0017-one-time-share-grant.md)及[证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+
+R3诊断采用字段白名单重建安全DTO/报告，不对原始TaskSnapshot、恢复或缓存owner做正则脱敏后整体导出。未知字符串不原样输出；临时任务编号不携带稳定身份、路径、URL或原始异常。安全JSON构造完成后才写入用户选择的本地位置，O_EXCL临时文件/Sync/不覆盖Link保护已有文件，取消不写stale选择；不自动上传。诊断导航不授予重试或网络权限，旧原生错误owner保持独立。schema12/wire/身份校验不变，实际验证和未验原生边界见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)。
+
+2026-10-19 可靠性R2增量：文件剪贴板接收/checkpoint支持借用profile owner固定的`os.Root`，目录字符串不能替换其文件系统授权；发布前复核可见路径的身份。原生写入被尝试后，错误也不能证明未发布，因此保留已验证缓存并显示不确定状态。boot变化与TTL不能单独证明粘贴结束；完整自动回收仍待可靠原生交接与读取结束证据。见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[增量验证](evidence/RELIABILITY-R2-CACHE-PATHS.md)。无文件wire/schema改变。
+
+R2持久记录借用既有SQLite owner，使用设备Ed25519身份、固定用途及严格版本/大小/字段校验，CAS写入后回读；不保存私钥，不授予网络信任或剪贴板权限，不从行内字符串重建删除路径。stage/part必须匹配引擎实际打开的目录/文件句柄；publishing先于native，运行代次及RAM-only native-start证明不能跨重启推断。未知/损坏/结果不确定记录继续保护；这些记录包含私有相对清单和文件身份，诊断不得直接导出原行。验证见[持久owner证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。
+
+未发布残留的回收只接受当前worker在原生调用前、接收器实际关闭后封存的签名条目清单；活动引用直到所有句柄关闭才释放。启动对账不重放复制，逐项核验固定Root/文件身份和改动，不再递归删除整个缓存目录。未知条目/链接、未封存或可能已发布的对象仍保护；扫描、尝试删除、读取大小及退避有界。无手动清理或用户容量/期限选项，见[生命周期增量](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。原生读结束许可和完整缓存管理仍未完成。
 
 桌面GitHub更新由用户明确触发，固定仓库/正式标签/平台与资产地址，保留HTTPS校验；下载在Go中以有界内存写入应用缓存，并核对GitHub提供的SHA256与大小。只有完整校验后的包可由原生入口打开，打开前再次核验，前端不能指定可执行路径。摘要是GitHub发布资产的一致性检查，不是独立发布者签名；现有Windows未签名及Mac ad-hoc/未公证边界保持。安装使用系统向导/DMG并由用户退出旧程序后完成，不自动改写运行中的程序或用户profile，见[ADR0014](adr/0014-desktop-github-updates.md)。
 

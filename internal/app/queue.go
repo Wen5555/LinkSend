@@ -232,7 +232,7 @@ func (s *Service) Enqueue(request EnqueueRequest) (QueueItem, error) {
 	if !canAttempt && !request.WaitForPeer {
 		return QueueItem{}, protocol.Fail(protocol.PeerOffline, "explicit waiting choice required")
 	}
-	prepared, err := transfer.PrepareSelected(s.workCtx, paths, 0, request.SourceSelection)
+	prepared, err := s.prepareUserSources(s.workCtx, paths, 0, request.SourceSelection)
 	if err != nil {
 		return QueueItem{}, classifyTaskError(err)
 	}
@@ -621,7 +621,7 @@ func (s *Service) ConfirmQueue(id string, revision uint64) error {
 	if _, _, err = s.loadQueueContent(s.workCtx, item.ID); err != nil {
 		return err
 	}
-	prepared, err := transfer.PrepareSelected(s.workCtx, item.paths, 0, item.SourceSelection)
+	prepared, err := s.prepareUserSources(s.workCtx, item.paths, 0, item.SourceSelection)
 	if err != nil {
 		return classifyTaskError(err)
 	}

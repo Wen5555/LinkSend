@@ -1,5 +1,94 @@
 # LinkSend 桌面体验全轮 TODO
 
+## 2026-10-26 当前接续：v0.7.0 发行收尾
+
+用户明确要求收尾并选择 v0.7.0。停止扩展 Shell publisher、分页 inventory 或新测试矩阵；先完成必要版本一致性、最终源码 CI、同源码三平台静态包核验，再合入 main、绑定准确 tag 并发布 GitHub Release。当前发布准备中，不能提前称已发布。发布范围与未验边界见[0.7.0说明](RELEASE-v0.7.0.md)。
+
+生产升级已获明确批准并完成：`jp-linksend` 的准确5ee、schema5、分享双能力与正常公网TLS已核；原永久表完整摘要保持，兼容36回退程序与私有一致性备份保留。随后同源核心在公网控制面完成 Windows→Linux 单次1KiB分享、双方本机完成和无永久授权残留，资源已退场。详见[生产事务](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)与[公网分享](evidence/RELIABILITY-R5-PUBLIC-SHARE-5EE-20261026.md)。下文“尚未部署/待授权”保留其历史时间，以本段和实际收据为准。
+
+R0–R6整体Goal保持active且未完成；R2实际键盘粘贴、已发布缓存读取结束与完整GC，R4最终安装/退出旅程及原Windows双端/受限双NAT等缺项继续保留。用户physical Escape后不再重启本机GUI/clipboard旅程。OLE one-shot探针有效运行0次，收尾撤flag，保持NOT_RUN。当前仅做发行必要检查，不把发版视为全部验收通过。
+
+## 2026-10-26 优先：Windows跨网连接
+
+用户最新指示允许 Linux 服务器替代 Mac。当前按 Windows↔Linux 完成连接、恢复、普通双向传输及临时分享的实网验收，不再等待/反复探测 Mac；Windows Explorer 实际键盘粘贴、自动缓存、安装退出继续，Finder/DMG 专属结果保留未验证。此调整不证明原两台 Windows 现场或受限双NAT通过。
+
+同日最新执行要求：减少测试，以每个增量的最小功能验证和必要安全检查推进，已有有效结果不重复完整矩阵；可审阅增量验证后及时commit/push。scene05准确36 Windows原生接收已完成Linux实网临时分享，三文件262175B/空目录/逐文件hash、双方本机终态及零永久授权均通过，正常GUI退出0；见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。准确36普通Win↔JP各一次16MiB/中文/zero/空目录、7/7 hash与原Task受控Pause/Resume已通过且资源收尾，见[普通跨网证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)；R1剩余物理旅程、R2完整回收/键盘粘贴及Windows完整安装退出继续。
+
+最新版Windows双端公网在线但连接未验证优先修复。正式版main最小分支的edf7cac已交付Windows候选和[PR #12](https://github.com/Wen5555/LinkSend/pull/12)，默认备用STUN、内置主机安全解析及ICE失败统计已验证；准确干净源码验证器Windows↔公共JP Linux双向16MiB/中文/空目录、6/6落盘条目/hash、双方Completed通过，约3.3秒建链。准确Windows包来源/摘要/版本核验通过，但用户暂时无法试用，两台Windows现场和受限双NAT不因此打勾；吞吐仍偏低，原R0–R6未完成。见[跨网证据](evidence/CROSS-NETWORK-20261026.md)。
+
+另行修复服务端把所有IPv4末尾255当广播的准入缺陷，并先Unmap防止映射地址绕过危险scope限制；真实签名WSS/forward回归通过，详见[准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。这是服务端代码，未替换生产或改宿主网络，不能通过只更新Windows候选生效。代码同步进入本可靠性分支；临时测试进程已结束、隔离peer已撤销。Mac SSH本次仍超时，台湾NAT别名不可用；不能把SSH失败当产品NAT失败。
+
+## 2026-10-19 可靠性 自动缓存与临时分享 Goal（active，整体未完成）
+
+用户已明确启动[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)。缓存不增加手动清理或容量/期限设置；保存常用发送方案不做。已授权相关SSH及阶段commit/push，具体边界见计划；旧Goal和历史缺项不因本轮启动改变状态。
+
+- [x] R0：核对 `f8358ce`、干净 tracked 工作区及三个既有未跟踪目录；复用本地 Go1.27.1/Node24.21.0/pnpm12.4.1；Mac arm64/macOS26.5 和日本自托管信令/STUN 主机 SSH 可用；修正 README 过期版本。见[基线证据](evidence/RELIABILITY-R0-BASELINE.md)。
+- [ ] R1（实施中）：已复现并修复网络通知破坏文件空闲但剪贴板活跃的健康QUIC会话；真实LAN TLS/Pion/QUIC回归、双向剪贴板及同会话文件复用/清理通过，见[源码证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)。准确36 headless core Windows↔JP普通双向16MiB及原Task/TransferID受控Pause/Resume、双方Completion/hash与退场已通过，见[本轮证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)；Wails普通恢复、准确候选双向LAN、睡眠/网络变化、原Windows双端现场与受限双NAT仍分别待验。
+
+  R1剪贴板续租后续：366 Windows真实失败已用固定第二lease晚到屏障重现；非文件路径仅一行复用当前observation选有效旧lease，旧FAIL13.881s/修复PASS11.728s，原3秒断言与权限/过期/重放门不改，无系统clipboard/整矩阵。925/5ad core与desktop准确CI已通过，0.7最终CI另核，见[因果证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
+- [ ] R2（实施中）：[缓存ADR0016](adr/0016-automatic-clipboard-file-cache.md)已先冻结；落实真实manifest自动空间预留、并发容量保护、拒绝后残留清理及稳定空间原因/新复制恢复。自动所有权/回收、跨启动保护及 Finder/Explorer 真实键盘粘贴仍待；现有文件条目读回不抵扣。见[容量增量证据](evidence/RELIABILITY-R2-CAPACITY.md)。
+
+
+  R2后续增量：已复现并修复原生结果不确定时删除可能已发布文件；接收/checkpoint借用固定Root，新增路径身份/空目录/Windows junction保护和准确不确定状态。见[路径与发布证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。ADR修正boot变化并不足以单独授权删除，原生读取结束证明仍必做。
+
+  2026-10-26补充：真实CI发现磁盘压力后的新复制被同权限lease续期吞掉；屏障稳定复现旧实现FAIL，现只为当前本机观察选择仍有效重叠lease，普通10轮/race3轮通过，缓存回收/容量/期限/用户文件保护不变。准确新CI继续核对，旧eccb903/a22f691失败保留；见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。
+
+  R2持久owner首批：同一SQLite连接保存带用途/身份/运行代次的签名记录，实际stage/file句柄来源在body前登记，publishing在原生写入前登记；损坏/冲突/旧运行不能重获发送或未发布删除权限。见[持久记录证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。活动引用、启动对账/自动回收与原生完成证明继续。
+
+  R2生命周期增量：活动引用持续到接收器及目的目录句柄关闭；关闭前观察实际存储，当前worker在native前封存确定未发布清单，启动/退出/剪贴板/周期/压力接入有界分页回收、删除意图与退避。未知/用户改动/可能已发布对象仍保护，超出完整封存预算不拒收正常文件。见[生命周期证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。大对象增量封存、未封存崩溃残留、原生读取结束许可与真实键盘粘贴仍必做。
+
+  R2原生引用隔离原型：同进程、两个真实COM消费者与launcher退出后helper寿命三阶段通过，最后stream/clone释放前仍保护，源文件保留、系统剪贴板未改。helper本身仍是存活的COM producer；未接生产发布/回收，缺签名交接与安全inventory/持久receipt，不能把原始trace当删除许可或抵扣键盘粘贴。见[原型证据](evidence/RELIABILITY-R2-NATIVE-REFERENCE-PROBE.md)。
+
+  R2后续私有基础：52f9bf2已实现receipt-only用途签名/实际inventory/跨main单次CAS，并修复collector信任剥离Native副本的误删入口；任何Native仍保护，未接生产helper或已发布回收。准确core/desktop/三平台包CI均attempt1/success；见[签名基础证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。不能将签名或CI当真实native读取结束证明。
+
+  R2 Windows私有broker首增量：固定可信image/child句柄与challenge、实际BootID、sealed inventory只读句柄、独立Go/C++受控COM消费者、持久spool与原SQLite单次消费已接成一次真实闭环；七门/5句柄及wrong-image/child/行变化/伪回执/重放拒绝有证据。该段首增量当时尚无打包trust anchor/真实launcher退出证据，后续结果见下两段；默认publisher、系统clipboard/注册格式、Explorer键盘和已发布删除仍待，任何Native继续保护，不勾R2。见[首增量证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+
+  R2真实进程寿命后续：已用实际launcher进程exit0时仍持有的helper COM consumer/stream继续读完，helper退出后由独立新main重载原profile/同SQLite消费原run一次；exit9→helper失败/空spool/新main拒绝消费，源保护。原绝对期限与直接复制的helper句柄均核对，不以Service重开代替。仍无系统clipboard/正式Shell发布/Explorer或Native删除；30秒受控期限不作为未来生产消费者寿命。见[进程证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)，R2保持未完成。
+
+  R2 publisher owner首段：系统publisher合同先写ADR；现launcher纠正commit已可能发出/Held未确认就强杀的窗，Shell独立无硬TTL政策与固定generation完成点仅建模待接。必要状态测试及双模块独立编译通过，未运行新native/clipboard。普通发送/重发/Open/Reveal等出口、watcher竞争、生产大目录/大文件与真正OLE provider仍须后续完成，Native删除继续关闭。见[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。
+
+  R2普通源/OS出口增量：统一实际FD源准备/hash/ReadChunk及所有app发送/恢复/重发入口，Open/Reveal/任务目录与preview元数据同门；父目录排除私有树仍可用。必要transfer/app/junction及小目录用例、core compile/vet和desktop独立仅编译通过。校验后OS按path重开窗仍在，Native删除不启用；系统publisher、读取结束与完整GC继续，见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
+
+  R2未激活Shell原语：独立C++虚拟文件模式、只读FD副本及无export后TTL的真实引用/Close门已候选实施，一次严格build及旧controlled COM回归通过；未调用新模式或系统clipboard。最后代次检查/OLE mutation的CAS缺口解前不激活，v3分页codec等独立工作继续，Native删除保持关闭，见[原语证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
+
+  R2独立v3 codec已候选实现并定向验证10k/20003合成metadata及必要拒绝，旧v2不变且双方不能互认；合法!note/零mtime修正同批复验通过。未接真实FD/launcher/helper、未升级原1024-node持久inventory或解除发布代次门，Native删除仍关闭，见[codec证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
+
+  R2 OLE锁组合最窄探测入口已准备：仅现有hosted Windows空板场景one-shot调用一次，公共合成IDataObject/竞争线程不读写用户正文；本机compile-only/AST通过，实际HRESULT与运行仍NOT_RUN，观测一次后撤flag，见[探测证据](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)。
+
+  925后续：desktop vet的native指针复制写法已改RtlMoveMemory并仅编译/vet通过；Windows原缓存用例未publish的具体根因仍INCONCLUSIVE，只补实际当前lease/session起始门和失败诊断，不改产品/20秒/GC保护。该轮native skipped/JSON0/mutation0，不称unsupported，flag继续等待首次有效结果；见[fixture证据](evidence/RELIABILITY-R2-CACHE-PUBLICATION-FIXTURE-DIAGNOSTICS.md)。
+
+  R2同次构建锚后续：实际helper SHA/PE/平台与源提交/输入摘要/真实dirty编入CGO0桌面，私有固定路径resolver及ZIP/NSIS当前helper载荷已接。唯一dirty build、同包/installer提取hash、必要解析与ZIP负例通过；symlink权限负例SKIP、准确clean提交CI待核。没有默认publisher、系统clipboard/Explorer、原生安装或Native删除通过，见[打包证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍不勾选。
+
+  推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
+- [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；已用真实TLS/WSS因果门修复typed原因降级，legacy仅精确signaling phase获得安全指导，补固定P2P/限频提示。普通/race各3轮、前端171项与完整Go12矩阵通过；准确新CI/候选旅程与Mac仍待。见[诊断增量](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)及[原生观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
+- [ ] R4：旧01b5c16 Windows候选的覆盖安装、状态保持、单实例及原系统入口恢复已有证据；当前36最小旅程只到63基线安装，用户Escape停止GUI后不重试，原wrapper超时exit1。已在原实例结束后精确Restore并核对登记/三快捷方式，数据与备份保留；36候选覆盖/原生活动完整续传、SendTo/拖放仍待，Mac专属未验保留。见[原生及恢复证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
+- [ ] R5（owner/数据面/桌面候选，整体待验）：[ADR0017](adr/0017-one-time-share-grant.md)先冻结的授权核心、显式备份迁移、签名HTTP及独立scope WSS已实现并验证；普通配置仍关闭；已有701e23b双向实网核心与准确36 Wails实收证据后，仅显式启用服务声明share_grants_v1/ready=true，旧实验或缺能力服务在传码前拒绝，见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)。历史增量及旧失败保留在[核心](evidence/RELIABILITY-R5-GRANT-CORE.md)、[控制](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)、[客户端](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)与[协调](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)证据中，不将旧包或CI移记本候选。
+
+  7084685首次core CI 40270372762在旧准备取消测试失败，原日志保留；仅修测试区分1次只读能力GET与零其他请求，准确归档加两测试文件的Preparation/HTTP一次定向通过5.158s，新提交CI待核。见[能力证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)。
+
+  准确708 Linux自有合成schema4→5及准确36兼容回退一次通过，原永久表和新增分享行保留、三服务exit0退场；850测试only准确clean重建且产品输入相同，复用旅程。850准确CI待核，生产未访问/部署，见[候选与回退](evidence/RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。
+
+  当前同profile签名/CAS owner、明确重启恢复、七天终态metadata回收、固定公钥Pion/QUIC两阶段预览及原V1引擎已接入。8MiB任务在4MiB暂停、双端重开Service后显式恢复原任务通过；同步Create/hash/HTTP退出取消及服务Completed不能替代本机Completion的受控失败均已修复，最终20项TemporaryShare测试race3轮通过。双模块workspace/off的test/vet/build共12命令全部exit0，前端19files/155tests及typecheck/lint/build通过。
+
+  桌面临时分享源码与真实页面浏览器夹具已验证明确确认、长目录/指纹/分页及无自动派发；夹具不代表Wails RPC、原生picker/剪贴板或P2P实机。当前原生复制目标因未证实可备份格式SKIP；独立WindowStation尝试遭CreateWindowStationW错误5，native未运行且用户剪贴板未改。仅GitHub托管Windows可创建空夹具的严格CI入口已准备，准确新提交CI与包结果另验。用户允许Linux替代Mac后，准确36 Linux→Windows原生保存已完成；反向原生发送及其余最终旅程仍待，Mac专属项目单列未验；不同网络Go核心双向证据见下段，不抵扣Windows双端现场；见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)，不标R5完成。
+
+  R5准确源码实网：`701e23b`干净验证器Windows↔公共JP Linux两个方向各16,777,247B、中文/零字节/空目录、树hash及双方本机/授权终态通过，永久trust/剪贴板权限0。控制metadata经专用SSH HTTPS/WSS通道，文件仍独立UDP/Pion/QUIC；测试服务/通道已关闭、临时凭据已移除。Windows正向后台进程退出码不可观察，明确保留；不是Win↔Win/双NAT、WinMac或Wails包原生证据，见[实网记录](evidence/RELIABILITY-R5-CROSS-NETWORK-20261026.md)。
+
+  R5准确CI历史失败：701 core/desktop成功、Windows native因测试scanner读独占空锁失败；仅测试修复103后core/desktop成功，native又在未分阶段的会话就绪检查失败，当时未记PASS。103 Mac arm64另因sum.golang.org IPv6无路由在安装工具链时失败，Intel包成功。后续因果修复及cd真实成功见下段，旧失败不抹去，未强改用户剪贴板。
+
+  R5托管原生子目标：cd95479的core/desktop/三平台包CI均success，无重试；Windows真实active/paused保护码与随后正常native文字QUIC目标7.54s、run1/pass1/skip0/fail0。初始注册/租约10ms、恢复租约6934ms；只覆盖该Go桥接/原生generation子目标，不抵扣Wails UI、文件键盘粘贴或WinMac。旧701/103失败保留，见[完整记录](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+  R5等待后续：认证WSS与等待对端入场采用独立预算，后者受原run/原阶段绝对期限限制，到场后重新核验授权并开始短网络预算。真实迟到peer ICE/QUIC、取消/撤销/过期/原任务计划回归普通/race3轮通过；同版双模块完整12矩阵与前端172项/typecheck/lint/build通过。8082旧CI的Intel Mac trickle失败另保留并仅修测试host前提，生产trickle未变。新准确CI/包/原生旅程待验，见[等待证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。
+
+- [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
+
+2026-10-26历史接续记录（生产批准前；当前下一步见页首）：Goal实际active。022f034/7084685/850b9d1及迁移证据309cde7已推送，草稿[PR #13](https://github.com/Wen5555/LinkSend/pull/13)可审阅。5ee准确push/PR core、desktop及三平台packages均首次success；Windows只下载一次，Actions摘要/clean来源/主PE锚/ZIP与installer内main和helper一致性静态核验通过，未运行候选/安装/clipboard，见[同源候选](evidence/RELIABILITY-CANDIDATE-5EE9A40.md)。708旧取消断言及850旧生成绑定dirty失败保留，486最窄修复来源门未放宽。准确5ee Linux clean候选与708/850实际rendezvous依赖输入相同，复用一次合成schema4→5/36兼容回退证据；2026-10-26T04:54:45Z只读核对生产仍0.5.0/schema4/分享关闭，未部署，具体升级授权已提出待答复。当前完成R2实际FD源读取和OS路径出口拒绝增量，继续真正Shell publisher、watcher竞争、完整inventory及自动回收，Native删除保持关闭。已有36普通双向/原Task恢复和36 Wails从Linux实收证据继续有效，不抵扣原Windows双端、双NAT、最终候选LAN/睡眠/安装退出或Explorer键盘粘贴。用户允许Linux替代Mac，不等待Mac；只做最小功能与必要安全验证并及时push。被Escape停止的R4现场已精确还原，不重试GUI；scene04被审批拒绝的旧凭据删除不绕过，测试数据/备份和三个用户未跟踪目录保留。其余状态见本页R1–R6各项与对应evidence。
+
+2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
+
+后续核对：`f2712dc` 的 run `39165099505` 已completed/success，三个包job均success；前述“仍运行”为当时记录，不是当前阻塞。当前继续缓存持久owner和原生交接完成证明，不以boot/TTL清理未知发布对象。
+
 ## 2026-10-19 本轮剪贴板与0.6.2发布
 
 本地候选已完成Windows↔Mac同LAN系统文字、独立像素图片和文件条目双向验证；64MiB复制、两端原生居中进度、取消及未完成缓存删除通过。最终两端备份恢复，测试进程停止。新文件同步须独立开启，≥32MiB才弹进度窗。最终文件完成状态绑定FileID的自动回归通过；物理结果仍绑定修复前状态展示候选包。用户已明确要求GitHub版本更新推送，已通过PR #11合并并正式发布[0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)，准确源码63c86c2c5ce183e1400d27ca0571610d50a42bdc、三平台run 39157767929与六资产digest均通过；下方为历史状态，不代表仍在等待本轮实机。Explorer/Finder键盘粘贴、完整双NAT及其余A–E边界保持，见[本轮记录](evidence/DESKTOP-CLIPBOARD-LAN-FIX.md)。

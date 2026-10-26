@@ -13,8 +13,9 @@ export function ClipboardCopyProgressView({ copies, cancel }: { copies: Clipboar
   const copy = active[0];
   const preparing = !copy || copy.state === 'queued' || copy.state === 'preparing';
   const failed = copy?.state === 'failed';
+  const uncertain = copy?.error === 'file_copy_publication_uncertain';
   const percent = copy && copy.total > 0 ? Math.min(100, Math.floor(copy.verified * 100 / copy.total)) : 0;
-  return <main className="clipboard-copy-progress" aria-live="polite"><div className="clipboard-copy-symbol" aria-hidden>⇄</div><h1>{failed ? '复制未完成' : '正在复制'}</h1><p>{failed ? '请重新复制文件后再试一次。' : preparing ? '正在准备文件…' : copy.direction === 'receive' ? '正在接收并验证文件…' : '正在传送文件…'}</p><progress aria-label="文件复制进度" max={100} value={preparing || failed ? undefined : percent} /><div className="clipboard-copy-bottom"><span>{failed ? '文件未写入剪贴板' : preparing ? '准备中' : `${percent}%`}{active.length > 1 ? ` · 共 ${active.length} 项` : ''}</span>{copy && <button onClick={() => active.forEach(item => cancel(item.id))}>{failed ? '关闭' : '取消复制'}</button>}</div></main>;
+  return <main className="clipboard-copy-progress" aria-live="polite"><div className="clipboard-copy-symbol" aria-hidden>⇄</div><h1>{failed ? '复制未完成' : '正在复制'}</h1><p>{failed ? uncertain ? '系统剪贴板状态未能确认，文件已保留。' : copy.error === 'file_copy_disk_full' ? '空间不足，暂时无法复制文件。' : '请重新复制文件后再试一次。' : preparing ? '正在准备文件…' : copy.direction === 'receive' ? '正在接收并验证文件…' : '正在传送文件…'}</p><progress aria-label="文件复制进度" max={100} value={preparing || failed ? undefined : percent} /><div className="clipboard-copy-bottom"><span>{failed ? uncertain ? '已保留文件，避免中断粘贴' : '文件未写入剪贴板' : preparing ? '准备中' : `${percent}%`}{active.length > 1 ? ` · 共 ${active.length} 项` : ''}</span>{copy && <button onClick={() => active.forEach(item => cancel(item.id))}>{failed ? '关闭' : '取消复制'}</button>}</div></main>;
 }
 
 export function ClipboardCopyProgress() {

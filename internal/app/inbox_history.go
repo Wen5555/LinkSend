@@ -46,21 +46,22 @@ type InboxQuery struct {
 // InboxItem is a reduced historical view, never a recovery record or an export
 // of absolute filesystem locations and private connection diagnostics.
 type InboxItem struct {
-	TaskID             string `json:"task_id"`
-	PeerID             string `json:"peer_id"`
-	Direction          string `json:"direction"`
-	State              string `json:"state"`
-	Summary            string `json:"summary"`
-	FileCount          int    `json:"file_count"`
-	VerifiedBytes      int64  `json:"verified_bytes"`
-	CommittedBytes     int64  `json:"committed_bytes"`
-	BilateralConfirmed bool   `json:"bilateral_confirmed"`
-	StartedAt          string `json:"started_at"`
-	EndedAt            string `json:"ended_at"`
-	Revision           uint64 `json:"revision"`
-	CanResend          bool   `json:"can_resend"`
-	CanResume          bool   `json:"can_resume"`
-	CanForget          bool   `json:"can_forget"`
+	Diagnostic         *DiagnosticTask `json:"diagnostic,omitempty"`
+	TaskID             string          `json:"task_id"`
+	PeerID             string          `json:"peer_id"`
+	Direction          string          `json:"direction"`
+	State              string          `json:"state"`
+	Summary            string          `json:"summary"`
+	FileCount          int             `json:"file_count"`
+	VerifiedBytes      int64           `json:"verified_bytes"`
+	CommittedBytes     int64           `json:"committed_bytes"`
+	BilateralConfirmed bool            `json:"bilateral_confirmed"`
+	StartedAt          string          `json:"started_at"`
+	EndedAt            string          `json:"ended_at"`
+	Revision           uint64          `json:"revision"`
+	CanResend          bool            `json:"can_resend"`
+	CanResume          bool            `json:"can_resume"`
+	CanForget          bool            `json:"can_forget"`
 }
 
 type InboxPage struct {
@@ -301,7 +302,8 @@ func (s *Service) Inbox(ctx context.Context, query InboxQuery) (InboxPage, error
 		if current, ok := s.Task(snap.ID); ok && !queueReferenced {
 			canResume = current.CanResume
 		}
-		page.Items = append(page.Items, InboxItem{TaskID: snap.ID, PeerID: snap.PeerID, Direction: snap.Direction, State: snap.State, Summary: inboxText(summary, 240), FileCount: snap.FileCount, VerifiedBytes: snap.VerifiedBytes, CommittedBytes: snap.CommittedBytes, BilateralConfirmed: snap.BilateralConfirmed, StartedAt: snap.StartedAt, EndedAt: snap.EndedAt, Revision: snap.Revision, CanResend: snap.Direction == "send" && isTerminal(snap.State) && recoveryUsable(recovery), CanResume: canResume, CanForget: !inboxTaskProtected(snap, recovery) && !queueReferenced})
+		diagnostic := makeDiagnosticTask(snap, "task")
+		page.Items = append(page.Items, InboxItem{Diagnostic: &diagnostic, TaskID: snap.ID, PeerID: snap.PeerID, Direction: snap.Direction, State: snap.State, Summary: inboxText(summary, 240), FileCount: snap.FileCount, VerifiedBytes: snap.VerifiedBytes, CommittedBytes: snap.CommittedBytes, BilateralConfirmed: snap.BilateralConfirmed, StartedAt: snap.StartedAt, EndedAt: snap.EndedAt, Revision: snap.Revision, CanResend: snap.Direction == "send" && isTerminal(snap.State) && recoveryUsable(recovery), CanResume: canResume, CanForget: !inboxTaskProtected(snap, recovery) && !queueReferenced})
 		last = inboxCursor{Version: 1, Filter: filterHash, Started: started, ID: snap.ID}
 	}
 	return page, rows.Err()

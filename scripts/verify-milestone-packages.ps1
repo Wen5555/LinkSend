@@ -30,20 +30,36 @@ foreach($platform in @('windows-amd64','macos-arm64','macos-amd64')) {
     $records.Add([ordered]@{name=$name;path=$asset.FullName;sha256=$hash;bytes=$asset.Length;platform=$platform})
     if($platform -eq 'windows-amd64' -and $asset.Extension -eq '.zip') {
       $expanded=Join-Path $root 'verified-windows-payload'
-      if(!(Test-Path -LiteralPath $expanded)) { [IO.Compression.ZipFile]::ExtractToDirectory($asset.FullName,$expanded) }
+      $helperHash=$info['clipboard_helper_sha256']
+      $helperPath="native-clipboard/$helperHash/LinkSendClipboardFileHelper.exe"
+      if($helperHash -cnotmatch '^[0-9a-f]{64}$' -or $info['clipboard_helper_path'] -cne $helperPath -or $info['clipboard_helper_source_commit'] -ne $ExpectedCommit -or $info['clipboard_helper_source_clean'] -cne 'true' -or $info['clipboard_helper_source_digest'] -cnotmatch '^[0-9a-f]{64}$') {throw 'Invalid Windows helper provenance'}
       $zip=[IO.Compression.ZipFile]::OpenRead($asset.FullName)
       try {
         $entries=@($zip.Entries | Where-Object { $_.Name -ne '' })
         $contents=[Collections.Generic.List[object]]::new()
+        $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $required=@('LinkSend.exe','README-WINDOWS-TEST.txt','BUILD-INFO.txt',$helperPath)
+        # Check all names before extraction, including otherwise empty dirs.
+        foreach($entry in $zip.Entries) {
+          $entryName=$entry.FullName.Replace('\','/')
+          if(!$seen.Add($entryName)) {throw 'Duplicate Windows package entry'}
+          if($entry.Name -eq '') {
+            if($entryName -cnotin @('native-clipboard/',"native-clipboard/$helperHash/")) {throw 'Unexpected Windows package directory'}
+          } elseif($entryName -cnotin ($required + @('SHA256SUMS.txt'))) {throw 'Unexpected Windows package entry'}
+        }
+        foreach($name in $required) { if(!$seen.Contains($name)) {throw 'Missing Windows package entry'} }
         foreach($entry in $entries) {
-          if($entry.FullName -notin @('LinkSend.exe','README-WINDOWS-TEST.txt','BUILD-INFO.txt','SHA256SUMS.txt')) {throw 'Unexpected Windows package entry'}
+          $entryName=$entry.FullName.Replace('\','/')
           $stream=$entry.Open()
           try { $sha=[Security.Cryptography.SHA256]::Create(); try { $digest=[Convert]::ToHexString($sha.ComputeHash($stream)).ToLowerInvariant() } finally {$sha.Dispose()} } finally {$stream.Dispose()}
-          $extracted=Join-Path $expanded $entry.FullName
-          if((Get-FileHash -LiteralPath $extracted -Algorithm SHA256).Hash.ToLowerInvariant() -ne $digest) {throw 'Previously extracted payload changed'}
-          $contents.Add([ordered]@{name=$entry.FullName;sha256=$digest;bytes=$entry.Length})
+          if($entryName -ceq $helperPath -and $digest -cne $helperHash) {throw 'Windows helper digest mismatch'}
+          $contents.Add([ordered]@{name=$entryName;sha256=$digest;bytes=$entry.Length})
         }
       } finally {$zip.Dispose()}
+      if(!(Test-Path -LiteralPath $expanded)) { [IO.Compression.ZipFile]::ExtractToDirectory($asset.FullName,$expanded) }
+      foreach($content in $contents) {
+        if((Get-FileHash -LiteralPath (Join-Path $expanded $content.name) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $content.sha256) {throw 'Previously extracted payload changed'}
+      }
       if([IO.File]::ReadAllText((Join-Path $expanded 'BUILD-INFO.txt')) -ne [IO.File]::ReadAllText($infoPath)) {throw 'Embedded Windows build metadata mismatch'}
       $exe=Get-Item -LiteralPath (Join-Path $expanded 'LinkSend.exe')
       if($exe.VersionInfo.ProductVersion -ne $Version) {throw 'Windows executable version mismatch'}

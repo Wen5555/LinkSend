@@ -22,4 +22,23 @@ describe('large file clipboard progress',()=>{
    expect(container.querySelector('progress')?.hasAttribute('value')).toBe(false);
   } finally {act(()=>root.unmount());}
  });
+ it('explains disk pressure without asking for manual cache management',()=>{
+  const container=document.createElement('div');const root=createRoot(container);
+  try {
+   act(()=>root.render(<ClipboardCopyProgressView copies={[copy({state:'failed',error:'file_copy_disk_full'})]} cancel={vi.fn()}/>));
+   expect(container.textContent).toContain('空间不足，暂时无法复制文件。');
+   expect(container.textContent).toContain('文件未写入剪贴板');
+   expect(container.querySelector('progress')?.hasAttribute('value')).toBe(false);
+   expect(container.querySelector('button')?.textContent).toBe('关闭');
+  } finally {act(()=>root.unmount());}
+ });
+ it('does not claim files are unpublished when native completion is uncertain',()=>{
+  const container=document.createElement('div');const root=createRoot(container);
+  try {
+   act(()=>root.render(<ClipboardCopyProgressView copies={[copy({state:'failed',error:'file_copy_publication_uncertain'})]} cancel={vi.fn()}/>));
+   expect(container.textContent).toContain('系统剪贴板状态未能确认，文件已保留。');
+   expect(container.textContent).not.toContain('文件未写入剪贴板');
+   expect(container.querySelector('button')?.textContent).toBe('关闭');
+  } finally {act(()=>root.unmount());}
+ });
 });

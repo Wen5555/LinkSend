@@ -5,7 +5,8 @@ export function connectionMethodLabel(method: string): string {
     case 'lan_direct': return '局域网直连';
     case 'internet_p2p': return '互联网 P2P';
     case 'relay': return '尚未实现';
-    default: return '直连 · 路径待确认';
+    case 'direct_unknown': return '直连 · 路径待确认';
+    default: return '未知';
   }
 }
 
@@ -30,6 +31,7 @@ export function taskPhaseLabel(phase: string): string {
     preparing: '准备中',
 	peer_lookup: '核对已配对设备',
 	signaling_connect: '连接信令服务',
+    waiting_share_peer: '等待对方进入本次分享',
 	endpoint_setup: '自动选择本机网络',
 	lan_control_connect: '连接局域网设备',
 	interface_resolve: '核验当前网卡地址',
@@ -50,6 +52,8 @@ export function taskPhaseLabel(phase: string): string {
     waiting_peer: '等待对方重新上线',
     connected: '已建立直连',
     awaiting_acceptance: '等待接收确认',
+    temporary_share_save_confirmation: '等待确认临时分享的保存位置',
+    saving_before_exit: '正在保存后退出',
     transferring: '传输中',
     verifying: '校验文件',
     no_content: '全部跳过，未接收内容',
@@ -57,6 +61,7 @@ export function taskPhaseLabel(phase: string): string {
 	paused: '已暂停',
     cancelling: '正在取消',
     recovering: '恢复传输',
+    restart_recovery_available: '已保存，等待恢复',
 	connection_interrupted: '连接已中断',
     completed: '已完成',
     failed: '失败',

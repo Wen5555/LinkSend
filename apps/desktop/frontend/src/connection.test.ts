@@ -3,9 +3,10 @@ import { connectionMethodLabel, normalizePairingCode, humanizeBackendError, merg
 
 describe('connection evidence labels', () => {
   it('does not infer LAN from an ICE host candidate or online presence', () => {
-    for (const unproven of ['host', 'online', 'direct_unknown', '', 'unexpected']) {
-      expect(connectionMethodLabel(unproven)).toBe('直连 · 路径待确认');
+    for (const unproven of ['host', 'online', '', 'unexpected']) {
+      expect(connectionMethodLabel(unproven)).toBe('未知');
     }
+    expect(connectionMethodLabel('direct_unknown')).toBe('直连 · 路径待确认');
   });
   it('does not advertise a relay implementation', () => {
     expect(connectionMethodLabel('relay')).toBe('尚未实现');
@@ -55,7 +56,9 @@ describe('connection evidence labels', () => {
     expect(taskPhaseLabel('CHECKING')).toBe('检查直连路径');
 	expect(taskPhaseLabel('endpoint_setup')).toBe('自动选择本机网络');
 	expect(taskPhaseLabel('quic_handshake')).toBe('建立加密传输通道');
+    expect(taskPhaseLabel('waiting_share_peer')).toBe('等待对方进入本次分享');
     expect(taskPhaseLabel('lan_control_connect')).toBe('连接局域网设备');
+    expect(taskPhaseLabel('restart_recovery_available')).toBe('已保存，等待恢复');
     expect(taskPhaseLabel('future_phase')).toBe('future_phase');
   });
   it('maps transport and task errors without exposing raw internals', () => {

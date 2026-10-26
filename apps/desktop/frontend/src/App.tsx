@@ -12,6 +12,8 @@ import { ReceivePlanDialog } from './components/ReceivePlanDialog';
 import { InboxPage } from './pages/InboxPage';
 import { LANPairPrompt } from './components/LANPairPrompt';
 import { QuickSendDialog } from './components/QuickSendDialog';
+import { TemporarySharePanel } from './components/TemporarySharePanel';
+import { DiagnosticNavigation } from './components/TaskDiagnostics';
 import { Events } from '@wailsio/runtime';
 import './App.css';
 
@@ -22,6 +24,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 const emptyPreferences: DesktopPreferences = { format_version: 1, revision: 0, server_url: '', bind_address: '', interface_priority: [], excluded_interfaces: [], stun_urls: [], receive_directory: '', conflict_policy: 'keep_both', device_name: '', background: { close_mode: '', notifications: false, prevent_sleep: false }, retain_transfer_queue: false, clipboard_enabled: false };
 
 export default function App() {
+  const [temporaryShareBusy, setTemporaryShareBusy] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const quickRevision = useRef(0);
   const [tab, setTab] = useState<Tab>('transfer');
@@ -71,13 +74,13 @@ export default function App() {
   const prefs = desktop.preferences.data ?? emptyPreferences;
   const inbox = shell?.inbox;
   const available = desktop.enabled && !desktop.workspace.isError && !!workspace?.persistence_available;
-  const incoming = [...(workspace?.tasks ?? [])].reverse().find(task => task.direction === 'receive' && task.state === 'awaiting_acceptance');
+  const incoming = [...(workspace?.tasks ?? [])].reverse().find(task => !task.temporary_share_id && task.direction === 'receive' && task.state === 'awaiting_acceptance');
   const loadError = desktop.workspace.error ?? desktop.devices.error ?? desktop.shell.error ?? desktop.preferences.error ?? desktop.configuration.error;
   const openSettings = (category: SettingsCategory) => {
     setSettingsRequest(current => ({ category, revision: current.revision + 1 }));
     setTab('settings');
   };
-  return <div className="app-shell">
+  return <DiagnosticNavigation.Provider value={{ openSettings, openDevices: () => setTab('devices') }}><div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark" aria-hidden="true">↗</div><div><strong>LinkSend</strong><span>点对点文件传输</span></div></div>
       <nav aria-label="主导航">{tabs.map(item => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'settings') openSettings('general'); else setTab(item.id); setFocusTaskID(undefined); }}><span aria-hidden="true">{item.icon}</span> {item.label}{item.id === 'transfer' && incomingCount > 0 && <span className="nav-badge" aria-label={`${incomingCount} 个新增传输项目`}>{incomingCount > 99 ? '99+' : incomingCount}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="profile-chip"><span className="avatar">{(prefs.device_name || 'L')[0]}</span><div><strong>{prefs.device_name || '本机设备'}</strong><small>{config?.identity.id ? `${config.identity.id.slice(0, 10)}…` : '未连接'}</small></div></div><div className="relay-note">端到端加密直连</div></div>
@@ -96,7 +99,7 @@ export default function App() {
       {command.notice && <div className="banner notice-banner" role="status"><p>{command.notice}</p><button onClick={command.clearNotice} aria-label="关闭操作提示">×</button></div>}
       {control.error && <div className="banner error-banner" role="alert"><p>{control.error}</p><button onClick={control.clearError} aria-label="关闭传输控制错误">×</button></div>}
       {control.notice && <div className="banner notice-banner" role="status"><p>{control.notice}</p><button onClick={control.clearNotice} aria-label="关闭传输控制提示">×</button></div>}
-      {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} run={command.run} op={command.op} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} /> :
+      {tab === 'transfer' ? <TransferPage workspace={workspace} devices={devices} identityID={shell?.status.identity} run={command.run} op={command.op || (temporaryShareBusy ? 'temporary-share' : '')} controlRun={control.run} controlOp={control.op} enqueueIdentity={enqueueIdentity.current} available={available} temporaryShare={<TemporarySharePanel key={shell?.status.identity || 'pending'} draft={workspace?.draft} tasks={workspace?.tasks ?? []} available={available} refresh={desktop.refresh} onBusyChange={setTemporaryShareBusy} op={command.op || control.op} />} /> :
         tab === 'inbox' ? <InboxPage devices={devices} run={control.run} op={control.op} available={available} focusTaskID={focusTaskID} navigationRevision={shell?.background.navigation_revision} /> :
         tab === 'devices' ? <DevicesPage devices={devices} identityID={shell?.status.identity} membership={shell?.membership} inbox={inbox} name={prefs.device_name} run={command.run} op={command.op} available={desktop.enabled} /> :
           <SettingsPage devices={devices} identityID={config?.identity.id || shell?.status.identity} initialCategory={settingsRequest.category} categoryRequest={settingsRequest} sendToSupported={shell?.entries.send_to_supported} preferences={prefs} effective={config?.effective} preferencesStatus={config?.preferencesStatus} interfaces={config?.interfaces ?? []} diagnostics={shell?.diagnostics} inbox={inbox} background={shell?.background} clipboard={shell?.clipboard} run={command.run} controlRun={control.run} op={command.op || control.op} available={desktop.enabled} onOpenLegacyQueue={() => setTab('transfer')} />}
@@ -104,5 +107,5 @@ export default function App() {
     {incoming && <ReceivePlanDialog key={`${incoming.id}-${incoming.attempt_id}`} task={incoming} device={devices.find(device => device.id === incoming.peer_id)} run={control.run} op={control.op} />}
     {!incoming && quickOpen && <QuickSendDialog devices={devices} identityID={config?.identity.id || shell?.status.identity} available={available} busy={!!command.op} lanes={lanes.current} refresh={desktop.refresh} close={() => setQuickOpen(false)} />}
     {!incoming && <LANPairPrompt run={control.run} op={control.op} available={desktop.enabled} />}
-  </div>;
+  </div></DiagnosticNavigation.Provider>;
 }

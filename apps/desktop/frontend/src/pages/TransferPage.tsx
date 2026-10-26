@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as Backend from '../../bindings/github.com/Wen5555/LinkSend/apps/desktop/app';
 import type { DeviceInfo, SendDraft, WorkspaceSnapshot } from '../../bindings/github.com/Wen5555/LinkSend/internal/app/models';
@@ -10,14 +10,14 @@ import { TransferQueue } from '../components/TransferQueue';
 import { SourceSelectionPanel } from '../components/SourceSelectionPanel';
 import { BatchTargets, batchTargetIDs } from '../components/BatchTargets';
 
-type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean };
+type Props = { workspace?: WorkspaceSnapshot; devices: DeviceInfo[]; identityID?: string; run: CommandRunner; op: string; controlRun: CommandRunner; controlOp: string; enqueueIdentity: EnqueueIdentity; available: boolean; temporaryShare?: ReactNode };
 const pathPageSize = 10;
 
 function clampPathPage(page: number, count: number) {
   return Math.max(0, Math.min(page, Math.max(0, Math.ceil(count / pathPageSize) - 1)));
 }
 
-export function TransferPage({ workspace, devices, identityID, run, op, controlRun, controlOp, enqueueIdentity, available }: Props) {
+export function TransferPage({ workspace, devices, identityID, run, op, controlRun, controlOp, enqueueIdentity, available, temporaryShare }: Props) {
   const [waitForPeer, setWaitForPeer] = useState(false);
   const [pathPage, setPathPage] = useState(0);
   const draft = workspace?.draft;
@@ -76,6 +76,7 @@ export function TransferPage({ workspace, devices, identityID, run, op, controlR
         {draft && <SourceSelectionPanel draft={draft} preview={preview.data} disabled={disabled} save={saveDraft} />}
       </details>
     </section>
+    {temporaryShare}
     <TransferQueue workspace={workspace} devices={devices} run={controlRun} op={controlOp} available={available && !!workspace?.persistence_available} />
   </div>;
 }

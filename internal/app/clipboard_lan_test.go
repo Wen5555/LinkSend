@@ -16,14 +16,18 @@ import (
 // Exercise the LAN TLS control path, rather than the WSS path used by the
 // original clipboard tests. Loopback isolates this test from physical peers.
 func TestClipboardLANBootstrapsWithoutFile(t *testing.T) {
-	testClipboardLAN(t, false)
+	testClipboardLAN(t, false, false)
 }
 
 func TestClipboardLANConcurrentBootstrap(t *testing.T) {
-	testClipboardLAN(t, true)
+	testClipboardLAN(t, true, false)
 }
 
-func testClipboardLAN(t *testing.T, concurrent bool) {
+func TestClipboardLANNetworkRefreshPreservesHealthySession(t *testing.T) {
+	testClipboardLAN(t, false, true)
+}
+
+func testClipboardLAN(t *testing.T, concurrent, refresh bool) {
 	t.Helper()
 	f := newDirectFixtureServices(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
@@ -167,6 +171,26 @@ func testClipboardLAN(t *testing.T, concurrent bool) {
 	if len(sessions) != 2 || sessions[0] != sessions[1] {
 		t.Fatalf("LAN peers retained different sessions: %v", sessions)
 	}
+	if refresh {
+		// An OS wake/address notification is only a hint. No file stream is
+		// reserved here, but the authenticated QUIC connection owns live
+		// clipboard leases. Refresh must not tear it down or require a new
+		// connection before the next copy/file operation.
+		for _, service := range []*Service{f.a, f.b} {
+			if err := service.NetworkChanged("wake"); err != nil {
+				t.Fatal(err)
+			}
+			service.directPoolMu.Lock()
+			retained := false
+			for _, pooled := range service.directPool {
+				retained = pooled.peer.SessionID == sessions[0] && pooled.peer.Data.Conn.Context().Err() == nil
+			}
+			service.directPoolMu.Unlock()
+			if !retained {
+				t.Fatal("network notification destroyed healthy authenticated clipboard session")
+			}
+		}
+	}
 	for _, item := range []struct {
 		service *Service
 		gen     *atomic.Uint64
@@ -216,5 +240,25 @@ func testClipboardLAN(t *testing.T, concurrent bool) {
 	received, err := os.ReadFile(filepath.Join(bReceived, filepath.Base(source)))
 	if err != nil || string(received) != "LAN file on clipboard session" {
 		t.Fatalf("LAN received file mismatch: %v", err)
+	}
+	if refresh {
+		f.a.directPoolMu.Lock()
+		peer := f.a.directPool[directPoolKey(f.bID.ID(), 1)].peer
+		f.a.directPoolMu.Unlock()
+		f.b.closePooledSessions(f.aID.ID())
+		select {
+		case <-peer.Data.Conn.Context().Done():
+		case <-ctx.Done():
+			t.Fatal("remote connection close was not observed")
+		}
+		if err := f.a.NetworkChanged("address"); err != nil {
+			t.Fatal(err)
+		}
+		f.a.directPoolMu.Lock()
+		remaining := len(f.a.directPool)
+		f.a.directPoolMu.Unlock()
+		if remaining != 0 {
+			t.Fatal("network refresh retained a closed idle session")
+		}
 	}
 }

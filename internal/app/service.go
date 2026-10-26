@@ -97,6 +97,9 @@ type Service struct {
 	clipboardFileJobs       map[string]*clipboardFileJob
 	clipboardFileSendSlots  chan struct{}
 	clipboardFileReadSlots  chan struct{}
+	clipboardCacheSpace     clipboardCacheSpace
+	clipboardCache          clipboardCacheLifecycle
+	temporaryShares         temporaryShareOwner
 }
 
 type cachedNetworkSelection struct {
@@ -206,6 +209,7 @@ func New(cfg Config) (*Service, error) {
 		}
 	}
 	s.initializeWorkspace()
+	s.startClipboardCacheLifecycle()
 	keepLock = true
 	keepHistory = true
 	return s, nil

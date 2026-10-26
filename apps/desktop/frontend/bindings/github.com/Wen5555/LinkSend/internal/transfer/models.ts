@@ -35,6 +35,23 @@ export interface ContentDescriptor {
     "height"?: number;
 }
 
+export interface FileEntry {
+    "id": number;
+    "path": string;
+    "type": string;
+    "size": number;
+    "modified": number;
+    "hash"?: string;
+    "chunks"?: string[] | null;
+}
+
+export interface Manifest {
+    "version": number;
+    "transfer_id": string;
+    "chunk_size": number;
+    "files": FileEntry[] | null;
+}
+
 export interface PlanSummary {
     "original_total": number;
     "selected_total": number;

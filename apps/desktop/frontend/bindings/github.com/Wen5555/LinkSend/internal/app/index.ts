@@ -16,7 +16,9 @@ export type {
     ContentTextRequest,
     DeviceInfo,
     DeviceProfile,
+    DiagnosticGuidance,
     DiagnosticIdentity,
+    DiagnosticTask,
     Diagnostics,
     DirectTimings,
     DraftPreview,
@@ -49,6 +51,8 @@ export type {
     TaskFailureDiagnostic,
     TaskPhaseEvent,
     TaskSnapshot,
+    TemporaryShareCreation,
+    TemporaryShareSnapshot,
     WorkspaceChange,
     WorkspaceSnapshot
 } from "./models.js";

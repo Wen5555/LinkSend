@@ -19,6 +19,36 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	t.Cleanup(f.b.Shutdown)
 	destination := filepath.Join(t.TempDir(), "received")
 	cfg := DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second, WaitTimeout: 10 * time.Second}
+	// This fixture checks reuse and revocation, not the three-second idle policy.
+	// Wait for both real owners to become idle, then park their existing timers
+	// while disk persistence and the next user decision run. Acquiring a stream
+	// still stops these timers normally; no activity or clipboard flags are set.
+	retainIdleSession := func(sessionID string, idleTTL time.Duration) bool {
+		if sessionID == "" {
+			return false
+		}
+		for _, service := range []*Service{f.a, f.b} {
+			retained := func() bool {
+				service.directPoolMu.Lock()
+				defer service.directPoolMu.Unlock()
+				for _, pooled := range service.directPool {
+					if pooled.peer.SessionID != sessionID {
+						continue
+					}
+					if pooled.peer.Data.Conn.Context().Err() != nil || pooled.inUse || pooled.receiving || pooled.timer == nil || !pooled.timer.Stop() {
+						return false
+					}
+					pooled.timer.Reset(idleTTL)
+					return true
+				}
+				return false
+			}()
+			if !retained {
+				return false
+			}
+		}
+		return true
+	}
 	if err := f.b.StartInbox(destination, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +98,8 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, 10*time.Second, func() bool {
-		return latestState(f.a.Tasks(), "send") == "completed" && latestState(f.b.Tasks(), "receive") == "completed"
+		done, ok := f.a.Task(firstSend.ID)
+		return ok && done.State == "completed" && latestState(f.b.Tasks(), "receive") == "completed" && retainIdleSession(done.SessionID, time.Hour)
 	}, "confirmed transfer did not complete")
 	firstDone, ok := f.a.Task(firstSend.ID)
 	if !ok || firstDone.SessionID == "" {
@@ -88,7 +119,8 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, 10*time.Second, func() bool {
-		return latestState(f.a.Tasks(), "send") == "completed" && latestState(f.b.Tasks(), "receive") == "completed" && len(f.b.Tasks()) == 2
+		done, ok := f.a.Task(secondSend.ID)
+		return ok && done.State == "completed" && latestState(f.b.Tasks(), "receive") == "completed" && len(f.b.Tasks()) == 2 && retainIdleSession(done.SessionID, time.Hour)
 	}, "always-accept transfer did not complete without a second decision")
 	secondDone, ok := f.a.Task(secondSend.ID)
 	if !ok || secondDone.SessionID != firstDone.SessionID {
@@ -117,7 +149,7 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 	}
 	waitFor(t, 10*time.Second, func() bool {
 		done, ok := f.b.Task(reverseSend.ID)
-		return ok && done.State == "completed"
+		return ok && done.State == "completed" && retainIdleSession(done.SessionID, time.Hour)
 	}, "reverse stream did not complete")
 	reverseDone, _ := f.b.Task(reverseSend.ID)
 	if reverseDone.SessionID != firstDone.SessionID {
@@ -167,6 +199,10 @@ func TestPairingCodePersistentInboxAndAlwaysAccept(t *testing.T) {
 		if matches != 1 {
 			t.Fatalf("paired device %s appeared %d times: %+v", expected, matches, devices)
 		}
+	}
+	// Restore the real expiry policy before testing revocation and reclamation.
+	if !retainIdleSession(reverseDone.SessionID, directSessionIdleTTL) {
+		t.Fatal("authenticated session was not idle before revocation")
 	}
 	if err := f.a.BlockPeer(f.bID.ID()); err != nil {
 		t.Fatal(err)

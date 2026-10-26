@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,6 +88,81 @@ func (f clipboardFilesFixture) copy(t *testing.T, generation uint64) {
 	}
 }
 
+func TestClipboardFilesRenewalDuringNativeReadKeepsFreshCopy(t *testing.T) {
+	f := newClipboardFilesFixture(t)
+	f.b.directPoolMu.Lock()
+	var receiver *PeerSession
+	for _, pooled := range f.b.directPool {
+		receiver = pooled.peer
+	}
+	f.b.directPoolMu.Unlock()
+	f.a.directPoolMu.Lock()
+	var sender *PeerSession
+	for _, pooled := range f.a.directPool {
+		sender = pooled.peer
+	}
+	f.a.directPoolMu.Unlock()
+	if sender == nil || receiver == nil {
+		t.Fatal("fixture has no authenticated clipboard peers")
+	}
+	previous, ok := f.a.clipboardSync.Outbound(sender.PeerID, sender.SessionID, sender.RemoteAuthorizationGeneration, clipboardsync.Files)
+	if !ok {
+		t.Fatal("fixture has no initial file lease")
+	}
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	f.a.clipboardAdapterMu.Lock()
+	read := f.a.clipboardAdapter.ReadFiles
+	f.a.clipboardAdapter.ReadFiles = func(ctx context.Context, generation uint64) ([]string, uint64, error) {
+		close(entered)
+		select {
+		case <-release:
+			return read(ctx, generation)
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		}
+	}
+	f.a.clipboardAdapterMu.Unlock()
+	f.aGen.Store(2)
+	finished := make(chan error, 1)
+	go func() {
+		finished <- f.a.ClipboardChanged(f.ctx, ClipboardChange{Generation: 2, Kinds: []clipboardsync.Kind{clipboardsync.Files}})
+	}()
+	select {
+	case <-entered:
+	case <-f.ctx.Done():
+		t.Fatal("native metadata read was not reached")
+	}
+	// Force a real renewal to arrive after the local observation but before
+	// binding. Its local baseline is already this copy's generation, whereas
+	// the still-valid overlapping lease predates it.
+	f.b.sendClipboardLease(f.ctx, receiver)
+	waitFor(t, time.Second, func() bool {
+		latest, ok := f.a.clipboardSync.Outbound(sender.PeerID, sender.SessionID, sender.RemoteAuthorizationGeneration, clipboardsync.Files)
+		return ok && latest.ID != previous.ID
+	}, "renewal did not arrive while the native read was blocked")
+	unblock()
+	if err := <-finished; err != nil {
+		t.Fatal("fresh copy failed after a same-policy renewal", err)
+	}
+	if len(f.a.ClipboardFileProgresses()) != 1 {
+		t.Fatal("renewal silently discarded the already-observed fresh copy")
+	}
+	select {
+	case paths := <-f.written:
+		if len(paths) != 1 {
+			t.Fatal("fresh copy did not publish exactly one file")
+		}
+		if data, err := os.ReadFile(paths[0]); err != nil || string(data) != "clipboard file bytes" {
+			t.Fatal("fresh copy contents changed across renewal", err)
+		}
+	case <-f.ctx.Done():
+		t.Fatal("fresh copy did not complete across renewal", f.a.ClipboardFileProgresses(), f.b.ClipboardFileProgresses())
+	}
+}
+
 func TestClipboardFilesUseAuthenticatedFileProtocolAndNativePaths(t *testing.T) {
 	f := newClipboardFilesFixture(t)
 	ctx, written, source := f.ctx, f.written, f.source
@@ -118,6 +195,50 @@ func TestClipboardFilesUseAuthenticatedFileProtocolAndNativePaths(t *testing.T) 
 		}
 		return true
 	}, "receiver retained a stale file-copy status")
+}
+
+func TestClipboardFilesUncertainNativePublicationKeepsVerifiedPaths(t *testing.T) {
+	f := newClipboardFilesFixture(t)
+	f.b.clipboardAdapterMu.Lock()
+	write := f.b.clipboardAdapter.WriteFiles
+	f.b.clipboardAdapter.WriteFiles = func(paths []string, expected uint64, deadline time.Time) (uint64, error) {
+		generation, err := write(paths, expected, deadline)
+		if err != nil {
+			return generation, err
+		}
+		// A native mutation may succeed before its final acknowledgment fails.
+		return generation, errors.New("native publication result is uncertain")
+	}
+	f.b.clipboardAdapterMu.Unlock()
+	f.copy(t, 2)
+	var published []string
+	select {
+	case published = <-f.written:
+	case <-f.ctx.Done():
+		t.Fatal("native publication did not start")
+	}
+	waitFor(t, time.Second, func() bool {
+		for _, p := range f.b.ClipboardFileProgresses() {
+			if clipboardFileFinished(p.State) {
+				return true
+			}
+		}
+		return false
+	}, "uncertain native publication did not finish")
+	if len(published) != 1 {
+		t.Fatal("unexpected native roots")
+	}
+	if data, err := os.ReadFile(published[0]); err != nil || string(data) != "clipboard file bytes" {
+		t.Fatal("uncertain native result deleted an OS-visible verified file", err)
+	}
+	for _, p := range f.b.ClipboardFileProgresses() {
+		if p.Error != "file_copy_publication_uncertain" {
+			t.Fatal("uncertain native outcome was reported as definitely unpublished", p)
+		}
+		if record := loadTestCacheRecord(t, f.b, p.ID); record.State != "protected" {
+			t.Fatal("uncertain native publication lost its durable protection", record.State)
+		}
+	}
 }
 
 func TestClipboardFilesCancellationBeforeBodyDoesNotPublish(t *testing.T) {
@@ -263,13 +384,13 @@ func TestClipboardFileCompletionCannotClearNewerCopyStatus(t *testing.T) {
 	if got := s.clipboardPeerRuntime["peer"]; got.FileID != "new" || got.Waiting != "copying_files" {
 		t.Fatal("old completion cleared new copy", got)
 	}
-	for _, statusError := range []string{"file_copy_failed", "write_failed"} {
+	for _, statusError := range []string{"file_copy_failed", "file_copy_disk_full", "file_copy_publication_uncertain", "write_failed"} {
 		ctx, cancel = context.WithCancel(t.Context())
 		job = &clipboardFileJob{peer: &PeerSession{PeerID: "peer"}, ctx: ctx, cancel: cancel, progress: ClipboardFileProgress{ID: "new", State: "transferring"}}
 		s.clipboardPeerRuntime["peer"] = clipboardPeerRuntimeStatus{FileID: "new", Waiting: "copying_files", Error: statusError}
 		s.finishClipboardFile(job, nil)
 		got := s.clipboardPeerRuntime["peer"]
-		if got.Waiting != "" || got.FileID != "" || (statusError == "file_copy_failed" && got.Error != "") || (statusError == "write_failed" && got.Error != statusError) {
+		if got.Waiting != "" || got.FileID != "" || (clipboardFileError(statusError) && got.Error != "") || (statusError == "write_failed" && got.Error != statusError) {
 			t.Fatal("completion changed an unrelated error or retained old file status", got)
 		}
 	}

@@ -369,11 +369,15 @@ func (s *Service) closePooledSessions(peerID string) {
 	}
 }
 
-func (s *Service) closeIdlePooledSessions() {
+// OS notifications and interface snapshots do not prove that a QUIC path is
+// broken. In particular a file-idle session can still own clipboard leases.
+// Leave healthy connections to their transport and existing idle owner; only
+// prune connections whose closure has already been observed by QUIC.
+func (s *Service) pruneClosedIdlePooledSessions() {
 	s.directPoolMu.Lock()
 	var peers []*PeerSession
 	for key, pooled := range s.directPool {
-		if !pooled.inUse && !pooled.receiving {
+		if !pooled.inUse && !pooled.receiving && pooled.peer.Data.Conn.Context().Err() != nil {
 			if pooled.timer != nil {
 				pooled.timer.Stop()
 			}

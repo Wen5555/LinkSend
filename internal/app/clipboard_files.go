@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/clipboardsync"
@@ -43,16 +44,18 @@ type clipboardFileOffer struct {
 }
 
 type clipboardFileJob struct {
-	peer        *PeerSession
-	event       clipboardsync.Event
-	lease       clipboardsync.Lease
-	reservation *clipboardsync.FileReservation
-	paths       []string
-	progress    ClipboardFileProgress
-	ctx         context.Context
-	cancel      context.CancelFunc
-	ready       chan struct{}
-	started     bool
+	peer                 *PeerSession
+	event                clipboardsync.Event
+	lease                clipboardsync.Lease
+	reservation          *clipboardsync.FileReservation
+	paths                []string
+	progress             ClipboardFileProgress
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	ready                chan struct{}
+	started              bool
+	localFailure         bool // Rejection precedes peer cancellation/connection teardown.
+	publicationUncertain bool
 }
 
 func validClipboardFileID(id string, size int) bool {
@@ -196,11 +199,15 @@ func (s *Service) updateClipboardFile(job *clipboardFileJob, state string, p tra
 func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	s.clipboardFilesMu.Lock()
 	wasCancelled := job.progress.State == "cancelled"
+	localFailure := job.localFailure
 	job.progress.State = "completed"
 	if err != nil {
 		job.progress.State = "failed"
-		job.progress.Error = "file_copy_failed"
-		if job.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, clipboardsync.ErrConflict) {
+		job.progress.Error = clipboardFileFailureCode(err)
+		if job.publicationUncertain {
+			job.progress.Error = "file_copy_publication_uncertain"
+		}
+		if !localFailure && (job.ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, clipboardsync.ErrConflict)) {
 			job.progress.State = "cancelled"
 			job.progress.Error = ""
 		}
@@ -210,14 +217,15 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	}
 	job.cancel()
 	failed := job.progress.State == "failed"
+	failure := job.progress.Error
 	s.clipboardFilesMu.Unlock()
 	s.clipboardStatusMu.Lock()
 	status := s.clipboardPeerRuntime[job.peer.PeerID]
 	if status.FileID == job.progress.ID {
 		status.Waiting, status.FileID = "", ""
 		if failed {
-			status.Error = "file_copy_failed"
-		} else if status.Error == "file_copy_failed" {
+			status.Error = failure
+		} else if clipboardFileError(status.Error) {
 			status.Error = ""
 		}
 	}
@@ -232,11 +240,22 @@ func (s *Service) finishClipboardFile(job *clipboardFileJob, err error) {
 	}
 }
 
+func clipboardFileError(code string) bool {
+	return code == "file_copy_failed" || code == "file_copy_disk_full" || code == "file_copy_publication_uncertain"
+}
+
+func clipboardFileFailureCode(err error) string {
+	if protocol.ErrorCode(err) == protocol.DiskFull || errors.Is(err, syscall.ENOSPC) {
+		return "file_copy_disk_full"
+	}
+	return "file_copy_failed"
+}
+
 func (s *Service) clipboardFileCancelled(peer *PeerSession, message clipboardsync.Message) {
 	s.clipboardFilesMu.Lock()
 	defer s.clipboardFilesMu.Unlock()
 	job := s.clipboardFileJobs[clipboardFileKey(peer, message.FileID)]
-	if job != nil && job.event.Digest == message.Digest && job.event.LeaseID == message.LeaseID && !clipboardFileFinished(job.progress.State) {
+	if job != nil && job.event.Digest == message.Digest && job.event.LeaseID == message.LeaseID && !job.localFailure && !clipboardFileFinished(job.progress.State) {
 		job.progress.State = "cancelled"
 		job.cancel()
 	}
@@ -295,7 +314,7 @@ func (s *Service) clipboardFilesChanged(ctx context.Context, observation clipboa
 			s.setClipboardPeerError(peer.PeerID, "files_unsupported")
 			continue
 		}
-		_, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files)
+		_, leased := s.clipboardSync.OutboundForObservation(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files, observation)
 		if permitted && leased {
 			eligible = append(eligible, peer)
 		}
@@ -327,7 +346,7 @@ func (s *Service) clipboardFilesChanged(ctx context.Context, observation clipboa
 		return err
 	}
 	for _, peer := range eligible {
-		lease, leased := s.clipboardSync.Outbound(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files)
+		lease, leased := s.clipboardSync.OutboundForObservation(peer.PeerID, peer.SessionID, peer.RemoteAuthorizationGeneration, clipboardsync.Files, base)
 		grant, permitted := s.clipboardGrant(peer.PeerID, "send", clipboardsync.Files, peer.AuthorizationGeneration)
 		if !leased || !permitted {
 			continue
@@ -409,7 +428,7 @@ func (s *Service) admitClipboardFiles(peer *PeerSession, candidate clipboardsync
 			defer s.clipboardWorkers.Done()
 			<-jobCtx.Done()
 			s.clipboardFilesMu.Lock()
-			if !clipboardFileFinished(job.progress.State) {
+			if !clipboardFileFinished(job.progress.State) && !job.localFailure {
 				job.progress.State = "cancelled"
 			}
 			s.clipboardFilesMu.Unlock()
@@ -461,7 +480,7 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 		return clipboardsync.ErrStale
 	}
 	s.updateClipboardFile(job, "preparing", transfer.Progress{})
-	prepared, err := transfer.PrepareForResume(job.ctx, job.paths, transfer.DefaultChunkSize, job.progress.ID)
+	prepared, err := s.prepareUserSourcesForResume(job.ctx, job.paths, transfer.DefaultChunkSize, job.progress.ID, nil)
 	if err != nil {
 		return err
 	}
@@ -493,7 +512,7 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 		}
 	}
 	var operationErr error
-	defer func() { _ = s.releasePeerSession(job.peer, operationErr) }()
+	defer func() { _ = s.releaseClipboardFileSession(job, operationErr) }()
 	stream, err := job.peer.Data.Conn.OpenStreamSync(job.ctx)
 	if err != nil {
 		operationErr = err
@@ -517,8 +536,19 @@ func (s *Service) sendClipboardFiles(job *clipboardFileJob) error {
 	}
 	_ = stream.SetWriteDeadline(time.Time{})
 	_, err = transfer.SendWithOptions(job.ctx, wrapped, prepared, transfer.SendOptions{BodyBudget: processFileBudget, Hooks: transfer.SendHooks{Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "transferring", p) }}})
-	operationErr = err
-	return err
+	operationErr = classifyTaskError(err)
+	return operationErr
+}
+
+func (s *Service) releaseClipboardFileSession(job *clipboardFileJob, err error) error {
+	// Stream interruption can surface EOF/another I/O error after cancellation.
+	// Keep that diagnostic, but also preserve the canceled operation's control
+	// intent so a healthy connection is not mistaken for a failed QUIC path.
+	// releasePeerSession still rejects reuse when the connection itself closed.
+	if cause := job.ctx.Err(); cause != nil {
+		err = errors.Join(cause, err)
+	}
+	return s.releasePeerSession(job.peer, err)
 }
 
 func (s *Service) receiveClipboardFileStream(peer *PeerSession, stream *transport.QUICStream) (handled bool) {
@@ -579,36 +609,74 @@ func (s *Service) receiveClipboardFileStream(peer *PeerSession, stream *transpor
 	return true
 }
 
-func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport.QUICStream) error {
+func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport.QUICStream) (err error) {
 	select {
 	case s.clipboardFileReadSlots <- struct{}{}:
 	case <-job.ctx.Done():
 		return job.ctx.Err()
 	}
 	defer func() { <-s.clipboardFileReadSlots }()
-	root := filepath.Join(s.cfg.DataDir, "clipboard-files")
-	if err := os.MkdirAll(root, 0700); err != nil {
-		return err
-	}
-	directory := filepath.Join(root, job.progress.ID)
-	// Transfer IDs are fixed-width lowercase hex and the per-transfer directory
-	// must be new. No remote path can choose the local cache root.
-	if err := os.Mkdir(directory, 0700); err != nil {
-		return err
-	}
-	cache, err := os.OpenRoot(root)
+	destination, err := openClipboardCacheDestination(s.cfg.DataDir, job.progress.ID)
 	if err != nil {
 		return err
 	}
-	defer cache.Close()
-	published := false
+	directory := destination.directory
+	published, nativeAttempted := false, false
+	var receipt *clipboardCacheReceipt
 	defer func() {
-		if !published {
-			_ = cache.RemoveAll(job.progress.ID)
+		// ReceiveWithOptions closed its receiver before returning. Close our
+		// pinned destination too before releasing the lifecycle reference.
+		_ = destination.Close()
+		if receipt != nil && receipt.release != nil {
+			receipt.release()
 		}
 	}()
+	defer func() {
+		var metadataErr error
+		if !published && !nativeAttempted {
+			var cleanupErr error
+			if receipt != nil {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				cleanupErr = receipt.discardUnpublished(cleanupCtx)
+				cancel()
+			} else {
+				cleanupErr = destination.discardUnpublished()
+			}
+			if receipt != nil {
+				if cleanupErr == nil {
+					metadataErr = receipt.forgetRemoved()
+				} else if receipt.record.State != "reclaimable" && receipt.record.State != "deleting" {
+					metadataErr = receipt.advance("abandoned")
+				}
+			}
+		} else if receipt != nil {
+			if published {
+				metadataErr = receipt.advance("published")
+			} else {
+				metadataErr = receipt.advance("protected")
+			}
+		}
+		if metadataErr != nil && err == nil {
+			err = cacheMetadataError(metadataErr)
+			if nativeAttempted {
+				s.clipboardFilesMu.Lock()
+				job.publicationUncertain = true
+				s.clipboardFilesMu.Unlock()
+			}
+		}
+	}()
+	receipt, err = s.registerClipboardCache(destination, job.peer.PeerID)
+	if err != nil {
+		return cacheMetadataError(err)
+	}
 	var roots []string
-	_, err = transfer.ReceiveWithOptions(job.ctx, stream, transfer.ReceiveOptions{Directory: directory, Peer: job.peer.PeerID, Plan: func(_ context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
+	var releaseSpace func()
+	defer func() {
+		if releaseSpace != nil {
+			releaseSpace()
+		}
+	}()
+	_, err = transfer.ReceiveWithOptions(job.ctx, stream, transfer.ReceiveOptions{Directory: directory, Root: destination.object, Peer: job.peer.PeerID, Plan: func(_ context.Context, offer transfer.Offer) (transfer.ReceivePlan, error) {
 		if offer.Manifest.TransferID != job.progress.ID || offer.Content != nil || !s.clipboardFileCurrent(job) {
 			return transfer.ReceivePlan{}, clipboardsync.ErrStale
 		}
@@ -623,12 +691,43 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		if len(roots) == 0 || len(roots) > 128 {
 			return transfer.ReceivePlan{}, clipboardsync.ErrLimit
 		}
+		if releaseSpace != nil {
+			return transfer.ReceivePlan{}, clipboardsync.ErrStale
+		}
+		releaseSpace, err = s.clipboardCacheSpace.reserve(directory, offer.Manifest)
+		if errors.Is(err, syscall.ENOSPC) {
+			_, _ = s.collectClipboardCache(job.ctx, true, time.Now())
+			releaseSpace, err = s.clipboardCacheSpace.reserve(directory, offer.Manifest)
+		}
+		if err != nil {
+			// Record local rejection before the engine sends its terminal error.
+			// Otherwise the peer's resulting file_cancel can arrive first and
+			// erase the actionable local reason. Earlier user cancellation wins.
+			s.clipboardFilesMu.Lock()
+			if !clipboardFileFinished(job.progress.State) && job.ctx.Err() == nil {
+				job.localFailure = true
+			}
+			s.clipboardFilesMu.Unlock()
+			return transfer.ReceivePlan{}, err
+		}
 		plan := transfer.FullReceivePlan(offer.Manifest)
 		plan.Directory = directory
+		if err := receipt.bindManifest(offer.Manifest); err != nil {
+			return transfer.ReceivePlan{}, cacheMetadataError(err)
+		}
 		return plan, nil
-	}, Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "receiving", p) }})
+	}, StorageReady: func(storage transfer.ReceiveStorage) error {
+		if err := receipt.bindStage(storage); err != nil {
+			return cacheMetadataError(err)
+		}
+		return nil
+	}, StorageClosing: receipt.captureClosingStorage,
+		Progress: func(p transfer.Progress) { s.updateClipboardFile(job, "receiving", p) }})
 	if err != nil {
 		return err
+	}
+	if err := receipt.advance("verified"); err != nil {
+		return cacheMetadataError(err)
 	}
 	s.clipboardAdapterMu.RLock()
 	adapter := s.clipboardAdapter
@@ -638,6 +737,11 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 	}
 	if err := job.ctx.Err(); err != nil {
 		return err
+	}
+	// Durable intent can involve disk I/O. Persist it outside the permission
+	// and clipboard-state locks; revalidate every control/CAS condition below.
+	if err := receipt.advance("publishing"); err != nil {
+		return cacheMetadataError(err)
 	}
 	s.clipboardGrantMu.Lock()
 	defer s.clipboardGrantMu.Unlock()
@@ -652,8 +756,23 @@ func (s *Service) receiveClipboardFiles(job *clipboardFileJob, stream *transport
 		if adapter.Generation() != expected {
 			return 0, clipboardsync.ErrConflict
 		}
+		if err := destination.visible(); err != nil {
+			return 0, err
+		}
+		if err := receipt.beginNative(); err != nil {
+			return 0, cacheMetadataError(err)
+		}
+		// Even an error can follow a native mutation. Once the OS adapter has
+		// seen the paths, preserve verified files until ownership reconciliation
+		// can prove they are no longer in use. Never remove possibly visible data.
+		nativeAttempted = true
 		return adapter.WriteFiles(roots, expected, job.reservation.Deadline)
 	})
 	published = err == nil
+	if err != nil && nativeAttempted {
+		s.clipboardFilesMu.Lock()
+		job.publicationUncertain = true
+		s.clipboardFilesMu.Unlock()
+	}
 	return err
 }

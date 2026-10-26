@@ -37,6 +37,10 @@ export function AcceptTaskAlways(id: string): $CancellablePromise<void> {
     return $Call.ByID(805976429, id);
 }
 
+export function ApproveTemporaryShare(id: string, claimID: string, receiverKey: string, generation: number): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(1705608156, id, claimID, receiverKey, generation);
+}
+
 export function Background(): $CancellablePromise<$models.BackgroundStatus> {
     return $Call.ByID(474171957);
 }
@@ -65,6 +69,10 @@ export function CancelTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(840985698, id);
 }
 
+export function CancelTemporaryShare(id: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(2469549041, id);
+}
+
 export function CancelUpdate(): $CancellablePromise<updater$0.Status> {
     return $Call.ByID(1981887714);
 }
@@ -75,6 +83,10 @@ export function CaptureClipboardImage(requestID: string): $CancellablePromise<ap
 
 export function CheckForUpdates(): $CancellablePromise<updater$0.Status> {
     return $Call.ByID(2675659504);
+}
+
+export function ClaimTemporaryShare(code: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(3943474205, code);
 }
 
 export function CleanupContentSnapshots(): $CancellablePromise<app$0.ContentCleanupResult> {
@@ -109,6 +121,10 @@ export function ConfirmQueue(id: string, revision: number): $CancellablePromise<
     return $Call.ByID(3080801262, id, revision);
 }
 
+export function ConfirmTemporaryShareSave(id: string, directory: string, conflictPolicy: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(3113007024, id, directory, conflictPolicy);
+}
+
 export function ContentDrafts(): $CancellablePromise<app$0.ContentDraft[] | null> {
     return $Call.ByID(1795683294);
 }
@@ -129,12 +145,28 @@ export function CopyReceivedText(taskID: string): $CancellablePromise<app$0.Cont
     return $Call.ByID(2054701800, taskID);
 }
 
+export function CopyTemporaryShareCode(id: string, code: string): $CancellablePromise<void> {
+    return $Call.ByID(1000794271, id, code);
+}
+
 export function CreateContentText(request: app$0.ContentTextRequest): $CancellablePromise<app$0.ContentDraft> {
     return $Call.ByID(2519138601, request);
 }
 
 export function CreateInvitation(): $CancellablePromise<app$0.InvitationInfo> {
     return $Call.ByID(997854590);
+}
+
+/**
+ * The desktop passes only the already saved main-draft revision. File paths
+ * and source selection are reloaded in Go, not reconstructed by JavaScript.
+ */
+export function CreateTemporaryShare(expectedDraftRevision: number): $CancellablePromise<app$0.TemporaryShareCreation> {
+    return $Call.ByID(3839785911, expectedDraftRevision);
+}
+
+export function DenyTemporaryShare(id: string, claimID: string, generation: number): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(2241883125, id, claimID, generation);
 }
 
 export function DesktopEntries(): $CancellablePromise<$models.DesktopEntryStatus> {
@@ -179,6 +211,14 @@ export function EnqueueContent(request: app$0.EnqueueContentRequest): $Cancellab
 
 export function EnqueueQuickSend(revision: number, waitForPeer: boolean): $CancellablePromise<app$0.QueueItem> {
     return $Call.ByID(2822745730, revision, waitForPeer);
+}
+
+/**
+ * Only this explicit native-picker command exports a report. The frontend
+ * receives success/cancel state, never a private raw service snapshot.
+ */
+export function ExportDiagnostics(): $CancellablePromise<string> {
+    return $Call.ByID(4266831633);
 }
 
 export function ForgetInboxRecords(records: app$0.InboxRecordRef[] | null): $CancellablePromise<void> {
@@ -336,6 +376,10 @@ export function RefreshLANDiscovery(): $CancellablePromise<void> {
     return $Call.ByID(850507783);
 }
 
+export function RefreshTemporaryShare(id: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(928530082, id);
+}
+
 export function RejectTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(3901406115, id);
 }
@@ -368,8 +412,20 @@ export function ResumeTask(id: string): $CancellablePromise<app$0.TaskSnapshot> 
     return $Call.ByID(1059512591, id);
 }
 
+export function ResumeTemporaryShare(id: string): $CancellablePromise<app$0.TaskSnapshot> {
+    return $Call.ByID(1787594972, id);
+}
+
 export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
     return $Call.ByID(3354333520, id);
+}
+
+export function RetryTemporaryShareAction(id: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(577395241, id);
+}
+
+export function RetryTemporaryShareClaim(id: string, code: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(2574363781, id, code);
 }
 
 /**
@@ -378,6 +434,10 @@ export function RetryTask(id: string): $CancellablePromise<app$0.TaskSnapshot> {
  */
 export function RevealInboxFile(taskID: string, fileID: number): $CancellablePromise<void> {
     return $Call.ByID(4148502446, taskID, fileID);
+}
+
+export function RevokeTemporaryShare(id: string): $CancellablePromise<app$0.TemporaryShareSnapshot> {
+    return $Call.ByID(2581032809, id);
 }
 
 export function SaveDeviceProfile(profile: app$0.DeviceProfile): $CancellablePromise<app$0.DeviceProfile> {
@@ -441,6 +501,10 @@ export function StartSend(peerID: string, paths: string[] | null): $CancellableP
     return $Call.ByID(1052991585, peerID, paths);
 }
 
+export function StartTemporaryShare(id: string): $CancellablePromise<app$0.TaskSnapshot> {
+    return $Call.ByID(425796317, id);
+}
+
 /**
  * Status reports this running shell only; it does not claim a P2P connection.
  */
@@ -454,6 +518,10 @@ export function SwitchMembership(token: string, name: string): $CancellablePromi
 
 export function Tasks(): $CancellablePromise<app$0.TaskSnapshot[] | null> {
     return $Call.ByID(151226709);
+}
+
+export function TemporaryShares(): $CancellablePromise<app$0.TemporaryShareSnapshot[] | null> {
+    return $Call.ByID(1470463780);
 }
 
 export function TrustDevice(deviceID: string, fingerprint: string): $CancellablePromise<void> {

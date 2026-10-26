@@ -517,6 +517,26 @@ func (s *State) Outbound(peerID, sessionID string, generation uint64, kind Kind)
 	return selected, selected.ID != ""
 }
 
+// OutboundForObservation selects a lease that predates this local copy. A
+// same-policy renewal installed while native metadata is being read can have
+// this copy as its baseline; keep using a still-valid overlapping lease rather
+// than rebinding old content to that renewal. Policy changes remove old leases.
+func (s *State) OutboundForObservation(peerID, sessionID string, generation uint64, kind Kind, observation Event) (Lease, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneLocked()
+	if s.paused || observation.Revision != s.revision || observation.OSGeneration != s.osGen || observation.OriginID != s.originID || observation.Boot != s.boot || observation.OriginSeq != s.seq {
+		return Lease{}, false
+	}
+	var selected Lease
+	for _, lease := range s.leases {
+		if lease.outbound && lease.PeerID == peerID && lease.SessionID == sessionID && lease.Generation == generation && lease.Kinds[kind] && observation.OSGeneration > lease.baseline && (selected.ID == "" || lease.issued.After(selected.issued)) {
+			selected = lease
+		}
+	}
+	return selected, selected.ID != ""
+}
+
 func (s *State) HasOutbound(peerID, sessionID string, generation uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

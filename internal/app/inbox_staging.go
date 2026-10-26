@@ -323,7 +323,11 @@ func (s *Service) ResolveInboxFile(ctx context.Context, taskID string, fileID ui
 	if err = ctx.Err(); err != nil {
 		return InboxLocation{}, err
 	}
-	return InboxLocation{TaskID: taskID, FileID: fileID, Name: relative, Path: filepath.Join(directory, filepath.FromSlash(relative))}, nil
+	resolved := filepath.Join(directory, filepath.FromSlash(relative))
+	if err = s.ValidateExternalFilePath(ctx, resolved); err != nil {
+		return InboxLocation{}, err
+	}
+	return InboxLocation{TaskID: taskID, FileID: fileID, Name: relative, Path: resolved}, nil
 }
 
 func (s *Service) loadInboxTask(ctx context.Context, id string) (TaskSnapshot, taskRecovery, error) {

@@ -10,4 +10,64 @@ export interface Capabilities {
     "restart_recovery_supported": boolean;
     "byte_resume_supported": boolean;
     "membership_version": number;
+    "share_grants_v1"?: boolean;
 }
+
+export enum Code {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    SignalingUnreachable = "SIGNALING_UNREACHABLE",
+    SignalingTimeout = "SIGNALING_TIMEOUT",
+    CandidateTimeout = "CANDIDATE_EXCHANGE_TIMEOUT",
+    PeerOffline = "PEER_OFFLINE",
+    LANDiscoveryUnavailable = "LAN_DISCOVERY_UNAVAILABLE",
+    LANControlUnreachable = "LAN_CONTROL_UNREACHABLE",
+    LANProbeInvalid = "LAN_PROBE_INVALID",
+    Unpaired = "UNPAIRED",
+    PairingCodeInvalid = "PAIRING_CODE_INVALID",
+    PairingCodeExpired = "PAIRING_CODE_EXPIRED",
+    PairingCodeUsed = "PAIRING_CODE_USED",
+    PairingIdentityConflict = "PAIRING_IDENTITY_CONFLICT",
+    AuthenticationFailed = "AUTHENTICATION_FAILED",
+    VersionIncompatible = "VERSION_INCOMPATIBLE",
+    NoCandidates = "NO_CANDIDATES",
+    NoViableCandidate = "NO_VIABLE_CANDIDATE",
+    CheckTimeout = "CHECK_TIMEOUT",
+    ICEFailed = "ICE_FAILED",
+    QUICHandshakeTimeout = "QUIC_HANDSHAKE_TIMEOUT",
+    QUICHandshakeFailed = "QUIC_HANDSHAKE_FAILED",
+    DirectFailed = "DIRECT_FAILED",
+    RelayNotImplemented = "RELAY_NOT_IMPLEMENTED",
+    ReceiveRejected = "RECEIVE_REJECTED",
+    SourceChanged = "SOURCE_CHANGED",
+    IntegrityFailed = "INTEGRITY_FAILED",
+    DiskFull = "DISK_FULL",
+    PermissionDenied = "PERMISSION_DENIED",
+    FileConflict = "FILE_CONFLICT",
+    UnsafePath = "UNSAFE_PATH",
+    Cancelled = "CANCELLED",
+    InvalidMessage = "INVALID_MESSAGE",
+    Replay = "REPLAY",
+    RateLimited = "RATE_LIMITED",
+    SessionConflict = "SESSION_CONFLICT",
+    ConnectionInterrupted = "CONNECTION_INTERRUPTED",
+    ResumeMismatch = "RESUME_IDENTITY_MISMATCH",
+    ReceivePlanUnsupported = "RECEIVE_PLAN_UNSUPPORTED",
+    ReceivePlanMismatch = "RECEIVE_PLAN_MISMATCH",
+    ReceivePlanInvalid = "INVALID_RECEIVE_PLAN",
+    ReceivePlanPersistence = "RECEIVE_PLAN_PERSIST_FAILED",
+    ReceiveDirectoryUnavailable = "RECEIVE_DIRECTORY_UNAVAILABLE",
+    ContentUnsupported = "CONTENT_UNSUPPORTED",
+    ContentInvalid = "INVALID_CONTENT_DESCRIPTOR",
+    ContentMismatch = "CONTENT_MISMATCH",
+    ShareInvalid = "SHARE_INVALID",
+    ShareRejected = "SHARE_REJECTED",
+    ShareExpired = "SHARE_EXPIRED",
+    ShareConflict = "SHARE_CONFLICT",
+    ShareTerminal = "SHARE_TERMINAL",
+    ShareUnsupported = "SHARE_UNSUPPORTED",
+    ShareUnavailable = "SHARE_UNAVAILABLE",
+};

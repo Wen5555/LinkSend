@@ -198,6 +198,19 @@ func (r *Receiver) persistPlan() error {
 	if err := r.checkpoint(); err != nil {
 		return fmt.Errorf("%w: %w", ErrPlanPersistence, err)
 	}
+	return r.notifyPlanReady()
+}
+
+func (r *Receiver) notifyPlanReady() error {
+	if r.storageReady != nil {
+		files := make(map[uint32]*os.File, len(r.files))
+		for id, file := range r.files {
+			files[id] = file
+		}
+		if err := r.storageReady(ReceiveStorage{Root: r.root, Stage: r.stage, Files: files, Manifest: cloneManifest(r.State.Manifest), Plan: clonePlan(r.plan), Peer: r.State.Peer}); err != nil {
+			return fmt.Errorf("%w: %w", ErrPlanPersistence, err)
+		}
+	}
 	if r.planChanged != nil {
 		if err := r.planChanged(clonePlan(r.plan)); err != nil {
 			return fmt.Errorf("%w: %w", ErrPlanPersistence, err)

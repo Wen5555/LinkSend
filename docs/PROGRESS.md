@@ -1,3 +1,244 @@
+## 2026-10-26 v0.7.0 发行收尾
+
+- 用户选择v0.7.0并要求收尾，停止新功能扩展。同步Go产品版本、前端、Wails资源、Windows安装器/系统分享清单和Mac bundle；文件协议V1不变。一次协议版本检查发现Appx旧值后补齐并通过；本机前端build先遇默认旧pnpm入口，切回既有工具链后仍被node_modules访问拒绝阻断，未称构建通过；由最终干净CI执行typecheck/build。最终准确源码CI/三平台包结果待发布后补录，未提前宣称通过。
+- 生产准确5ee升级已批准并完成，私有配置/一致性SQLite备份、副本升级重开与schema5兼容回退、现场镜像/数据/TLS后验均保留。正常公网控制面同源1KiB临时分享通过，双方本机完成/清单/hash一致、无永久授权残留，资源退场。[生产事务](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)与[公网分享](evidence/RELIABILITY-R5-PUBLIC-SHARE-5EE-20261026.md)。普通默认身份鉴权探针失败，原成员状态未知，未将其解释为数据迁移损坏或正向鉴权通过。
+- 5ad Windows包停于inbox复用测试：测试缺少保持会话未过期的时间前提，原CI根因INCONCLUSIVE。仅fixture停泊真实空闲timer并在撤权前恢复原3秒策略，保留三次同session/WSS数与撤权关闭断言；首次遗漏恢复导致清理FAIL，补齐后单例PASS，原日志保留。[收尾检查](evidence/RELIABILITY-070-CLOSEOUT.md)。产品TTL/安全门不变。
+- OLE锁组合探针从未运行到有效结果，JSON0/mutation0，收尾撤one-shot flag；不继续采样，不产生平台结论。Native删除保持关闭。R2键盘粘贴/已发布缓存完整GC、R4最终安装退出及WinWin/双NAT等缺项仍在唯一TODO，整体Goal未完成。
+
+## 2026-10-26 925后续最小静态检查及fixture诊断
+
+- 925 Windows在原缓存生命周期用例20秒未publish失败，单例隔离诊断未复现，根因INCONCLUSIVE；仅补该用例当前活连接/同session/files lease/grant revision起始门与安全计数/progress，原20秒及GC保护断言不变，两次针对具体改动的必要单例均通过，不伪称修产品。见[证据](evidence/RELIABILITY-R2-CACHE-PUBLICATION-FIXTURE-DIAGNOSTICS.md)。
+- 独立desktop vet拒绝探针native地址→Go slice；改用已有RtlMoveMemory并KeepAlive，一次仅编译和vet均0。925 native步骤skipped、JSON0/mutation0，未产生API结论；首次有效hosted结果尚待，flag没有提前撤。见[探针记录](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)。
+
+## 2026-10-26 同策略续租晚到的真实剪贴板修复
+
+- 366 Windows core步骤真实失败已固定复现：两张同策略lease中后者在native generation3才安装，文字路径误选最新baseline3，丢弃刚复制事件且两侧仍ready/error空。原代码+确定屏障exit1/13.881s；只把该处选择改为已有OutboundForObservation，同一用例exit0/11.728s，原3秒断言不变、无系统clipboard或整矩阵。
+- 固定当前observation及原peer/session/授权/kind/期限约束，选择仍有效且早于该复制的重叠lease；暂停/撤权/重放门不改。原366失败及5ee静态候选来源保留，新准确CI由本次push确认，见[因果证据](evidence/RELIABILITY-R1-CLIPBOARD-RENEWAL-CAUSAL-GATE.md)。
+
+## 2026-10-26 单次hosted OLE锁组合探测入口
+
+- 只复用既有GitHub-hosted Windows空板native测试入口，末尾恢复fixture后在同STA进行一次公共OLE组合探测；public数据缓存只含固定合成文字，竞争线程只试Open/Close，HRESULT负结果也记录，不卸锁重试/回滚/启用publisher。one-shot flag同时控制调用与summary强制记录，观测后即撤。
+- 本机仅一次CGO0 go test -c编译测试二进制exit0及workflow PowerShell AST解析0，未运行binary/init/clipboard；真实hosted结果当前NOT_RUN。scope、实际命令和后续撤flag要求见[探测证据](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)，不增加矩阵、不因采样成功声称全局CAS。
+
+## 2026-10-26 独立v3分页codec增量
+
+- 首帧/固定页/总摘要、strict canonical与原签名用途version3合同独立实施，旧controlled v2未改；10,000清单/20,003源、声明65MiB文件仅合成metadata，实际FD/helper/Shell/GC均未运行。
+- 一次定向2.507s通过后，review修合法!note/root排序与零mtime限制，仅同批复验2.500s及vet0；保留两日志，未扩矩阵。独立版本/错页/截断/摘要/超限等必要拒绝与旧codec兼容通过，当前CAS发布门/原1024-node持久inventory继续，见[证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
+
+## 2026-10-26 尚未激活的Shell原语增量
+
+- 独立ShellSession/Witness、标准虚拟文件格式、只读FD副本与真实native引用/Close门已落C++候选，Go仍只调用旧controlled v2，不广告或启用系统publisher/GC。可能export后无硬TTL/强杀路径，259 UTF-16发布名边界明确拒绝，不做物理路径fallback。
+- 一次严格CGO1 build和一次旧controlled COM回归exit0/6.380s通过，未调用新Shell/格式注册/系统clipboard/GUI。官方合同未保证外层OpenClipboard包住内部OLE window，最后代次检查不能当原子CAS；此缺口解前不激活。准确源码/命令/来源和后续独立v3分页codec见[证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)，R2仍未完成。
+
+## 2026-10-26 准确5ee候选核验与生产待授权
+
+- 5ee push/PR core、desktop及三平台packages均首次success；唯一一次Windows下载通过Actions摘要、完整clean来源、主PE锚与ZIP/installer内main/helper一致性静态核验，未运行候选/安装器/clipboard。准确Linux候选已构建，实际6包16生产输入与708/850逐项相同，复用一次合成库旅程而不重测。来源/hash与未验边界见[候选证据](evidence/RELIABILITY-CANDIDATE-5EE9A40.md)。
+- 生产只读仍0.5.0/schema4，准确5ee候选、目标、一致性备份/副本/兼容回退方案已备齐，按完整提示词第四节提出一次具体生产授权请求，尚未执行变更。其余原生publisher/GC继续，Goal保持active；Mac未等待或重测，R0–R6未整体完成。
+
+## 2026-10-26 R2普通源和OS出口拒绝
+
+- 20代码文件接通实际FD源约束及所有app准备/ReadChunk入口，关闭成功才释放；Open/Reveal/任务目录和excluded preview同门。普通父目录排除私有子树、外部用户名字保持，Native删除不启用，OS按path重开窗明确保留。
+- transfer定向3.207s、app三项7.188s和仅补public entry断言的preview单项4.754s均exit0；core compile/vet及desktop GOWORK=off CGO0仅编译exit0，无完整矩阵/GUI/clipboard重跑。独立只读审阅限此拒绝门通过，冻结、日志与边界见[证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)，R2未勾选。
+
+## 2026-10-26 R2 publisher owner与commit未知窗
+
+- ADR0016先冻结新的pathless publisher职责：准入期限不作源寿命、commit可能发出即不可强杀、真实Shell引用终静止、无物理路径出口、watcher/完成竞争、目录与大文件尚未接通限制和最后GC连接条件。当前不调用系统publisher、clipboard或GUI，不放开Native删除。
+- 新PublicationLifetime保存实际durable授权digest后的不可逆export_possible；现私有launcher在首个控制写之前进入该状态，close不再因缺Held ack而TerminateProcess。未来Shell政策在export后无硬deadline；当前受控helper的自身30秒仍是旧受控范围，不能称已完成生产Shell保活。
+- 两个必要安全状态用例一次GOWORK=off通过1.366s，core/app和desktop/helper仅编译及core vet退出0，没有新native场景或完整矩阵。实际范围、源码与未接出口见[证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。R2未完成，继续统一路径出口与实际OLE provider。
+
+## 2026-10-26 R5显式能力与入口门
+
+- 850准确push/PR core/desktop均首次success，Windows包被单一未同步的生成TS字段触发source-clean gate拒绝，原失败保留；486283f只补可选能力字段，准确850生成器复现/前端build通过且dist不变，随R2guard 5ee9a40已推送，新准确CI待核。04:54:45Z仅只读SSH刷新生产仍原PID/0.5.0/schema4/分享关闭，无备份/配置/迁移/重启，见[绑定修复](evidence/RELIABILITY-R5-GENERATED-CAPABILITY-BINDING.md)与[事务草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+- 准确708 Linux候选在本机WSL一次合成非空库完成4→5、唯一0600备份、原成员签名认证、新临时分享及准确36关闭分享读同schema5回退；永久表/新增分享均保留，三服务exit0退场。测试only850准确clean重建且产品输入完全相同，复用旅程不重跑；准确850 CI待，未访问生产。见[兼容回退证据](evidence/RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。
+- 7084685首次core CI 40270372762真实失败于旧取消测试把能力GET计作任意HTTP；仅修测试精确要求1次GET /healthz、零其他请求，原取消/worker/caller断言保持。708 clean归档加两测试文件的Preparation/HTTP一次定向exit0/5.158s，无产品改动、无重跑旧CI；新准确CI待核，详见下方能力证据。
+- 复用701e23b实网核心双向及准确36 Wails接收/保存/Completion/hash证据，显式开关开启且初始化成功的实例现在声明share_grants_v1/ready=true；默认仍关闭。客户端每操作检查规范能力、ready和当前epoch，旧控制/旧端在传码/开WS前明确unsupported，Create/Claim零prepare/零intent前置拒绝；原签名/永久隔离/双确认/取消与终态恢复保持。
+- 单次GOWORK=off server/signaling/app定向15项及桌面保存草稿入口1项通过，未重复数据面/全矩阵/race/GUI。准确最终CI仍待；R5整体未勾选。生产升级仅以历史只读记录准备目标/一致性备份/schema5兼容回退草案，未SSH/部署/开关/DB操作。见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)及[未授权事务草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
+
+## 2026-10-26 R2同次helper构建与私有镜像锚
+
+- Windows 原生构建先生成静态 CGO1 helper，以实际 SHA/PE/Go metadata 和提交/输入摘要/真实 dirty 状态编入 CGO0 桌面；私有 resolver 只认自身目录的固定摘要文件，严格解析与实际 PE/hash 校验，不读用户路径/hash、sidecar 或 helper 自报。没有默认 publisher/新 Wails API。
+- ZIP/NSIS 只带本次 helper，卸载只动确定文件和空目录；ZIP 先检查精确白名单、重复及摘要再解压。定向workspace/off两模式测试/vet、唯一 dirty 来源 build、NSIS 编译与只提取 helper 的 hash、五个 ZIP 负例通过；symlink 权限负例 SKIP、原生安装/clipboard/删除未运行。准确来源与限制见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍未完成；后续核对提交CI。
+
+## 2026-10-26 R2真实launcher退出与新main消费
+
+- 私有launch v2固定完整prepare摘要/原绝对期限；helper在真实STA↔MTA consumer、stream/clone/async持有时签Held，随后仅凭原稳定launcher HANDLE实际exit0继续读完、关闭源和签一次原receipt。成功detach后owner清理不再强杀helper；原profile/v1 receipt/schema12/Native保护保持。
+- 一次正例：launcher64872实际exit0→helper29500实际exit0→独立新main62292重载原profile身份并消费原run一次/重放拒绝。必要负例：launcher64288实际exit9→helper63112实际exit1/空spool→新main11436拒绝消费；两例源/hash保护、原绝对期限保持。driver直接接收复制的helper内核句柄，不按自报PID重开。app8.380s/生命周期3.23s，准确日志及范围见[证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
+- 新helper严格static build、core/helper vet及一次正常commit兼容app4.774s均exit0；未重复矩阵/race。30秒与未确认Held失败窗只属当前受控合同，不代表未来系统消费者的退出策略；无clipboard/注册/GUI/Native删除，R2整体不勾选。等待root审阅提交推送。
+
+## 2026-10-26 Windows测试现场已精确还原
+
+- 用户physical Escape停止Computer Use后，未重试GUI。新R4仅到63基线安装；候选36/activepeer未启动。原GUI由既有30分钟wrapper结束，exit1/forced=true/1800059ms，不能记正常退出或R4通过。
+- 原实例全退出、18449无listener后，同一Restore事务exit0/RESTORED_VERIFIED；原登记和三个快捷方式回读一致，隔离EXE不存在，profile/数据/备份保留。详见[恢复证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。Goal继续非GUI工作，不重启该场景。
+
+## 2026-10-26 R1准确36普通跨网与原任务恢复
+
+- 准确clean `36cfce3` core验证器及原rendezvous，独立私有HTTPS/WSS协调入口18447、只在driver进程信任CA，Windows↔JP公共Linux各一次16MiB+中文/zero/空目录：4文件7条目、16,777,310B，两端Completed/exit0及逐路径hash、TransferID/manifest一致，TLS1.3/ALPN linksend/1/relay=false。
+- 唯一恢复在实际verified4,194,398B显式Pause，再一次Resume原TaskID/TransferID/manifest、新attempt完成，verified/committed16,777,310、bilateral=true、7/7 hash一致；低层接收首段受控DIRECT_FAILED保留。它不替代GUI恢复/双NAT/网络切换/睡眠。
+- 隔离peer已撤，server/job正常exit0；owned forward按image/开始时间核验停止、18447无监听、自有进程0，临时邀请/CA私钥移除，profile/源/副本/checkpoint留证。未改产品源码、生产组或宿主网络，未操作GUI；按最小验证要求未扩矩阵。详见[本轮证据](evidence/RELIABILITY-R1-ORDINARY-CROSSNET-20261026.md)，R1其余及Goal仍未完成。
+
+## 2026-10-26 R2 Windows私有受控broker首增量
+
+- 固定预期可信image摘要、挂起CreateProcess返回的稳定hProcess、实际image身份核验后才恢复，并以私有本机继承管道验证child签名challenge。sealed inventory的实际只读源句柄交接给独立Go/C++ helper；真实内核BootIdentifier，无profile key/DB传入helper。当前无默认调用/发行包trust anchor，不接系统clipboard/注册或删除。
+- 一次真实STA↔MTA标准COM闭环通过：七个provider/marshal/stream/clone/async/关闭保护门、实际5个源句柄成功Close后签原delegation回执。helper真实exit0后，原Service关闭并重开、身份重载，原spool/同SQLite仅消费一次；wrong-image/child/行变化/伪回执/重放拒绝，压力collector保留源。它不证明GUI或launcher进程退出时仍有活跃consumer。
+- C++严格静态构建、GOWORK=off定向测试app8.080s与core/helper vet均exit0；第一次C++缩进-Werror失败、动态winpthread首版握手前退出真实FAIL保留，未改宿主DLL/PATH。按用户最小验证要求未追加完整矩阵/race多轮；具体命令、源码与边界见[证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。R2及Goal保持未完成；root提交后核对准确CI，不以本次受控回执代替系统粘贴与回收。
+
+## 2026-10-26 准确Windows包跨网临时分享完成
+
+- scene05准确36 Wails Windows从JP Linux实际领取、身份确认、加密清单预览、原生选目录并明确保存，三文件262175B与嵌套空目录全部落地；独立逐文件hash与双方本机/share/grant completed一致，双方确认、QUIC/TLS1.3/relay=false、零永久trust/clipboard grants、普通成员接口拒绝均有回执。GUI正常退出0、forced=false；详见[实机证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
+- Windows候选为srflx→host，method真实direct_unknown；只证明本次Windows↔公共Linux，不推断双NAT或原Windows双端现场。用户要求减少测试，后续采用最小功能验证及必要安全检查，复用现有有效结果，验证后及时commit/push；剩余必做仍继续，不将未运行改记通过。
+
+## 2026-10-26 Linux替代对端与准确候选
+
+- 用户明确允许 Linux 服务器替代 Mac。连接、恢复、普通双向传输及一次性分享按 Windows↔Linux 实网继续；不再等待 Mac。Windows 原生粘贴、缓存回收和安装退出继续实施，Finder/DMG 专属项目保持未验证，不将 Linux 或 CI 结果冒充原生认证。
+- 产品提交 `36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 已推送核对，core `40251000156`、desktop `40251000220`、packages `40251000157` 均首次成功，三平台包均成功。四资产来源/摘要与准确Windows载荷已核验，Windows EXE SHA256 `4d90408843347d637be7e2eb54b41cbcd8450cc7f48fa358ec4f585883cbb68d`；原生跨网分享正接续验证，未预记通过。
+
+## 2026-10-26 已批准对端等待与trickle测试前提
+
+- 临时分享HTTP/WSS保持短Check，认证后独立Wait并受原run/原阶段绝对grant期限限制；对端到场重验原owner/黑名单/scope，再开始新的短网络预算。新增本地中文等待phase及安全指导，无wire/schema/权限或自动重试变化。真实TLS/WSS旧红转为迟到peer的固定公钥ICE/QUIC，普通/race3轮及完整12矩阵/前端172项/typecheck/lint/build通过，见[证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。
+- 8082准确core/desktop成功，包Windows/ARM Mac成功、Intel Mac原trickle回归6秒超时。真实签名候选顺序overlay复现host/prflx导致相同超时的机制，但原CI没有path，不能断言其具体根因。仅测试在checks前经真实签名交换安装双端host，30普通/20race及禁结束分支负例验证通过，6秒/原安全断言保持，见[R1补证](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确CI另核对，旧失败保留。
+
+## 2026-10-26 临时分享信令原因与可操作提示
+
+- 真实SQLite/TLS/WSS孤立peer在认证后因果门复现裸deadline/cancel丢成DIRECT_FAILED；现在只在已知ConnectShare/WaitPeer阶段保留typed原因及errors.Is，已有grant/Auth/终态码不被取消竞争覆盖。legacy只有精确signaling_connect获得安全阶段指导，不从原始日志猜ICE/NAT原因。
+- 临时分享补固定P2P及RATE_LIMITED提示，保留原intent/明确重试，无自动派发。旧Go/UI失败保留；普通/race各3轮、前端171项/typecheck/lint/build、同版双Go模块workspace/off完整12命令均exit0。准确新CI另核对，未将原生失败改为通过，详见[诊断证据](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)。
+- 第三轮GUI加夹具批准就绪门后仍未传输：记录UTC接收端开始比发送端失败晚约0.414秒，但未测跨机时钟偏差，不能证明scope缺陷。两端0B、无预览/Completion，资源精确退场。原Check/Wait人机等候问题另作独立修复，不混入本增量。
+
+## 2026-10-26 准确包原生入口与失败证据
+
+- 3d20ccb准确三平台包已下载核对Actions digest、内外BUILD-INFO、四资产SHA及Windows PE/README；52f9bf2的core40240526707、desktop40240526725、packages40240526706再次查询均attempt1/completed/success，未重跑。52增量不倒记进3d包。
+- 准确Windows GUI已实际领取且由sender精确批准，但本轮receiver参与晚于sender实际35秒连接期限，两端最终failed/signaling_connect/DIRECT_FAILED，sender verified/committed=0，Windows无preview或本机Completion；不记传输通过，不推断用户现场根因。两轮私有GUI正常退出exit0；首个WebView隔离拒绝/强制退出和未备份全局缓存边界保留。
+- 同包实际SaveFile导出安全报告通过，也暴露DIRECT_FAILED及实际signaling_connect仍显示generic/unknown的诊断缺口；未将导出成功当错误说明完善。Mac07:14 SSH仍timeout255。详见[原生入口与保留失败](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)，下一轮仅加夹具批准就绪屏障，产品期限保持，R0–R6整体未完成。
+
+## 2026-10-26 R2 私有原生回执基础与删除状态认证
+
+- ADR0016先冻结receipt-only范围；同schema12/cache metadata可选Native签名记录、实际inventory封存、原publication跨main重启单次CAS/回读已实现，原save的run限制保留。launch/boot接口无生产构造或调用，签名不证明native refs语义；任何Native在老化/压力/boot改变后仍保护，未接WriteFiles或发布回收。
+- 新自有负例证明collector若信另传的副本，可将真实DB Native剥掉而误删；现重新认证实际row并只依该row判断删除态，源/hash保护。普通/race各三轮及两Go模块workspace/off完整12命令exit0，前端未改；详见[证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。准确新CI另核对，R2整体未完成。
+
+## 2026-10-26 cd95479 完整CI与原生代码复制目标通过
+
+- cd954790aebaf78b9673fce08351eece1de392e4的core40235670319、desktop40235670269、packages40235670231全部completed/success，三平台包job成功、attempt1无重试。Windows native目标真实run1/pass1/skip0/fail0/exit0，7.54s，恢复租约6934ms；active/paused码不读/缓存/转发，随后新原生text真实QUIC收取，三原始日志已留存。仅覆盖该native子目标，不代替准确Wails UI/文件键盘粘贴或Mac旅程。
+- Windows随包说明仍写0.6.0，与BUILD-INFO/PE0.6.2矛盾；已移除重复硬编码，版本/来源引用BUILD-INFO，摘要引用同资产SHA256SUMS，链接通用releases。仅文档变更，将显式打包取得正确说明的候选，复用cd完整代码CI；准确新包结果另记。
+
+## 2026-10-26 Windows原生复制夹具就绪门
+
+- 纯Core/QUIC与copy/deliver桥接回归证明原三秒门在resume时可失败：A接收已就绪、发送等待对端既有七秒lease周期，连接保持健康。现夹具先等receiver实际注册，并按原15秒父context等待真实initial/resumed租约，不改生产、权限、周期或强迫对端续租；103旧CI仍保留调用点歧义。
+- 最终普通三轮/race三轮与desktop双模式六检查全exit0，恢复实际约6.98秒、无额外WSS、保护码不读/不发而新文字实传。本机native optin未跑；新提交托管native及准确包继续核对，详见[证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+## 2026-10-26 R5 准确源码实网与R2原生引用原型
+
+- `701e23b`干净源码验证器完成Windows↔公共JP Linux双向临时分享，每向3文件16,777,247B、中文/零字节/嵌套空目录1、树hash一致，双方task/local share/grant completed、TLS1.3/linksend/1、零永久授权。控制metadata经隔离SSH HTTPS/WSS，文件独立UDP/Pion/QUIC；Windows正向后台退出码不可观察，其余三actor exit0。服务与通道关闭，临时凭据精确移除，文件保留，见[准确实网证据](evidence/RELIABILITY-R5-CROSS-NETWORK-20261026.md)。不替代Win↔Win/双NAT、WinMac或准确Wails包。
+- R2同进程166条trace、真实跨进程496条、launcher退出后helper499条原型已严格构建/运行通过，持有引用一直保护源，最后引用结束才quiescent，系统剪贴板958→958、源全部保留、无残留。未接生产/系统发布，helper仍是live COM producer，签名delegation、安全inventory与持久receipt未做；详见[原型边界](evidence/RELIABILITY-R2-NATIVE-REFERENCE-PROBE.md)。
+- 103准确core40233307686/desktop40233307731成功，packages40233307711失败：Windows native真实run/no-skip但会话就绪检查失败，阶段尚不能确定；Mac arm64另为sum.golang.org IPv6无路由，Intel包成功。不重复跑以掩盖问题，正做无系统clipboard的因果回归；整体R0–R6未完成。
+
+## 2026-10-26 R5 本地owner、两阶段数据面与桌面候选
+
+- Core `e53a806` 与desktop `701e23b` 已提交推送并核对远端。701准确core40232117991/desktop40232117989成功，packages40232117997的两个Mac job成功、Windows native检查因测试误读独占零字节.profile.lock失败。仅测试scanner精确排除此根控制锁，纯文件真实持锁旧FAIL→普通10轮及desktop六矩阵PASS；其他读错/伪码仍拒绝，未改生产权限或强跑本机剪贴板，完整native仍待新准确CI。
+- 同profile现有SQLite metadata的用途签名/raw CAS owner固定原身份、origin、授权、源与接收计划；稳定控制意图保留响应丢失状态，重启只展示，恢复须明确触发。仅回收服务确认终态且首次观察满七天、无活动/待处理意图的私有metadata，不删用户文件、历史或checkpoint，不新增缓存设置。
+- 新独立driver复现目录无写入却SOURCE_CHANGED：Windows目录mtime延后可见。现完整重建源后仅同ID/路径/type目录沿用冻结时间，再比较完整摘要；真实两阶段6条落盘正例与目录增删/改名、同size/mtime换内容、文件mtime变化负例普通10轮及定向race3轮通过。普通文件检查和原wire保持；早期失败、wrapper收尾stderr拒绝与后续准确矩阵分别记录。
+- 目录修复生产源码对应新12矩阵全部exit0（core test135385/134782ms，desktop12689/11544ms）。首个workspace test启动后仅新增精确路径/type测试断言，已由最终目录普通3轮及后续core off完整测试覆盖；准确提交CI仍另核对。
+- approved经固定公钥的真实Pion ICE/QUIC交换LSSP01完整清单，明确保存/Bind后退役preview，使用新scope/ICE会话/QUIC及原V1引擎。8MiB在4MiB暂停、双端重开Service并显式恢复原grant/claim/task/generation/manifest/plan/目录闭环通过，无第二任务。同IP完整合法流程48–50请求，冗余证明导致的早期RATE_LIMITED失败保留，原全局burst60未提高。
+- 受控旧实现分别暴露同步Create/hash/HTTP阻挡退出的五场景及服务Completed冒充本机完成的三场景。现在操作context同时响应profile退出并join；只有持久本机Completion才标本机完成，否则needs_attention且禁止继续。最终20项TemporaryShare测试race3轮app89.487s、相关vet及两模块workspace/off test/vet/build共12命令全部exit0（core test133863/125610ms，desktop16532/11166ms）。
+- 桌面源码、19files/155tests、typecheck/lint/build及960×640/1100×720真实页面浏览器夹具通过；夹具Backend为假元数据，不证明RPC/native/P2P。原生复制目标因未证实可备份格式SKIP；独立WindowStation创建遭OS错误5，目标测试未运行、原用户剪贴板不变。严格限GitHub托管Windows的空夹具CI入口已准备，准确新提交CI/包结果待核对，不预记PASS。
+- 实验file_transfer_ready仍false，Windows↔Mac/不同网络临时分享与原生完整旅程未完成，R5保持未勾选；Goal当前实际active。准确来源、命令、失败与边界见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
+
+## 2026-10-26 R5 专属授权协调原型（历史增量范围）
+
+- 先冻结ADR0017两阶段/完整scope，再实现独立临时WSS和双层原AuthBytes签名；preview→Bind退役→新transfer scope，原成员认证/注册表保持。资源、消息结构与绝对期限有界，终态/撤销与普通断线分类分开，不发信令清单/文件正文，不授予剪贴板或普通会话复用。
+- 真实SQLite/WSS、三处屏障、预算/重放/角色/期限/重启/关闭安全回归普通与race3轮通过；新客户端46项、race3轮及真实TLS完整协调链通过。root相关完整包/vet通过，完整候选矩阵与准确CI随后核对，见[证据](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)。
+- 该协调增量当时尚未接本地owner、认证P2P/原文件引擎及UI；当前实现见本日owner节。仍experimental_share_control=true才启用、file_transfer_ready=false，准确实网未验，不标完整功能已可用。
+
+## 2026-10-26 R2 文件新复制与续期交错修复
+
+- 后续准确4f562b3969d0dc646e88f92142a566e1c9d07404的core40219427913、desktop40219427884与三平台包40219427841均completed/success；旧eccb903/a22f691真实core失败保留，不重标。
+
+- 准确eccb903/a22f691 core CI的磁盘压力后新复制恢复失败被保留；真实QUIC+原生读取屏障证明同权限续期在Observe后安装，会让最新lease的baseline吞掉新复制，旧实现0.29s稳定FAIL，无第二job。不是空间预留泄漏或DATA RACE告警。
+- 按仍当前的本机观察选择有效重叠lease，文件读取前/后均使用，最终BindScoped/权限/期限/新复制/撤权门保持；无有效旧lease不能借续期补发。新回归/原失败/负例普通10轮、相关race3轮和最终双模块workspace/off完整12命令均exit0（core106644/108627ms、desktop7759/7721ms），覆盖最终签名客户端语义去重；缓存删除/容量/用户文件规则不变，准确CI继续核对，见[证据](evidence/RELIABILITY-R2-OBSERVED-LEASE.md)。
+
+## 2026-10-26 R5 签名HTTP客户端
+
+- 新增类型化ShareControlInfo/ShareControl，每次取新epoch、签新nonce；有限响应按actor/ID/清单/task/gen/计划核对，合法后续幂等状态保留。HTTPS/禁止重定向/取消延续现有client，不自动重试副作用请求；远端错误只留白名单码及固定摘要，不回显分享码或detail。
+- 真实TLS实验服务下未入组身份完成完整控制链，普通成员枚举/WSS仍拒绝；最终57项2.699s、race3轮5.658s及signaling双模式全包test/vet通过；独立审查发现并以旧实现13项FAIL证明大小写/Unicode别名可绕过去重，修后语义重复拒绝。两模块12矩阵早于最后解析修复，准确完整CI随后核对，app压力恢复竞态另行修复。见[客户端证据](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)。
+- 该签名客户端增量当时未接数据面或两端UI；当前实现见本日owner节。仍不广告完整分享，file_transfer_ready=false，R5及原Goal保持未完成。
+
+## 2026-10-26 优先跨网修复同步
+
+- 将已验证edf7cac的默认备用STUN、内置主机有界HTTPS解析和ICE失败真实证据同步到可靠性分支；原正式版最小分支Windows候选及[PR #12](https://github.com/Wen5555/LinkSend/pull/12)已交付，准确源码Windows↔公共Linux双向16MiB/中文/空目录/hash/双方Completed通过。Windows用户暂不能试用，Win↔Win准确候选、受限双NAT及其余Goal必做项仍未验。见[证据](evidence/CROSS-NETWORK-20261026.md)。
+- 服务端准入独立修复末尾255单播误拒绝和映射地址危险scope绕过，普通/race及真实认证forward安全回归通过；最小分支99a6c0e已推送，未部署生产，旧CI无实际候选IP，不将其当用户现场已证根因。见[证据](evidence/CANDIDATE-ADMISSION-20261026.md)。
+- 当前可靠性工作树两模块workspace/off完整test/vet/build共12命令全部exit0，core test118813/111465ms、desktop9088/8267ms，日志reliability-network-share-client-*.log含退出码和耗时。工作树同时包含接续签名HTTP客户端，分别暂存成可审阅增量，准确提交CI随后核对。无前端源码或文件wire改动。
+
+## 2026-10-26 可靠性 Goal R5 签名控制增量复核
+
+- 后续准确ff6a3274a756cb8c7d08fc87a0dbfd9684dc4745已推送核对：core40216320379、desktop40216320542、packages40216320548均completed/success。旧25f core失败仍保留，不倒记通过。
+
+- 复核既有签名HTTP控制：显式实验配置才激活ShareGrant迁移，运行epoch绑定原AuthBytes/Ed25519，重启旧证明、篡改、重放、真实IP/身份双限频及普通成员隔离回归通过。实验health仍file_transfer_ready=false，不广告完整分享，客户端/P2P/两端UI及真实分享未完成，见[证据](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)。
+- 复用该增量源码最后修改之后的2026-10-19双模块workspace/off完整test/vet/build日志；2026-10-26补跑GOWORK=off的server/store/sharegrant定向race退出0（4.299s/3.058s/1.351s）。只读独立复核未发现阻止该增量提交的问题；没有前端或文件wire改动。
+- 准确核对旧25f10a2：desktop39180492313及packages39180492292成功，但core39180492297因多个app真实Pion用例broadcast/reserved candidate address及检查超时失败。保留日志与失败，不能用本地通过覆盖；本次准确提交CI推送后另查，不预记成功或R5完成。
+
+## 2026-10-19 可靠性 Goal R5 授权与持久核心
+
+- 先冻结ADR0017，再实现160bit随机码/用途摘要、双重确认、原身份/清单/task/计划绑定、有限恢复、撤销/完成终态；Control同连接事务CAS、显式4→5一致性备份迁移及有界配额/对账。普通服务不激活迁移、不提供临时分享路由或能力，签名控制/P2P/UI及真实分享仍必做，详见[核心证据](evidence/RELIABILITY-R5-GRANT-CORE.md)。
+- 实际SQLite32路领取1个winner，撤销与完成并发1个终态，跨组/未入组不新增永久成员，存储重开保持原授权与绝对期限。备份夹具journal_mode误改造成首轮FAIL，query_only核验修正后通过；最终定向普通/race各3轮、两模块workspace/off完整12命令退出0。CI推送后另核对，不标R5或Goal完成。
+
+## 2026-10-19 可靠性 Goal R3 可操作诊断候选
+
+- Go白名单投影提供任务/记录原因、阶段、下一步、版本/连接方法与真实尝试时间；仅用户主动SaveFile导出有界安全JSON，不复制私有路径/凭据/正文或原始异常，已有文件不覆盖，Windows取消不写旧路径。文件wire/schema12和原授权控制保持。
+- 前端130项/typecheck/lint/build、核心组合race3轮、两模块workspace/off完整检查通过；浏览器布局发现并修复说明行负margin，双尺寸已看图。准确候选原生导出与最终旅程继续，见[证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)，R3暂不打整体完成勾。
+- 上一565840e的core/desktop与三平台包CI全部success；旧1bc92e0 Mac arm64失败作为历史保留，不移记本批CI或原生通过。
+- 后续01b5c16准确Windows包已通过原生保存/取消及任务诊断跳转；恢复阶段内部名在新源码映射为“已保存，等待恢复”，前端130项/构建与两模块workspace/off完整12命令通过。新代码CI与新包另核对，不倒记旧包已有修复。
+
+## 2026-10-19 可靠性 Goal Mac候选交换因果检查
+
+- `1bc92e0`已推送且远端一致；core/desktop CI成功，包CI39172841244的Mac arm64旧墙钟断言FAIL，Windows/Intel Mac包success。准确记录失败，没有用本机重跑覆盖。
+- 透传真实Pion候选但故意不交付收集结束通知，验证选中host对后交换能独立结束；保留原6秒父期限，另用禁用结束分支的独立Mac负例证明6秒准确超时。Mac普通100/race50轮、两模块workspace/off完整12命令通过，Windows交换相关普通/race30轮通过。详见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新提交CI待核对，物理跨网/键盘粘贴未抵扣。
+
+## 2026-10-19 可靠性 Goal R2 未发布对象生命周期
+
+- 同profile owner活动引用持续至真实句柄关闭，Go-only关闭观察器提供实际存储来源；当前worker在native前封存完整未发布清单，再接入有界分页、压力、启动继续删除意图及退避。取消/UI终态不释放引用，未知条目和用户改动不递归删除；具体测试、早期失败及预算见[证据](evidence/RELIABILITY-R2-CACHE-LIFECYCLE.md)。
+- 70个空目录的实际协议回归保持接收可用，超出清理封存预算不缩小文件协议。已发布、未封存/未知崩溃残留和大对象仍保护，原生读取结束许可与键盘粘贴继续，R2不标完成。
+- 上一持久owner `c4910f9` 的core/desktop及三平台包CI全部success；本增量最终检查与新CI单独记录，不移记旧包或原生通过。
+- 本增量最终两模块workspace/off的test/vet/build共12命令退出0；最终源码定向race3轮app43.659秒/transfer3.864秒，完整app文件/缓存/退出组合race3轮90.230秒。无前端改动，显式gofmt清单及diff检查通过；新提交CI推送后核对，不预记成功。
+
+## 2026-10-19 可靠性 Goal Windows覆盖安装与原生诊断
+
+- 准确01b5c16的core/desktop/三平台包全部success，包来源/digest/payload核验通过。隔离安装63c86c2后真实活动256MiB任务在20MiB验证处保存退出，覆盖01b5c16后身份、配对、偏好、中文草稿、历史和合法待恢复状态保持；单实例唤回通过。两安装与受管卸载退出0，原系统登记/三个快捷方式恢复回读通过，GUI/peer正常退出。
+- 准确候选Windows SaveFile保存/取消及任务到诊断设置导航通过，1565B白名单报告hash/无身份路径文件名已回读。恢复阶段内部名可见待修，完整续传、SendTo/拖放和Mac旅程仍未验。协调服务续起被自动审批拒绝，仅保留原夹具自行到期，不绕过；详细来源/哈希/证据和边界见[Windows记录](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。R1–R6必做未齐，不标Goal完成。
+
+## 2026-10-19 可靠性 Goal R2 持久owner首批
+
+- 在现有SQLite metadata命名空间保存严格版本/用途/身份/运行代次及Ed25519签名的缓存归属，CAS+回读；实际引擎Root/Stage/File句柄来源在accept/body前登记，publishing先于原生写入，DB I/O在授权/状态锁外，实际mutation仍复核控制与CAS。无新数据库/schema/wire，损坏或未知记录保护。
+- 首轮首次checkpoint漏接回调的安全失败保留，统一notifyPlanReady后修复；真实QUIC、before-body门、签名/外来inode/SQLite故障及真实profile key重载测试核对所有权与不重放，详见[证据](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。完整活动引用/对账/自动回收、原生完成证明和键盘粘贴仍未完成。
+- 本地最终普通3轮、app/transfer定向race各3轮及两模块workspace/off test/vet/build全部退出0；前端未改，复用同产品前端来源。推送后继续核对CI，源码记录通过不抵扣真实系统粘贴或自动回收验收。
+- `bed8d2c` 的core/desktop及三平台包CI全部success，Linux实际目录替换分支已被完整core测试/race覆盖；不冒充系统粘贴或安装验收。
+
+## 2026-10-19 可靠性 Goal R2 路径与不确定发布
+
+- 原生adapter已接收路径但确认报错的注入回归先复现文件被删；修复后保留已验证缓存并显示准确不确定状态。接收/checkpoint使用同profile owner固定的Root，目录字符串不再可替换写入授权；无wire/schema变化。Root闭合、错误目录/伪checkpoint、Windows junction及已有用户文件保护均有回归，真实QUIC夹具与文件系统/内存原生adapter范围见[证据](evidence/RELIABILITY-R2-CACHE-PATHS.md)。
+- 修正ADR0016的boot假设：系统恢复旧路径后仍可开始新粘贴，boot+TTL不构成安全回收证明；完整原生交接、持久所有权/自动回收和真实键盘粘贴继续，不记R2完成。
+- 最终两模块workspace/off test/vet/build、app定向race3轮（23.836秒）、Root race3轮及前端127项/typecheck/lint/build均退出0；Windows真实junction边界通过，固定目录重命名被系统拒绝，Linux替换分支待CI。没有日常剪贴板或生产改动。
+- `f2712dc` 的Intel Mac DMG随后success，core/desktop及三平台run39165099505全部通过。没有把CI包通过写成原生旅程或安装通过。
+
+## 2026-10-19 可靠性 Goal R2 自动容量首批
+
+- 先形成ADR0016，再落实真实manifest自动空间预留、32路竞争容量保护、发布返回后幂等释放、低空间安全拒绝和下一次复制恢复。原代码低空间仍发布的负例及第一轮本地错误被取消覆盖的失败均保留，现已修复；健康会话不因单流磁盘拒绝关闭。无wire/schema变更，不新增缓存用户设置。
+- 定向普通3轮、组合race3轮/立即复制race10轮、前端126项/typecheck/lint/build及最终两模块workspace/off test/vet/build全部通过；一次组合race恢复失败和取消I/O确定性负例保留，取消意图修复后维持立即复制测试，见[容量证据](evidence/RELIABILITY-R2-CAPACITY.md)。已发布缓存仍保留，自动所有权/回收与真实键盘粘贴未完成，R2不打完成勾。
+- 上一增量 `f5f05ef` 远端SHA一致，core/desktop及三平台包CI全部success，详见R1证据；不代表对应包已完成物理关键旅程。
+- 本增量 `f2712dc` 已推送且远端SHA一致，core/desktop CI已success；Windows和Mac arm64包通过，Intel Mac DMG构建在本记录时仍运行，后续继续核对。Goal保持active，R2完整生命周期/自动回收及其余必做项继续，不将容量首批记作R2整体完成。
+
+## 2026-10-19 可靠性 Goal R1 健康会话保护
+
+- 新定向真实ICE/QUIC回归先复现 `NetworkChanged` 关闭剪贴板活跃/文件空闲连接的缺陷；仅清理已由QUIC报告关闭的空闲会话后，通过通知后双向剪贴板、同SessionID文件完整传输/确认及失效连接清理。保持原transport失效与恢复机制，无wire/schema改变。
+- 五项定向组合普通3轮及race3轮（42.175秒）、两Go模块workspace/off的test/vet/build退出0；准确提交CI按[增量证据](evidence/RELIABILITY-R1-SESSION-REFRESH.md)另核对。R1物理双机/睡眠/真实跨网仍未完成，Goal保持active；不覆盖旧证据边界。
+
+## 2026-10-19 可靠性 Goal R0 基线
+
+- 用户明确启动 Goal，当前 active；基线为 `f8358ce`，工作分支与远端一致。保留三个未跟踪目录，复用现有便携合规工具链。Mac arm64/macOS26.5 与日本支持主机只读 SSH 核对通过，未影响日常进程或生产服务；台湾 NAT 别名探测255且无原因证据，不计可用环境。
+- 修正 README 当前版本0.5.0→0.6.2及计划/路线入口的未启动描述；唯一 TODO 新增 R0–R6实际状态。详见[R0证据](evidence/RELIABILITY-R0-BASELINE.md)。本增量仅文档，检查差异与本地链接，不重跑应用测试；R1–R6功能和原生/跨网验收继续。
+
+## 2026-10-19 可靠性 自动缓存与临时分享计划
+
+- 形成[实施计划](RELIABILITY-AND-SHARING-PLAN.md)与[Goal启动提示词](prompts/RELIABILITY-AND-SHARING-GOAL.md)：连接/恢复/跨NAT、文件键盘粘贴、程序全自动缓存、可操作诊断、安装升级/退出、一次性临时分享与工程维护。保存常用发送方案排除；自动缓存不设手动清理和容量/期限选项。
+- 记录用户本轮相关SSH及阶段commit/push授权，区分生产替换和宿主网络边界；明确各工作包验收、准确包来源和外部阻塞规则。本次为文档交付，未创建/恢复Goal、修改产品代码或执行远程测试。
+
 ## 2026-10-19 v0.6.2已发布
 
 - PR #11正常合并main，准确程序包源码`63c86c2c5ce183e1400d27ca0571610d50a42bdc`；[v0.6.2](https://github.com/Wen5555/LinkSend/releases/tag/v0.6.2)已公开并设Latest，tag一致。main core/desktop及[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/39157767929)全部success，四个程序包加两份元数据共六项资产digest核验通过。

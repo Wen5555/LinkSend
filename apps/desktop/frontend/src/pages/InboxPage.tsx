@@ -7,6 +7,7 @@ import { humanizeBackendError } from '../connection';
 import { deviceName, formatBytes, taskLabels } from '../presentation';
 import './InboxPage.css';
 import { ReceivedContentActions } from '../components/ContentActions';
+import { TaskDiagnostics } from '../components/TaskDiagnostics';
 
 type Props = { devices: DeviceInfo[]; run: CommandRunner; op: string; available: boolean; focusTaskID?: string; navigationRevision?: number };
 type Filters = { search: string; peer: string; direction: string; state: string; after: string; before: string };
@@ -203,6 +204,7 @@ export function InboxPage({ devices, run, op, available, focusTaskID, navigation
       <div className="inbox-pagination"><button className="secondary" disabled={!available || history.isFetching || cursors.length < 2} onClick={() => changePage(previous => previous.slice(0, -1))}>上一页</button><span>每页最多 25 条</span><button className="secondary" disabled={!available || history.isFetching || !history.data?.next_cursor} onClick={() => { if (history.data?.next_cursor) changePage(previous => [...previous, history.data.next_cursor]); }}>下一页</button></div>
     </section>
 
+    {detail && <TaskDiagnostics task={detail} />}
     {detailID && <ReceivedContentActions taskID={detailID} revision={detail?.revision} run={run} op={op} available={available} />}
     {detailID && <section ref={filePanel} className="inbox-files" aria-labelledby="inbox-files-title"><div className="section-heading compact"><div><span className="section-kicker">文件清单</span><h3 id="inbox-files-title">{detail?.summary || '所选任务的文件'}</h3></div><button className="ghost" onClick={() => setDetailID('')}>收起文件</button></div>
       {!available ? <p className="muted">后端就绪后可读取文件清单。</p> : files.isPending ? <p role="status">正在读取文件清单…</p> : files.isError ? <p className="inbox-error" role="alert">{inboxError(files.error)}</p> : !files.data?.available ? <p className="muted">这条旧记录没有完整文件清单，无法从这里定位文件。</p> : !(files.data.files ?? []).length ? <p className="muted">没有文件条目。</p> : <div className="inbox-file-rows">{(files.data.files ?? []).map(file => <div className="inbox-file-row" key={file.file_id}><span className="file-icon" aria-hidden="true">{file.kind === 'directory' ? '▤' : '▧'}</span><div><strong>{file.name}</strong><small>{file.kind === 'directory' ? '目录' : formatBytes(file.size)}{!file.selected && ' · 未选择接收'}</small></div><div className="inline-actions"><button className="secondary" disabled={blocked || !file.selected || (!!detail && detail.direction === 'receive' && (!detail.bilateral_confirmed || detail.state !== 'completed'))} onClick={() => void execute(`inbox-open-${file.file_id}`, async () => { await Backend.OpenInboxFile(detailID, file.file_id); setNotice('已请求系统打开文件。'); })}>{file.kind === 'directory' ? '打开文件夹' : '打开文件'}</button><button className="secondary" disabled={blocked || !file.selected || (!!detail && detail.direction === 'receive' && (!detail.bilateral_confirmed || detail.state !== 'completed'))} onClick={() => void execute(`inbox-reveal-${file.file_id}`, async () => { await Backend.RevealInboxFile(detailID, file.file_id); setNotice('已请求文件管理器定位该文件。'); })}>打开所在文件夹</button></div></div>)}</div>}
