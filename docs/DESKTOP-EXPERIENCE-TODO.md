@@ -41,9 +41,11 @@
 
   R5托管原生子目标：cd95479的core/desktop/三平台包CI均success，无重试；Windows真实active/paused保护码与随后正常native文字QUIC目标7.54s、run1/pass1/skip0/fail0。初始注册/租约10ms、恢复租约6934ms；只覆盖该Go桥接/原生generation子目标，不抵扣Wails UI、文件键盘粘贴或WinMac。旧701/103失败保留，见[完整记录](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)。
 
+  R5等待后续：认证WSS与等待对端入场采用独立预算，后者受原run/原阶段绝对期限限制，到场后重新核验授权并开始短网络预算。真实迟到peer ICE/QUIC、取消/撤销/过期/原任务计划回归普通/race3轮通过；同版双模块完整12矩阵与前端172项/typecheck/lint/build通过。8082旧CI的Intel Mac trickle失败另保留并仅修测试host前提，生产trickle未变。新准确CI/包/原生旅程待验，见[等待证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。
+
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。3d准确包/来源及52完整CI已核对；3d GUI真实领取/批准/导出与scene02/03失败均保留，未取得预览/Completion，不证明scope或用户现场根因。typed信令原因及安全提示已修复并完成同版12矩阵/171前端，准确新CI与包另核对；接续分离已批准对端人机等待与网络短期限，并继续真实WinWin跨网验证，详见[诊断证据](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)。R1用户现场/受限双NAT，R2完整回收/键盘粘贴、R4双平台完整旅程及R6仍必做。Mac07:14 SSH仍connect-timeout/255，未改宿主网络或把SSH不可达当产品NAT失败；旧审批拒绝保留原边界。
+当前接续点（2026-10-26）：Goal实际active。8082准确core/desktop成功，Windows/ARM Mac包成功、Intel Mac原trickle测试失败；真实顺序overlay复现相同失败机制，已仅测试修正host前提。等待对端入场与短网络期限已分离，并完成同版12矩阵/172前端；接续新准确CI/包及原生分享，继续独立WinWin实网驱动与标准密文交接（当前仅隔离验证，未执行正式服务写API或真实runner）。见[等待证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。3d GUI失败与Mac07:14 SSH超时均保留；R1用户现场/受限双NAT、R2完整回收/键盘粘贴、R4双平台及R6仍必做，未改宿主网络或把SSH不可达当产品NAT失败，旧审批边界保持。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

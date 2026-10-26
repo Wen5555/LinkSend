@@ -31,6 +31,15 @@ async function mount(initial: TemporaryShareSnapshot[] = [], opened = true) {
 afterEach(() => { for (const root of roots.splice(0)) act(() => root.unmount()); document.body.replaceChildren(); vi.restoreAllMocks(); vi.resetAllMocks(); });
 
 describe('一次性临时分享', () => {
+  it('shows the authenticated peer wait without starting or retrying an existing share', async () => {
+    const original = share({ state: 'active', grant_state: 'approved' as TemporaryShareSnapshot['grant_state'], task_record_id: 'original-task' });
+    const { container, render } = await mount([original]);
+    await act(async () => { render(true, draft, [{ id: 'original-task', phase: 'waiting_share_peer', state: 'connecting', verified_bytes: 0, total_bytes: 12 } as TaskSnapshot]); await settle(); });
+    expect(container.textContent).toContain('等待对方进入本次分享');
+    expect(container.textContent).not.toContain('waiting_share_peer');
+    for (const fn of [backend.CreateTemporaryShare, backend.ClaimTemporaryShare, backend.ApproveTemporaryShare, backend.StartTemporaryShare, backend.ResumeTemporaryShare, backend.RetryTemporaryShareAction, backend.RetryTemporaryShareClaim]) expect(fn).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['offered', '等待领取'],
     ['pending', '等待发送方确认'],

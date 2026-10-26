@@ -31,6 +31,7 @@ export function taskPhaseLabel(phase: string): string {
     preparing: '准备中',
 	peer_lookup: '核对已配对设备',
 	signaling_connect: '连接信令服务',
+    waiting_share_peer: '等待对方进入本次分享',
 	endpoint_setup: '自动选择本机网络',
 	lan_control_connect: '连接局域网设备',
 	interface_resolve: '核验当前网卡地址',

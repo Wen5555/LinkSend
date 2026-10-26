@@ -33,3 +33,13 @@
 推送后另核对新提交三组CI，旧Mac arm64包仍记FAIL；只有新准确源码包通过才补新PASS。
 
 后续核对：新提交565840ec157f933f3d3dacb5100130e6a2c1ea2e已推送且远端一致，core39174347344、desktop39174347400、packages39174347352全部completed/success，Windows/Mac arm64/Mac amd64包job均成功。1bc92e0的旧Mac arm64包仍FAIL；本批不宣称物理跨网或墙钟性能通过。
+
+## 2026-10-26 8082 Intel Mac 再次失败与 host 前提
+
+准确8082b2c的core40247491025/desktop40247490982成功；packages40247490996的Windows/ARM Mac成功，Intel Mac job121332050999在 `GOWORK=off go test ./...` 的本用例6.00s返回CANDIDATE_EXCHANGE_TIMEOUT（原日志 `.artifacts/share-owner-draft/diagnostics-ci-8082b2c-macos-amd64.log:409`）。当次无双方 provisional path 日志，不能断言那次具体根因。
+
+干净701验证树中相关三个源文件与8082一致。独立Go overlay只控制真实签名候选到达顺序：暂缓A候选，直到B的真实ConnectProvisional返回，再放行。实际观察B为host/prflx、relay=false、err=nil，双方最终6.0004326s返回同码。Pion可先从真实STUN检查学习prflx；旧fixture只扣住gathering-end，却未保证host已安装，其前提可能与只为host/host结束交换的分支不一致。此为可复现机制，不倒推原CI具体路径。
+
+修正仅在 `direct_lifecycle_test.go`：checks前，两端真实首个loopback host候选经原 `exchangeCandidatesWithBudget` 的签名/session验证与AddRemoteCandidate，之后同候选再通过原永不关闭流，保留6秒总期限、host/host/no-relay断言和STUN sink探测。没有修改生产trickle、伪装candidate type或关闭身份校验。
+
+`.artifacts/trickle-ci-8082b2c-isolation/RESULT.md` 与实际overlay命令/日志保存来源：普通30次PASS/app9.179s、race20次PASS/app7.315s；同一barrier只禁用close(stopGathering)的独立负例仍6.10s按预期FAIL。冻结测试SHA256 `4e0592a090e14517d542d4e166a1a5e3b880f8c6842540757732344a7da778cc`。随后root同版完整12矩阵通过，见[等待增量](RELIABILITY-R5-PEER-WAIT.md)；新Mac CI另验，不声明当前物理Mac或跨网成功。

@@ -21,7 +21,9 @@ type candidateSessionStub struct {
 
 // Real Pion agents, live shared UDP sockets and signed candidates. A bound UDP
 // STUN sink never answers. The application candidate streams intentionally never
-// close: successful nominated host paths must end exchange without relying on
+// close. A signed-exchange barrier installs both host candidates before checks:
+// this test's premise is a nominated host/host path, not a prflx-first race.
+// Successful nominated host paths must end exchange without relying on
 // gathering completion. Loopback is not physical LAN or a throughput benchmark.
 func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 	blackhole, err := net.ListenPacket("udp4", "127.0.0.1:0")
@@ -75,9 +77,16 @@ func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 	defer cancel()
-	holdGatheringEnd := func(source <-chan connectivity.Candidate) <-chan connectivity.Candidate {
+	holdGatheringEnd := func(first connectivity.Candidate, source <-chan connectivity.Candidate) <-chan connectivity.Candidate {
 		out := make(chan connectivity.Candidate)
 		go func() {
+			// Replay the same real host candidate through the production stream;
+			// AddRemoteCandidate safely deduplicates the signed barrier's value.
+			select {
+			case out <- first:
+			case <-ctx.Done():
+				return
+			}
 			// Deliberately do not close out even when Pion finishes gathering.
 			// The only successful exit in candidate exchange must be nomination.
 			for {
@@ -98,9 +107,40 @@ func TestTrickleNominatedHostPairDoesNotWaitForUnresponsiveSTUN(t *testing.T) {
 		}()
 		return out
 	}
-	aCandidates, bCandidates := holdGatheringEnd(a.Candidates()), holdGatheringEnd(b.Candidates())
 	start := time.Now()
 	id := protocol.RandomID()
+	firstHost := func(endpoint *connectivity.Endpoint) connectivity.Candidate {
+		t.Helper()
+		select {
+		case candidate, ok := <-endpoint.Candidates():
+			if !ok {
+				t.Fatal("gathering ended without the loopback host candidate")
+			}
+			return candidate
+		case <-ctx.Done():
+			t.Fatal("host candidate did not arrive within the unchanged parent deadline")
+			return connectivity.Candidate{}
+		}
+	}
+	aHost, bHost := firstHost(a), firstHost(b)
+	// Only the fixture setup is ordered: both genuine candidates traverse the
+	// production signed-envelope verification and AddRemoteCandidate before
+	// either agent starts checks. Without this barrier, incoming STUN may create
+	// a prflx pair before its signed host candidate is consumed, contradicting
+	// this test's explicit host/host premise.
+	barrierErrors := make(chan error, 2)
+	go func() {
+		barrierErrors <- exchangeCandidatesWithBudget(ctx, pipe(aID, ab, ba), a, []connectivity.Candidate{aHost}, aID, bPeer, id, firstGeneration, candidateExchangeBudget)
+	}()
+	go func() {
+		barrierErrors <- exchangeCandidatesWithBudget(ctx, pipe(bID, ba, ab), b, []connectivity.Candidate{bHost}, bID, aPeer, id, firstGeneration, candidateExchangeBudget)
+	}()
+	for range 2 {
+		if err = <-barrierErrors; err != nil {
+			t.Fatalf("signed host candidate barrier: %v", err)
+		}
+	}
+	aCandidates, bCandidates := holdGatheringEnd(aHost, a.Candidates()), holdGatheringEnd(bHost, b.Candidates())
 	results := make(chan pathResult, 2)
 	go func() {
 		path, err := connectWithCandidateStream(ctx, pipe(aID, ab, ba), a, aCandidates, aID, bPeer, id, firstGeneration, b.Credentials(), true)

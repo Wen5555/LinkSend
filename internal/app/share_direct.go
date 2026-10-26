@@ -27,6 +27,9 @@ func classifyShareSignalingError(ctx context.Context, err error) error {
 	if errors.As(err, &existing) {
 		return err
 	}
+	if errors.As(context.Cause(ctx), &existing) {
+		return protocol.Wrap(existing.Code, "temporary share signaling authorization ended", err)
+	}
 	if ctx.Err() != nil {
 		return classifyPhaseError(ctx, err, protocol.SignalingTimeout, "temporary share signaling")
 	}
@@ -60,14 +63,34 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 		return nil, protocol.Fail(protocol.ShareRejected, "temporary peer key invalid")
 	}
 	peer := signaling.Device{ID: identity.DeviceID(public), PublicKey: ed25519.PublicKey(public), Name: "Temporary share"}
+	deadline := pinned.ExpiresAt
+	if scope.Phase == sharegrant.SignalTransfer {
+		deadline = pinned.ResumeUntil
+	}
+	classifySignal := func(stageCtx context.Context, failure error) error {
+		var authoritative *protocol.Error
+		if !errors.As(failure, &authoritative) && errors.Is(stageCtx.Err(), context.DeadlineExceeded) && time.Now().Unix() >= deadline {
+			// The original run may have the same grant deadline. Its timer can
+			// win before the child cause, but cannot turn expiry into a network
+			// failure. An explicit cancellation or typed server code still wins.
+			return protocol.Wrap(protocol.ShareExpired, "temporary share phase expired", failure)
+		}
+		return classifyShareSignalingError(stageCtx, failure)
+	}
 	check := func() error {
 		if err := ctx.Err(); err != nil {
-			return err
+			return classifySignal(ctx, err)
 		}
 		if err := s.checkPeerAllowed(peer.ID); err != nil {
 			return err
 		}
-		return authorize()
+		if err := authorize(); err != nil {
+			return err
+		}
+		if time.Now().Unix() >= deadline {
+			return temporaryShareFailure(protocol.ShareExpired)
+		}
+		return nil
 	}
 	if err = check(); err != nil {
 		return nil, err
@@ -92,8 +115,21 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 	stage := time.Now()
 	signal, err := client.ConnectShare(connectCtx, scope, pinned, signaling.ShareSignalOptions{AllowLoopbackCandidates: cfg.AllowLoopback})
 	if err != nil {
-		return nil, classifyShareSignalingError(connectCtx, err)
+		return nil, classifySignal(connectCtx, err)
 	}
+	timings.SignalingConnectMS = durationMS(stage)
+	// Peer presence includes the other person's explicit UI actions. It has a
+	// separate bounded window after WSS authentication, never a renewed grant.
+	// The immutable phase expiry and original run cancellation bound all later
+	// work as well; transfer uses ResumeUntil rather than the preview expiry.
+	scopeCtx, cancelScope := context.WithDeadlineCause(ctx, time.Unix(deadline, 0), temporaryShareFailure(protocol.ShareExpired))
+	defer cancelScope()
+	wait := cfg.WaitTimeout
+	if wait <= 0 {
+		wait = budget
+	}
+	waitCtx, cancelWait := context.WithTimeout(scopeCtx, wait)
+	defer cancelWait()
 	keep := false
 	stopHeartbeat := startHeartbeat(ctx, signal)
 	defer func() {
@@ -102,16 +138,25 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 			_ = signal.Close()
 		}
 	}()
+	cfg.phase("waiting_share_peer")
 	if hook := s.temporaryShares.beforeSignalWait; hook != nil {
-		hook()
+		hook(connectCtx, waitCtx)
 	}
-	if err = signal.WaitPeer(connectCtx); err != nil {
-		return nil, classifyShareSignalingError(connectCtx, err)
+	if err = signal.WaitPeer(waitCtx); err != nil {
+		return nil, classifySignal(waitCtx, err)
 	}
-	timings.SignalingConnectMS = durationMS(stage)
+	if err = waitCtx.Err(); err != nil {
+		return nil, classifySignal(waitCtx, err)
+	}
+	cancelWait()
+	cancelConnect()
 	if err = check(); err != nil {
 		return nil, err
 	}
+	// Only a present peer starts this fresh network budget. The responder's
+	// connect_request is now network coordination, not another human wait.
+	networkCtx, cancelNetwork := context.WithTimeout(scopeCtx, budget)
+	defer cancelNetwork()
 	cfg.phase("endpoint_setup")
 	stage = time.Now()
 	endpoint, err := s.newEndpoint(cfg)
@@ -139,15 +184,13 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 		if makeErr != nil {
 			return nil, makeErr
 		}
-		requestCtx, cancelRequest := context.WithTimeout(ctx, budget)
-		defer cancelRequest()
 		stage = time.Now()
-		if err = signal.SendEnvelope(requestCtx, request); err != nil {
-			return nil, err
+		if err = signal.SendEnvelope(networkCtx, request); err != nil {
+			return nil, classifySignal(networkCtx, err)
 		}
-		response, readErr := readSignalMessage(requestCtx, signal)
+		response, readErr := signal.Read(networkCtx)
 		if readErr != nil {
-			return nil, readErr
+			return nil, classifySignal(networkCtx, readErr)
 		}
 		if response.Message == nil {
 			return nil, protocol.Fail(protocol.InvalidMessage, "temporary response missing")
@@ -166,7 +209,7 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 		}
 		cfg.phase("ice_checking")
 		stage = time.Now()
-		path, err = connectWithTrickle(ctx, signal, endpoint, s.identity, peer, sessionID, firstGeneration, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
+		path, err = connectWithTrickle(networkCtx, signal, endpoint, s.identity, peer, sessionID, firstGeneration, connectivity.Credentials{Ufrag: remote.Ufrag, Password: remote.Password}, true)
 		timings.ICEMS = durationMS(stage)
 		if err == nil {
 			tlsConfig, tlsErr := s.identity.TLSConfig(peer.PublicKey, false)
@@ -175,21 +218,13 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 			}
 			cfg.phase("quic_handshake")
 			stage = time.Now()
-			quicCtx, cancelQUIC := context.WithTimeout(ctx, budget)
-			data, err = transport.Establish(quicCtx, endpoint, path, tlsConfig, true)
-			cancelQUIC()
+			data, err = transport.Establish(networkCtx, endpoint, path, tlsConfig, true)
 			timings.QUICHandshakeMS = durationMS(stage)
 		}
 	} else {
-		wait := cfg.WaitTimeout
-		if wait <= 0 {
-			wait = budget
-		}
-		waitCtx, cancelWait := context.WithTimeout(ctx, wait)
-		defer cancelWait()
-		request, readErr := readSignalMessage(waitCtx, signal)
+		request, readErr := signal.Read(networkCtx)
 		if readErr != nil {
-			return nil, readErr
+			return nil, classifySignal(networkCtx, readErr)
 		}
 		if request.Message == nil || request.Message.Type != "connect_request" || request.Message.Sender != peer.ID || request.Message.Recipient != s.identity.ID() || request.Message.Generation != firstGeneration || request.Message.Verify(peer.PublicKey, time.Now()) != nil || sharegrant.ValidateSignalPayload(*request.Message, cfg.AllowLoopback) != nil {
 			return nil, protocol.Fail(protocol.AuthenticationFailed, "temporary request binding invalid")
@@ -199,7 +234,7 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 		if err = check(); err != nil {
 			return nil, err
 		}
-		path, data, err = s.establishResponder(ctx, signal, endpoint, peer, *request.Message, budget, cfg)
+		path, data, err = s.establishResponder(networkCtx, signal, endpoint, peer, *request.Message, budget, cfg)
 	}
 	timings.TotalConnectMS = durationMS(started)
 	if err != nil {

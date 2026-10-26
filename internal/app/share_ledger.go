@@ -81,9 +81,9 @@ type temporaryShareOwner struct {
 	err              error
 	wg               sync.WaitGroup
 	now              func() time.Time
-	beforeRetire     func(string)          // Package-private deterministic CAS test barrier.
-	beforePrepare    func(context.Context) // Package-private cancellation test barrier; never stores a context.
-	beforeSignalWait func()                // Package-private causal barrier after scoped WSS authentication.
+	beforeRetire     func(string)                           // Package-private deterministic CAS test barrier.
+	beforePrepare    func(context.Context)                  // Package-private cancellation test barrier; never stores a context.
+	beforeSignalWait func(context.Context, context.Context) // Package-private causal barrier after scoped WSS authentication; never stores contexts.
 }
 
 func (s *Service) temporaryNow() time.Time {

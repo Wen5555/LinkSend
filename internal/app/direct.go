@@ -34,7 +34,7 @@ type DirectConfig struct {
 	STUNURLs                        []string
 	AllowLoopback                   bool
 	CheckTimeout                    time.Duration
-	WaitTimeout                     time.Duration // receiver only: time allowed for an incoming request
+	WaitTimeout                     time.Duration // ordinary receiver request or authenticated temporary-share peer-presence wait
 	ReceiveConflictPolicy           transfer.ConflictPolicy
 	DeviceConflictPolicies          map[string]transfer.ConflictPolicy
 	onPhase                         func(string) // local application observation; never serialized

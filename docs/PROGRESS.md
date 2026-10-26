@@ -1,3 +1,8 @@
+## 2026-10-26 已批准对端等待与trickle测试前提
+
+- 临时分享HTTP/WSS保持短Check，认证后独立Wait并受原run/原阶段绝对grant期限限制；对端到场重验原owner/黑名单/scope，再开始新的短网络预算。新增本地中文等待phase及安全指导，无wire/schema/权限或自动重试变化。真实TLS/WSS旧红转为迟到peer的固定公钥ICE/QUIC，普通/race3轮及完整12矩阵/前端172项/typecheck/lint/build通过，见[证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。
+- 8082准确core/desktop成功，包Windows/ARM Mac成功、Intel Mac原trickle回归6秒超时。真实签名候选顺序overlay复现host/prflx导致相同超时的机制，但原CI没有path，不能断言其具体根因。仅测试在checks前经真实签名交换安装双端host，30普通/20race及禁结束分支负例验证通过，6秒/原安全断言保持，见[R1补证](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确CI另核对，旧失败保留。
+
 ## 2026-10-26 临时分享信令原因与可操作提示
 
 - 真实SQLite/TLS/WSS孤立peer在认证后因果门复现裸deadline/cancel丢成DIRECT_FAILED；现在只在已知ConnectShare/WaitPeer阶段保留typed原因及errors.Is，已有grant/Auth/终态码不被取消竞争覆盖。legacy只有精确signaling_connect获得安全阶段指导，不从原始日志猜ICE/NAT原因。

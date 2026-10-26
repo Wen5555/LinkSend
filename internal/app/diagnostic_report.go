@@ -80,6 +80,10 @@ var diagnosticGuidance = map[protocol.Code]DiagnosticGuidance{
 	protocol.Cancelled:                   {Stage: "control", Reason: "任务已取消", NextStep: "需要再次发送时，明确创建新的发送任务。", Action: "details"},
 	protocol.RateLimited:                 {Stage: "control", Reason: "请求过于频繁", NextStep: "稍后再重试，不要连续重复提交。", Action: "details"},
 	protocol.SessionConflict:             {Stage: "control", Reason: "连接请求正在协调", NextStep: "等待当前尝试结束后，再检查原任务状态。", Action: "details"},
+	protocol.ShareRejected:               {Stage: "authorization", Reason: "本次分享授权核验未通过", NextStep: "核对原分享状态和接收人，不要跳过身份与授权检查。", Action: "details"},
+	protocol.ShareExpired:                {Stage: "authorization", Reason: "本次分享授权已到期", NextStep: "查看原分享的当前状态；到期授权不能继续连接。", Action: "details"},
+	protocol.ShareTerminal:               {Stage: "authorization", Reason: "本次分享已结束", NextStep: "查看原分享的当前状态；结束的授权不能继续连接。", Action: "details"},
+	protocol.ShareConflict:               {Stage: "authorization", Reason: "本次分享状态已变化", NextStep: "在原分享中核对当前状态和原操作，不要重复领取或创建任务。", Action: "details"},
 }
 
 func taskDiagnosticGuidance(snapshot TaskSnapshot) DiagnosticGuidance {
@@ -87,6 +91,9 @@ func taskDiagnosticGuidance(snapshot TaskSnapshot) DiagnosticGuidance {
 		return DiagnosticGuidance{Code: "NONE", Stage: "completed", Reason: "传输已完成", Action: "none"}
 	}
 	if snapshot.ErrorCode == "" {
+		if snapshot.Phase == "waiting_share_peer" && (snapshot.State == "preparing" || snapshot.State == "connecting" || snapshot.State == "recovering") {
+			return DiagnosticGuidance{Code: "NONE", Stage: "presence", Reason: "正在等待对方进入本次分享", NextStep: "请对方在原分享中明确继续；等待仍受本次授权期限限制。", Action: "wait"}
+		}
 		switch snapshot.State {
 		case "failed":
 			return DiagnosticGuidance{Code: "UNKNOWN", Stage: "unknown", Reason: "任务失败，具体阶段尚未确认", NextStep: "查看原任务状态，必要时导出本地诊断供检查。", Action: "details"}
@@ -97,6 +104,9 @@ func taskDiagnosticGuidance(snapshot TaskSnapshot) DiagnosticGuidance {
 		default:
 			return DiagnosticGuidance{Code: "NONE", Stage: "unknown", Reason: "暂无已确认的错误", NextStep: "查看原任务的当前状态。", Action: "details"}
 		}
+	}
+	if snapshot.Phase == "waiting_share_peer" && snapshot.ErrorCode == string(protocol.SignalingTimeout) {
+		return DiagnosticGuidance{Code: snapshot.ErrorCode, Stage: "presence", Reason: "本次分享等待对方进入已超时", NextStep: "确认对方已在原分享中继续，再通过原分享手动继续；不会自动重新领取或创建任务。", Action: "details"}
 	}
 	if guidance, ok := diagnosticGuidance[protocol.Code(snapshot.ErrorCode)]; ok {
 		guidance.Code = snapshot.ErrorCode

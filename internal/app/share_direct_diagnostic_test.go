@@ -22,7 +22,7 @@ func TestShareDirectSignalWaitRetainsTypedContextCause(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newShareDirectFixture(t)
 			entered := make(chan struct{})
-			f.a.temporaryShares.beforeSignalWait = func() { close(entered) }
+			f.a.temporaryShares.beforeSignalWait = func(context.Context, context.Context) { close(entered) }
 			ctx, cancel := context.WithCancel(f.ctx)
 			defer cancel()
 			var phase string
@@ -47,7 +47,7 @@ func TestShareDirectSignalWaitRetainsTypedContextCause(t *testing.T) {
 				cancel()
 			}
 			err := <-done
-			if !errors.Is(err, cause) || protocol.ErrorCode(err) != want || phase != "signaling_connect" {
+			if !errors.Is(err, cause) || protocol.ErrorCode(err) != want || phase != "waiting_share_peer" {
 				t.Fatalf("typed cause lost after authenticated WaitPeer: code=%s cause=%t phase=%s", protocol.ErrorCode(err), errors.Is(err, cause), phase)
 			}
 		})
@@ -57,7 +57,7 @@ func TestShareDirectSignalWaitRetainsTypedContextCause(t *testing.T) {
 func TestShareDirectSignalWaitKeepsAuthoritativeGrantTerminal(t *testing.T) {
 	f := newShareDirectFixture(t)
 	entered := make(chan struct{})
-	f.a.temporaryShares.beforeSignalWait = func() { close(entered) }
+	f.a.temporaryShares.beforeSignalWait = func(context.Context, context.Context) { close(entered) }
 	done := make(chan error, 1)
 	go func() {
 		peer, err := f.a.connectSharePeer(f.ctx, f.scope, f.approved, DirectConfig{AllowLoopback: true, CheckTimeout: 5 * time.Second}, func() error { return nil })
@@ -127,7 +127,7 @@ func TestShareDirectSignalConnectKeepsCurrentGrantRejection(t *testing.T) {
 		t.Fatal("revoked scope did not retain a typed client rejection")
 	}
 	entered := false
-	f.a.temporaryShares.beforeSignalWait = func() { entered = true }
+	f.a.temporaryShares.beforeSignalWait = func(context.Context, context.Context) { entered = true }
 	peer, err := f.a.connectSharePeer(f.ctx, f.scope, f.approved, DirectConfig{AllowLoopback: true, CheckTimeout: time.Second}, func() error { return nil })
 	if peer != nil || entered || protocol.ErrorCode(err) != typed.Code {
 		t.Fatal("stale grant crossed signaling admission or changed authority", protocol.ErrorCode(err))
@@ -138,7 +138,7 @@ func TestTemporaryShareMissingSignalPeerPersistsTypedFailure(t *testing.T) {
 	f := newTemporaryShareFixture(t)
 	created, _ := createApprovedTemporaryShare(t, f)
 	entered := make(chan struct{})
-	f.a.temporaryShares.beforeSignalWait = func() { close(entered) }
+	f.a.temporaryShares.beforeSignalWait = func(context.Context, context.Context) { close(entered) }
 	task, err := f.a.StartTemporaryShare(t.Context(), created.Share.ID, DirectConfig{AllowLoopback: true, CheckTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func TestTemporaryShareMissingSignalPeerPersistsTypedFailure(t *testing.T) {
 	waitFor(t, 3*time.Second, func() bool { task, _ := f.a.Task(task.ID); return task.State == "failed" }, "isolated peer wait did not end")
 	got, _ := f.a.Task(task.ID)
 	owner := onlyTemporary(t, f.a)
-	if got.ErrorCode != string(protocol.SignalingTimeout) || got.Phase != "signaling_connect" || owner.ErrorCode != protocol.SignalingTimeout || owner.State != "needs_attention" || got.VerifiedBytes != 0 || got.CommittedBytes != 0 || got.TLSVersion != 0 {
+	if got.ErrorCode != string(protocol.SignalingTimeout) || got.Phase != "waiting_share_peer" || owner.ErrorCode != protocol.SignalingTimeout || owner.State != "needs_attention" || got.VerifiedBytes != 0 || got.CommittedBytes != 0 || got.TLSVersion != 0 {
 		t.Fatal("durable task/share lost the known signaling failure", got.ErrorCode, got.Phase, owner.ErrorCode)
 	}
 }

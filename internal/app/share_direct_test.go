@@ -29,13 +29,15 @@ type shareDirectFixture struct {
 	prepared *transfer.Prepared
 	scope    sharegrant.SignalScope
 	ctx      context.Context
+	database string
 }
 
 func newShareDirectFixture(t *testing.T) shareDirectFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	t.Cleanup(cancel)
-	srv, err := server.New(server.Config{Listen: "127.0.0.1:0", Database: filepath.Join(t.TempDir(), "server.sqlite"), AllowInsecureLoopback: true, AllowLoopbackCandidates: true, ExperimentalShareControl: true})
+	database := filepath.Join(t.TempDir(), "server.sqlite")
+	srv, err := server.New(server.Config{Listen: "127.0.0.1:0", Database: database, AllowInsecureLoopback: true, AllowLoopbackCandidates: true, ExperimentalShareControl: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +89,7 @@ func newShareDirectFixture(t *testing.T) shareDirectFixture {
 		t.Fatal(err)
 	}
 	scope := sharegrant.SignalScope{GrantID: approved.ID, ClaimID: approved.ClaimID, TaskID: approved.TaskID, GrantGeneration: approved.Generation, Phase: sharegrant.SignalPreview, Manifest: approved.Manifest}
-	return shareDirectFixture{a: a, b: b, ca: ca, cb: cb, approved: approved, prepared: prepared, scope: scope, ctx: ctx}
+	return shareDirectFixture{a: a, b: b, ca: ca, cb: cb, approved: approved, prepared: prepared, scope: scope, ctx: ctx, database: database}
 }
 
 func (f shareDirectFixture) connect(t *testing.T) (*PeerSession, *PeerSession) {
