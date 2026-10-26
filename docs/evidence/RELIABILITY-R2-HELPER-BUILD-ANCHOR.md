@@ -43,3 +43,13 @@ Windows 原生构建现在生成同次 manifest/NSIS include。发行 ZIP 只增
 ## 仍未覆盖
 
 本次 builder 之后只补了任务局部 .NET 环境、非 Windows NSIS 入口保护和末尾仅清理本次确定 syso、文档，没有重跑 Go build；本地包保持上述原工作区来源。Taskfile不再使用`*.syso`清理其他文件；没有为此实际删除未知文件。最终准确 clean 来源、GitHub Windows 同包 metadata/hash 仍由本增量提交后的实际 CI 核对。没有宣称默认 publisher、系统剪贴板、Explorer 键盘、Native 删除、安装覆盖/卸载或旧 helper 自动清理通过。旧 helper/未知文件保守保留，活跃同摘要镜像的安装锁行为另验；不新增用户缓存设置。
+
+## 933e0b0准确CI失败与最小修复（2026-10-26）
+
+增量提交 `933e0b099d8cde3418e10b86b50c17dbc1621fd0` 的第1次准确 core `40265172952`、desktop `40265172956` 成功。packages `40265172967` 第1次中两个 Mac job 成功，但 Windows job `121385891103` 在 `Build Windows amd64` 失败：实际 helper/CGO0桌面、NativeShare 和 NSIS 均完成后，builder 的 `source clean=False` 被发行 gate 以 `Clipboard helper source/platform mismatch` 拒绝。没有上传或下载 Windows 发行包，没有修改 clean 状态、取消或重跑旧 run；Mac 成功不计为 Windows 成功。原日志与准确 head/attempt/job 状态保存在 `.artifacts/r2-helper-ci-933e0b0/windows-original.log`、`CI-FAILURE-RECEIPT.json`。
+
+在同目录下创建本地共享对象的准确933隔离 checkout（初始 Git 状态为空），只运行现有锁定 Wails beta.18 的 `generate icons` 就复现两个 tracked dirty：`build/darwin/icons.icns` 356,592→403,856 bytes，`build/windows/icon.ico` 21,677→22,091 bytes。第二次生成两者 SHA 完全一致。继续执行现有 `go mod tidy`、同参数 `wails3 generate bindings`、`pnpm run build` 均 exit0，最终除这两个图标外无其它 dirty。该结果证明确认的生成产物不同步，原 runner 未打印具体 dirty 项，不能据此编造其完整现场列表。
+
+修复仅同步既有 `appicon.png` 派生的两个图标产物，源图不变；这正是现有 fresh package task 本来就会生成的内容，不扩展图标设计。新 SHA256 为 mac `e46058a52ac0e918fd8eea0ab0b2b59b81ef0e712fdce57d2e6bfd01142c5558`、Windows `5b629b903add3b0fe897bf7b94dd349593e86aea6cc6873dfc3a0081a55378b6`。builder 增加最多16条真实 Git dirty 路径诊断，原 clean 判断、输入摘要、前后稳定性和发行拒绝 gate 不变。对准确隔离副本执行实际 `Get-SourceSnapshot` 后只列出上述两项，仍返回 clean=false；PowerShell AST 检查通过。没有为这次修复重跑 Go 编译、原 CI 或 GUI/安装/clipboard。
+
+复现日志 `icons-reproduction.log`、`tidy-reproduction.log`、`bindings-reproduction.log`、`frontend-reproduction.log` 与 `ICON-REPRODUCTION.json`、`SOURCE-DIRTY-RECEIPT.json` 保留在同 ignored 目录。两个产物提交后须由新准确提交的 Windows CI 和真实 artifact 静态校验确认修复；原933失败始终保留，不标同包验收通过。

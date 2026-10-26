@@ -50,6 +50,10 @@ function Get-SourceSnapshot {
   # preserved untracked user directories; Git excludes are never changed.
   $generatedResource = '?? apps/desktop/wails_windows_' + $Arch + '.syso'
   $dirty = @($status | Where-Object { $_ -cne $generatedResource })
+  if ($dirty.Count -gt 0) {
+    Write-Host ("Build source is dirty ({0} Git entries; showing at most 16):" -f $dirty.Count)
+    $dirty | Select-Object -First 16 | ForEach-Object { Write-Host ('  ' + $_) }
+  }
   return [pscustomobject]@{ commit=$commit; digest=$digest; clean=($dirty.Count -eq 0) }
 }
 
