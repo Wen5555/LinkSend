@@ -1,7 +1,7 @@
 name: wails3-packages
 
 env:
-  PRODUCT_VERSION: 0.6.2
+  PRODUCT_VERSION: 0.7.0
 
 on:
   push:
@@ -76,8 +76,6 @@ jobs:
         env:
           GOWORK: 'off'
           LINKSEND_TEMP_SHARE_NATIVE_CLIPBOARD: '1'
-          # One-shot source probe. Remove after collecting the reviewed result.
-          LINKSEND_SHELL_GENERATION_PROBE: '1'
           LINKSEND_RUNNER_ENVIRONMENT: ${{ runner.environment }}
           LINKSEND_RUNNER_OS: ${{ runner.os }}
         run: |

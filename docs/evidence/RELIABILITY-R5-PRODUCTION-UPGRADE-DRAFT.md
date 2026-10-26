@@ -1,4 +1,22 @@
-# R5 生产升级事务草案
+# R5 生产升级事务记录与原审阅草案
+
+## 已批准执行结果（2026-10-26）
+
+状态：**DEPLOYED_VERIFIED，临时分享已开启**。用户明确批准原草案范围后，`jp-linksend` 的唯一 `linksend.service` 已从原0.5.0切换到准确 `5ee9a40e6741749a4bc2d098c85a58e2cc9bd785`，实际服务版本0.6.2、PID3007149、镜像SHA256 `92e3ce635246925e0492d3e092f3e6fe9615cf7fd9d8213cf89dfc16dc927a59`；`/opt/linksend/current` 指向同名release。执行回执时间UTC07:13:06，后续v0.7.0客户端发行不改变本页记录的生产源码来源。
+
+唯一配置变化为 `experimental_share_control=true`，新配置SHA256 `de4f23a8e158e743753572b7c5754c70b9b66d7a3f28c1c1ec3bafc80693eb04`。先保存配置、unit、旧二进制及SQLite Backup API一致性快照；停服后另存final快照，再切换并迁移schema4→5。原永久表devices/groups/invitations/membership_requests的规范摘要保持一致；实际自动迁移备份为 `/var/lib/linksend/control.db.pre-share-v5-6df27705a89ea65621521c4f40f4d112.sqlite`，SHA256 `dc8e083fb2fb6d368c1058f95f51539a46e17fda8b8d929ea8a3eba5375ea5c5`、mode0600。没有回灌数据库、触发回退或修改unit、环境、防火墙、路由、代理及DNS。
+
+私有事务目录 `/var/backups/linksend/20261026T064908Z-r5-5ee9a40-a6261785` 保留原config/unit/binary、initial与final一致性备份及部署收据。首个副本验证因 `snapshot_has_sidecars` 安全拒绝，未启动副本服务或改动生产；保留原快照及WAL/SHM，另用Backup API生成DELETE journal的 `copy-source.sqlite` 后，准确5ee迁移、重开和准确36关闭分享回退三个真实副本服务均正常exit0、监听关闭、原数据不变。schema5兼容fallback `36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 已验证并安装留存；它只作为保留当前DB、关闭分享的回退程序，不能直接退回原schema4-only 0.5.0或覆盖旧DB。
+
+UTC07:14:00正常公网TLS的 `https://linksend.oooai.de/healthz` 返回HTTP200、0.6.2、`share_grants_v1=true`、`file_transfer_ready=true`、`relay=false`。准确5ee随后完成一次Windows→JP Linux公网临时分享：1文件1024B，双方本机task/share、服务grant均completed，清单/TransferID/实际文件hash一致，永久trust与clipboard grants均0，临时身份普通成员请求HTTP401；所有自有测试进程与监听已退场。完整范围、首尝验证器偏差与修正后的唯一成功旅程见[公网后验](RELIABILITY-R5-PUBLIC-SHARE-5EE-20261026.md)。这不证明原Windows双端、双NAT或最终v0.7.0包实机旅程通过。
+
+现有默认本机身份另一次正常TLS只读 `GET /v1/devices` 返回 `AUTHENTICATION_FAILED`，身份字节未变、未写profile key。未核实该身份在升级前是否已入组或被撤销，不能据此归因迁移，也不能宣称普通既有用户正向认证已实测通过。原永久表摘要完整保留与临时身份隔离是分别成立的证据。
+
+本地原始收据在 `.artifacts/r5-production-5ee/`：`COPY-VERIFY-FIRST-FAILURE.json`、`NORMALIZED-SNAPSHOT-RECEIPT.json`、`COPY-VERIFY-PASS.json`、`DEPLOYMENT-TOOL-RECEIPT.json`、`PUBLIC-POST-HEALTH.json`、`ORDINARY-AUTH-PROBE.log`、`PUBLIC-SHARE-PASS-RECEIPT-V2.json` 和 `PUBLIC-SHARE-FINAL-FREEZE.json`。实际部署typed job `/tmp/codex-ssh/job-r5-prod-deploy-5ee-20261026-01` 为finished/exit0；副本验证最终job `job-r5-prod-copy-verify-5ee-20261026-02` 为finished/exit0。原失败与备份继续保留，不重跑或清理。
+
+## 以下为执行前审阅草案（历史记录）
+
+下文的“未授权”“未部署”“尚未访问生产副本”和候选进行中均描述当时状态；本次实际批准、执行及后验以上节为准。保留原方案与失败时间线，不将历史合成库验证倒改为生产验证。
 
 日期：2026-10-26。状态：**DRAFT / NOT_AUTHORIZED / NOT_DEPLOYED**。本文件准备审阅目标、备份、验证与回退；未执行生产备份、上传、配置修改、DB 迁移、服务 stop/start 或 release 切换。当前准确候选为 `5ee9a40` 的独立clean Linux构建；已分别解析708/850/5ee的Linux rendezvous真实编译依赖，全部输入相同，复用708一次合成库迁移/兼容回退，见[证据](RELIABILITY-R5-SCHEMA5-FALLBACK-20261026.md)。708测试失败与850Windows包失败保留。5ee push/PR的core、desktop及Windows包job均首次成功；Windows静态验包仍进行，整体packages未在本页确认成功。尚未取得生产变更授权。
 

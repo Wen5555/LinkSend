@@ -1,3 +1,10 @@
+## 2026-10-26 v0.7.0 发行收尾
+
+- 用户选择v0.7.0并要求收尾，停止新功能扩展。同步Go产品版本、前端、Wails资源、Windows安装器/系统分享清单和Mac bundle；文件协议V1不变。一次协议版本检查发现Appx旧值后补齐并通过；本机前端build先遇默认旧pnpm入口，切回既有工具链后仍被node_modules访问拒绝阻断，未称构建通过；由最终干净CI执行typecheck/build。最终准确源码CI/三平台包结果待发布后补录，未提前宣称通过。
+- 生产准确5ee升级已批准并完成，私有配置/一致性SQLite备份、副本升级重开与schema5兼容回退、现场镜像/数据/TLS后验均保留。正常公网控制面同源1KiB临时分享通过，双方本机完成/清单/hash一致、无永久授权残留，资源退场。[生产事务](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)与[公网分享](evidence/RELIABILITY-R5-PUBLIC-SHARE-5EE-20261026.md)。普通默认身份鉴权探针失败，原成员状态未知，未将其解释为数据迁移损坏或正向鉴权通过。
+- 5ad Windows包停于inbox复用测试：测试缺少保持会话未过期的时间前提，原CI根因INCONCLUSIVE。仅fixture停泊真实空闲timer并在撤权前恢复原3秒策略，保留三次同session/WSS数与撤权关闭断言；首次遗漏恢复导致清理FAIL，补齐后单例PASS，原日志保留。[收尾检查](evidence/RELIABILITY-070-CLOSEOUT.md)。产品TTL/安全门不变。
+- OLE锁组合探针从未运行到有效结果，JSON0/mutation0，收尾撤one-shot flag；不继续采样，不产生平台结论。Native删除保持关闭。R2键盘粘贴/已发布缓存完整GC、R4最终安装退出及WinWin/双NAT等缺项仍在唯一TODO，整体Goal未完成。
+
 ## 2026-10-26 925后续最小静态检查及fixture诊断
 
 - 925 Windows在原缓存生命周期用例20秒未publish失败，单例隔离诊断未复现，根因INCONCLUSIVE；仅补该用例当前活连接/同session/files lease/grant revision起始门与安全计数/progress，原20秒及GC保护断言不变，两次针对具体改动的必要单例均通过，不伪称修产品。见[证据](evidence/RELIABILITY-R2-CACHE-PUBLICATION-FIXTURE-DIAGNOSTICS.md)。

@@ -21,7 +21,7 @@ import (
 
 const (
 	Version        = 1
-	ProductVersion = "0.6.2"
+	ProductVersion = "0.7.0"
 )
 const MaxMessageBytes = 32 * 1024
 const MaxPayloadBytes = 16 * 1024
