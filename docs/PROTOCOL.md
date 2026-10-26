@@ -1,3 +1,7 @@
+## 2026-10-26 私有Shell v3分页元数据候选
+
+新Go-only `ShellPrepare`/catalog/page固定version3与windows-virtual-files-v1，不替换旧controlled v2。首帧绑定总bytes/pages/entries/sources及完整catalog/manifest/inventory摘要；每页最多64KiB原始元数据，在原256KiB有界帧内严格校验版本/顺序/长度/摘要，最终canonical JSON和完整清单一致性检查后才返回。元数据总量64MiB、10,000清单条目/20,003源，不能当文件正文限制。旧新用途域沿用既有签名算法但版本/contract/launch摘要分别核验，兼容负例拒绝互认。后续控制阶段仍必须拒绝多余/错序帧。该私有codec尚无launcher/helper main调用、不发布系统clipboard、不赋GC权限，真实FD与当前原子发布门仍独立待办；详见[codec证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)，网络V1与relay=false保持。
+
 ## 2026-10-26 R5显式能力与旧端入口门
 
 沿用既有配置experimental_share_control（缺省false）；仅明确开启并已成功初始化分享存储/epoch/scoped hub的服务在health与普通WS hello/authenticated的Capabilities中加入可选share_grants_v1=true，并提供share_control.version=1、当前epoch及file_transfer_ready=true。该能力不代替任何grant/签名/双确认/文件授权，也不授予临时actor普通成员权限；普通配置省略这两项，仍明确SHARE_UNSUPPORTED。

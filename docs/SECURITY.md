@@ -4,6 +4,8 @@
 
 # Security
 
+2026-10-26 未接线Shell v3 codec：64KiB固定页和64MiB仅metadata预算先核总数再分配，完整canonical/总摘要及version3/contract/原签名用途绑定后才返回整份catalog；旧v2不能降级互认。声明的文件大小、合成身份/hash和借用句柄值不证明真实文件或native寿命，当前无launcher/helper/GC调用，见[验证与边界](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
+
 2026-10-26 尚未激活的Shell原语：新C++模式与原controlled合同互斥，原句柄仍归调用方，native仅持只读副本；相对descriptor/Stat不提供路径fallback，失败抑制witness但继续核减和关闭真实引用。export可能发生后不以main退出/cancel/TTL强杀；代次检查到OleSetClipboard的CAS缺口尚未解决，新模式无生产调用、不启用Native删除。范围见[证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
 
 2026-10-26 R2私有缓存出口拒绝：普通源准备/hash及每次ReadChunk核对实际借用FD，约束在FD成功Close后释放；app发送、恢复/重发及Open/Reveal/preview统一拒绝当前profile私有缓存树和实际别名。它不认领外部用户硬链接，也不把校验后OS重开路径当作无读取者证明；Native自动删除继续关闭。范围与未闭窗口见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。

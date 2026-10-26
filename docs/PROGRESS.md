@@ -1,3 +1,8 @@
+## 2026-10-26 独立v3分页codec增量
+
+- 首帧/固定页/总摘要、strict canonical与原签名用途version3合同独立实施，旧controlled v2未改；10,000清单/20,003源、声明65MiB文件仅合成metadata，实际FD/helper/Shell/GC均未运行。
+- 一次定向2.507s通过后，review修合法!note/root排序与零mtime限制，仅同批复验2.500s及vet0；保留两日志，未扩矩阵。独立版本/错页/截断/摘要/超限等必要拒绝与旧codec兼容通过，当前CAS发布门/原1024-node持久inventory继续，见[证据](evidence/RELIABILITY-R2-SHELL-CATALOG.md)。
+
 ## 2026-10-26 尚未激活的Shell原语增量
 
 - 独立ShellSession/Witness、标准虚拟文件格式、只读FD副本与真实native引用/Close门已落C++候选，Go仍只调用旧controlled v2，不广告或启用系统publisher/GC。可能export后无硬TTL/强杀路径，259 UTF-16发布名边界明确拒绝，不做物理路径fallback。
