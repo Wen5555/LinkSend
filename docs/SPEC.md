@@ -12,6 +12,8 @@
 
 # LinkSend protocol V1 implementation specification
 
+2026-10-26 R2同次构建锚：Windows native build先static CGO1 helper后CGO0桌面，把实际镜像SHA/平台/源提交/输入摘要/真实clean状态编入主程序；私有resolver固定自身目录的摘要路径并验实际PE/hash，不信sidecar/用户配置/helper自报。ZIP/NSIS只携本次helper，来源为dirty的本地唯一build与静态包校验通过，最终准确提交CI另核；没有默认publisher/系统clipboard/删除或安装旅程通过，见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
+
 2026-10-26 R2真实进程寿命增量：私有launch v2把完整prepare和原绝对期限绑定到child challenge；成功detach仅在真实COM consumer/stream已持有后确认，helper等待原稳定launcher句柄实际exit0才继续读取，真实关闭源后签原v1 receipt。一个实际launcher→helper→新main正例与非零退出保护负例通过，原profile/同SQLite原run仅消费一次且源保留。该证据限自有受控COM，30秒硬期限和未确认Held失败窗的终止策略不可直接用于未来系统publisher；系统clipboard/Explorer、自动删除与R2完整验收仍未完成，见[证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
 
 2026-10-26 R2 Windows私有broker增量：新增固定可信镜像摘要、实际image/child句柄与签名challenge、真实内核BootIdentifier、sealed inventory只读句柄交接、独立Go/C++受控STA↔MTA消费者及同profile spool/SQLite receipt-only消费。七个真实持有/关闭门、helper退出0、新Service身份重载后单次消费与必要负例通过；默认publisher/打包信任锚、系统clipboard/注册格式、Explorer、launcher进程退出时仍活跃consumer、已发布自动删除均未接或未验，不标R2完成。详见[证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。

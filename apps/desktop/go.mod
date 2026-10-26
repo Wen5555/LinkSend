@@ -8,6 +8,7 @@ require (
 	github.com/Wen5555/LinkSend v0.0.0
 	github.com/go-ole/go-ole v1.3.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.18
+	github.com/zeebo/blake3 v0.2.4
 	golang.org/x/sys v0.47.0
 )
 
@@ -35,7 +36,6 @@ require (
 	github.com/quic-go/quic-go v0.62.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	github.com/zeebo/blake3 v0.2.4 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/text v0.40.0 // indirect

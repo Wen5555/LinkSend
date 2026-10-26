@@ -95,3 +95,9 @@ helper在原delegate持久并核验后创建真实STA↔MTA consumer，实际持
 本批启用与回退：沿用schema12既有metadata表，只增`clipboard-cache/v1/`私有键，首次对象注册以单SQLite提交创建，其他现有键不改。缓存记录版本1与DB schema不是同一版本；未来/损坏记录只保护，不能重签并认领。兼容schema12的旧程序按原key读取设置/历史并忽略该命名空间，旧程序也没有发布缓存自动回收器；更早schema11程序的拒绝边界不变。程序回退和数据回退分开，不能用旧备份覆盖升级后的新任务/历史写入。准确旧包安装/回退旅程仍留R4，不用源码兼容检查冒充已实测安装。
 
 测试必须实际核对保护文件仍存在且可用，覆盖：并发预留/释放、恶意大小提示/manifest、ENOSPC、取消、新复制、发布临界崩溃、应用重启、当前引用/未知引用、同启动任意TTL、跨启动安全无引用、墙钟跳变、删除退避、未知对象、签名/身份替换、symlink/reparse与根逃逸；并发删除及生命周期运行 race。Windows/Mac 原生系统粘贴与实际自动回收另验，注入 boot/容量/时钟不冒充真实系统重启或 Finder/Explorer 操作。
+
+## Windows同次构建锚（2026-10-26增量）
+
+可信helper摘要必须由同一构建事务读取实际静态CGO镜像后编入CGO0桌面，同时固定平台、源提交、完整约定构建输入摘要和真实clean状态；输入在前后变化则不生成打包metadata。私有resolver只按自身EXE目录与内置摘要派生固定路径，验证实际PE/hash并拒绝reparse；不能把可写BUILD-INFO/sidecar、用户路径/hash、环境或helper自报当授权。该resolver只提供未来core pin/recheck所需镜像信息，不自行发布、启动或接Wails API。
+
+本次只支持Windows原生构建的ZIP/NSIS同候选载荷；按摘要分目录，installer只复制当前文件，uninstaller只精确删除当前文件及空目录，旧helper/未知内容保留。这样不证明同摘要活跃consumer安装锁已解决，也不赋予Native缓存删除资格。实际dirty构建、静态包/必要负例和准确来源边界见[构建证据](../evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)；系统publisher/Explorer、安装旅程及完整R2继续待实现/验证。

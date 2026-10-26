@@ -1,3 +1,8 @@
+## 2026-10-26 R2同次helper构建与私有镜像锚
+
+- Windows 原生构建先生成静态 CGO1 helper，以实际 SHA/PE/Go metadata 和提交/输入摘要/真实 dirty 状态编入 CGO0 桌面；私有 resolver 只认自身目录的固定摘要文件，严格解析与实际 PE/hash 校验，不读用户路径/hash、sidecar 或 helper 自报。没有默认 publisher/新 Wails API。
+- ZIP/NSIS 只带本次 helper，卸载只动确定文件和空目录；ZIP 先检查精确白名单、重复及摘要再解压。定向workspace/off两模式测试/vet、唯一 dirty 来源 build、NSIS 编译与只提取 helper 的 hash、五个 ZIP 负例通过；symlink 权限负例 SKIP、原生安装/clipboard/删除未运行。准确来源与限制见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍未完成；后续核对提交CI。
+
 ## 2026-10-26 R2真实launcher退出与新main消费
 
 - 私有launch v2固定完整prepare摘要/原绝对期限；helper在真实STA↔MTA consumer、stream/clone/async持有时签Held，随后仅凭原稳定launcher HANDLE实际exit0继续读完、关闭源和签一次原receipt。成功detach后owner清理不再强杀helper；原profile/v1 receipt/schema12/Native保护保持。

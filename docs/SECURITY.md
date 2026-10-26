@@ -2,6 +2,8 @@
 
 # Security
 
+2026-10-26 R2构建信任锚：可信来源是同次构建后编入桌面的版本/平台/实际helper SHA/源提交/输入摘要/真实clean状态；BUILD-INFO与sidecar只作审计，不作为运行信任根。私有resolver严格拒绝空/未知/重复/非规范字段及错误PE/路径reparse，只从自身EXE固定摘要目录取镜像；未来启动仍需core稳定image/child句柄复核。ZIP先验精确条目和摘要再解压，NSIS仅本次文件及空目录，不增加系统发布或删除授权。dirty本地构建和symlink权限SKIP边界见[证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)。
+
 2026-10-26 R2真实进程寿命后续：私有launch v2对完整prepare/原绝对期限签child challenge；真实native consumer/stream已持有后才签Held，成功detach不强杀helper。helper读取门只信原稳定launcher HANDLE实际exit0，非零/到期/未知保持Native保护且不签。driver接收直接复制的helper内核句柄，独立新main重载原profile与原run单次消费，已有一次正例与非零退出保护证据。30秒硬期限及commit已发/Held未确认失败窗可终止helper只属当前受控合同，不能用于未来系统Shell消费者；不宣称取消失败窗保活，也没有系统clipboard/删除权限。见[进程证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
 
 2026-10-26 R2 Windows私有broker只接受预先固定的可信镜像摘要，持稳定image/child句柄并在挂起启动后核对实际image；本机继承管道绑定随机challenge、child临时公钥、BootIdentifier及原sealed inventory。helper只持最小只读源句柄和预建spool写句柄，不持profile私钥/SQLite；原owner回读实际签名授权后才commit，原生引用结束且真实源句柄关闭后才签固定回执。这个receipt-only实现没有系统clipboard发布、默认调用或发行包信任锚，任何Native对象仍受collector保护；原Service重开的一次消费不证明主进程退出时活跃粘贴可继续。见[实现及最小验证](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。

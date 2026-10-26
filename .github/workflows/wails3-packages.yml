@@ -213,6 +213,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force -Path "bin/release" | Out-Null
           Copy-Item "bin/LinkSend.exe", "README-WINDOWS-TEST.txt" -Destination "bin/release"
+          $helper = Get-Content -LiteralPath 'bin/clipboard-helper-build.json' -Raw | ConvertFrom-Json
+          if ($helper.source_commit -ne '${{ github.sha }}' -or !$helper.source_clean -or $helper.target_os -ne 'windows' -or $helper.target_arch -ne '${{ matrix.arch }}') { throw 'Clipboard helper source/platform mismatch' }
+          if ($helper.helper_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $helper.source_digest -cnotmatch '^[0-9a-f]{64}$' -or $helper.helper_relative_path -cne "native-clipboard/$($helper.helper_sha256)/LinkSendClipboardFileHelper.exe") { throw 'Invalid clipboard helper manifest' }
+          if ((Get-FileHash -LiteralPath "bin/$($helper.helper_relative_path)" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $helper.helper_sha256 -or (Get-FileHash -LiteralPath 'bin/LinkSend.exe' -Algorithm SHA256).Hash.ToLowerInvariant() -ne $helper.desktop_sha256) { throw 'Same-candidate build output changed' }
+          $helperDestination = Join-Path 'bin/release' $helper.helper_relative_path
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $helperDestination) | Out-Null
+          Copy-Item -LiteralPath "bin/$($helper.helper_relative_path)" -Destination $helperDestination
           $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $goVersion = (go version).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -235,6 +242,11 @@ jobs:
             "build_time_utc=$buildTime"
             "target_os=windows"
             "target_arch=amd64"
+            "clipboard_helper_sha256=$($helper.helper_sha256)"
+            "clipboard_helper_path=$($helper.helper_relative_path)"
+            "clipboard_helper_source_commit=$($helper.source_commit)"
+            "clipboard_helper_source_digest=$($helper.source_digest)"
+            "clipboard_helper_source_clean=$($helper.source_clean.ToString().ToLowerInvariant())"
             "tool_go=$goVersion"
             "tool_node=$nodeVersion"
             "tool_pnpm=$pnpmVersion"

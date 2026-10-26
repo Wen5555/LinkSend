@@ -30,9 +30,11 @@
 
   R2后续私有基础：52f9bf2已实现receipt-only用途签名/实际inventory/跨main单次CAS，并修复collector信任剥离Native副本的误删入口；任何Native仍保护，未接生产helper或已发布回收。准确core/desktop/三平台包CI均attempt1/success；见[签名基础证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。不能将签名或CI当真实native读取结束证明。
 
-  R2 Windows私有broker首增量：固定可信image/child句柄与challenge、实际BootID、sealed inventory只读句柄、独立Go/C++受控COM消费者、持久spool与原SQLite单次消费已接成一次真实闭环；七门/5句柄及wrong-image/child/行变化/伪回执/重放拒绝有证据。默认publisher/打包trust anchor、系统clipboard/注册格式、Explorer键盘、launcher进程退出时活跃consumer和已发布删除仍待；任何Native继续保护，不勾R2。见[本轮证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
+  R2 Windows私有broker首增量：固定可信image/child句柄与challenge、实际BootID、sealed inventory只读句柄、独立Go/C++受控COM消费者、持久spool与原SQLite单次消费已接成一次真实闭环；七门/5句柄及wrong-image/child/行变化/伪回执/重放拒绝有证据。该段首增量当时尚无打包trust anchor/真实launcher退出证据，后续结果见下两段；默认publisher、系统clipboard/注册格式、Explorer键盘和已发布删除仍待，任何Native继续保护，不勾R2。见[首增量证据](evidence/RELIABILITY-R2-WINDOWS-NATIVE-BROKER.md)。
 
   R2真实进程寿命后续：已用实际launcher进程exit0时仍持有的helper COM consumer/stream继续读完，helper退出后由独立新main重载原profile/同SQLite消费原run一次；exit9→helper失败/空spool/新main拒绝消费，源保护。原绝对期限与直接复制的helper句柄均核对，不以Service重开代替。仍无系统clipboard/正式Shell发布/Explorer或Native删除；30秒受控期限不作为未来生产消费者寿命。见[进程证据](evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)，R2保持未完成。
+
+  R2同次构建锚后续：实际helper SHA/PE/平台与源提交/输入摘要/真实dirty编入CGO0桌面，私有固定路径resolver及ZIP/NSIS当前helper载荷已接。唯一dirty build、同包/installer提取hash、必要解析与ZIP负例通过；symlink权限负例SKIP、准确clean提交CI待核。没有默认publisher、系统clipboard/Explorer、原生安装或Native删除通过，见[打包证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍不勾选。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
 - [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；已用真实TLS/WSS因果门修复typed原因降级，legacy仅精确signaling phase获得安全指导，补固定P2P/限频提示。普通/race各3轮、前端171项与完整Go12矩阵通过；准确新CI/候选旅程与Mac仍待。见[诊断增量](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)及[原生观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。

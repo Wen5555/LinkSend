@@ -48,6 +48,10 @@ Unicode true
 !endif
 
 !include "wails_tools.nsh"
+!ifndef ARG_LINKSEND_CLIPBOARD_INFO
+!error "Build the same-candidate clipboard helper before packaging."
+!endif
+!include "${ARG_LINKSEND_CLIPBOARD_INFO}"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -106,6 +110,9 @@ Section
     SetOutPath $INSTDIR
     !insertmacro wails.files
     File /r "${ARG_LINKSEND_SHARE_DIR}\*.*"
+    SetOutPath "$INSTDIR\native-clipboard\${LINKSEND_CLIPBOARD_HELPER_SHA256}"
+    File /oname=LinkSendClipboardFileHelper.exe "${LINKSEND_CLIPBOARD_HELPER_SOURCE}"
+    SetOutPath $INSTDIR
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
@@ -137,6 +144,11 @@ Section "uninstall"
     Delete "$INSTDIR\AppxManifest.xml"
     Delete "$INSTDIR\Assets\Logo.png"
     RMDir "$INSTDIR\Assets"
+    # Delete only this installer's known candidate; active/old helpers and
+    # user-added files are preserved. No recursive directory removal.
+    Delete "$INSTDIR\native-clipboard\${LINKSEND_CLIPBOARD_HELPER_SHA256}\LinkSendClipboardFileHelper.exe"
+    RMDir "$INSTDIR\native-clipboard\${LINKSEND_CLIPBOARD_HELPER_SHA256}"
+    RMDir "$INSTDIR\native-clipboard"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
