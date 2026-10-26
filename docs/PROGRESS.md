@@ -1,3 +1,8 @@
+## 2026-10-26 准确Windows包跨网临时分享完成
+
+- scene05准确36 Wails Windows从JP Linux实际领取、身份确认、加密清单预览、原生选目录并明确保存，三文件262175B与嵌套空目录全部落地；独立逐文件hash与双方本机/share/grant completed一致，双方确认、QUIC/TLS1.3/relay=false、零永久trust/clipboard grants、普通成员接口拒绝均有回执。GUI正常退出0、forced=false；详见[实机证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
+- Windows候选为srflx→host，method真实direct_unknown；只证明本次Windows↔公共Linux，不推断双NAT或原Windows双端现场。用户要求减少测试，后续采用最小功能验证及必要安全检查，复用现有有效结果，验证后及时commit/push；剩余必做仍继续，不将未运行改记通过。
+
 ## 2026-10-26 Linux替代对端与准确候选
 
 - 用户明确允许 Linux 服务器替代 Mac。连接、恢复、普通双向传输及一次性分享按 Windows↔Linux 实网继续；不再等待 Mac。Windows 原生粘贴、缓存回收和安装退出继续实施，Finder/DMG 专属项目保持未验证，不将 Linux 或 CI 结果冒充原生认证。

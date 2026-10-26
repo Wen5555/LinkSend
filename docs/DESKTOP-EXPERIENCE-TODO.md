@@ -4,6 +4,8 @@
 
 用户最新指示允许 Linux 服务器替代 Mac。当前按 Windows↔Linux 完成连接、恢复、普通双向传输及临时分享的实网验收，不再等待/反复探测 Mac；Windows Explorer 实际键盘粘贴、自动缓存、安装退出继续，Finder/DMG 专属结果保留未验证。此调整不证明原两台 Windows 现场或受限双NAT通过。
 
+同日最新执行要求：减少测试，以每个增量的最小功能验证和必要安全检查推进，已有有效结果不重复完整矩阵；可审阅增量验证后及时commit/push。scene05准确36 Windows原生接收已完成Linux实网临时分享，三文件262175B/空目录/逐文件hash、双方本机终态及零永久授权均通过，正常GUI退出0；见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。普通双向/恢复、R2完整回收/键盘粘贴和Windows完整安装退出继续。
+
 最新版Windows双端公网在线但连接未验证优先修复。正式版main最小分支的edf7cac已交付Windows候选和[PR #12](https://github.com/Wen5555/LinkSend/pull/12)，默认备用STUN、内置主机安全解析及ICE失败统计已验证；准确干净源码验证器Windows↔公共JP Linux双向16MiB/中文/空目录、6/6落盘条目/hash、双方Completed通过，约3.3秒建链。准确Windows包来源/摘要/版本核验通过，但用户暂时无法试用，两台Windows现场和受限双NAT不因此打勾；吞吐仍偏低，原R0–R6未完成。见[跨网证据](evidence/CROSS-NETWORK-20261026.md)。
 
 另行修复服务端把所有IPv4末尾255当广播的准入缺陷，并先Unmap防止映射地址绕过危险scope限制；真实签名WSS/forward回归通过，详见[准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。这是服务端代码，未替换生产或改宿主网络，不能通过只更新Windows候选生效。代码同步进入本可靠性分支；临时测试进程已结束、隔离peer已撤销。Mac SSH本次仍超时，台湾NAT别名不可用；不能把SSH失败当产品NAT失败。

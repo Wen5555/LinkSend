@@ -75,3 +75,16 @@ scene04准确36 GUI真实领取，observer核验pending Claim后等待root-ready
 scene04远端runtime已精确退役，8个受保护文件hash保持。本地两个自有凭据的删除在CreateProcess前被自动审批以 `blocked by policy` 拒绝，未给更具体原因；未换工具绕过，文件仍在用户专属私有目录，见 `scene04/LOCAL-CREDENTIAL-RETIREMENT-BLOCKED.json`。
 
 新scene05只调整测试工具：WaitTimeout45秒→10分钟，与桌面人机等待默认值一致；Check35秒保持（桌面本身30秒），actor/forward/observer/GUI总窗口统一30分钟。产品码、claim、grant的绝对期限不变，不续期旧场景。来源和构建在 `scene05/LAUNCH-PLAN.md` 与 `scene05-preparation/BUILD-RECEIPT.json`，不以准备完成预记实机通过。用户允许Linux替代Mac后按Windows↔Linux接续，不再等待Mac；Finder/DMG专属项目保持未验证。
+
+## 第五轮：准确Windows包从Linux实收完成
+
+Windows准确36 Wails候选与JP Linux准确36干净源码driver完成一次真实临时分享。Windows绑定私有LAN地址，Linux绑定其公网地址，未启用loopback候选或固定端口映射；控制元数据通过专用SSH loopback HTTP/WSS，文件独立走Pion/UDP/QUIC，不通过SSH/信令/JS。这是不同主机、不同网络的Windows↔公共Linux成功范围，不证明双NAT或原Windows双端现场。
+
+真实WebView子进程的 `--user-data-dir` 核对位于本次子进程APPDATA私有根（`scene05/webview-process-isolation.json`）后才输入凭据。原生界面领取并清空输入，observer验证真实签名Claim后消费fresh root-ready，Linux发送方重新核验并精确批准。Windows明确读取加密清单，observer证明preview时目标为空且未确认保存；之后通过原生文件夹picker选择本轮received目录，再明确点击“确认保存并接收”。期间一次重复打开picker经Escape取消，已有目标保持，没有代替GUI调用Bind或填充本机完成记录。
+
+- Windows原任务、本机签名share ledger及engine Completion、服务端grant均completed；Linux原任务/share/grant均completed。双方verified/committed/expected均262175B，bilateral_confirmed=true；Windowsreceived=262175B。
+- 三个文件（262144B payload、31B中文说明、零字节文件）、嵌套空目录均落地。独立比较源和Windows发布树的每条路径/size/SHA256全部相等，共同树SHA256 `6a9eb64fcd569b4495b7ad7a7e95d14e71dd1dd0f5fa39f9fa3fd2dadd21d074`。原始回执 `scene05/FILE-HASH-COMPARISON.json`，未将恢复checkpoint副本计入正式文件集合。
+- QUIC/TLS1.3/ALPN linksend/1、relay=false；Windows所选候选srflx→host，method实际为direct_unknown，保留原标签，不改称internet_p2p或推断NAT类型。双方永久trust及clipboard grants均0，同身份普通成员接口仍拒绝（Windows实测HTTP401）。
+- observer与sender实际exit0；Windows经原生关闭确认→“退出应用”正常exit0、forced_by_timeout=false、649077ms。sender stderr的关闭UDP读取错误保留，不抹日志；它没有改变已核验Completion或exit0。coordinator经精确受管SIGINT退出0，身份、profile、源/目标与失败历史保留。
+
+实际GUI启动命令 `python .artifacts/share-native-ui-draft/scene05/launch-owned-gui.py`；完整来源、actor requestId/jobPath/游标、双方回执、UIA完成快照、各退出收据在同scene目录及既有RUN-RECOVERY。此次按用户要求只做直接相关的最小功能核验，不重跑已通过完整矩阵。准确Wails接收旅程现有证据；反向原生发送、普通双向/恢复、R2完整回收和Explorer键盘粘贴、Windows完整安装退出及R6仍继续，R5/Goal不因单次成功整体打勾。
