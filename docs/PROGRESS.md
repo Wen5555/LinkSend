@@ -1,3 +1,8 @@
+## 2026-10-26 准确5ee候选核验与生产待授权
+
+- 5ee push/PR core、desktop及三平台packages均首次success；唯一一次Windows下载通过Actions摘要、完整clean来源、主PE锚与ZIP/installer内main/helper一致性静态核验，未运行候选/安装器/clipboard。准确Linux候选已构建，实际6包16生产输入与708/850逐项相同，复用一次合成库旅程而不重测。来源/hash与未验边界见[候选证据](evidence/RELIABILITY-CANDIDATE-5EE9A40.md)。
+- 生产只读仍0.5.0/schema4，准确5ee候选、目标、一致性备份/副本/兼容回退方案已备齐，按完整提示词第四节提出一次具体生产授权请求，尚未执行变更。其余原生publisher/GC继续，Goal保持active；Mac未等待或重测，R0–R6未整体完成。
+
 ## 2026-10-26 R2普通源和OS出口拒绝
 
 - 20代码文件接通实际FD源约束及所有app准备/ReadChunk入口，关闭成功才释放；Open/Reveal/任务目录和excluded preview同门。普通父目录排除私有子树、外部用户名字保持，Native删除不启用，OS按path重开窗明确保留。

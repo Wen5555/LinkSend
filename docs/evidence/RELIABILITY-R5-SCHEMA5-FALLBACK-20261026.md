@@ -1,6 +1,6 @@
 # R5 准确 Linux 构建与合成库兼容回退
 
-日期：2026-10-26。范围：准确 `708468579c2d969f9e028d52c06eee4defb43164` standalone rendezvous 的一次最小 Linux 功能验证，以及测试/文档修正后 `850b9d115ac2a2e460a0678039a1642cd2c1de9b` 的准确重建和相同产品输入核对。**没有生产访问/部署、SSH、外网请求、GUI、系统剪贴板或文件数据面重测；R5 不因此整体完成。** 708整体CI的真实失败保留，850准确CI仍待，不能把本记录作为CI成功或部署可用证据。
+日期：2026-10-26。范围：准确 `708468579c2d969f9e028d52c06eee4defb43164` standalone rendezvous 的一次最小 Linux 功能验证，以及850/当前 `5ee9a40e6741749a4bc2d098c85a58e2cc9bd785` 的准确重建和真实rendezvous依赖输入核对。**本次构建/合成库验证没有生产访问/部署、SSH、外网请求、GUI、系统剪贴板或文件数据面重测；R5不因此整体完成。** 708测试失败和850Windows包失败保留；准确5ee core/desktop与Windows包job已首次成功，静态验包仍进行，不冒充整体packages成功或生产部署证据。
 
 ## 准确构建
 
@@ -15,6 +15,14 @@ go version -m <outside-source>/rendezvous-linux-amd64
 构建 exit0，18,188,312B、SHA256 `4ec005a23c5da98ae77367924e1b1c41efbec34f58ddec396b86835bc09c4de6`。真实 buildinfo 含 `vcs.revision=708468579c2d969f9e028d52c06eee4defb43164`、`vcs.modified=false`、linux/amd64、CGO0、trimpath。Linux 实际 `-version` 返回 `LinkSend rendezvous 0.6.2`。二进制在该监督目录；收据 `.artifacts/r5-server-7084685/BUILD-RECEIPT.json`、完整 `GO-BUILD-INFO.txt`、`build.log`。
 
 后续850只改两个 `*_test.go` 和三份docs，没有产品输入变化。用完整 `git ls-tree -rz` 的mode/path/blob列表比较，排除docs/和`*_test.go`后所有tracked文件完全相同，SHA256 `d6890c344e21f3ef984f409f77264f8f7e69944fa3e8016f361055dd5063edfd`。同一独立checkout干净切至准确850，以同工具链/参数构建到源外新文件 `rendezvous-linux-amd64-850b9d1`：exit0、18,188,312B、SHA256 `6efa08b5919113281d1fcc8c81f7b63316fc0492df33de9dfe930c273252a784`，真实buildinfo完整850/modified=false，构建前后clean；实际Linux `-version` exit0/0.6.2。新构建收据 `BUILD-RECEIPT-850b9d1.json`、`GO-BUILD-INFO-850b9d1.txt` 均位于同artifact目录。复用下面708旅程，没有重跑850服务、迁移或矩阵；原708 PID/结果仍绑定708。
+
+## 当前5ee准确候选与实际依赖复用
+
+5ee包含后续R2发送/缓存guard和生成TS修正，不能直接用「只改测试」或模块名称推测server不受影响。因此在同一独立clean checkout分别切到准确708、850、5ee，以 `GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go list -deps -json ./cmd/rendezvous` 取得三次真实依赖图，逐个解析repo目录实际选中的Go/C/汇编/系统对象/embed等生产输入并加上go.mod/go.sum。三版实际repo生产依赖均为cmd/rendezvous、identity、protocol、server、sharegrant、store六包，16个输入文件、本目标无embed。输入列表、git mode/path/blob、实际字节SHA以及外部模块版本/go.sum全部相同；完整规范输入SHA256 `c0d6665d5f8a6d60208ef4e117ddeb835a5dba188370fa942a1644136e79e2bb`。全量JSON与每文件详情在 `.artifacts/r5-server-7084685/RENDEZVOUS-DEPENDENCY-EQUIVALENCE-5ee9a40.json` 及三份 `go-list-<sha>.json`。
+
+准确5ee以同Go1.27.1/linux-amd64/CGO0/trimpath构建一次，构建前后clean：18,188,312B、SHA256 `92e3ce635246925e0492d3e092f3e6fe9615cf7fd9d8213cf89dfc16dc927a59`，真实buildinfo完整5ee/modified=false；已有WSL执行该新二进制 `-version` exit0/0.6.2。文件为 `C:/Users/Wen/.codex/supervision/r5-server-7084685-20261026-01/rendezvous-linux-amd64-5ee9a40`，独立构建收据 `BUILD-RECEIPT-5ee9a40.json`、`GO-BUILD-INFO-5ee9a40.txt` 同存上述artifact目录。依据实际相同输入复用708迁移/回退，未重复5ee服务、迁移或完整矩阵；下述实际服务PID与数据库结果继续明确归于708。
+
+准确5ee CI已读回 `.artifacts/r2-helper-ci-5ee9a40/ci-runs.json` 和 `windows-job.json`：push core `40273165842`/desktop `40273165901` 与PR core `40273168788`/desktop `40273168780` 均attempt1/success；Windows job `121410208098`（run `40273165815`/attempt1）2026-10-26T05:24:16Z首次success，含构建/hash/上传成功。该观测整体packages仍in_progress，独立Windows静态验包仍进行；没有等待Mac或把Windows job成功冒充整体结果。生产只读刷新由root另行记录在[草案](RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)，本子任务未SSH或变更生产。
 
 ## 一次合成库旅程
 
