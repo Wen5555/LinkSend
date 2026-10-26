@@ -40,11 +40,15 @@ func newShareDirectFixture(t *testing.T) shareDirectFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = srv.Close() })
-	httpServer := httptest.NewServer(srv.Handler())
+	httpServer := httptest.NewTLSServer(srv.Handler())
 	t.Cleanup(httpServer.Close)
 	makeService := func() *Service {
 		t.Helper()
 		s, e := New(Config{DataDir: t.TempDir(), ServerURL: httpServer.URL, AllowInsecureLoopback: true})
+		if e != nil {
+			t.Fatal(e)
+		}
+		s.signal, e = signaling.New(signaling.Config{ServerURL: httpServer.URL, Identity: s.identity, HTTPClient: httpServer.Client()})
 		if e != nil {
 			t.Fatal(e)
 		}

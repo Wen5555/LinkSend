@@ -11,7 +11,7 @@ const pageSize = 5;
 const terminal = (share: TemporaryShareSnapshot) => ['completed', 'stopped'].includes(share.state) || ['completed', 'revoked', 'expired'].includes(share.grant_state ?? '');
 
 export function temporaryShareError(cause: unknown): string {
-  const code = String(cause ?? '').match(/\b(?:SHARE_[A-Z_]+|SIGNALING_[A-Z_]+|AUTHENTICATION_FAILED|SOURCE_CHANGED|METADATA_REVISION_CONFLICT|CANCELLED|CLIPBOARD_[A-Z_]+|NATIVE_RUNTIME_UNAVAILABLE)\b/)?.[0];
+  const code = String(cause ?? '').match(/\b(?:SHARE_[A-Z_]+|SIGNALING_[A-Z_]+|AUTHENTICATION_FAILED|SOURCE_CHANGED|METADATA_REVISION_CONFLICT|CANCELLED|CLIPBOARD_[A-Z_]+|NATIVE_RUNTIME_UNAVAILABLE|DIRECT_FAILED|RATE_LIMITED|PEER_OFFLINE|CANDIDATE_EXCHANGE_TIMEOUT|NO_CANDIDATES|NO_VIABLE_CANDIDATE|CHECK_TIMEOUT|ICE_FAILED|QUIC_HANDSHAKE_(?:TIMEOUT|FAILED)|SESSION_CONFLICT|CONNECTION_INTERRUPTED)\b/)?.[0];
   const messages: Record<string, string> = {
     SHARE_UNSUPPORTED: '当前服务器尚未启用临时分享。请升级并启用服务后重试；已配对设备的收发仍可使用。',
     SHARE_UNAVAILABLE: '临时分享服务暂时不可用，请稍后刷新状态。',
@@ -21,7 +21,19 @@ export function temporaryShareError(cause: unknown): string {
     SHARE_EXPIRED: '这次分享已过期，请由发送方重新创建。',
     SHARE_TERMINAL: '这次分享已经结束，不能再次打开；如需再发请创建新分享。',
     SIGNALING_UNREACHABLE: '无法连接分享服务，请检查服务地址和网络后刷新。',
-    SIGNALING_TIMEOUT: '分享服务响应超时，请先刷新状态，再重试原操作。',
+    SIGNALING_TIMEOUT: '分享协调等待超时，请确认双方仍在本次分享中等待，再刷新原分享状态并手动继续。',
+    DIRECT_FAILED: '本次直连或传输未完成。请确认对方仍在等待，刷新原分享状态后再手动继续，避免重复创建或领取。',
+    PEER_OFFLINE: '对方尚未参与本次连接，请让对方保持应用打开，并在这次分享中继续后再重试。',
+    CANDIDATE_EXCHANGE_TIMEOUT: '连接信息交换未完成，请确认协调服务可用且对方仍在等待后重试原分享。',
+    NO_CANDIDATES: '未取得可用的直连地址，请检查绑定网卡和STUN配置后重试原分享。',
+    NO_VIABLE_CANDIDATE: '未找到可用的直连路径，请检查双方网络是否允许UDP；当前不提供文件中继。',
+    CHECK_TIMEOUT: '直连探测超时，请检查双方网络是否允许UDP，再手动重试原分享。',
+    ICE_FAILED: '直连探测失败，请检查绑定网卡和双方网络后重试原分享。',
+    QUIC_HANDSHAKE_TIMEOUT: '安全连接握手等待超时，请确认双方仍在线，网络恢复后重试原分享。',
+    QUIC_HANDSHAKE_FAILED: '安全连接身份或协议核验未完成，请核对双方身份和版本；不要跳过身份核验。',
+    SESSION_CONFLICT: '当前连接正在协调，请先刷新原分享状态，再手动继续。',
+    CONNECTION_INTERRUPTED: '文件连接已中断，请保留原文件和接收目录，确认双方恢复后从原分享继续。',
+    RATE_LIMITED: '临时分享请求暂时受限，可能是请求频繁或分享记录较多。请稍后核对已有分享状态，再手动重试原操作，避免重复创建或领取。',
     AUTHENTICATION_FAILED: '临时分享的身份核验失败，请核对接收方身份后重试。',
     SOURCE_CHANGED: '源文件已变化，请撤销这次分享，核对内容后重新创建。',
     METADATA_REVISION_CONFLICT: '上方草稿已变化，请刷新后使用当前选择重新创建。',

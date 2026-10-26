@@ -27,7 +27,7 @@
   R2后续私有基础：52f9bf2已实现receipt-only用途签名/实际inventory/跨main单次CAS，并修复collector信任剥离Native副本的误删入口；任何Native仍保护，未接生产helper或已发布回收。准确core/desktop/三平台包CI均attempt1/success；见[签名基础证据](evidence/RELIABILITY-R2-NATIVE-AUTHORIZATION.md)。不能将签名或CI当真实native读取结束证明。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。
-- [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现；130项前端/定向race和两模块检查通过，浏览器布局/导航已检查。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；当前DIRECT_FAILED/实际signaling_connect仍降级generic/unknown，需修复并复核，Mac旅程仍待。见[诊断证据](evidence/RELIABILITY-R3-DIAGNOSTICS.md)及[新准确包观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
+- [ ] R3（候选实施）：Go白名单原因/阶段/下一步、安全任务与记录DTO、实际尝试时间及本地JSON导出已实现。01b5c16原生保存/取消及任务导航已验，准确3d包再次实际导出失败任务安全报告；已用真实TLS/WSS因果门修复typed原因降级，legacy仅精确signaling phase获得安全指导，补固定P2P/限频提示。普通/race各3轮、前端171项与完整Go12矩阵通过；准确新CI/候选旅程与Mac仍待。见[诊断增量](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)及[原生观察](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。
 - [ ] R4：准确Windows候选实际覆盖安装、profile逐字节保持、身份/草稿/历史/20MiB恢复状态、单实例唤回及原系统入口恢复已验；基线活动任务取消退出/保存退出通过。候选活动完整续传、SendTo/拖放和Mac替换/活动退出仍待，见[原生证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
 - [ ] R5（owner/数据面/桌面候选，整体待验）：[ADR0017](adr/0017-one-time-share-grant.md)先冻结的授权核心、显式备份迁移、签名HTTP及独立scope WSS已实现并验证；普通配置关闭，实验health的file_transfer_ready=false，不广告正式share_grants_v1。历史增量及旧失败保留在[核心](evidence/RELIABILITY-R5-GRANT-CORE.md)、[控制](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)、[客户端](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)与[协调](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)证据中，不将旧包或CI移记本候选。
 
@@ -43,7 +43,7 @@
 
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。3d20ccb准确三平台包/来源/修正说明已验，52f9bf2完整三CI亦准确success；701独立Go实网双向和cd托管native子目标保留各自范围。准确3d Windows GUI已真实领取/批准及导出诊断，但receiver参与晚于sender35秒期限，两端失败，sender verified/committed=0、Windows无预览/Completion；下一轮先补夹具批准就绪屏障，并修复实际DIRECT_FAILED诊断缺口，详见[原生记录](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)。R1用户Windows双端公网现场、受限双NAT，R2完整回收/键盘粘贴、R4双平台完整旅程及R6仍必做。Mac保存别名192.168.1.243于本日07:14 SSH仍connect-timeout/255，未改宿主网络或把SSH不可达当产品NAT失败；旧审批拒绝保留原边界。
+当前接续点（2026-10-26）：Goal实际active。3d准确包/来源及52完整CI已核对；3d GUI真实领取/批准/导出与scene02/03失败均保留，未取得预览/Completion，不证明scope或用户现场根因。typed信令原因及安全提示已修复并完成同版12矩阵/171前端，准确新CI与包另核对；接续分离已批准对端人机等待与网络短期限，并继续真实WinWin跨网验证，详见[诊断证据](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)。R1用户现场/受限双NAT，R2完整回收/键盘粘贴、R4双平台完整旅程及R6仍必做。Mac07:14 SSH仍connect-timeout/255，未改宿主网络或把SSH不可达当产品NAT失败；旧审批拒绝保留原边界。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

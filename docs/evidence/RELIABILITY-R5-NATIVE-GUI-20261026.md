@@ -46,3 +46,13 @@ sender 是准确 `701e23b` 干净源码 driver（来源及 hash 见[已有实网
 同一报告也保留了尚待修复的可操作诊断缺口：task 的已知 `signaling_connect` 在 guidance 仍为 unknown，`DIRECT_FAILED` 只显示“任务未完成，具体原因需要进一步检查”，临时分享行也只显示通用失败。不能将导出成功写成所有错误说明均已完善。此轮未做原生 SaveFile 取消，不用旧包取消结果替代；真实文件传输、实际恢复与两个平台旅程继续。
 
 Mac保存别名在本日07:14再次 SSH255/connect-timeout；这是测试入口不可达，不能冒充产品连接失败。保留 `.artifacts/share-native-ui-draft/mac-probe-20261026-071409.json`。其余 R1–R6 必做项与 Goal active 状态不变。
+
+## 第三轮夹具就绪屏障与精确时间
+
+新 gated observer 在真实签名 pending Claim 核验后等待 root 的新普通文件标记，再复核同一 Claim/pin/generation 并触发原 sender 的真实批准。七项本地测试/vet/build exit0，新工具 SHA256 `9ad28a53c07f5507503e971958d09ffa91dfd47cc341c49d8779f04a83427b4c`；旧工具/driver/产品期限未改，生产与系统剪贴板未触碰。
+
+仍未取得预览：sender记录23:37:53.233602534→23:38:28.237797711，35,004.195177ms；receiver记录23:38:28.6515725→23:38:58.6773551，30,025.7826ms。记录UTC窗口不重叠，receiver开始比sender终态晚413.774789ms；没有测跨机时钟偏差上界，不能将亚秒先后当严格物理证明，也没有证据证明scope/Origin故障。双方真实verified/committed及receiver received均为0，未取得接收预览/计划或本机Completion，见 `scene03/{TASK-TIME-COMPARISON,receiver-live-state}.json`。
+
+GUI正常退出0、forced=false、422155ms；observer/forward/coordinator自然退场，18445两端空闲。只退役临时runtime，按诊断需要保留双方测试identity/profile、源、接收目录与日志。协调库schema5/quick_check=ok、approved1；协调stdout/stderr实际0B，没有per-session trace，不能杜撰会话细节。后续独立修复等待语义；本轮未启动scene04。
+
+同轮定向回归已证明 typed signaling 原因丢失并修复，见[诊断增量](RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)；它不改上述原生失败或人机等待期限。

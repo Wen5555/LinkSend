@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/Wen5555/LinkSend/internal/connectivity"
@@ -14,6 +15,29 @@ import (
 	"github.com/Wen5555/LinkSend/internal/signaling"
 	"github.com/Wen5555/LinkSend/internal/transport"
 )
+
+// Only this known signaling stage owns this classification. In particular a
+// deadline from an unrelated file operation must not become a signaling error,
+// and an authoritative grant/security code must survive a racing cancellation.
+func classifyShareSignalingError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	var existing *protocol.Error
+	if errors.As(err, &existing) {
+		return err
+	}
+	if ctx.Err() != nil {
+		return classifyPhaseError(ctx, err, protocol.SignalingTimeout, "temporary share signaling")
+	}
+	if errors.Is(err, context.Canceled) {
+		return protocol.Wrap(protocol.Cancelled, "temporary share signaling cancelled", err)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return protocol.Wrap(protocol.SignalingTimeout, "temporary share signaling timed out", err)
+	}
+	return err
+}
 
 // connectSharePeer uses a positive, one-task authorization owner. It does not
 // enroll a peer or enter the ordinary peer/generation connection pool. Preview
@@ -68,7 +92,7 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 	stage := time.Now()
 	signal, err := client.ConnectShare(connectCtx, scope, pinned, signaling.ShareSignalOptions{AllowLoopbackCandidates: cfg.AllowLoopback})
 	if err != nil {
-		return nil, err
+		return nil, classifyShareSignalingError(connectCtx, err)
 	}
 	keep := false
 	stopHeartbeat := startHeartbeat(ctx, signal)
@@ -78,8 +102,11 @@ func (s *Service) connectSharePeer(ctx context.Context, scope sharegrant.SignalS
 			_ = signal.Close()
 		}
 	}()
+	if hook := s.temporaryShares.beforeSignalWait; hook != nil {
+		hook()
+	}
 	if err = signal.WaitPeer(connectCtx); err != nil {
-		return nil, err
+		return nil, classifyShareSignalingError(connectCtx, err)
 	}
 	timings.SignalingConnectMS = durationMS(stage)
 	if err = check(); err != nil {

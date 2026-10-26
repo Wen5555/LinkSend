@@ -75,14 +75,15 @@ type temporaryShareEntry struct {
 }
 
 type temporaryShareOwner struct {
-	once          sync.Once
-	mu            sync.Mutex
-	entries       map[string]*temporaryShareEntry
-	err           error
-	wg            sync.WaitGroup
-	now           func() time.Time
-	beforeRetire  func(string)          // Package-private deterministic CAS test barrier.
-	beforePrepare func(context.Context) // Package-private cancellation test barrier; never stores a context.
+	once             sync.Once
+	mu               sync.Mutex
+	entries          map[string]*temporaryShareEntry
+	err              error
+	wg               sync.WaitGroup
+	now              func() time.Time
+	beforeRetire     func(string)          // Package-private deterministic CAS test barrier.
+	beforePrepare    func(context.Context) // Package-private cancellation test barrier; never stores a context.
+	beforeSignalWait func()                // Package-private causal barrier after scoped WSS authentication.
 }
 
 func (s *Service) temporaryNow() time.Time {

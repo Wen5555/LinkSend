@@ -102,6 +102,9 @@ func taskDiagnosticGuidance(snapshot TaskSnapshot) DiagnosticGuidance {
 		guidance.Code = snapshot.ErrorCode
 		return guidance
 	}
+	if snapshot.ErrorCode == string(protocol.DirectFailed) && snapshot.Phase == "signaling_connect" {
+		return DiagnosticGuidance{Code: snapshot.ErrorCode, Stage: "signaling", Reason: "连接协调未完成", NextStep: "确认对方仍在等待本次连接，检查协调服务后，再通过原任务或原分享手动继续。", Action: "open_network"}
+	}
 	switch protocol.Code(snapshot.ErrorCode) {
 	case protocol.LANProbeInvalid, protocol.PairingCodeInvalid, protocol.PairingCodeExpired, protocol.PairingCodeUsed,
 		protocol.DirectFailed, protocol.RelayNotImplemented, protocol.InvalidMessage, protocol.Replay,

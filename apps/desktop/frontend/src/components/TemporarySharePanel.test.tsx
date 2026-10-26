@@ -145,6 +145,61 @@ describe('一次性临时分享', () => {
     expect(temporaryShareError(wrapped)).not.toContain('private draft');
   });
 
+  it.each([
+    ['DIRECT_FAILED', '直连或传输未完成'],
+    ['SIGNALING_TIMEOUT', '分享协调等待超时'],
+    ['PEER_OFFLINE', '对方尚未参与本次连接'],
+    ['CANDIDATE_EXCHANGE_TIMEOUT', '连接信息交换未完成'],
+    ['NO_CANDIDATES', '未取得可用的直连地址'],
+    ['NO_VIABLE_CANDIDATE', '未找到可用的直连路径'],
+    ['CHECK_TIMEOUT', '直连探测超时'],
+    ['ICE_FAILED', '直连探测失败'],
+    ['QUIC_HANDSHAKE_TIMEOUT', '安全连接握手等待超时'],
+    ['QUIC_HANDSHAKE_FAILED', '安全连接身份或协议核验未完成'],
+    ['SESSION_CONFLICT', '连接正在协调'],
+    ['CONNECTION_INTERRUPTED', '文件连接已中断'],
+    ['RATE_LIMITED', '请求暂时受限'],
+  ])('shows a fixed safe explanation for %s without private details', (stableCode, reason) => {
+    const value = temporaryShareError(new Error(`RuntimeError: ${stableCode}: PRIVATE_ENDPOINT_AND_KEY ${code}`));
+    expect(value).toContain(reason);
+    expect(value).not.toContain('PRIVATE_ENDPOINT_AND_KEY');
+    expect(value).not.toContain(code);
+  });
+
+  it('does not infer a network cause from untyped deadline text', () => {
+    expect(temporaryShareError(`private deadline exceeded ${code}`)).toBe('操作未完成，请刷新分享状态后重试。');
+  });
+
+  it('keeps a rate-limited claim explicit through time, local refresh and rerender', async () => {
+    backend.ClaimTemporaryShare.mockRejectedValue(new Error(`RATE_LIMITED: PRIVATE_ENDPOINT_AND_KEY ${code}`));
+    const { container, render } = await mount();
+    await input(container, code);
+    await click(container, '领取分享');
+    expect(container.textContent).toContain('请求暂时受限');
+    expect(container.textContent).not.toContain(code);
+    expect(container.textContent).not.toContain('PRIVATE_ENDPOINT_AND_KEY');
+    expect(container.querySelector<HTMLInputElement>('input')!.value).toBe('');
+    vi.useFakeTimers();
+    try { act(() => { render(); vi.advanceTimersByTime(60_000); }); }
+    finally { vi.useRealTimers(); }
+    await click(container, '重读本机状态');
+    expect(backend.ClaimTemporaryShare).toHaveBeenCalledExactlyOnceWith(code);
+    for (const fn of [backend.CreateTemporaryShare, backend.ApproveTemporaryShare, backend.StartTemporaryShare, backend.ResumeTemporaryShare, backend.RetryTemporaryShareAction, backend.RetryTemporaryShareClaim]) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('shows an owner error safely and refreshes only the original local share on click', async () => {
+    const original = share({ state: 'needs_attention', grant_state: 'approved' as TemporaryShareSnapshot['grant_state'], error_code: 'DIRECT_FAILED' as TemporaryShareSnapshot['error_code'] });
+    backend.RefreshTemporaryShare.mockResolvedValue(share({ state: 'ready', grant_state: 'approved' as TemporaryShareSnapshot['grant_state'], revision: 2 }));
+    const { container } = await mount([original]);
+    expect(container.textContent).toContain('直连或传输未完成');
+    expect(backend.RefreshTemporaryShare).not.toHaveBeenCalled();
+    expect(backend.StartTemporaryShare).not.toHaveBeenCalled();
+    await click(container, '刷新分享状态');
+    expect(backend.RefreshTemporaryShare).toHaveBeenCalledExactlyOnceWith('local-owner');
+    expect(container.textContent).not.toContain('直连或传输未完成');
+    for (const fn of [backend.StartTemporaryShare, backend.ResumeTemporaryShare, backend.RetryTemporaryShareAction, backend.RetryTemporaryShareClaim]) expect(fn).not.toHaveBeenCalled();
+  });
+
   it('captures exact claim/key/generation and starts only after the explicit confirmation', async () => {
     const original = pending();
     backend.ApproveTemporaryShare.mockResolvedValue(share({ ...original, state: 'approved', grant_state: 'approved' as TemporaryShareSnapshot['grant_state'], revision: 3 }));

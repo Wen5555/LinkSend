@@ -1,3 +1,9 @@
+## 2026-10-26 临时分享信令原因与可操作提示
+
+- 真实SQLite/TLS/WSS孤立peer在认证后因果门复现裸deadline/cancel丢成DIRECT_FAILED；现在只在已知ConnectShare/WaitPeer阶段保留typed原因及errors.Is，已有grant/Auth/终态码不被取消竞争覆盖。legacy只有精确signaling_connect获得安全阶段指导，不从原始日志猜ICE/NAT原因。
+- 临时分享补固定P2P及RATE_LIMITED提示，保留原intent/明确重试，无自动派发。旧Go/UI失败保留；普通/race各3轮、前端171项/typecheck/lint/build、同版双Go模块workspace/off完整12命令均exit0。准确新CI另核对，未将原生失败改为通过，详见[诊断证据](evidence/RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)。
+- 第三轮GUI加夹具批准就绪门后仍未传输：记录UTC接收端开始比发送端失败晚约0.414秒，但未测跨机时钟偏差，不能证明scope缺陷。两端0B、无预览/Completion，资源精确退场。原Check/Wait人机等候问题另作独立修复，不混入本增量。
+
 ## 2026-10-26 准确包原生入口与失败证据
 
 - 3d20ccb准确三平台包已下载核对Actions digest、内外BUILD-INFO、四资产SHA及Windows PE/README；52f9bf2的core40240526707、desktop40240526725、packages40240526706再次查询均attempt1/completed/success，未重跑。52增量不倒记进3d包。
