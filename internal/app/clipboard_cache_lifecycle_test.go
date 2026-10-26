@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Wen5555/LinkSend/internal/clipboardsync"
 	"github.com/Wen5555/LinkSend/internal/protocol"
 	"github.com/Wen5555/LinkSend/internal/transfer"
 )
@@ -348,12 +350,63 @@ func TestClipboardCacheLifecycleFailedBeforeNativePreservesUnknownThenReclaims(t
 
 func TestClipboardCacheLifecycleNeverReclaimsPossiblyPublishedOrUnknown(t *testing.T) {
 	f := newClipboardFilesFixture(t)
+	// The shared fixture's SendReady is a cached status bit. This lifecycle
+	// assertion starts only with the current healthy session's real files lease.
+	var sender, receiver *PeerSession
+	var initialLease clipboardsync.Lease
+	waitFor(t, 2*time.Second, func() bool {
+		sender, receiver = nil, nil
+		f.a.directPoolMu.Lock()
+		for _, pooled := range f.a.directPool {
+			p := pooled.peer
+			if p != nil && p.PeerID == f.bID.ID() && p.ClipboardFiles && p.Data != nil && p.Data.Conn != nil && p.Data.Conn.Context().Err() == nil {
+				sender = p
+				break
+			}
+		}
+		f.a.directPoolMu.Unlock()
+		if sender == nil {
+			return false
+		}
+		f.b.directPoolMu.Lock()
+		for _, pooled := range f.b.directPool {
+			p := pooled.peer
+			if p != nil && p.PeerID == f.aID.ID() && p.SessionID == sender.SessionID && p.ClipboardFiles && p.Data != nil && p.Data.Conn != nil && p.Data.Conn.Context().Err() == nil {
+				receiver = p
+				break
+			}
+		}
+		f.b.directPoolMu.Unlock()
+		if receiver == nil || sender.AuthorizationGeneration != receiver.RemoteAuthorizationGeneration || sender.RemoteAuthorizationGeneration != receiver.AuthorizationGeneration {
+			return false
+		}
+		grant, permitted := f.b.clipboardGrant(f.aID.ID(), "receive", clipboardsync.Files, receiver.AuthorizationGeneration)
+		var leased bool
+		initialLease, leased = f.a.clipboardSync.Outbound(sender.PeerID, sender.SessionID, sender.RemoteAuthorizationGeneration, clipboardsync.Files)
+		return permitted && leased && initialLease.Revision(clipboardsync.Files) == grant.Revision
+	}, "current authenticated files lease was not ready for cache lifecycle fixture")
+	t.Logf("cache publication start: session=%s generation=%d/%d lease=%s expires=%s", sender.SessionID, sender.AuthorizationGeneration, sender.RemoteAuthorizationGeneration, initialLease.ID, initialLease.ExpiresAt().Format(time.RFC3339Nano))
+	var reads, writes atomic.Int32
+	f.a.clipboardAdapterMu.Lock()
+	readFiles := f.a.clipboardAdapter.ReadFiles
+	f.a.clipboardAdapter.ReadFiles = func(ctx context.Context, generation uint64) ([]string, uint64, error) {
+		reads.Add(1)
+		return readFiles(ctx, generation)
+	}
+	f.a.clipboardAdapterMu.Unlock()
+	f.b.clipboardAdapterMu.Lock()
+	writeFiles := f.b.clipboardAdapter.WriteFiles
+	f.b.clipboardAdapter.WriteFiles = func(paths []string, generation uint64, deadline time.Time) (uint64, error) {
+		writes.Add(1)
+		return writeFiles(paths, generation, deadline)
+	}
+	f.b.clipboardAdapterMu.Unlock()
 	f.copy(t, 2)
 	var paths []string
 	select {
 	case paths = <-f.written:
 	case <-f.ctx.Done():
-		t.Fatal("copy did not publish")
+		t.Fatalf("copy did not publish: reads=%d writes=%d aGen=%d bGen=%d sender=%+v receiver=%+v sent=%+v received=%+v", reads.Load(), writes.Load(), f.aGen.Load(), f.bGen.Load(), f.a.ClipboardPeerStatuses(), f.b.ClipboardPeerStatuses(), f.a.ClipboardFileProgresses(), f.b.ClipboardFileProgresses())
 	}
 	id := filepath.Base(filepath.Dir(paths[0]))
 	waitFor(t, time.Second, func() bool {

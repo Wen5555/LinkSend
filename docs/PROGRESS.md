@@ -1,3 +1,8 @@
+## 2026-10-26 925后续最小静态检查及fixture诊断
+
+- 925 Windows在原缓存生命周期用例20秒未publish失败，单例隔离诊断未复现，根因INCONCLUSIVE；仅补该用例当前活连接/同session/files lease/grant revision起始门与安全计数/progress，原20秒及GC保护断言不变，两次针对具体改动的必要单例均通过，不伪称修产品。见[证据](evidence/RELIABILITY-R2-CACHE-PUBLICATION-FIXTURE-DIAGNOSTICS.md)。
+- 独立desktop vet拒绝探针native地址→Go slice；改用已有RtlMoveMemory并KeepAlive，一次仅编译和vet均0。925 native步骤skipped、JSON0/mutation0，未产生API结论；首次有效hosted结果尚待，flag没有提前撤。见[探针记录](evidence/RELIABILITY-R2-SHELL-GENERATION-PROBE.md)。
+
 ## 2026-10-26 同策略续租晚到的真实剪贴板修复
 
 - 366 Windows core步骤真实失败已固定复现：两张同策略lease中后者在native generation3才安装，文字路径误选最新baseline3，丢弃刚复制事件且两侧仍ready/error空。原代码+确定屏障exit1/13.881s；只把该处选择改为已有OutboundForObservation，同一用例exit0/11.728s，原3秒断言不变、无系统clipboard或整矩阵。

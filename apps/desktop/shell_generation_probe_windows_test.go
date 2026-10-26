@@ -139,7 +139,8 @@ func runHostedShellGenerationProbe(t *testing.T) {
 	if address == 0 {
 		t.Fatal("OLE lock probe synthetic allocation could not be locked; no publish attempted")
 	}
-	copy(unsafe.Slice((*uint16)(unsafe.Pointer(address)), len(text)), text)
+	kernel32.NewProc("RtlMoveMemory").Call(address, uintptr(unsafe.Pointer(&text[0])), uintptr(len(text)*2))
+	runtime.KeepAlive(text)
 	kernel32.NewProc("GlobalUnlock").Call(memory)
 	medium := shellGenerationProbeMedium{Medium: 1, Data: memory}
 	// FALSE: OLE must make its own copy; this fixture always frees its HGLOBAL.

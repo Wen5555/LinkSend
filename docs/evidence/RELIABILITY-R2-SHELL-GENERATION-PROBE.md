@@ -25,3 +25,9 @@ desktop 工作目录，加载 `.tools/use-desktop-toolchain.ps1` 后仅一次：
 `GOWORK=off CGO_ENABLED=0 go test -c -o D:/apps/Osend/.artifacts/r2-shell-generation-probe/desktop-probe.test.exe .`
 
 exit 0，日志 `.artifacts/r2-shell-generation-probe/compile-only.log`。该命令只编译，不执行 test binary / init / clipboard API；没有用 `-run '^$'` 冒充 compile-only。产物 SHA256 `353945a377f121edadd6177b65aebf0c2a34bb5b65dd3ad6e045c0034aa6d324`。`gofmt`、定向 diff check 和修改后的 workflow PowerShell AST 静态解析另录冻结收据；真实 CI / HRESULT 尚未取得。
+
+## 925首轮与静态检查修正
+
+准确925的desktop显式`go vet ./...`在将GlobalLock的native地址转为Go slice处拒绝unsafe.Pointer用法；Go测试通过不等于该静态检查通过。Windows包另在原缓存生命周期用例失败，native步骤实际skipped、JSON0/mutation0/native artifact0，收据 `.artifacts/r2-helper-ci-925ba7c/CI-PROBE-NOT-RUN-RECEIPT.json`。这不是API unsupported证据，也不以撤flag冒充已观测。
+
+仅将复制改为项目已有的`RtlMoveMemory`调用，从仍存活的Go UTF-16 buffer复制到native地址，不再反向构造Go指针；`runtime.KeepAlive`覆盖该buffer。一次`GOWORK=off CGO_ENABLED=0 go test -c -o <artifact>/desktop-probe-vetfix.test.exe .`及同模块`go vet ./...`均exit0，记录 `.artifacts/r2-shell-generation-probe/vetfix-check.json`、`vetfix-compile.log`、`vetfix-vet.log`。没有执行binary/init/clipboard，没有静态检查豁免。one-shot flag保留到首次有效hosted结果后再撤。
