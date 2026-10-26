@@ -33,3 +33,16 @@
 - 生产原永久数据迁移前后摘要一致，但使用当前默认本机身份的只读普通鉴权探针失败，尚未确认该身份原本的成员状态；不能宣称现有普通用户正向鉴权已实测成功。
 
 R0–R6 整体 Goal 保持未完成，准确状态见[唯一 TODO](DESKTOP-EXPERIENCE-TODO.md)。
+
+## 发布来源与资产
+
+[v0.7.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.7.0)已正式公开并设为Latest；PR [#13](https://github.com/Wen5555/LinkSend/pull/13)正常合入main，tag准确指向`7d09e59f0dd5ec6fd20300fb83ad428f94dd034c`。[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/40291770390)及同源码core/desktop均success。四个程序包和两份校验/来源元数据共六资产的GitHub digest与本地一致。
+
+Windows ZIP与NSIS内主程序/helper一致，PE版本0.7.0、helper锚和来源clean已核。Mac静态结论来自准确CI的只读挂载/架构/严格签名及本地下载digest；没有独立本地挂载读取bundle版本或原生运行。
+
+| 平台 | 资产 | SHA256 |
+|---|---|---|
+| windows-amd64 | [LinkSend-v0.7.0-windows-amd64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.zip](https://github.com/Wen5555/LinkSend/releases/download/v0.7.0/LinkSend-v0.7.0-windows-amd64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.zip) | `cfc5c9c70f69d314ca46b5d9035baca21cdb5baf8a09c32213ff8634a628292c` |
+| windows-amd64 | [LinkSend-v0.7.0-windows-amd64-installer-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.exe](https://github.com/Wen5555/LinkSend/releases/download/v0.7.0/LinkSend-v0.7.0-windows-amd64-installer-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.exe) | `0dec8a892813dfdaa1e383bd9fabc77e1c93b82d30b7416b8102c27664f889ca` |
+| macos-arm64 | [LinkSend-v0.7.0-macos-arm64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.7.0/LinkSend-v0.7.0-macos-arm64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.dmg) | `4ab70588a3fa083babbaff5be612e76c0bd7f2502a0e175eaef0eedf89e98018` |
+| macos-amd64 | [LinkSend-v0.7.0-macos-amd64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.dmg](https://github.com/Wen5555/LinkSend/releases/download/v0.7.0/LinkSend-v0.7.0-macos-amd64-7d09e59f0dd5ec6fd20300fb83ad428f94dd034c.dmg) | `36f0cfda5f77bbe7dba7d262e7725c01eacb2018e196c9bc1909c6cbe2ee5bb4` |

@@ -23,3 +23,7 @@ freeze：`.artifacts/release-070-closeout/inbox-fixture-freeze.json`；最终源
 ## 发行边界
 
 不再运行本机GUI/clipboard/安装旅程，不再扩展Shell/自动回收实现。one-shot OLE探针有效运行0次，撤flag，NOT_RUN。现有生产5ee公网分享通过、真实Windows↔Linux证据各自绑定原提交；新0.7资产只报告真实准确源码CI和静态核验。R0–R6整体未完成，Native删除关闭，详细缺项保留在唯一TODO。
+
+## 最终发行结果
+
+main准确源码`7d09e59f0dd5ec6fd20300fb83ad428f94dd034c`，三平台run `40291770390` 与core/desktop全部success；[v0.7.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.7.0)正式公开为Latest，tag一致，六资产GitHub digest全部匹配。本机frontend环境失败保留，最终干净desktop CI完整前端检查通过。静态包结论及未运行边界见RELEASE-MANIFEST.json；本地收据 `.artifacts/release-070-closeout/final-main-assets/RELEASE-PUBLISHED.json`。

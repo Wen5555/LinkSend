@@ -2,7 +2,7 @@
 
 ## 2026-10-26 当前接续：v0.7.0 发行收尾
 
-用户明确要求收尾并选择 v0.7.0。停止扩展 Shell publisher、分页 inventory 或新测试矩阵；先完成必要版本一致性、最终源码 CI、同源码三平台静态包核验，再合入 main、绑定准确 tag 并发布 GitHub Release。当前发布准备中，不能提前称已发布。发布范围与未验边界见[0.7.0说明](RELEASE-v0.7.0.md)。
+用户明确要求收尾并选择 v0.7.0，已完成[正式Release](https://github.com/Wen5555/LinkSend/releases/tag/v0.7.0)并设Latest。PR #13合入main，准确包源码`7d09e59f0dd5ec6fd20300fb83ad428f94dd034c`、tag、准确core/desktop及三平台run `40291770390` 全部通过；四程序包和两元数据摘要已核。停止新功能扩展；本次发布不把下列验收缺项改记完成。来源与下载见[0.7.0说明](RELEASE-v0.7.0.md)。
 
 生产升级已获明确批准并完成：`jp-linksend` 的准确5ee、schema5、分享双能力与正常公网TLS已核；原永久表完整摘要保持，兼容36回退程序与私有一致性备份保留。随后同源核心在公网控制面完成 Windows→Linux 单次1KiB分享、双方本机完成和无永久授权残留，资源已退场。详见[生产事务](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)与[公网分享](evidence/RELIABILITY-R5-PUBLIC-SHARE-5EE-20261026.md)。下文“尚未部署/待授权”保留其历史时间，以本段和实际收据为准。
 

@@ -1,3 +1,5 @@
+2026-10-26 [v0.7.0](RELEASE-v0.7.0.md)已发布：跨网修复、诊断、一次性分享及缓存保护增量；文件wire V1/relay=false，未激活Shell publisher/Native删除。生产5ee已开启分享；最终发行包来源和未验边界以发布清单与唯一TODO为准。
+
 2026-10-26 R5显式可用性：已有两阶段Pion/QUIC、原V1引擎与701e23b实网核心双向及准确36 Wails实收证据后，仅experimental_share_control=true且启动初始化成功的实例声明share_grants_v1=true与file_transfer_ready=true。客户端每次要求规范能力、ready和当前epoch；旧控制/旧端明确SHARE_UNSUPPORTED，Create/Claim在prepare、码与本地intent前拒绝。默认关闭、永久组/双确认/relay=false保持；新准确提交CI及生产升级仍待，见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)与[生产草案](evidence/RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)。
 
 2026-10-19 可靠性R2持久owner：在既有SQLite metadata命名空间保存版本1的私有签名缓存记录，固定目录与实际stage/file句柄来源在body前登记，发布意图先落盘，实际mutation仍重验控制/CAS；不确定发布缓存保护，旧运行记录不重放。文件wire、clipboard_files_v1及任务库schema12保持。完整活动引用/自动回收和双平台键盘粘贴仍待，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)与[持久记录验证](evidence/RELIABILITY-R2-CACHE-LEDGER.md)。

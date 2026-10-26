@@ -1,3 +1,9 @@
+## 2026-10-26 v0.7.0已正式发布
+
+- [PR #13](https://github.com/Wen5555/LinkSend/pull/13)合入main，准确包源码`7d09e59f0dd5ec6fd20300fb83ad428f94dd034c`、tag一致。[v0.7.0](https://github.com/Wen5555/LinkSend/releases/tag/v0.7.0)为Latest、非Draft/非prerelease。准确main core/desktop及[三平台包CI](https://github.com/Wen5555/LinkSend/actions/runs/40291770390)均成功；四程序包加两元数据的GitHub digest、Actions外层digest及本地SHA一致。
+- Windows ZIP/NSIS的0.7版本、真实helper锚与相同main/helper核验通过；Mac只用准确CI挂载/架构/签名与下载digest，不宣称独立本地挂载/运行。此前本机依赖目录阻断的build由干净desktop CI typecheck/lint/test/build完成验证，不抹去原失败。
+- 真实传输/恢复/临时分享保持各自36/5ee候选来源；原两Windows现场、双NAT、R2键盘粘贴/已发布缓存GC及R4最终实机仍未完成。生产仍为已批准的5ee（0.6.2/schema5/分享开启），本次客户端发版没有再次替换生产。
+
 ## 2026-10-26 v0.7.0 发行收尾
 
 - 用户选择v0.7.0并要求收尾，停止新功能扩展。同步Go产品版本、前端、Wails资源、Windows安装器/系统分享清单和Mac bundle；文件协议V1不变。一次协议版本检查发现Appx旧值后补齐并通过；本机前端build先遇默认旧pnpm入口，切回既有工具链后仍被node_modules访问拒绝阻断，未称构建通过；由最终干净CI执行typecheck/build。最终准确源码CI/三平台包结果待发布后补录，未提前宣称通过。
