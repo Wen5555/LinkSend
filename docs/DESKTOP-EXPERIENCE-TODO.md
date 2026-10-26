@@ -2,6 +2,8 @@
 
 ## 2026-10-26 优先：Windows跨网连接
 
+用户最新指示允许 Linux 服务器替代 Mac。当前按 Windows↔Linux 完成连接、恢复、普通双向传输及临时分享的实网验收，不再等待/反复探测 Mac；Windows Explorer 实际键盘粘贴、自动缓存、安装退出继续，Finder/DMG 专属结果保留未验证。此调整不证明原两台 Windows 现场或受限双NAT通过。
+
 最新版Windows双端公网在线但连接未验证优先修复。正式版main最小分支的edf7cac已交付Windows候选和[PR #12](https://github.com/Wen5555/LinkSend/pull/12)，默认备用STUN、内置主机安全解析及ICE失败统计已验证；准确干净源码验证器Windows↔公共JP Linux双向16MiB/中文/空目录、6/6落盘条目/hash、双方Completed通过，约3.3秒建链。准确Windows包来源/摘要/版本核验通过，但用户暂时无法试用，两台Windows现场和受限双NAT不因此打勾；吞吐仍偏低，原R0–R6未完成。见[跨网证据](evidence/CROSS-NETWORK-20261026.md)。
 
 另行修复服务端把所有IPv4末尾255当广播的准入缺陷，并先Unmap防止映射地址绕过危险scope限制；真实签名WSS/forward回归通过，详见[准入证据](evidence/CANDIDATE-ADMISSION-20261026.md)。这是服务端代码，未替换生产或改宿主网络，不能通过只更新Windows候选生效。代码同步进入本可靠性分支；临时测试进程已结束、隔离peer已撤销。Mac SSH本次仍超时，台湾NAT别名不可用；不能把SSH失败当产品NAT失败。
@@ -45,7 +47,7 @@
 
 - [ ] R6：触及职责拆分、版本一致性、同候选完整 CI/产物与资源收尾待完成。
 
-当前接续点（2026-10-26）：Goal实际active。8082准确core/desktop成功，Windows/ARM Mac包成功、Intel Mac原trickle测试失败；真实顺序overlay复现相同失败机制，已仅测试修正host前提。等待对端入场与短网络期限已分离，并完成同版12矩阵/172前端；接续新准确CI/包及原生分享，继续独立WinWin实网驱动与标准密文交接（当前仅隔离验证，未执行正式服务写API或真实runner）。见[等待证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。3d GUI失败与Mac07:14 SSH超时均保留；R1用户现场/受限双NAT、R2完整回收/键盘粘贴、R4双平台及R6仍必做，未改宿主网络或把SSH不可达当产品NAT失败，旧审批边界保持。
+当前接续点（2026-10-26）：Goal实际active。36cfce3准确core40251000156/desktop40251000220/packages40251000157均首次成功，四资产及准确Windows载荷来源/hash核验通过；8082 Intel Mac旧失败保留。scene04仅真实领取，未写root-ready、未批准/预览，GUI原夹具到期强退exit1，不能判产品等待失败。新scene05使用独立私有根及与桌面一致的10分钟人机等待（产品授权期限不改），接续准确Wails Windows↔Linux实网分享。用户允许Linux替代Mac，不再等待Mac；WinWin额外驱动冻结于离线覆盖，未执行正式写API或hosted实网。见[原生证据](evidence/RELIABILITY-R5-NATIVE-GUI-20261026.md)；R2完整回收/Explorer键盘粘贴、Windows候选恢复/退出及R6继续，Mac专属结果保持未验证。scene04本地凭据删除遭审批拒绝且未绕过，其他授权边界保持。
 
 2026-10-19历史接续记录（保留当时状态，非当前下一步）：当时要求核对 `f2712dc` 包CI run `39165099505`（core `39165099512`/desktop `39165099516` 已success；Windows/Mac arm64包success，Intel Mac DMG仍运行），只读watch日志 `ci-39165099505.log` 后记录结果，不能把运行中记PASS。后续结果见PROGRESS对应R2路径记录。Mac补查job `/tmp/codex-ssh/job-ls-r2-mac-preflight-20261019-001` 已退出0，无远程运行中作业；系统boot标识API只测可读/短时稳定，未测重启。
 

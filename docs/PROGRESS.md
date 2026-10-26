@@ -1,3 +1,8 @@
+## 2026-10-26 Linux替代对端与准确候选
+
+- 用户明确允许 Linux 服务器替代 Mac。连接、恢复、普通双向传输及一次性分享按 Windows↔Linux 实网继续；不再等待 Mac。Windows 原生粘贴、缓存回收和安装退出继续实施，Finder/DMG 专属项目保持未验证，不将 Linux 或 CI 结果冒充原生认证。
+- 产品提交 `36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 已推送核对，core `40251000156`、desktop `40251000220`、packages `40251000157` 均首次成功，三平台包均成功。四资产来源/摘要与准确Windows载荷已核验，Windows EXE SHA256 `4d90408843347d637be7e2eb54b41cbcd8450cc7f48fa358ec4f585883cbb68d`；原生跨网分享正接续验证，未预记通过。
+
 ## 2026-10-26 已批准对端等待与trickle测试前提
 
 - 临时分享HTTP/WSS保持短Check，认证后独立Wait并受原run/原阶段绝对grant期限限制；对端到场重验原owner/黑名单/scope，再开始新的短网络预算。新增本地中文等待phase及安全指导，无wire/schema/权限或自动重试变化。真实TLS/WSS旧红转为迟到peer的固定公钥ICE/QUIC，普通/race3轮及完整12矩阵/前端172项/typecheck/lint/build通过，见[证据](evidence/RELIABILITY-R5-PEER-WAIT.md)。

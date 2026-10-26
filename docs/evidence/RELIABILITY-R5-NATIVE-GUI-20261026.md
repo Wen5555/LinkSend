@@ -56,3 +56,22 @@ Mac保存别名在本日07:14再次 SSH255/connect-timeout；这是测试入口�
 GUI正常退出0、forced=false、422155ms；observer/forward/coordinator自然退场，18445两端空闲。只退役临时runtime，按诊断需要保留双方测试identity/profile、源、接收目录与日志。协调库schema5/quick_check=ok、approved1；协调stdout/stderr实际0B，没有per-session trace，不能杜撰会话细节。后续独立修复等待语义；本轮未启动scene04。
 
 同轮定向回归已证明 typed signaling 原因丢失并修复，见[诊断增量](RELIABILITY-R3-SHARE-SIGNALING-DIAGNOSTICS.md)；它不改上述原生失败或人机等待期限。
+
+## 准确36候选与第四轮边界
+
+`36cfce3d2e8f3d5eed8ab6588c5d172bc05f4d73` 的 core `40251000156`、desktop `40251000220`、packages `40251000157` 均 attempt1/completed/success，三平台 package job 全通过；原8082 Intel Mac失败保留。原始查询在 `.artifacts/share-owner-draft/peer-wait-ci-36cfce3.json`。实际执行 `fetch-milestone-artifacts.ps1` 与 `verify-milestone-packages.ps1` 均 exit0，来源/内外BUILD-INFO/Actions摘要/PE版本已核对，回执 `.artifacts/share-ui-draft/candidate-36cfce3/{artifact-verification,PACKAGE-VERIFICATION}.json`。
+
+| 准确36资产 | SHA256 |
+|---|---|
+| Windows ZIP | `815c5e099795202fcbba6d195ceacaee5a92133b698271e18f418e270aa23aac` |
+| Windows installer | `50500aecdb772958d232b8147f77d736f8c9348937d3541dea706895fb65d766` |
+| macOS arm64 DMG | `77bf3c4cfeb2a09428eeb1693f1c0fc68e62308b3acaa82b7591852dd3461b7c` |
+| macOS amd64 DMG | `acbf69324224902363a5774931101da02d4d6d3978753f23c683536ce88d6dbf` |
+
+实际Wails载荷 `verified-windows-payload/LinkSend.exe` SHA256 `4d90408843347d637be7e2eb54b41cbcd8450cc7f48fa358ec4f585883cbb68d`，PE0.6.2。该exe无嵌入vcs字段，来源由Actions/BUILD-INFO/摘要证明，不声明其vcs.modified=false。随包native code-copy目标真实run1/pass1/skip0/fail0/exit0，只证明对应原生代码保护及后续文字同步子目标，不替代文件键盘粘贴或Wails传输。
+
+scene04准确36 GUI真实领取，observer核验pending Claim后等待root-ready；本轮没有写该marker，因此没有发送方批准、preview、产品peer-wait或本机Completion。原10分钟夹具耗尽，sender停在fixture `wait_claim_confirmation`、observer停在 `wait_root_approval_ready`。GUI PID58844真实wrapper exit1、forced_by_timeout=true、603709ms，不记正常退出。退场回执 `.artifacts/share-native-ui-draft/scene04/RUN-RECOVERY.json` 及 `gui-process-exit.json` 保留。
+
+scene04远端runtime已精确退役，8个受保护文件hash保持。本地两个自有凭据的删除在CreateProcess前被自动审批以 `blocked by policy` 拒绝，未给更具体原因；未换工具绕过，文件仍在用户专属私有目录，见 `scene04/LOCAL-CREDENTIAL-RETIREMENT-BLOCKED.json`。
+
+新scene05只调整测试工具：WaitTimeout45秒→10分钟，与桌面人机等待默认值一致；Check35秒保持（桌面本身30秒），actor/forward/observer/GUI总窗口统一30分钟。产品码、claim、grant的绝对期限不变，不续期旧场景。来源和构建在 `scene05/LAUNCH-PLAN.md` 与 `scene05-preparation/BUILD-RECEIPT.json`，不以准备完成预记实机通过。用户允许Linux替代Mac后按Windows↔Linux接续，不再等待Mac；Finder/DMG专属项目保持未验证。
