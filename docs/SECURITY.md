@@ -4,6 +4,8 @@
 
 # Security
 
+2026-10-26 尚未激活的Shell原语：新C++模式与原controlled合同互斥，原句柄仍归调用方，native仅持只读副本；相对descriptor/Stat不提供路径fallback，失败抑制witness但继续核减和关闭真实引用。export可能发生后不以main退出/cancel/TTL强杀；代次检查到OleSetClipboard的CAS缺口尚未解决，新模式无生产调用、不启用Native删除。范围见[证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
+
 2026-10-26 R2私有缓存出口拒绝：普通源准备/hash及每次ReadChunk核对实际借用FD，约束在FD成功Close后释放；app发送、恢复/重发及Open/Reveal/preview统一拒绝当前profile私有缓存树和实际别名。它不认领外部用户硬链接，也不把校验后OS重开路径当作无读取者证明；Native自动删除继续关闭。范围与未闭窗口见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
 
 2026-10-26 R2 publisher owner政策：控制写之前在已回读的真实durable授权digest上不可逆登记export_possible；写失败、ack丢失、main取消或退出不再强杀可能活跃的私有helper。Shell政策的deadline只约束准入，export后没有硬TTL；该政策尚未接实际系统publisher，当前受控helper仍保留自身测试期限。它不认证原生refs、不签静止证明、不赋删除权。路径出口、实际OLE与完整大目录/长路径仍须先闭合，见[ADR0016](adr/0016-automatic-clipboard-file-cache.md)和[owner证据](evidence/RELIABILITY-R2-PUBLISHER-OWNER.md)。

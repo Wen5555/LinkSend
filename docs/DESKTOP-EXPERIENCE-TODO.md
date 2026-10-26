@@ -38,6 +38,8 @@
 
   R2普通源/OS出口增量：统一实际FD源准备/hash/ReadChunk及所有app发送/恢复/重发入口，Open/Reveal/任务目录与preview元数据同门；父目录排除私有树仍可用。必要transfer/app/junction及小目录用例、core compile/vet和desktop独立仅编译通过。校验后OS按path重开窗仍在，Native删除不启用；系统publisher、读取结束与完整GC继续，见[出口证据](evidence/RELIABILITY-R2-CACHE-EXPORT-GATES.md)。
 
+  R2未激活Shell原语：独立C++虚拟文件模式、只读FD副本及无export后TTL的真实引用/Close门已候选实施，一次严格build及旧controlled COM回归通过；未调用新模式或系统clipboard。最后代次检查/OLE mutation的CAS缺口解前不激活，v3分页codec等独立工作继续，Native删除保持关闭，见[原语证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
+
   R2同次构建锚后续：实际helper SHA/PE/平台与源提交/输入摘要/真实dirty编入CGO0桌面，私有固定路径resolver及ZIP/NSIS当前helper载荷已接。唯一dirty build、同包/installer提取hash、必要解析与ZIP负例通过；symlink权限负例SKIP、准确clean提交CI待核。没有默认publisher、系统clipboard/Explorer、原生安装或Native删除通过，见[打包证据](evidence/RELIABILITY-R2-HELPER-BUILD-ANCHOR.md)，R2仍不勾选。
 
   推送来源`1bc92e0`：core/desktop CI成功；包CI39172841244的Mac arm64旧直连时序断言失败，Windows/Intel Mac成功。因果回归改为扣住两端候选结束通知，Mac普通100轮/race50轮、独立负例及双模块完整矩阵通过，见[证据](evidence/RELIABILITY-R1-TRICKLE-CAUSAL-CHECK.md)。新准确提交CI继续核对，旧失败不抹去。

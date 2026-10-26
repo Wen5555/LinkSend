@@ -1,3 +1,8 @@
+## 2026-10-26 尚未激活的Shell原语增量
+
+- 独立ShellSession/Witness、标准虚拟文件格式、只读FD副本与真实native引用/Close门已落C++候选，Go仍只调用旧controlled v2，不广告或启用系统publisher/GC。可能export后无硬TTL/强杀路径，259 UTF-16发布名边界明确拒绝，不做物理路径fallback。
+- 一次严格CGO1 build和一次旧controlled COM回归exit0/6.380s通过，未调用新Shell/格式注册/系统clipboard/GUI。官方合同未保证外层OpenClipboard包住内部OLE window，最后代次检查不能当原子CAS；此缺口解前不激活。准确源码/命令/来源和后续独立v3分页codec见[证据](evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)，R2仍未完成。
+
 ## 2026-10-26 准确5ee候选核验与生产待授权
 
 - 5ee push/PR core、desktop及三平台packages均首次success；唯一一次Windows下载通过Actions摘要、完整clean来源、主PE锚与ZIP/installer内main/helper一致性静态核验，未运行候选/安装器/clipboard。准确Linux候选已构建，实际6包16生产输入与708/850逐项相同，复用一次合成库旅程而不重测。来源/hash与未验边界见[候选证据](evidence/RELIABILITY-CANDIDATE-5EE9A40.md)。

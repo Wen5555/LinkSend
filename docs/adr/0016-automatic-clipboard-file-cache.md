@@ -85,6 +85,12 @@ helper在原delegate持久并核验后创建真实STA↔MTA consumer，实际持
 
 首个源码步骤只落实不可逆export intent与helper退出策略，纠正commit已发/Held未确认的错误强杀窗；随后实现统一缓存路径出口保护与真正OLE publisher。实际WriteFiles仍待按本合同接线，当前不运行系统clipboard/GUI或新原生场景。
 
+### 2026-10-26 尚未接线的Windows Shell primitives
+
+独立C++ `ShellSession`/`ShellWitness`候选使用最小只读FD副本、正式虚拟文件格式和真实引用结束门；可能export后没有硬期限/强杀出口。一次严格构建及原controlled COM/source-close回归通过，没有调用新Shell函数、系统clipboard或GUI。生产Go仍只接receipt-only，Native删除保持关闭。构造可容纳10,000发布条目但FILEDESCRIPTORW相对名字仍少于260 UTF-16单元；分页handoff、完整inventory/长路径和真实Shell范围未完成，见[候选证据](../evidence/RELIABILITY-R2-SHELL-PRIMITIVES.md)。
+
+最后generation检查与OleSetClipboard为独立调用，稳定准确对象ack不能补成原子CAS。官方desktop合同未保证自有非空HWND外层OpenClipboard与OLE内部window重入/保锁；Windows CE说明和兼容源码不能替代该保证。此缺口解决前禁止激活publisher；禁止发布后回滚。若需最窄实测，仅复用既有GitHub-hosted Windows空clipboard隔离入口，失败保守拒绝且不卸锁重试。本机/其他runner不运行该probe，单次成功也不能冒充真实Explorer或普遍平台保证。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。
