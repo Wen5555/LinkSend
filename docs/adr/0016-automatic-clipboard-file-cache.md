@@ -70,6 +70,19 @@ helper在原delegate持久并核验后创建真实STA↔MTA consumer，实际持
 
 这里的30秒硬deadline、同helper内受控MTA consumer，以及commit已发送但Held尚未确认的失败窗可终止helper，均是当前受控合同边界。没有宣称取消失败期间活跃consumer保活；不得把该超时/终止策略直接用于未来系统Shell publisher。系统clipboard/正式格式/Explorer、升级与已发布自动删除仍需另行实现和真实证据。最小一次正例/必要非零退出负例与独立只读审查见[进程证据](../evidence/RELIABILITY-R2-NATIVE-PROCESS-LIFECYCLE.md)。
 
+## Windows系统publisher接入合同（实施前冻结）
+
+正式方向采用独立的`windows-virtual-files-v1`合同；当前受控`receipt-only-v1`对象和旧CF_HDROP/file URL永不追认。先冻结生产owner/出口/寿命边界，再接实际系统publisher；未取得真实Shell及无路径出口证据前，所有Native仍由现collector保护，不能因源码状态机或签名齐全宣布可回收。
+
+1. **准入期限不是源寿命。** 可信image/child/源inventory准备和最后授权/generation CAS可有绝对期限；只要commit可能发出或原生export可能开始，owner即进入不可逆的`export_possible`。取消、IPC错误/响应丢失、main正常退出、升级与准入期限都不得强杀该helper。准备阶段尚可证明未export时允许终止；正式Shell helper在export后没有30秒或其他硬TTL。Native I/O错误/未知状态保留，不把helper消失、boot变化或墙钟代替最终源结束证明。
+2. **唯一最终原生门。** helper独立STA持有实际IDataObject与消息泵，提供FileGroupDescriptorW/FileContents/IStream/相对Stat和copy effect，不给CF_HDROP、TYMED_FILE、物理路径或读写源句柄。实际clipboard ownership丢失只允许关闭新factory并释放helper自己的clipboard控制ref，已有provider/marshal/stream/clone/async/活动调用继续有效；全部实际引用和源句柄成功关闭才签一次原publication的终静止回执。COM消费者异常/未知引用宁可继续保护；不得通过超时或关闭布尔值补出许可。
+3. **原授权和echo竞争。** 完整源准备/持久CAS在grant/state锁外；实际系统mutation仍在现接收授权revision、取消、新复制、generation和准入deadline门内。只接受固定helper签发、绑定本次publication和实际OS generation的成功ack；成功点在watcher可推进新本机事件前固定job完成，之后新复制只淘汰新的等待内容，不倒改已完成任务。ack丢失保持publication uncertain且helper存活；不得退回路径发布。helper自己的generation沿现State去重，未知/其他generation按新本机事件处理。
+4. **全部路径出口。** 文件剪贴板job当前只向UI投影id/peer/state/进度，不创建普通task/inbox路径记录。但普通队列/StartSend/历史重发可重新读取路径，Inbox Open/Reveal和OpenTaskDirectory会交OS，原生拖入最终经过同一发送入口；接通新合同前须统一拒绝内部缓存路径及其目录祖先/真实别名，或在真正独立用户副本中完成明确物化。任何实际路径外泄或未经owner跟踪的读取都令整个对象保持path-protected；不会给该对象事后补无路径证明。
+5. **目录和大文件范围。** 生产流按原manifest逐项/分块服务，不把65句柄、64MiB正文、30秒测试寿命当产品上限；需分页封存inventory并按实际stream/clone引用懒开源、校验固定身份/内容，内存和在途I/O有界，64位size/seek覆盖原文件协议。FILEDESCRIPTORW的相对名字固定260 UTF-16和当前1024-node封存上限是尚未接通的阻断：超界不得截断、漏目录、缩协议或降级CF_HDROP后授GC权。长路径/完整大目录在有可验证实现前明确保持不支持虚拟发布且对象受保护，不宣称原文件剪贴板完整范围已通过。
+6. **自动回收的最后连接。** 只有新的受支持合同、可信准确helper、零物理路径出口、原publication最终native静止证据、Go活动引用结束及原sealed inventory均齐备，再沿现同SQLite owner的首次静止观察/自动保护期/压力预算、逐项身份核验和删除意图CAS接回收。不增手动清理、容量或期限设置；任何一项缺失、回拨、损坏或重放继续保护。当前不开放该删除连接。
+
+首个源码步骤只落实不可逆export intent与helper退出策略，纠正commit已发/Held未确认的错误强杀窗；随后实现统一缓存路径出口保护与真正OLE publisher。实际WriteFiles仍待按本合同接线，当前不运行系统clipboard/GUI或新原生场景。
+
 ## 自动空间预留
 
 接收前以实际经过文件协议验证的 manifest 计算所需内容字节，不能相信 files 事件的 Bytes 提示。每个缓存接收并发预留全部正文、每条目4KiB元数据估计及16MiB事务余量；卷上另外保留自动计算的余量 `max(64MiB, min(1GiB, available/100))`。两路接收共享同一预留 owner，校验剩余空间时扣除其他在途预留；已写入字节仍不释放预留，采取保守上界。

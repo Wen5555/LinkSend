@@ -39,6 +39,7 @@ type cacheNativeWindowsLaunch struct {
 	verified, committed, closed bool
 	detached                    bool
 	held                        nc.Held
+	lifetime                    *nc.PublicationLifetime
 }
 
 func cacheNativeFinalPath(handle windows.Handle) (string, error) {
@@ -161,6 +162,7 @@ func (r *clipboardCacheReceipt) prepareCacheNativeWindowsLifetime(ctx context.Co
 		return launch, context.DeadlineExceeded
 	}
 	launch.prepare = nc.Prepare{Version: 2, Challenge: challenge, OwnerPublic: r.service.identity.PublicKey(), ObjectID: sealed.Directory, Inventory: invRaw, Manifest: *sealed.Manifest, DeadlineUnixNano: deadline.UnixNano(), WaitForLauncherExit: waitExit}
+	launch.lifetime = nc.NewControlledLifetime(deadline)
 	var inherited []windows.Handle
 	defer func() {
 		for _, h := range inherited {
@@ -448,6 +450,12 @@ func (p *cacheNativeWindowsLaunch) commitMode(ctx context.Context, d cacheNative
 		return result, err
 	}
 	p.pipe.Context = ctx
+	if err = p.lifetime.Authorize(nc.SHA(raw)); err != nil {
+		return result, err
+	}
+	if err = p.lifetime.CommitMayStart(nc.SHA(raw), time.Now()); err != nil {
+		return result, err
+	}
 	p.committed = true
 	if err = nc.Write(p.pipe, d); err != nil {
 		return result, err
@@ -509,7 +517,11 @@ func (p *cacheNativeWindowsLaunch) close() error {
 	}
 	if p.process != 0 {
 		state, e := windows.WaitForSingleObject(p.process, 0)
-		if !p.detached && e == nil && state == uint32(windows.WAIT_TIMEOUT) {
+		// A write can reach the helper before its ack fails. Main cleanup must
+		// not terminate an already-committed, possibly active native producer.
+		// The current controlled helper still enforces its own probe deadline;
+		// the future Shell contract has no such post-export lifetime deadline.
+		if !p.detached && !p.committed && p.lifetime != nil && p.lifetime.MayTerminate() && e == nil && state == uint32(windows.WAIT_TIMEOUT) {
 			_ = windows.TerminateProcess(p.process, 1)
 			_, _ = windows.WaitForSingleObject(p.process, 3000)
 		}
