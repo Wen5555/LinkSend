@@ -20,6 +20,12 @@ Go 的 Create/Claim 在源准备、生成码或保存本地 intent 前先过该�
 
 没有扩大全矩阵、race、文件传输或原生场景。最终提交的准确包/CI 仍由该提交的新结果确认，不把 36 的数据面证据改记为新二进制实测。
 
+## 7084685 首次 CI 与取消断言修正
+
+`7084685` 首次 core CI `40270372762` 的 `GOWORK=off go test ./...` 实际失败：`TestTemporaryShareShutdownCancelsSynchronousPreparation` 将新增的准备前只读能力查询计入旧的“全部 HTTP 必须为零”断言。原日志保留在 `.artifacts/r2-helper-ci-7084685/core-failed.log`，不重跑该 CI 或改记通过。
+
+仅修改测试夹具与该断言：严格区分无 query 的 `GET /healthz` 和所有其他请求，要求取消的准备恰好只执行一次只读查询、零其他请求；取消、等待 worker 退出与 caller context 独立性断言全部保留。没有改变产品、授权或超时行为。以准确 708 归档加这两个测试文件，单次 `GOWORK=off go test ./internal/app -run '^TestTemporaryShareShutdownCancelsSynchronous(Preparation|HTTP)$' -count=1 -v` exit0 / 5.158s，HTTP 的 create/claim/refresh/retry_intent 四分支均通过。收据 `.artifacts/r5-capability-ready/shutdown-fix/RECEIPT.json`。修正后的准确新提交 CI 另行核验。
+
 ## 生产边界
 
 生产现有记录只读显示 `https://linksend.oooai.de` 仍为 0.5.0、无分享能力；本轮没有重新 SSH 或变更它。开启分享会进行 Control4→5 的已实现一致性备份迁移，任务库仍 schema12。旧 schema4-only 二进制不能作为迁移后的默认回退。目标、最终准确构建前置条件、私有备份、副本迁移验证及兼容回退见[待授权草案](RELIABILITY-R5-PRODUCTION-UPGRADE-DRAFT.md)；当前仅准备，不能当成部署或生产分享可用证据。

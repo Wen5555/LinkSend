@@ -69,8 +69,10 @@ func TestTemporaryShareShutdownCancelsSynchronousPreparation(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("shutdown retained the synchronous create worker")
 	}
-	if f.requests.Load() != 0 {
-		t.Fatal("cancelled preparation sent an HTTP operation")
+	// Capability admission now precedes preparation. Cancellation must still
+	// prevent every subsequent request, including create/claim mutations.
+	if f.healthRequests.Load() != 1 || f.otherRequests.Load() != 0 || f.requests.Load() != 1 {
+		t.Fatalf("cancelled preparation escaped its one read-only capability check: health=%d other=%d total=%d", f.healthRequests.Load(), f.otherRequests.Load(), f.requests.Load())
 	}
 }
 

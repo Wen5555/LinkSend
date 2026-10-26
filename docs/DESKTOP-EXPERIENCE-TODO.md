@@ -43,6 +43,8 @@
 - [ ] R4：旧01b5c16 Windows候选的覆盖安装、状态保持、单实例及原系统入口恢复已有证据；当前36最小旅程只到63基线安装，用户Escape停止GUI后不重试，原wrapper超时exit1。已在原实例结束后精确Restore并核对登记/三快捷方式，数据与备份保留；36候选覆盖/原生活动完整续传、SendTo/拖放仍待，Mac专属未验保留。见[原生及恢复证据](evidence/RELIABILITY-R4-WINDOWS-UPGRADE.md)。
 - [ ] R5（owner/数据面/桌面候选，整体待验）：[ADR0017](adr/0017-one-time-share-grant.md)先冻结的授权核心、显式备份迁移、签名HTTP及独立scope WSS已实现并验证；普通配置仍关闭；已有701e23b双向实网核心与准确36 Wails实收证据后，仅显式启用服务声明share_grants_v1/ready=true，旧实验或缺能力服务在传码前拒绝，见[能力与入口证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)。历史增量及旧失败保留在[核心](evidence/RELIABILITY-R5-GRANT-CORE.md)、[控制](evidence/RELIABILITY-R5-SIGNED-CONTROL.md)、[客户端](evidence/RELIABILITY-R5-SIGNED-CLIENT.md)与[协调](evidence/RELIABILITY-R5-SCOPED-SIGNALING.md)证据中，不将旧包或CI移记本候选。
 
+  7084685首次core CI 40270372762在旧准备取消测试失败，原日志保留；仅修测试区分1次只读能力GET与零其他请求，准确归档加两测试文件的Preparation/HTTP一次定向通过5.158s，新提交CI待核。见[能力证据](evidence/RELIABILITY-R5-CAPABILITY-READY.md)。
+
   当前同profile签名/CAS owner、明确重启恢复、七天终态metadata回收、固定公钥Pion/QUIC两阶段预览及原V1引擎已接入。8MiB任务在4MiB暂停、双端重开Service后显式恢复原任务通过；同步Create/hash/HTTP退出取消及服务Completed不能替代本机Completion的受控失败均已修复，最终20项TemporaryShare测试race3轮通过。双模块workspace/off的test/vet/build共12命令全部exit0，前端19files/155tests及typecheck/lint/build通过。
 
   桌面临时分享源码与真实页面浏览器夹具已验证明确确认、长目录/指纹/分页及无自动派发；夹具不代表Wails RPC、原生picker/剪贴板或P2P实机。当前原生复制目标因未证实可备份格式SKIP；独立WindowStation尝试遭CreateWindowStationW错误5，native未运行且用户剪贴板未改。仅GitHub托管Windows可创建空夹具的严格CI入口已准备，准确新提交CI与包结果另验。用户允许Linux替代Mac后，准确36 Linux→Windows原生保存已完成；反向原生发送及其余最终旅程仍待，Mac专属项目单列未验；不同网络Go核心双向证据见下段，不抵扣Windows双端现场；见[本轮证据](evidence/RELIABILITY-R5-OWNER-DATA-PATH.md)，不标R5完成。

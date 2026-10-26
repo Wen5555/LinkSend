@@ -23,11 +23,12 @@ import (
 )
 
 type temporaryShareFixture struct {
-	a, b     *Service
-	h        *httptest.Server
-	source   string
-	origin   string
-	requests *atomic.Int32
+	a, b                          *Service
+	h                             *httptest.Server
+	source                        string
+	origin                        string
+	requests                      *atomic.Int32
+	healthRequests, otherRequests *atomic.Int32
 }
 
 func newTemporaryShareFixture(t *testing.T) temporaryShareFixture {
@@ -38,8 +39,17 @@ func newTemporaryShareFixture(t *testing.T) temporaryShareFixture {
 	}
 	t.Cleanup(func() { _ = control.Close() })
 	requests := new(atomic.Int32)
+	healthRequests, otherRequests := new(atomic.Int32), new(atomic.Int32)
 	handler := control.Handler()
-	h := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); handler.ServeHTTP(w, r) }))
+	h := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method == http.MethodGet && r.URL.Path == "/healthz" && r.URL.RawQuery == "" {
+			healthRequests.Add(1)
+		} else {
+			otherRequests.Add(1)
+		}
+		handler.ServeHTTP(w, r)
+	}))
 	t.Cleanup(h.Close)
 	makeService := func() *Service {
 		s, err := New(Config{DataDir: t.TempDir(), ServerURL: h.URL, AllowInsecureLoopback: true})
@@ -58,7 +68,7 @@ func newTemporaryShareFixture(t *testing.T) temporaryShareFixture {
 	if err = os.WriteFile(source, []byte("one-time authenticated content"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return temporaryShareFixture{a: makeService(), b: makeService(), h: h, source: source, origin: h.URL, requests: requests}
+	return temporaryShareFixture{a: makeService(), b: makeService(), h: h, source: source, origin: h.URL, requests: requests, healthRequests: healthRequests, otherRequests: otherRequests}
 }
 
 func createApprovedTemporaryShare(t *testing.T, f temporaryShareFixture) (TemporaryShareCreation, TemporaryShareSnapshot) {
